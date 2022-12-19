@@ -136,7 +136,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     }
     fn deployment_terminated(
         &self,
-        result: &Result<Self::DeploymentResult, EngineError>,
+        result: &Result<Self::DeploymentResult, Box<EngineError>>,
         _: &mut Self::DeploymentState,
     ) {
         let error = match result {
@@ -151,7 +151,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 format!(
                     r#"
                 🚫 Deployment has been cancelled. {} has been rollback to previous version if rollout was on-going
@@ -164,7 +164,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             ));
         } else if error.tag() == &HelmDeployTimeout {
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 format!(r#"
 ❌ {} failed to be deployed in the given time frame.
 This most likely an issue with its configuration or because the app failed to start correctly.
@@ -175,9 +175,9 @@ Look at the report from above to understand why, and check your applications log
                 None,
             ));
         } else {
-            self.logger.send_error(error.clone());
+            self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 format!(r#"
 ❌ Deployment of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/

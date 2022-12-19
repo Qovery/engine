@@ -86,7 +86,7 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
 }
 
 impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         for domain in &self.resolve_to_ip {
             check_domain_resolve_ip(domain, &self.log, target.should_abort);
         }
@@ -98,11 +98,11 @@ impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
         Ok(())
     }
 
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 }

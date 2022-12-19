@@ -24,7 +24,6 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
-use crate::cloud_provider::aws::models::AwsLoadBalancerType;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -48,7 +47,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::domain::ToTerraformString;
+use crate::io_models::domain::{ToHelmString, ToTerraformString};
 use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::s3::S3;
@@ -196,19 +195,19 @@ fn aws_zones(
     zones: Vec<String>,
     region: &AwsRegion,
     event_details: &EventDetails,
-) -> Result<Vec<AwsZones>, EngineError> {
+) -> Result<Vec<AwsZones>, Box<EngineError>> {
     let mut aws_zones = vec![];
 
     for zone in zones {
         match AwsZones::from_string(zone.to_string()) {
             Ok(x) => aws_zones.push(x),
             Err(e) => {
-                return Err(EngineError::new_unsupported_zone(
+                return Err(Box::new(EngineError::new_unsupported_zone(
                     event_details.clone(),
                     region.to_string(),
                     zone,
                     CommandError::new_from_safe_message(e.to_string()),
-                ));
+                )));
             }
         };
     }
@@ -238,16 +237,16 @@ fn check_odd_subnets(
     event_details: EventDetails,
     zone_name: &str,
     subnet_block: &[String],
-) -> Result<usize, EngineError> {
+) -> Result<usize, Box<EngineError>> {
     if subnet_block.len() % 2 == 1 {
-        return Err(EngineError::new_subnets_count_is_not_even(
+        return Err(Box::new(EngineError::new_subnets_count_is_not_even(
             event_details,
             zone_name.to_string(),
             subnet_block.len(),
-        ));
+        )));
     }
 
-    Ok((subnet_block.len() / 2) as usize)
+    Ok(subnet_block.len() / 2)
 }
 
 fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> String {
@@ -265,7 +264,7 @@ fn tera_context(
     zones: &[AwsZones],
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
-) -> Result<TeraContext, EngineError> {
+) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 
@@ -628,22 +627,23 @@ fn should_update_desired_nodes(
     action: KubernetesClusterAction,
     node_groups: &[NodeGroups],
     aws_eks_client: Option<EksClient>,
-) -> Result<Vec<NodeGroupsWithDesiredState>, EngineError> {
-    let get_autoscaling_config = |node_group: &NodeGroups, eks_client: EksClient| -> Result<Option<i32>, EngineError> {
-        let current_nodes = get_nodegroup_autoscaling_config_from_aws(
-            event_details.clone(),
-            kubernetes,
-            node_group.clone(),
-            eks_client,
-        )?;
-        match current_nodes {
-            Some(x) => match x.desired_size {
-                Some(n) => Ok(Some(n as i32)),
+) -> Result<Vec<NodeGroupsWithDesiredState>, Box<EngineError>> {
+    let get_autoscaling_config =
+        |node_group: &NodeGroups, eks_client: EksClient| -> Result<Option<i32>, Box<EngineError>> {
+            let current_nodes = get_nodegroup_autoscaling_config_from_aws(
+                event_details.clone(),
+                kubernetes,
+                node_group.clone(),
+                eks_client,
+            )?;
+            match current_nodes {
+                Some(x) => match x.desired_size {
+                    Some(n) => Ok(Some(n as i32)),
+                    None => Ok(None),
+                },
                 None => Ok(None),
-            },
-            None => Ok(None),
-        }
-    };
+            }
+        };
     let mut node_groups_with_size = Vec::with_capacity(node_groups.len());
 
     for node_group in node_groups {
@@ -682,16 +682,19 @@ fn should_update_desired_nodes(
 }
 
 /// Returns a rusoto eks client using the current configuration.
-fn get_rusoto_eks_client(event_details: EventDetails, kubernetes: &dyn Kubernetes) -> Result<EksClient, EngineError> {
+fn get_rusoto_eks_client(
+    event_details: EventDetails,
+    kubernetes: &dyn Kubernetes,
+) -> Result<EksClient, Box<EngineError>> {
     let cloud_provider = kubernetes.cloud_provider();
     let region = match RusotoRegion::from_str(kubernetes.region()) {
         Ok(value) => value,
         Err(error) => {
-            return Err(EngineError::new_unsupported_region(
+            return Err(Box::new(EngineError::new_unsupported_region(
                 event_details,
                 kubernetes.region().to_string(),
                 CommandError::new_from_safe_message(error.to_string()),
-            ));
+            )));
         }
     };
 
@@ -708,7 +711,7 @@ fn get_nodegroup_autoscaling_config_from_aws(
     kubernetes: &dyn Kubernetes,
     node_group: NodeGroups,
     eks_client: EksClient,
-) -> Result<Option<NodegroupScalingConfig>, EngineError> {
+) -> Result<Option<NodegroupScalingConfig>, Box<EngineError>> {
     // In case of EC2, there is no need to care about auto scaling
     if kubernetes.kind() == Kind::Ec2 {
         return Ok(None);
@@ -724,14 +727,14 @@ fn get_nodegroup_autoscaling_config_from_aws(
             Some(x) => x,
         },
         Err(e) => {
-            return Err(EngineError::new_nodegroup_list_error(
+            return Err(Box::new(EngineError::new_nodegroup_list_error(
                 event_details,
                 CommandError::new(
                     e.to_string(),
                     Some("Error while trying to get node groups from eks".to_string()),
                     None,
                 ),
-            ))
+            )))
         }
     };
 
@@ -745,22 +748,22 @@ fn get_nodegroup_autoscaling_config_from_aws(
         })) {
             Ok(res) => match res.nodegroup {
                 None => {
-                    return Err(EngineError::new_missing_nodegroup_information_error(
+                    return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                         event_details,
                         eks_node_group_name,
-                    ))
+                    )))
                 }
                 Some(x) => x,
             },
             Err(error) => {
-                return Err(EngineError::new_cluster_worker_node_not_found(
+                return Err(Box::new(EngineError::new_cluster_worker_node_not_found(
                     event_details,
                     Some(CommandError::new(
                         "Error while trying to get node groups from AWS".to_string(),
                         Some(error.to_string()),
                         None,
                     )),
-                ));
+                )));
             }
         };
         // ignore if group of nodes is not managed by Qovery
@@ -780,7 +783,7 @@ fn create(
     aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
     let mut kubernetes_action = KubernetesClusterAction::Bootstrap;
 
@@ -799,7 +802,7 @@ fn create(
     // aws connection
     let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
         Some(x) => x,
-        None => return Err(EngineError::new_not_implemented_error(event_details)),
+        None => return Err(Box::new(EngineError::new_not_implemented_error(event_details))),
     };
 
     // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
@@ -888,12 +891,12 @@ fn create(
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
     {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
             temp_dir,
             e,
-        ));
+        )));
     }
 
     let dirs_to_be_copied_to = vec![
@@ -911,12 +914,12 @@ fn create(
     ];
     for (source_dir, target_dir) in dirs_to_be_copied_to {
         if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 source_dir,
                 target_dir,
                 e,
-            ));
+            )));
         }
     }
 
@@ -942,7 +945,7 @@ fn create(
             ))?;
         };
 
-        return Err(EngineError::new_terraform_error(event_details, e));
+        return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
     }
 
     let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
@@ -992,13 +995,13 @@ fn create(
             let port = match qovery_terraform_config.kubernetes_port_to_u16() {
                 Ok(p) => p,
                 Err(e) => {
-                    return Err(EngineError::new_terraform_error(
+                    return Err(Box::new(EngineError::new_terraform_error(
                         event_details,
                         TerraformError::ConfigFileInvalidContent {
                             path: qovery_terraform_config_file,
                             raw_message: e,
                         },
-                    ))
+                    )))
                 }
             };
 
@@ -1047,8 +1050,8 @@ fn create(
                                     &qovery_terraform_config.aws_ec2_public_hostname
                                 )),
                             ));
-                        OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                            event_details.clone(),
+                        OperationResult::Retry(Box::new(
+                            EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
                         ))
                     }
                 }
@@ -1058,19 +1061,21 @@ fn create(
                 Ok(x) => x,
                 Err(Operation { error, .. }) => return Err(error),
                 Err(Error::Internal(_)) => {
-                    return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details))
+                    return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                        event_details,
+                    )))
                 }
             }
         }
         _ => {
-            return Err(EngineError::new_unsupported_cluster_kind(
+            return Err(Box::new(EngineError::new_unsupported_cluster_kind(
                 event_details,
                 &kubernetes.kind().to_string(),
                 CommandError::new_from_safe_message(format!(
                     "expected AWS provider here, while {} was found",
                     kubernetes.kind()
                 )),
-            ))
+            )))
         }
     };
 
@@ -1152,18 +1157,23 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-                managed_dns_domain: kubernetes.dns_provider().domain().clone(),
                 ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
+                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
+                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
-                load_balancer_type: AwsLoadBalancerType::Nlb,
                 disable_pleco: kubernetes.context().disable_pleco(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
@@ -1193,10 +1203,17 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-                managed_dns_domain: kubernetes.dns_provider().domain().clone(),
+                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
+                managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
+                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
@@ -1216,11 +1233,11 @@ fn create(
         }
         _ => {
             let safe_message = format!("unsupported requested cluster type: {}", kubernetes.kind());
-            return Err(EngineError::new_unsupported_cluster_kind(
+            return Err(Box::new(EngineError::new_unsupported_cluster_kind(
                 event_details,
                 &safe_message,
                 CommandError::new(safe_message.to_string(), None, None),
-            ));
+            )));
         }
     };
 
@@ -1231,10 +1248,10 @@ fn create(
         helm_charts_to_deploy,
         kubernetes.context().is_dry_run_deploy(),
     )
-    .map_err(|e| EngineError::new_helm_charts_deploy_error(event_details.clone(), e))
+    .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
 }
 
-fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
     let (kubeconfig_path, _) = kubernetes.get_kubeconfig_file()?;
     let environment_variables = kubernetes.cloud_provider().credentials_environment_variables();
@@ -1260,7 +1277,7 @@ fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
     Ok(())
 }
 
-fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     kubernetes.logger().log(EngineEvent::Warning(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
         EventMessage::new_from_safe(format!("{}.upgrade_error() called.", kubernetes.kind())),
@@ -1275,7 +1292,7 @@ fn pause(
     aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
     kubernetes.logger().log(EngineEvent::Info(
@@ -1308,12 +1325,12 @@ fn pause(
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
     {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
             temp_dir,
             e,
-        ));
+        )));
     }
 
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap-{type}/common/charts directory.
@@ -1321,12 +1338,12 @@ fn pause(
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
     let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             bootstrap_charts_dir,
             common_charts_temp_dir,
             e,
-        ));
+        )));
     }
 
     // pause: only select terraform workers elements to pause to avoid applying on the whole config
@@ -1344,7 +1361,7 @@ fn pause(
         Err(e) => {
             let error = EngineError::new_terraform_error(event_details, e);
             kubernetes.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(error);
+            return Err(Box::new(error));
         }
     };
 
@@ -1406,10 +1423,10 @@ fn pause(
                         kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                     }
                     Err(Operation { error, .. }) => {
-                        return Err(error);
+                        return Err(Box::new(error));
                     }
                     Err(Error::Internal(msg)) => {
-                        return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))));
+                        return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))));
                     }
                 }
             }
@@ -1431,11 +1448,11 @@ fn pause(
 
             Ok(())
         }
-        Err(e) => Err(EngineError::new_terraform_error(event_details, e)),
+        Err(e) => Err(Box::new(EngineError::new_terraform_error(event_details, e))),
     }
 }
 
-fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     kubernetes.logger().log(EngineEvent::Warning(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
         EventMessage::new_from_safe(format!("{}.pause_error() called.", kubernetes.kind())),
@@ -1450,7 +1467,7 @@ fn delete(
     aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
     let mut skip_kubernetes_step = false;
 
@@ -1483,13 +1500,13 @@ fn delete(
             )]
         }
         _ => {
-            return Err(EngineError::new_unsupported_cluster_kind(
+            return Err(Box::new(EngineError::new_unsupported_cluster_kind(
                 event_details,
                 "only AWS clusters are supported for this delete method",
                 CommandError::new_from_safe_message(
                     "please contact Qovery, deletion can't happen on something else than AWS clsuter type".to_string(),
                 ),
-            ))
+            )))
         }
     };
 
@@ -1505,12 +1522,12 @@ fn delete(
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
     {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
             temp_dir,
             e,
-        ));
+        )));
     }
 
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
@@ -1518,12 +1535,12 @@ fn delete(
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
     let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             bootstrap_charts_dir,
             common_charts_temp_dir,
             e,
-        ));
+        )));
     }
 
     let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
@@ -1808,16 +1825,13 @@ fn delete(
         EventMessage::new_from_safe("Running Terraform destroy".to_string()),
     ));
 
-    match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
-        Ok(_) => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
-            ));
-            Ok(())
-        }
-        Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
-    }?;
+    if let Err(err) = cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
+        return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
+    }
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
+    ));
 
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details);
@@ -1831,7 +1845,7 @@ fn delete(
     Ok(())
 }
 
-fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     kubernetes.logger().log(EngineEvent::Warning(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
         EventMessage::new_from_safe(format!("{}.delete_error() called.", kubernetes.kind())),

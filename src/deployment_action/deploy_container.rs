@@ -23,14 +23,14 @@ impl<T: CloudProvider> DeploymentAction for Container<T>
 where
     Container<T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         struct TaskContext {
             last_deployed_image: Option<String>,
         }
 
         // We first mirror the image if needed
-        let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+        let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             mirror_image(
                 &self.registry,
                 &self.image,
@@ -57,7 +57,7 @@ where
             })
         };
 
-        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
                 self.selector(),
@@ -103,7 +103,7 @@ where
             let _ = delete_cached_image(self.tag_for_mirror(), state.last_deployed_image, false, target, logger)
                 .map_err(|err| {
                     error!("Error while deleting cached image: {}", err);
-                    EngineError::new_container_registry_error(event_details.clone(), err)
+                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
                 });
         };
 
@@ -118,10 +118,10 @@ where
         )
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
                     self.selector(),
                     self.is_stateful(),
@@ -133,14 +133,14 @@ where
         )
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         struct TaskContext {
             last_deployed_image: Option<String>,
         }
 
         // We first mirror the image if needed
-        let pre_task = |_logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+        let pre_task = |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             let last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),
                 &self.selector(),
@@ -158,7 +158,7 @@ where
         };
 
         // Execute the deployment
-        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 namespace: HelmChartNamespaces::Custom,
@@ -185,11 +185,11 @@ where
                     &self.selector(),
                     target.environment.namespace(),
                 )) {
-                    return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),
                         self.selector(),
                         CommandError::new_from_safe_message(err.to_string()),
-                    ));
+                    )));
                 }
             }
 
@@ -208,7 +208,7 @@ where
             let _ =
                 delete_cached_image(self.tag_for_mirror(), last_deployed_image, true, target, logger).map_err(|err| {
                     error!("Error while deleting cached image: {}", err);
-                    EngineError::new_container_registry_error(event_details.clone(), err)
+                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
                 });
         };
 

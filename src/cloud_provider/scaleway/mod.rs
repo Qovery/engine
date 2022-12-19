@@ -11,7 +11,6 @@ use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
 
 pub mod kubernetes;
-mod models;
 
 pub struct Scaleway {
     context: Context,
@@ -95,7 +94,7 @@ impl CloudProvider for Scaleway {
         todo!()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), Box<EngineError>> {
         // TODO(benjaminch): To be implemented
         Ok(())
     }

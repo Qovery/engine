@@ -692,7 +692,7 @@ fn terraform_plugins_failed_load(
         || error_string.contains("Failed to install provider")
         || (error_string.contains("The specified plugin cache dir") && error_string.contains("cannot be opened"))
     {
-        if let Err(e) = fs::remove_file(&terraform_provider_lock) {
+        if let Err(e) = fs::remove_file(terraform_provider_lock) {
             return Err(TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock: terraform_provider_lock.to_string(),
                 raw_message: e.to_string(),
@@ -1287,7 +1287,7 @@ terraform {
         "#;
 
         let dest_dir = "/tmp/test";
-        fs::create_dir_all(&dest_dir).unwrap();
+        fs::create_dir_all(dest_dir).unwrap();
 
         let _ = fs::write(format!("{}/.terraform.lock.hcl", &dest_dir), terraform_lock_file);
         let _ = fs::write(format!("{}/providers.tf", &dest_dir), provider_file);

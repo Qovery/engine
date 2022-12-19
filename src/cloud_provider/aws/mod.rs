@@ -138,14 +138,16 @@ impl CloudProvider for AWS {
         todo!()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_x) => Ok(()),
-            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(event_details)),
+            Err(_) => Err(Box::new(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
+            ))),
         }
     }
 

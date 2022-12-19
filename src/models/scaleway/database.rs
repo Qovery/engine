@@ -117,8 +117,8 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-        get_version: &dyn Fn(EventDetails) -> Result<ServiceVersionCheckResult, EngineError>,
-    ) -> Result<TeraContext, EngineError>
+        get_version: &dyn Fn(EventDetails) -> Result<ServiceVersionCheckResult, Box<EngineError>>,
+    ) -> Result<TeraContext, Box<EngineError>>
     where
         Database<SCW, M, T>: Service,
     {
@@ -181,7 +181,7 @@ impl ToTeraContext for Database<SCW, Managed, PostgresSQL>
 where
     PostgresSQL: DatabaseType<SCW, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let check_version = |event_details| {
             check_service_version(pick_managed_postgres_version(self.version.to_string()), self, event_details)
         };
@@ -193,7 +193,7 @@ impl ToTeraContext for Database<SCW, Container, PostgresSQL>
 where
     PostgresSQL: DatabaseType<SCW, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
             check_service_version(get_self_hosted_postgres_version(self.version.to_string()), self, event_details)
         };
@@ -207,7 +207,7 @@ impl ToTeraContext for Database<SCW, Managed, MySQL>
 where
     MySQL: DatabaseType<SCW, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let check_version = |event_details| {
             check_service_version(pick_managed_mysql_version(self.version.to_string()), self, event_details)
         };
@@ -219,7 +219,7 @@ impl ToTeraContext for Database<SCW, Container, MySQL>
 where
     MySQL: DatabaseType<SCW, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
             check_service_version(get_self_hosted_mysql_version(self.version.to_string()), self, event_details)
         };
@@ -233,7 +233,7 @@ impl ToTeraContext for Database<SCW, Container, MongoDB>
 where
     MongoDB: DatabaseType<SCW, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
             check_service_version(get_self_hosted_mongodb_version(self.version.to_string()), self, event_details)
         };
@@ -248,7 +248,7 @@ impl ToTeraContext for Database<SCW, Container, Redis>
 where
     Redis: DatabaseType<SCW, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
             check_service_version(get_self_hosted_redis_version(self.version.to_string()), self, event_details)
         };

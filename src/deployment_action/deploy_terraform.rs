@@ -38,7 +38,7 @@ impl TerraformDeployment {
         }
     }
 
-    fn prepare_terraform_files(&self) -> Result<(), EngineError> {
+    fn prepare_terraform_files(&self) -> Result<(), Box<EngineError>> {
         // Copy the root folder
         generate_and_copy_all_files_into_dir(
             &self.terraform_common_folder,
@@ -76,7 +76,7 @@ impl TerraformDeployment {
         kubernetes: &dyn Kubernetes,
         namespace: &str,
         secret_name: &str,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         let config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
         // create the namespace to insert the tfstate in secrets
@@ -92,7 +92,7 @@ impl TerraformDeployment {
 }
 
 impl DeploymentAction for TerraformDeployment {
-    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
         let ret = cmd::terraform::terraform_init_validate_plan_apply(
             &self.destination_folder.to_string_lossy(),
@@ -100,17 +100,17 @@ impl DeploymentAction for TerraformDeployment {
         );
 
         if let Err(err) = ret {
-            Err(EngineError::new_terraform_error(self.event_details.clone(), err))
+            Err(Box::new(EngineError::new_terraform_error(self.event_details.clone(), err)))
         } else {
             Ok(())
         }
     }
 
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
         match cmd::terraform::terraform_init_validate_destroy(&self.destination_folder.to_string_lossy(), false) {
             Ok(_) => {
@@ -123,7 +123,7 @@ impl DeploymentAction for TerraformDeployment {
                 }
                 Ok(())
             }
-            Err(e) => Err(EngineError::new_terraform_error(self.event_details.clone(), e)),
+            Err(e) => Err(Box::new(EngineError::new_terraform_error(self.event_details.clone(), e))),
         }
     }
 }

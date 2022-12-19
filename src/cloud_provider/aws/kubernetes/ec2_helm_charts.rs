@@ -15,10 +15,8 @@ use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerCo
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
-use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
-use crate::io_models::domain::{Domain, ToHelmString};
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -61,8 +59,11 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
-    pub managed_dns_domain: Domain,
+    pub managed_dns_name: String,
+    pub managed_dns_name_wildcarded: String,
+    pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
+    pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
@@ -74,7 +75,7 @@ pub struct Ec2ChartsConfigPrerequisites {
 pub fn get_aws_ec2_qovery_terraform_config(
     qovery_terraform_config_file: &str,
 ) -> Result<AwsEc2QoveryTerraformConfig, TerraformError> {
-    let content_file = match File::open(&qovery_terraform_config_file) {
+    let content_file = match File::open(qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
             return Err(TerraformError::ConfigFileNotFound {
@@ -153,7 +154,7 @@ pub fn ec2_aws_helm_charts(
     let coredns_config = CoreDNSConfigChart::new(
         chart_prefix_path,
         true,
-        chart_config_prerequisites.managed_dns_domain.to_helm_format_string(),
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
@@ -195,9 +196,8 @@ pub fn ec2_aws_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.dns_provider_config.clone(),
         chart_config_prerequisites
-            .managed_dns_domain
-            .root_domain()
-            .to_helm_format_string(),
+            .managed_dns_root_domain_helm_format
+            .to_string(),
         false,
         chart_config_prerequisites.cluster_id.to_string(),
     )
@@ -262,24 +262,47 @@ pub fn ec2_aws_helm_charts(
         chart_prefix_path,
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_config_prerequisites.managed_dns_domain.to_helm_format_string(),
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
     )
     .to_common_helm_chart();
 
-    // Nginx Ingress
-    let nginx_ingress = NginxIngressChart::new(
-        chart_prefix_path,
-        Some(chart_config_prerequisites.managed_dns_domain.clone()),
-        None,
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(256), // Memory is set to 256Mi to prevent random OOM on x64
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(256), // Memory is set to 256Mi to prevent random OOM on x64
-        }),
-        HelmChartResourcesConstraintType::ChartDefault,
-    )
-    .to_common_helm_chart();
+    let nginx_ingress = CommonChart {
+        chart_info: ChartInfo {
+            name: "nginx-ingress".to_string(),
+            path: chart_path("common/charts/ingress-nginx"),
+            namespace: HelmChartNamespaces::NginxIngress,
+            // Because of NLB, svc can take some time to start
+            timeout_in_seconds: 300,
+            values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
+            values: vec![
+                ChartSetValue {
+                    key: "controller.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
+                // Controller resources limits
+                // Memory is set to 256Mi to prevent random OOM on x64
+                ChartSetValue {
+                    key: "controller.resources.limits.memory".to_string(),
+                    value: "256Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "controller.resources.requests.memory".to_string(),
+                    value: "256Mi".to_string(),
+                },
+                // Default backend resources limits
+                ChartSetValue {
+                    key: "defaultBackend.resources.limits.memory".to_string(),
+                    value: "32Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "defaultBackend.resources.requests.memory".to_string(),
+                    value: "32Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
     let nginx_ingress_wildcard_dns_record = CommonChart {
         chart_info: ChartInfo {
@@ -293,10 +316,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "source".to_string(),
-                    value: chart_config_prerequisites
-                        .managed_dns_domain
-                        .wildcarded()
-                        .to_helm_format_string(),
+                    value: chart_config_prerequisites.managed_dns_name_wildcarded.to_string(),
                 },
                 ChartSetValue {
                     key: "destination".to_string(),

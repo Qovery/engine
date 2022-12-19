@@ -29,7 +29,7 @@ pub trait CloudProvider {
 }
 
 pub trait ToTeraContext {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>>;
 }
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)

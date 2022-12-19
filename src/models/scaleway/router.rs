@@ -5,7 +5,7 @@ use crate::models::types::{ToTeraContext, SCW};
 use tera::Context as TeraContext;
 
 impl ToTeraContext for Router<SCW> {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.default_tera_context(target)
     }
 }

@@ -75,7 +75,7 @@ impl EnvironmentTask {
 
     // FIXME: Remove EngineConfig type, there is no use for it
     // merge it with DeploymentTarget type
-    fn infrastructure_context(&self) -> Result<InfrastructureContext, EngineError> {
+    fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
         self.request
             .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
     }
@@ -94,7 +94,7 @@ impl EnvironmentTask {
         infra_ctx: &InfrastructureContext,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         should_abort: &dyn Fn() -> bool,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         // do the same for applications
         let services_to_build = services
             .into_iter()
@@ -177,37 +177,35 @@ impl EnvironmentTask {
         mut environment: Environment,
         infra_ctx: &InfrastructureContext,
         should_abort: &dyn Fn() -> bool,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
-        let run_deploy = || -> Result<(), EngineError> {
-            // Build applications if needed
-            if environment.action == service::Action::Create {
-                if should_abort() {
-                    return Err(EngineError::new_task_cancellation_requested(event_details));
-                }
-
-                let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
-                let services_to_build: Vec<&mut dyn Service> = environment
-                    .applications
-                    .iter_mut()
-                    .map(|app| app.as_service_mut())
-                    .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
-                    .collect();
-                Self::build_and_push_services(
-                    services_to_build,
-                    &DeploymentOption {
-                        force_build: false,
-                        force_push: false,
-                    },
-                    infra_ctx,
-                    |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-                    should_abort,
-                )?;
+        let run_deploy = || -> Result<(), Box<EngineError>> {
+            // Build apps
+            if should_abort() {
+                return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
+            let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
+            let services_to_build: Vec<&mut dyn Service> = environment
+                .applications
+                .iter_mut()
+                .map(|app| app.as_service_mut())
+                .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
+                .collect();
+            Self::build_and_push_services(
+                services_to_build,
+                &DeploymentOption {
+                    force_build: false,
+                    force_push: false,
+                },
+                infra_ctx,
+                |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
+                should_abort,
+            )?;
+
             if should_abort() {
-                return Err(EngineError::new_task_cancellation_requested(event_details));
+                return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
             let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort)?;
@@ -286,7 +284,7 @@ impl Task for EnvironmentTask {
         let infra_context = match self.infrastructure_context() {
             Ok(infra_ctx) => infra_ctx,
             Err(err) => {
-                self.logger.log(EngineEvent::Error(err, None));
+                self.logger.log(EngineEvent::Error(*err, None));
                 return;
             }
         };

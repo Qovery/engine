@@ -12,7 +12,6 @@ use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
-use crate::cloud_provider::scaleway::models::ScwLoadBalancerType;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd;
@@ -28,6 +27,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
+use crate::io_models::domain::ToHelmString;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
@@ -163,7 +163,7 @@ impl Kapsule {
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
-    ) -> Result<Kapsule, EngineError> {
+    ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
@@ -183,7 +183,7 @@ impl Kapsule {
                     );
                     logger.log(EngineEvent::Error(err.clone(), None));
 
-                    return Err(err);
+                    return Err(Box::new(err));
                 }
                 Ok(instance_type) => {
                     if !instance_type.is_instance_cluster_allowed() {
@@ -203,7 +203,7 @@ impl Kapsule {
                             )),
                         );
 
-                        return Err(err);
+                        return Err(Box::new(err));
                     }
                 }
             }
@@ -249,7 +249,7 @@ impl Kapsule {
         }
     }
 
-    fn get_scw_cluster_info(&self) -> Result<Option<ScalewayK8sV1Cluster>, EngineError> {
+    fn get_scw_cluster_info(&self) -> Result<Option<ScalewayK8sV1Cluster>, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
 
         // get cluster info
@@ -267,14 +267,14 @@ impl Kapsule {
         )) {
             Ok(x) => x,
             Err(e) => {
-                return Err(EngineError::new_cannot_get_cluster_error(
+                return Err(Box::new(EngineError::new_cannot_get_cluster_error(
                     event_details,
                     CommandError::new(
                         "Error, wasn't able to retrieve SCW cluster information from the API.".to_string(),
                         Some(e.to_string()),
                         None,
                     ),
-                ));
+                )));
             }
         };
 
@@ -283,13 +283,13 @@ impl Kapsule {
         if cluster_info_content.is_empty() {
             return Ok(None);
         } else if cluster_info_content.len() != 1_usize {
-            return Err(EngineError::new_multiple_cluster_found_expected_one_error(
+            return Err(Box::new(EngineError::new_multiple_cluster_found_expected_one_error(
                 event_details,
                 CommandError::new_from_safe_message(format!(
                     "Error, too many clusters found ({}) with this name, where 1 was expected.",
                     &cluster_info_content.len()
                 )),
-            ));
+            )));
         }
 
         Ok(Some(cluster_info_content[0].clone()))
@@ -445,7 +445,7 @@ impl Kapsule {
         format!("qovery-logs-{}", self.id)
     }
 
-    fn tera_context(&self) -> Result<TeraContext, EngineError> {
+    fn tera_context(&self) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
@@ -598,7 +598,7 @@ impl Kapsule {
         .to_string()
     }
 
-    fn create(&self) -> Result<(), EngineError> {
+    fn create(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
@@ -649,12 +649,12 @@ impl Kapsule {
             temp_dir.as_str(),
             context,
         ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
                 temp_dir,
                 e,
-            ));
+            )));
         }
 
         let dirs_to_be_copied_to = vec![
@@ -672,12 +672,12 @@ impl Kapsule {
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
             if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-                return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                     event_details,
                     source_dir,
                     target_dir,
                     e,
-                ));
+                )));
             }
         }
 
@@ -698,19 +698,19 @@ impl Kapsule {
         {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(error);
+            return Err(Box::new(error));
         }
 
         // Logs bucket
         if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(error);
+            return Err(Box::new(error));
         }
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error(event_details, e));
+            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
         // push config file to object storage
@@ -724,15 +724,15 @@ impl Kapsule {
         ) {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(error);
+            return Err(Box::new(error));
         }
 
         let cluster_info = self.get_scw_cluster_info()?;
         if cluster_info.is_none() {
-            return Err(EngineError::new_no_cluster_found_error(
+            return Err(Box::new(EngineError::new_no_cluster_found_error(
                 event_details,
                 CommandError::new_from_safe_message("Error, no cluster found from the Scaleway API".to_string()),
-            ));
+            )));
         }
 
         let current_nodegroups = match self
@@ -742,10 +742,10 @@ impl Kapsule {
             Err(e) => {
                 match e {
                     ScwNodeGroupErrors::CloudProviderApiError(c) => {
-                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                        return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
                             Some(c),
-                        ))
+                        )))
                     }
                     ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
@@ -754,12 +754,12 @@ impl Kapsule {
                         ),
                     )),
                     ScwNodeGroupErrors::MultipleClusterFound => {
-                        return Err(EngineError::new_multiple_cluster_found_expected_one_error(
+                        return Err(Box::new(EngineError::new_multiple_cluster_found_expected_one_error(
                             event_details,
                             CommandError::new_from_safe_message(
                                 "Error, multiple clusters found, can't match the correct node groups.".to_string(),
                             ),
-                        ));
+                        )));
                     }
                     ScwNodeGroupErrors::NoNodePoolFound(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
@@ -768,18 +768,18 @@ impl Kapsule {
                         ),
                     )),
                     ScwNodeGroupErrors::MissingNodePoolInfo => {
-                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                        return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
                             Some(CommandError::new_from_safe_message(
                                 "Error with Scaleway API while trying to retrieve node pool info".to_string(),
                             )),
-                        ));
+                        )));
                     }
                     ScwNodeGroupErrors::NodeGroupValidationError(c) => {
-                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                        return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
                             Some(c),
-                        ));
+                        )));
                     }
                 };
                 Vec::with_capacity(0)
@@ -879,12 +879,12 @@ impl Kapsule {
             );
             match res {
                 Ok(_) => {}
-                Err(Operation { error, .. }) => return Err(error),
+                Err(Operation { error, .. }) => return Err(Box::new(error)),
                 Err(retry::Error::Internal(msg)) => {
-                    return Err(EngineError::new_k8s_node_not_ready(
+                    return Err(Box::new(EngineError::new_k8s_node_not_ready(
                         event_details,
                         CommandError::new("Waiting for too long worker nodes to be ready".to_string(), Some(msg), None),
-                    ))
+                    )))
                 }
             }
         }
@@ -902,7 +902,7 @@ impl Kapsule {
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
             )),
             Err(e) => {
-                return Err(EngineError::new_k8s_node_not_ready(event_details, e));
+                return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
             }
         };
 
@@ -921,20 +921,6 @@ impl Kapsule {
             ));
         }
 
-        let load_balancer_type = match ScwLoadBalancerType::from_str(&self.advanced_settings.load_balancer_size) {
-            Ok(t) => t,
-            Err(e) => {
-                let err = EngineError::new_unsupported_load_balancer_type(
-                    event_details,
-                    &self.advanced_settings.load_balancer_size,
-                    e,
-                );
-                self.logger().log(EngineEvent::Error(err.clone(), None));
-
-                return Err(err);
-            }
-        };
-
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.organization_long_id(),
@@ -950,13 +936,14 @@ impl Kapsule {
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
-            self.dns_provider.domain().clone(),
             self.context.is_feature_enabled(&Features::Grafana),
             self.dns_provider.domain().root_domain().to_string(),
+            self.dns_provider.domain().to_helm_format_string(),
+            self.managed_dns_resolvers_terraform_format(),
+            self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
-            load_balancer_type,
             self.context.disable_pleco(),
             self.options.clone(),
             self.advanced_settings().clone(),
@@ -982,10 +969,10 @@ impl Kapsule {
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
         )
-        .map_err(|e| EngineError::new_helm_charts_deploy_error(event_details.clone(), e))
+        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
     }
 
-    fn create_error(&self) -> Result<(), EngineError> {
+    fn create_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
@@ -1011,7 +998,7 @@ impl Kapsule {
         Ok(())
     }
 
-    fn upgrade_error(&self) -> Result<(), EngineError> {
+    fn upgrade_error(&self) -> Result<(), Box<EngineError>> {
         self.logger().log(EngineEvent::Warning(
             self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
             EventMessage::new_from_safe("SCW.upgrade_error() called.".to_string()),
@@ -1020,7 +1007,7 @@ impl Kapsule {
         Ok(())
     }
 
-    fn pause(&self) -> Result<(), EngineError> {
+    fn pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         self.logger().log(EngineEvent::Info(
             self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
@@ -1041,12 +1028,12 @@ impl Kapsule {
             temp_dir.as_str(),
             context,
         ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
                 temp_dir,
                 e,
-            ));
+            )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
@@ -1055,12 +1042,12 @@ impl Kapsule {
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 bootstrap_charts_dir,
                 common_charts_temp_dir,
                 e,
-            ));
+            )));
         }
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
@@ -1078,7 +1065,7 @@ impl Kapsule {
             Err(e) => {
                 let error = EngineError::new_terraform_error(event_details, e);
                 self.logger().log(EngineEvent::Error(error.clone(), None));
-                return Err(error);
+                return Err(Box::new(error));
             }
         };
 
@@ -1138,10 +1125,10 @@ impl Kapsule {
                             self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
                         Err(Operation { error, .. }) => {
-                            return Err(error)
+                            return Err(Box::new(error))
                         }
                         Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))))
+                            return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))))
                         }
                     }
                 }
@@ -1155,11 +1142,11 @@ impl Kapsule {
         ));
 
         if let Err(e) = terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources) {
-            return Err(EngineError::new_terraform_error(event_details, e));
+            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
         if let Err(e) = self.check_workers_on_pause() {
-            return Err(EngineError::new_k8s_node_not_ready(event_details, e));
+            return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
         let message = format!("Kubernetes cluster {} successfully paused", self.name());
@@ -1168,7 +1155,7 @@ impl Kapsule {
         Ok(())
     }
 
-    fn pause_error(&self) -> Result<(), EngineError> {
+    fn pause_error(&self) -> Result<(), Box<EngineError>> {
         self.logger().log(EngineEvent::Warning(
             self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
             EventMessage::new_from_safe("SCW.pause_error() called.".to_string()),
@@ -1177,7 +1164,7 @@ impl Kapsule {
         Ok(())
     }
 
-    fn delete(&self) -> Result<(), EngineError> {
+    fn delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let skip_kubernetes_step = false;
 
@@ -1196,12 +1183,12 @@ impl Kapsule {
             temp_dir.as_str(),
             context,
         ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
                 temp_dir,
                 e,
-            ));
+            )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
@@ -1210,12 +1197,12 @@ impl Kapsule {
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 bootstrap_charts_dir,
                 common_charts_temp_dir,
                 e,
-            ));
+            )));
         }
 
         // should apply before destroy to be sure destroy will compute on all resources
@@ -1255,7 +1242,7 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
-                &kubeconfig_path,
+                kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
             );
 
@@ -1271,7 +1258,7 @@ impl Kapsule {
 
                     for namespace_to_delete in namespaces_to_delete.iter() {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
-                            &kubeconfig_path,
+                            kubeconfig_path,
                             namespace_to_delete,
                             self.cloud_provider().credentials_environment_variables(),
                         ) {
@@ -1320,7 +1307,7 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
+            let helm = Helm::new(kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
                 .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
@@ -1334,7 +1321,7 @@ impl Kapsule {
 
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
-                &kubeconfig_path,
+                kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1385,7 +1372,7 @@ impl Kapsule {
 
             for qovery_namespace in qovery_namespaces.iter() {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                    &kubeconfig_path,
+                    kubeconfig_path,
                     qovery_namespace,
                     self.cloud_provider().credentials_environment_variables(),
                 );
@@ -1456,11 +1443,11 @@ impl Kapsule {
                 ));
                 Ok(())
             }
-            Err(err) => Err(EngineError::new_terraform_error(event_details, err)),
+            Err(err) => Err(Box::new(EngineError::new_terraform_error(event_details, err))),
         }
     }
 
-    fn delete_error(&self) -> Result<(), EngineError> {
+    fn delete_error(&self) -> Result<(), Box<EngineError>> {
         self.logger().log(EngineEvent::Warning(
             self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
             EventMessage::new_from_safe("SCW.delete_error() called.".to_string()),
@@ -1531,7 +1518,7 @@ impl Kubernetes for Kapsule {
         &self.object_storage
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
@@ -1540,7 +1527,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), EngineError> {
+    fn on_create(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -1554,7 +1541,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -1567,7 +1554,7 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
@@ -1597,12 +1584,12 @@ impl Kubernetes for Kapsule {
             temp_dir.as_str(),
             context,
         ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
                 temp_dir,
                 e,
-            ));
+            )));
         }
 
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
@@ -1610,12 +1597,12 @@ impl Kubernetes for Kapsule {
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
         {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 common_bootstrap_charts,
                 common_charts_temp_dir,
                 e,
-            ));
+            )));
         }
 
         self.logger().log(EngineEvent::Info(
@@ -1630,7 +1617,7 @@ impl Kubernetes for Kapsule {
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);
         }
 
@@ -1638,7 +1625,7 @@ impl Kubernetes for Kapsule {
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);
         }
 
@@ -1651,15 +1638,15 @@ impl Kubernetes for Kapsule {
                     ));
                 }
                 Err(e) => {
-                    return Err(EngineError::new_k8s_node_not_ready_with_requested_version(
+                    return Err(Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
                         event_details,
                         kubernetes_upgrade_status.requested_version.to_string(),
                         e,
-                    ));
+                    )));
                 }
             },
             Err(e) => {
-                return Err(EngineError::new_terraform_error(event_details, e));
+                return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
             }
         }
 
@@ -1667,7 +1654,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), EngineError> {
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -1681,7 +1668,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -1695,7 +1682,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), EngineError> {
+    fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -1709,7 +1696,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), EngineError> {
+    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -1723,7 +1710,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), EngineError> {
+    fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
@@ -1737,7 +1724,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),

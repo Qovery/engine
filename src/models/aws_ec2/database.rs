@@ -230,7 +230,10 @@ impl<T: DatabaseType<AWSEc2, Managed>> Database<AWSEc2, Managed, T>
 where
     Database<AWSEc2, Managed, T>: Service,
 {
-    fn get_version_aws_managed(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+    fn get_version_aws_managed(
+        &self,
+        event_details: EventDetails,
+    ) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
             service::DatabaseType::PostgreSQL => get_managed_postgres_version,
             service::DatabaseType::MongoDB => get_managed_mongodb_version,
@@ -245,7 +248,7 @@ where
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-    ) -> Result<TeraContext, EngineError> {
+    ) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -333,7 +336,7 @@ impl ToTeraContext for Database<AWSEc2, Managed, PostgresSQL>
 where
     PostgresSQL: DatabaseType<AWSEc2, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -342,7 +345,7 @@ impl ToTeraContext for Database<AWSEc2, Container, PostgresSQL>
 where
     PostgresSQL: DatabaseType<AWSEc2, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -353,7 +356,7 @@ impl ToTeraContext for Database<AWSEc2, Managed, MySQL>
 where
     MySQL: DatabaseType<AWSEc2, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -362,7 +365,7 @@ impl ToTeraContext for Database<AWSEc2, Container, MySQL>
 where
     MySQL: DatabaseType<AWSEc2, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -373,7 +376,7 @@ impl ToTeraContext for Database<AWSEc2, Managed, MongoDB>
 where
     MongoDB: DatabaseType<AWSEc2, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -382,7 +385,7 @@ impl ToTeraContext for Database<AWSEc2, Container, MongoDB>
 where
     MongoDB: DatabaseType<AWSEc2, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -393,7 +396,7 @@ impl ToTeraContext for Database<AWSEc2, Managed, Redis>
 where
     Redis: DatabaseType<AWSEc2, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -402,7 +405,7 @@ impl ToTeraContext for Database<AWSEc2, Container, Redis>
 where
     Redis: DatabaseType<AWSEc2, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }

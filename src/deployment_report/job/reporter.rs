@@ -178,7 +178,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
     fn deployment_terminated(
         &self,
-        result: &Result<Self::DeploymentResult, EngineError>,
+        result: &Result<Self::DeploymentResult, Box<EngineError>>,
         _: &mut Self::DeploymentState,
     ) {
         let error = match result {
@@ -192,7 +192,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 "🚫 Deployment has been cancelled.".to_string(),
                 None,
             ));
@@ -219,7 +219,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
         if error.tag() == &JobFailure {
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 format!(r#"
 ❌ {} failed to be executed in the given {} due to `{}`.
 This most likely an issue with its configuration/code.
@@ -230,9 +230,9 @@ Look at your logs in order to understand what went wrong or increase its max dur
                 None,
             ));
         } else {
-            self.logger.send_error(error.clone());
+            self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 format!(r#"
 ❌ Deployment of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/

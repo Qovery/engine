@@ -17,34 +17,14 @@ controller:
     targetCPUUtilizationPercentage: 50
     targetMemoryUtilizationPercentage: 50
 
-  admissionWebhooks:
-    enabled: false
-
   publishService:
     enabled: true
 
   service:
     enabled: true
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: set-by-engine-code
-      external-dns.alpha.kubernetes.io/hostname: set-by-engine-code
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
-
-  resources:
-    limits:
-      cpu: set-by-engine-code
-      memory: set-by-engine-code
-    requests:
-      cpu: set-by-engine-code
-      memory: set-by-engine-code
-
-defaultBackend:
-  resources:
-    limits:
-      cpu: set-by-engine-code
-      memory: set-by-engine-code
-    requests:
-      cpu: set-by-engine-code
-      memory: set-by-engine-code

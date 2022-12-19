@@ -19,10 +19,10 @@ impl<T: CloudProvider> DeploymentAction for Router<T>
 where
     Router<T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -69,17 +69,17 @@ where
         )
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         execute_long_deployment(
             RouterDeploymentReporter::new(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) },
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) },
         )
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         execute_long_deployment(
             RouterDeploymentReporter::new(self, target, Action::Delete),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let chart = ChartInfo {
                     name: self.helm_release_name(),
                     namespace: HelmChartNamespaces::Custom,

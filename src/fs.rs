@@ -19,7 +19,7 @@ pub fn delete_file_if_exists(file: &str) -> Result<(), Error> {
         return Ok(());
     }
 
-    fs::remove_file(&file)
+    fs::remove_file(file)
 }
 
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
@@ -200,7 +200,7 @@ where
     let str_path = string_path.as_str();
     let path = Path::new(str_path);
 
-    let mut file = match File::create(&path) {
+    let mut file = match File::create(path) {
         Err(e) => {
             return Err(CommandError::new(
                 format!("Unable to create YAML backup file for chart {}.", chart_name),

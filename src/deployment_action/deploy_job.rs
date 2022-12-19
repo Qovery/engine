@@ -32,7 +32,7 @@ impl<T: CloudProvider> DeploymentAction for Job<T>
 where
     Job<T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
 
         // Force job to run, if force trigger is requested
@@ -55,14 +55,14 @@ where
             }
             JobSchedule::OnPause {} | JobSchedule::OnDelete {} => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Create);
-                execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
                 })
             }
         }
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
             JobSchedule::Cron { .. } => {
@@ -86,14 +86,14 @@ where
             }
             JobSchedule::OnStart {} | JobSchedule::OnDelete {} => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Pause);
-                execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
                 })
             }
         }
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
             JobSchedule::OnDelete {} => {
@@ -128,14 +128,14 @@ fn run_job<'a, T: CloudProvider>(
     target: &'a DeploymentTarget,
     event_details: &'a EventDetails,
 ) -> (
-    impl Fn(&EnvProgressLogger) -> Result<TaskContext, EngineError> + 'a,
-    impl Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, EngineError> + 'a,
+    impl Fn(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a,
+    impl Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a,
     impl Fn(&EnvSuccessLogger, TaskContext) + 'a,
 )
 where
     Job<T>: JobService,
 {
-    let pre_run = move |logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+    let pre_run = move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         match &job.image_source {
             // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
             ImageSource::Registry { source } => {
@@ -168,7 +168,7 @@ where
         })
     };
 
-    let task = move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+    let task = move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
         let chart = ChartInfo {
             name: job.helm_release_name(),
             path: job.workspace_directory().to_string(),
@@ -365,14 +365,14 @@ fn delete_job<'a, T: CloudProvider>(
     target: &'a DeploymentTarget,
     event_details: &'a EventDetails,
 ) -> (
-    impl Fn(&EnvProgressLogger) -> Result<TaskContext, EngineError> + 'a,
-    impl Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, EngineError> + 'a,
+    impl Fn(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a,
+    impl Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a,
     impl Fn(&EnvSuccessLogger, TaskContext) + 'a,
 )
 where
     Job<T>: JobService,
 {
-    let pre_run = move |_logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+    let pre_run = move |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         let last_image = block_on(get_last_deployed_image(
             target.kube.clone(),
             &job.selector(),
@@ -389,7 +389,7 @@ where
         })
     };
 
-    let task = move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+    let task = move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
         let chart = ChartInfo {
             name: job.helm_release_name(),
             path: job.workspace_directory().to_string(),
@@ -489,7 +489,7 @@ fn get_active_job_pod_by_selector(
     job_pod_selector: &str,
     event_details: &EventDetails,
     set_of_pods_already_processed: &HashSet<String>,
-) -> Result<String, EngineError> {
+) -> Result<String, Box<EngineError>> {
     let list_job_pods_result = retry::retry(Fibonacci::from_millis(1000).take(10), || {
         // List pods according to job label selector
         let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
@@ -555,14 +555,14 @@ fn get_active_job_pod_by_selector(
     });
     match list_job_pods_result {
         Ok(active_pod_name) => Ok(active_pod_name),
-        Err(Operation { error, .. }) => Err(error),
-        Err(Error::Internal(message)) => Err(EngineError::new_job_error(
+        Err(Operation { error, .. }) => Err(Box::new(error)),
+        Err(Error::Internal(message)) => Err(Box::new(EngineError::new_job_error(
             event_details.clone(),
             format!(
                 "Internal error when listing pods having label {} through Kube API: {}",
                 &job_pod_selector, message
             ),
-        )),
+        ))),
     }
 }
 

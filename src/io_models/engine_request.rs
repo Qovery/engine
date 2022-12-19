@@ -60,20 +60,20 @@ impl<T> EngineRequest<T> {
         context: &Context,
         event_details: EventDetails,
         logger: Box<dyn Logger>,
-    ) -> Result<InfrastructureContext, IoEngineError> {
+    ) -> Result<InfrastructureContext, Box<IoEngineError>> {
         let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
             .ok_or_else(|| {
-                IoEngineError::new_error_on_cloud_provider_information(
+                Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
                     CommandError::new(
                         "Invalid cloud provider information".to_string(),
                         Some(format!("Invalid cloud provider information: {:?}", self.cloud_provider)),
                         None,
                     ),
-                )
+                ))
             })?;
         let cloud_provider = Arc::new(cloud_provider);
 
@@ -282,7 +282,7 @@ impl Kubernetes {
         cloud_provider: Arc<Box<dyn cloud_provider::CloudProvider>>,
         dns_provider: Arc<Box<dyn dns_provider::DnsProvider>>,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
+    ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
         match self.kind {
             cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
@@ -328,11 +328,11 @@ impl Kubernetes {
             cloud_provider::kubernetes::Kind::Ec2 => {
                 let ec2_instance = match self.nodes_groups.len() != 1 {
                     true => {
-                        return Err(EngineError::new_missing_nodegroup_information_error(
+                        return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                             cloud_provider
                                 .get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                             "unknown for EC2 nodegroup".to_string(),
-                        ))
+                        )))
                     }
                     false => self.nodes_groups[0].to_ec2_instance(),
                 };

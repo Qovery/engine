@@ -85,15 +85,15 @@ impl InfrastructureContext {
         (*self.dns_provider).borrow()
     }
 
-    pub fn is_valid(&self) -> Result<(), EngineConfigError> {
+    pub fn is_valid(&self) -> Result<(), Box<EngineConfigError>> {
         if let Err(e) = self.cloud_provider.is_valid() {
-            return Err(EngineConfigError::CloudProviderNotValid(e));
+            return Err(Box::new(EngineConfigError::CloudProviderNotValid(*e)));
         }
 
         if let Err(e) = self.dns_provider.is_valid() {
-            return Err(EngineConfigError::DnsProviderNotValid(
+            return Err(Box::new(EngineConfigError::DnsProviderNotValid(
                 e.to_engine_error(self.dns_provider.event_details()),
-            ));
+            )));
         }
 
         Ok(())
