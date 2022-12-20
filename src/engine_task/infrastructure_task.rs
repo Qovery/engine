@@ -3,7 +3,7 @@ use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
 use crate::errors::EngineError;
-use crate::events::Stage::Infrastructure;
+use crate::events::Stage::{self, Infrastructure};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
@@ -57,6 +57,10 @@ impl InfrastructureTask {
             self.docker.clone(),
             self.request.event_details(),
         )
+    }
+
+    fn get_event_details(&self, step: InfrastructureStep) -> EventDetails {
+        EventDetails::clone_changing_stage(self.request.event_details(), Stage::Infrastructure(step))
     }
 
     fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: TransactionResult) {
@@ -134,6 +138,17 @@ impl Task for InfrastructureTask {
             self.request.build_platform.id.as_str()
         );
 
+        self.logger.log(EngineEvent::Info(
+            self.get_event_details(InfrastructureStep::Start),
+            EventMessage::new("Qovery Engine has started the infrastructure deployment".to_string(), None),
+        ));
+        let guard = scopeguard::guard((), |_| {
+            self.logger.log(EngineEvent::Info(
+                self.get_event_details(InfrastructureStep::Terminated),
+                EventMessage::new("Qovery Engine has terminated the infrastructure deployment".to_string(), None),
+            ));
+        });
+
         let engine = match self
             .request
             .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
@@ -168,6 +183,10 @@ impl Task for InfrastructureTask {
         };
 
         self.handle_transaction_result(self.logger.clone(), tx.commit());
+
+        // Uploading to S3 can take a lot of time, and might hit the core timeout
+        // So we early drop the guard to notify core that the task is done
+        drop(guard);
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
