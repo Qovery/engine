@@ -12,7 +12,7 @@ use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::kubers_utils::kube_delete_all_from_selector;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
@@ -576,7 +576,7 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
+        let run = |logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -595,9 +595,15 @@ where
             );
 
             if let Err(e) = helm.on_create(target) {
-                return match is_pvc_bound(target, event_details.clone(), self.as_service().sanitized_name()) {
-                    Ok(_) => Err(e),
-                    Err(err) => Err(err),
+                return match e.tag() {
+                    Tag::TaskCancellationRequested => Err(e),
+                    _ => match is_pvc_bound(target, event_details.clone(), self.as_service().sanitized_name()) {
+                        Ok(_) => Err(e),
+                        Err(err) => {
+                            logger.warning(format!("Cannot find if pvc bound: {}", err.user_log_message()));
+                            Err(e)
+                        }
+                    },
                 };
             };
 
