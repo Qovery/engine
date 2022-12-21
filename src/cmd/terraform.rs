@@ -266,6 +266,21 @@ impl TerraformError {
             }
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"error creating EC2 (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: None,
+                        },
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"InvalidParameterException: Limit of (?P<max_resource_count>[\d]+) (?P<resource_type>[\w?\s]+) exceeded",
         ) {
             if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
@@ -1324,6 +1339,17 @@ terraform {
         }
 
         let test_cases = vec![
+            TestCase {
+                input_raw_message: "error creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "VPC".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message: "error creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
+                        .to_string(),
+                },
+            },
             TestCase {
                 input_raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default).",
                 expected_terraform_error: TerraformError::QuotasExceeded {
