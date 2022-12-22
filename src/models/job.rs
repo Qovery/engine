@@ -313,7 +313,7 @@ impl<T: CloudProvider> Service for Job<T> {
                 JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
                 JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
                 JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
-                JobSchedule::Cron { .. } => Some(build),
+                JobSchedule::Cron { .. } if self.action == Action::Create => Some(build),
                 _ => None,
             },
         }
@@ -326,7 +326,7 @@ impl<T: CloudProvider> Service for Job<T> {
                 JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
                 JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
                 JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
-                JobSchedule::Cron { .. } => Some(build),
+                JobSchedule::Cron { .. } if self.action == Action::Create => Some(build),
                 _ => None,
             },
         }
