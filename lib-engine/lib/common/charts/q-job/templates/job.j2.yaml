@@ -41,10 +41,10 @@ spec:
       containers:
         - name: qovery-wait-container-output
           image: "busybox:1.34.1"
-          command: ['sh', '-c', 'while true; do sleep 5; if [ -f /output/terminate ]; then break; fi; done; sleep 10']
+          command: ['sh', '-c', 'while true; do sleep 5; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 10']
           volumeMounts:
             - name: output
-              mountPath: /output
+              mountPath: /qovery-output
               #TODO (mzo): mutualize the container job part with cron job
               # Also, if we have 2 types of job (one with output, one without), should be mutualized too
         - name: {{ service.name }}
@@ -61,7 +61,7 @@ spec:
             {%- endfor %}
           volumeMounts:
             - name: output
-              mountPath: /output
+              mountPath: /qovery-output
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"
