@@ -977,6 +977,105 @@ fn deploy_container_with_no_router_on_aws_eks() {
 #[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
+fn deploy_container_with_storages_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+
+        let storage_id_1 = Uuid::new_v4();
+        let storage_id_2 = Uuid::new_v4();
+        environment.containers = vec![Container {
+            long_id: Uuid::new_v4(),
+            name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            action: Action::Create,
+            registry: Registry::DockerHub {
+                url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
+                credentials: None,
+            },
+            image: "debian".to_string(),
+            tag: "bullseye".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_mili: 250,
+            cpu_limit_in_mili: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            min_instances: 1,
+            max_instances: 1,
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    id: Uuid::new_v4().to_string(),
+                    port: 8080,
+                    is_default: true,
+                    name: Some("http".to_string()),
+                    publicly_accessible: false,
+                    protocol: Protocol::HTTP,
+                },
+            ],
+            storages: vec![
+                Storage {
+                id: to_short_id(&storage_id_1),
+                long_id: storage_id_1,
+                name: "photos1".to_string(),
+                storage_type: StorageType::Ssd,
+                size_in_gib: 10,
+                mount_point: "/mnt/photos1".to_string(),
+                snapshot_retention_in_days: 0,
+                },
+                Storage {
+                    id: to_short_id(&storage_id_2),
+                    long_id: storage_id_2,
+                    name: "photos2".to_string(),
+                    storage_type: StorageType::Ssd,
+                    size_in_gib: 10,
+                    mount_point: "/mnt/photos2".to_string(),
+                    snapshot_retention_in_days: 0,
+                }],
+            environment_vars: BTreeMap::default(),
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
 fn deploy_container_with_router_on_aws_eks() {
     engine_run_test(|| {
         init();
