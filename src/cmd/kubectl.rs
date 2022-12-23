@@ -1348,7 +1348,7 @@ where
         "qovery-wait-container-output",
         "--",
         "cat",
-        "/output/qovery-output.json",
+        "/qovery-output/qovery-output.json",
     ];
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }

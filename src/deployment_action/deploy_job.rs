@@ -264,7 +264,7 @@ where
                 // Write file in shared volume to let the waiting container terminate
                 block_on(kube_pod_api.clone().exec(
                     &pod_name,
-                    vec!["touch", "/output/terminate"],
+                    vec!["touch", "/qovery-output/terminate"],
                     &AttachParams::default().container("qovery-wait-container-output"),
                 ))
                 .map_err(|_err| {

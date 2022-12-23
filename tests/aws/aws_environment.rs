@@ -1119,7 +1119,10 @@ fn deploy_job_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!("echo starting; sleep 10; echo '{}' > /output/qovery-output.json", json_output),
+                format!(
+                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
+                    json_output
+                ),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -1334,7 +1337,10 @@ fn build_and_deploy_job_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!("echo starting; sleep 10; echo '{}' > /output/qovery-output.json", json_output),
+                format!(
+                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
+                    json_output
+                ),
             ],
             entrypoint: None,
             force_trigger: false,
