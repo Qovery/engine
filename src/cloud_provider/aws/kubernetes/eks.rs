@@ -26,6 +26,7 @@ use aws_config::SdkConfig;
 use aws_sdk_eks::error::{
     DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
 };
+use aws_sdk_eks::model::NodegroupIssueCode;
 use aws_sdk_eks::output::{
     DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
 };
@@ -787,14 +788,45 @@ pub async fn delete_eks_failed_nodegroups(
         }
     };
 
-    let nodegroups_to_delete = match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described) {
+    let nodegroups_to_delete = match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described.clone()) {
         Ok(x) => x,
         Err(e) => {
+            // print AWS nodegroup errors to the customer (useful when quota is reached)
+            if e == NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast {
+                let nodegroup_health_message = all_cluster_nodegroups_described
+                    .iter()
+                    .map(|n| match n.nodegroup() {
+                        Some(nodegroup) => {
+                            let nodegroup_name = nodegroup.nodegroup_name().unwrap_or("unknown_nodegroup_name");
+                            let nodegroup_status = match nodegroup.health() {
+                                Some(x) =>
+                                    x
+                                    .issues()
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .map(|x| format!("{:?}: {}", x.code().unwrap_or(&NodegroupIssueCode::Unknown("unknown AWS nodegroup code".to_string())), x.message().unwrap_or("no AWS specific message given, please contact Qovery and AWS support regarding this nodegroup issue")))
+                                    .collect::<Vec<String>>()
+                                    .join(", "),
+                                None => "can't get nodegroup status from cloud provider".to_string(),
+                            };
+                            format!("Nodegroup {} health is: {}", nodegroup_name, nodegroup_status)
+                        }
+                        None => "".to_string(),
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n");
+
+                return Err(Box::new(EngineError::new_nodegroup_delete_any_nodegroup_error(
+                    event_details,
+                    nodegroup_health_message,
+                )));
+            };
+
             return Err(Box::new(EngineError::new_nodegroup_delete_error(
                 event_details,
                 None,
                 e.to_string(),
-            )))
+            )));
         }
     };
 
