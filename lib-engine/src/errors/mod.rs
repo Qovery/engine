@@ -560,6 +560,8 @@ pub enum Tag {
     CannotDetermineK8sKubeletWorkerVersion,
     /// CannotGetNodeGroupList: represents an error while getting node group list from the cloud provider
     CannotGetNodeGroupList,
+    /// CannotDeleteNodeGroup: represents an error while trying to delete or checking if delete is possible of a node group
+    CannotDeleteNodeGroup,
     /// CannotGetNodeGroupInfo: represent and error caused by the cloud provider because no Nodegroup information has been returned
     CannotGetNodeGroupInfo,
     /// NumberOfMaxNodesIsBelowThanCurrentUsage: represents an error explaining to the user the requested maximum of nodes is below the current usage
@@ -3093,7 +3095,18 @@ impl EngineError {
             None => format!("Error, can't delete nodegroup. {}", &safe_error),
         };
 
-        EngineError::new(event_details, Tag::CannotGetNodeGroupList, message, None, None, None)
+        EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
+    }
+
+    /// Can't delete any present node group
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `safe_error`: Raw error message.
+    pub fn new_nodegroup_delete_any_nodegroup_error(event_details: EventDetails, raw_error: String) -> EngineError {
+        let message = format!("Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider iterface and manually fix issues.\n{}", raw_error);
+        EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
     }
 
     /// No cluster found
