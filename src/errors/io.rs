@@ -188,6 +188,7 @@ pub enum Tag {
     JobFailure,
     DoNotRespectCloudProviderBestPractices,
     CannotListClusters,
+    CannotDeleteNodeGroup,
 }
 
 impl From<errors::Tag> for Tag {
@@ -377,6 +378,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sCannotGetPVCs => Tag::K8sCannotGetPVCs,
             errors::Tag::K8sCannotBoundPVC => Tag::K8sCannotBoundPVC,
             errors::Tag::CannotListClusters => Tag::CannotListClusters,
+            errors::Tag::CannotDeleteNodeGroup => Tag::CannotDeleteNodeGroup,
         }
     }
 }
