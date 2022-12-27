@@ -41,6 +41,9 @@ spec:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
     spec:
       automountServiceAccountToken: false
+      {%- if security_service_account_name != "" %}
+      serviceAccountName: {{ security_service_account_name }}
+      {%- endif %}
       terminationGracePeriodSeconds: 60
       securityContext:
         fsGroup: 1000

@@ -43,6 +43,9 @@ spec:
         spec:
           restartPolicy: OnFailure
           automountServiceAccountToken: false
+          {%- if service.advanced_settings.security_service_account_name != "" %}
+          serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+          {%- endif %}
           terminationGracePeriodSeconds: 60
           securityContext: { }
           {%- if registry %}

@@ -153,6 +153,9 @@ impl Registry {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct ContainerAdvancedSettings {
+    #[serde(alias = "security.service_account_name")]
+    pub security_service_account_name: String,
+
     // Deployment
     #[serde(alias = "deployment.custom_domain_check_enabled")]
     pub deployment_custom_domain_check_enabled: bool,
@@ -227,6 +230,7 @@ pub struct ContainerAdvancedSettings {
 impl Default for ContainerAdvancedSettings {
     fn default() -> Self {
         ContainerAdvancedSettings {
+            security_service_account_name: "".to_string(),
             deployment_custom_domain_check_enabled: true,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,

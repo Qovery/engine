@@ -64,6 +64,9 @@ spec:
                       - {{ long_id }}
                 topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
+      {%- if security_service_account_name != "" %}
+      serviceAccountName: {{ security_service_account_name }}
+      {%- endif %}
       terminationGracePeriodSeconds: 60
       securityContext: {}
       {%- if is_registry_secret %}
