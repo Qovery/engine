@@ -1,13 +1,18 @@
 use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, FuncTestsSecrets};
 use function_name::named;
 
-use crate::helpers::scaleway::{SCW_BUCKET_TTL_IN_SECONDS, SCW_TEST_ZONE};
+use crate::helpers::scaleway::SCW_BUCKET_TTL_IN_SECONDS;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 use tracing::log::info;
 use tracing::{span, Level};
 use uuid::Uuid;
+
+// SCW zone has been switched from Paris2 to Warsaw due to a lot of slowness on SCW Object storage end
+// making tests very flacky
+pub const SCW_OBJECT_STORAGE_TEST_ZONE: ScwZone = ScwZone::Warsaw1;
 
 #[cfg(feature = "test-scw-minimal")]
 #[named]
@@ -30,7 +35,7 @@ fn test_delete_bucket_hard_delete_strategy() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
@@ -76,7 +81,7 @@ fn test_delete_bucket_empty_strategy() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::Empty,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
@@ -121,7 +126,7 @@ fn test_create_bucket() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
@@ -168,7 +173,7 @@ fn test_recreate_bucket() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
@@ -223,7 +228,7 @@ fn test_file_handling() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
@@ -281,7 +286,7 @@ fn test_ensure_file_is_absent() {
             "test".to_string(),
             scw_access_key,
             scw_secret_key,
-            SCW_TEST_ZONE,
+            SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
             Some(SCW_BUCKET_TTL_IN_SECONDS),
