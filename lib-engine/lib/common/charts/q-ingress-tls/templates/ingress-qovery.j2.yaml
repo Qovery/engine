@@ -31,7 +31,7 @@ metadata:
     ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
     nginx.ingress.kubernetes.io/proxy-buffer-size: "{{ advanced_settings.network_ingress_proxy_buffer_size_kb }}k"
-    {%- if advanced_settings.network_ingress_cors_enable == "true" %}
+    {%- if advanced_settings.network_ingress_cors_enable == true %}
     nginx.ingress.kubernetes.io/enable-cors: "{{ advanced_settings.network_ingress_cors_enable }}"
     nginx.ingress.kubernetes.io/cors-allow-origin: "{{ advanced_settings.network_ingress_cors_allow_origin }}"
     nginx.ingress.kubernetes.io/cors-allow-methods: "{{ advanced_settings.network_ingress_cors_allow_methods }}"
