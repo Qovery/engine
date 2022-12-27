@@ -39,6 +39,9 @@ pub struct JobAdvancedSettings {
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
 
+    #[serde(alias = "security.service_account_name")]
+    pub security_service_account_name: String,
+
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
     pub readiness_probe_type: AdvancedSettingsProbeType,
@@ -80,6 +83,7 @@ impl Default for JobAdvancedSettings {
             cronjob_failed_jobs_history_limit: 1,
             cronjob_success_jobs_history_limit: 1,
             build_timeout_max_sec: 30 * 60, // 30 minutes
+            security_service_account_name: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::None,
             readiness_probe_http_get_path: "".to_string(),
             readiness_probe_initial_delay_seconds: 0,

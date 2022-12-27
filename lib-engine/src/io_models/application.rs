@@ -65,6 +65,8 @@ pub struct ApplicationAdvancedSettings {
     #[deprecated(
         note = "please use `readiness_probe.initial_delay_seconds` and `liveness_probe.initial_delay_seconds` instead"
     )]
+    #[serde(alias = "security.service_account_name")]
+    pub security_service_account_name: String,
     #[serde(alias = "deployment.delay_start_time_sec")]
     pub deployment_delay_start_time_sec: u32,
     #[serde(alias = "deployment.custom_domain_check_enabled")]
@@ -134,9 +136,10 @@ pub struct ApplicationAdvancedSettings {
 impl Default for ApplicationAdvancedSettings {
     fn default() -> Self {
         ApplicationAdvancedSettings {
-            deployment_delay_start_time_sec: 30,
-            build_timeout_max_sec: 30 * 60, // 30min
+            security_service_account_name: "".to_string(),
+            deployment_delay_start_time_sec: 30, // 30min
             deployment_custom_domain_check_enabled: true,
+            build_timeout_max_sec: 30 * 60,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
