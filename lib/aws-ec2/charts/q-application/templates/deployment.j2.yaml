@@ -52,6 +52,9 @@ spec:
         appCommitId: {{ version }}
     spec:
       automountServiceAccountToken: false
+      {%- if security_service_account_name != "" %}
+      serviceAccountName: {{ security_service_account_name }}
+      {%- endif %}
       terminationGracePeriodSeconds: 60
       securityContext: {}
       {%- if is_registry_secret %}

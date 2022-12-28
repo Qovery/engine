@@ -247,6 +247,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         vec![test_storage()],
         vec![test_env_var()],
         ApplicationAdvancedSettings {
+            security_service_account_name: "".to_string(),
             deployment_delay_start_time_sec: 0,
             deployment_custom_domain_check_enabled: true,
             build_timeout_max_sec: 2,
@@ -341,6 +342,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             liveness_probe_success_threshold: 34,
             liveness_probe_failure_threshold: 35,
             hpa_cpu_average_utilization_percent: 41,
+            security_service_account_name: "".to_string(),
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -484,6 +486,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             liveness_probe_timeout_seconds: 23,
             liveness_probe_success_threshold: 24,
             liveness_probe_failure_threshold: 25,
+            security_service_account_name: "".to_string(),
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
