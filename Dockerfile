@@ -10,7 +10,8 @@ ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc
+RUN apt-get update && \
+  apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev
 ADD . .
 
 # run release build
@@ -51,6 +52,7 @@ RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
 COPY --from=build /root/target/release/app .
+COPY --from=build /root/target/release/engine_grpc .
 COPY --from=build /root/docker/load.sh $HOME_DIR
 COPY --from=build /root/docker/engine/run.sh $HOME_DIR
 COPY --from=build /root/bin_versions $HOME_DIR

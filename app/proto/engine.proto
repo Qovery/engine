@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "qovery-engine/proto";
+option java_multiple_files = true;
+option java_package = "com.qovery.lib.grpc";
+option java_outer_classname = "EngineProto";
+
+package engine;
+
+service Engine {
+  rpc GetNewDeployment(DeploymentRequest) returns (DeploymentInfo) {}
+  rpc ExecDeployment(stream EngineMessageTx) returns (stream EngineMessageRx) {}
+}
+
+enum DeploymentType {
+  Unknown = 0; // empty value in proto map to 0
+  Environment = 1;
+  Infrastructure = 2;
+}
+
+message DeploymentRequest {
+  DeploymentType deployment_type = 1;
+}
+
+message DeploymentInfo {
+  string organization_id = 1;
+  string cluster_id = 2;
+  string execution_id = 3;
+  string request_id = 4;
+  DeploymentType type = 5;
+}
+
+message EngineMessageTx {
+  oneof message {
+    DeploymentInfo deployment_request = 1;
+    string log = 2;
+  }
+}
+
+message EngineMessageRx {
+  oneof request {
+    string deployment_request = 1;
+    int32 deployment_cancel = 2;
+  }
+}

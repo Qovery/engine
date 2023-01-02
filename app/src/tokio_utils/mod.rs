@@ -13,7 +13,7 @@ lazy_static! {
         Builder::new_multi_thread()
             .thread_name("tokio-warp-http")
             .max_blocking_threads(MAX_THREADS)
-            .enable_io()
+            .enable_all()
             .build()
             .unwrap()
     });
@@ -38,6 +38,14 @@ pub fn launch(listen_on: &str) -> JoinHandle<()> {
 
     info!("Starting tokio runtime");
     TOKIO_RUNTIME.lock().unwrap().spawn(launch_warp(listen_on))
+}
+
+pub fn launch_task<R: Send + 'static>(future: impl std::future::Future<Output = R> + Send + 'static) -> JoinHandle<R> {
+    TOKIO_RUNTIME.lock().unwrap().spawn(future)
+}
+
+pub fn launch_blocking_task<R: Send + 'static>(task: impl FnOnce() -> R + Send + 'static) -> JoinHandle<R> {
+    TOKIO_RUNTIME.lock().unwrap().spawn_blocking(task)
 }
 
 /// Start warp webserver
@@ -74,7 +82,7 @@ fn prometheus_service() -> WithHeader<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::webserver::launch;
+    use super::*;
 
     #[test]
     fn test_launch_webserver() {

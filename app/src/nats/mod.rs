@@ -1,4 +1,6 @@
+pub mod nats_logger;
 pub mod subjects;
+
 pub use nats::{Message, Subscription}; // re-export nats internal
 
 use std::io;

@@ -6,6 +6,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "engine_grpc"
+path = "src/main_grpc.rs"
+
 [features]
 default = []
 
@@ -27,12 +31,21 @@ retry = "1.3.1"
 dirs = "4.0.0"
 url = "2.2.2"
 regex = "1"
+anyhow = "1.0.68"
 
 # Webserver (For Prometheus, Healthcheck, ...)
-tokio = { version = "1.18.1", features = ["net", "rt-multi-thread"] }
+tokio = { version = "1.23.0", features = ["full"] }
+tokio-stream = "0.1.11"
 warp = "0.3.2"
 lazy_static = "1.4.0"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
+
+# GRPC
+tonic = { version = "0.8.3", features = ["tls", "tls-roots", "gzip", "transport"] }
+prost = "0.11.5"
+prost-types = "0.11.5"
+tower = "0.4.13"
+futures-util = "0.3.25"
 
 # tracing
 tracing = { version = "0.1.26", features = ["log"] }
@@ -45,3 +58,5 @@ dotenv = "0.15.0"
 reqwest = { version = "0.11.10", features = ["blocking"] }
 
 
+[build-dependencies]
+tonic-build = { version = "0.8.4", features = ["prost"] }

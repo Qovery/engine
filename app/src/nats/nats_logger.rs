@@ -1,4 +1,3 @@
-use crate::nats;
 use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::EngineEvent;
@@ -7,11 +6,11 @@ use qovery_engine::logger::{Logger, StdIoLogger};
 #[derive(Clone)]
 pub struct NatsLogger {
     std_logger: StdIoLogger,
-    nats_connection: nats::Connection,
+    nats_connection: super::Connection,
 }
 
 impl NatsLogger {
-    pub fn new(std_logger: StdIoLogger, nats_connection: nats::Connection) -> Self {
+    pub fn new(std_logger: StdIoLogger, nats_connection: super::Connection) -> Self {
         NatsLogger {
             std_logger,
             nats_connection,
@@ -27,7 +26,7 @@ impl Logger for NatsLogger {
 
         match serde_json::to_string(&event_io) {
             Ok(json_string) => {
-                let subject = nats::subjects::Subject::new_for_engine_event(event.clone());
+                let subject = super::subjects::Subject::new_for_engine_event(event.clone());
 
                 if let Err(e) = self.nats_connection.publish(&subject, json_string.as_bytes()) {
                     self.std_logger.log(EngineEvent::Error(

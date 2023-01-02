@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_arguments, deprecated)]
+#![allow(clippy::too_many_arguments, deprecated, dead_code)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -43,11 +43,11 @@ use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
 
+use self::nats::nats_logger::NatsLogger;
 use crate::constants::ASCII_BANNER;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::logger::composite_logger::CompositeLogger;
-use crate::logger::nats_logger::NatsLogger;
 
 use crate::models::TaskSelector;
 use crate::nats::subjects::{Subject, SubjectInfo};
@@ -61,8 +61,8 @@ mod logger;
 mod models;
 mod nats;
 mod task_manager;
+mod tokio_utils;
 mod utils;
-mod webserver;
 
 fn to_engine_task(
     msg: Message,
@@ -310,7 +310,7 @@ pub fn main() -> io::Result<()> {
         Err(_) => true,
     };
 
-    webserver::launch(http_listen_on.as_str());
+    tokio_utils::launch(http_listen_on.as_str());
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
     // docker daemon is slower to start than the engine
