@@ -528,6 +528,7 @@ async fn listen_for_new_deployments(
         Ok(upstream_msg) => upstream_msg.into_inner(),
         Err(err) => {
             error!("Error while executing deployment: {}", err);
+            tokio::time::sleep(Duration::from_secs(5)).await;
             return Err(err.into());
         }
     };
