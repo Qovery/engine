@@ -78,7 +78,7 @@ gitguardian:
   only:
     - merge_requests
     - main
-  script: ggshield scan ci
+  script: ggshield secret scan
   interruptible: true
   tags:
     - vm-250mcpu-1gmem-0g
