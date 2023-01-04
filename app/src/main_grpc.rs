@@ -421,6 +421,14 @@ impl DeploymentHandle {
         }
     }
 
+    pub fn is_task_terminated(&self) -> bool {
+        if let Some(task) = &self.task {
+            task.1.is_finished()
+        } else {
+            true
+        }
+    }
+
     // This one is tricky/hacky due to the unsafe.
     // The stream we give back must be 'static due to tonic/grpc requirements.
     // and we want to be able to resume on error (i.e: cnx loss) and keep messages even if the grpc stream fails
@@ -527,7 +535,14 @@ async fn listen_for_new_deployments(
     let msg_stream = match engine_client.exec_deployment(msg_stream).await {
         Ok(upstream_msg) => upstream_msg.into_inner(),
         Err(err) => {
-            error!("Error while executing deployment: {}", err);
+            if err.code() != Code::NotFound {
+                error!("Error while getting new deployment: {}", err);
+            }
+            // Task is terminated, and the server refused to accept message for it, we can remove it
+            if current_deployment.is_task_terminated() {
+                current_deployment.remove_task();
+            }
+
             tokio::time::sleep(Duration::from_secs(5)).await;
             return Err(err.into());
         }
