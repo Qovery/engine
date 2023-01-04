@@ -17,6 +17,8 @@ pub struct DeploymentInfo {
     pub request_id: ::prost::alloc::string::String,
     #[prost(enumeration = "DeploymentType", tag = "5")]
     pub r#type: i32,
+    #[prost(string, tag = "6")]
+    pub last_message_id: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -38,7 +40,9 @@ pub mod engine_message_tx {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EngineMessageRx {
-    #[prost(oneof = "engine_message_rx::Request", tags = "1, 2")]
+    #[prost(string, tag = "1")]
+    pub message_id: ::prost::alloc::string::String,
+    #[prost(oneof = "engine_message_rx::Request", tags = "2, 3")]
     pub request: ::core::option::Option<engine_message_rx::Request>,
 }
 /// Nested message and enum types in `EngineMessageRx`.
@@ -46,9 +50,9 @@ pub mod engine_message_rx {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Request {
-        #[prost(string, tag = "1")]
+        #[prost(string, tag = "2")]
         DeploymentRequest(::prost::alloc::string::String),
-        #[prost(int32, tag = "2")]
+        #[prost(int32, tag = "3")]
         DeploymentCancel(i32),
     }
 }

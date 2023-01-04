@@ -557,6 +557,7 @@ async fn listen_for_new_deployments(
 
             _ = &mut current_deployment => {
                 // Current deployment finished
+                info!("Deployment terminated for: {:?}", deployment_info);
                 current_deployment.remove_task();
                 break;
             }
@@ -566,29 +567,33 @@ async fn listen_for_new_deployments(
                     info!("Upstream stream closed");
                     break;
                 }
-                Some(Ok(msg)) => match msg.request {
-                    Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
-                        info!("Received new deployment request: {}", payload);
-                        let task = to_engine_task(
-                            payload,
-                            &workspace_root_dir,
-                            &lib_root_dir,
-                            &docker_host,
-                            docker.clone(),
-                            &task_selector,
-                            logger_for_task.clone_dyn(),
-                        )
-                        .unwrap();
+                Some(Ok(msg)) => {
+                    current_deployment.deployment_info.last_message_id = msg.message_id;
 
-                        current_deployment.set_current_task(task, deployment_info.clone());
-                    }
-                    Some(engine_message_rx::Request::DeploymentCancel(_)) => {
-                        if let Some(task) = current_deployment.get_task() {
-                            let _ = task.cancel();
+                    match msg.request {
+                        Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
+                            info!("Received new deployment request: {}", payload);
+                            let task = to_engine_task(
+                                payload,
+                                &workspace_root_dir,
+                                &lib_root_dir,
+                                &docker_host,
+                                docker.clone(),
+                                &task_selector,
+                                logger_for_task.clone_dyn(),
+                            )
+                            .unwrap();
+
+                            current_deployment.set_current_task(task, deployment_info.clone());
                         }
-                    }
-                    None => {
-                        error!("Invalid payload received from grpc server. Update the protobuf !");
+                        Some(engine_message_rx::Request::DeploymentCancel(_)) => {
+                            if let Some(task) = current_deployment.get_task() {
+                                let _ = task.cancel();
+                            }
+                        }
+                        None => {
+                            error!("Invalid payload received from grpc server. Update the protobuf !");
+                        }
                     }
                 },
                 Some(Err(e)) => {

@@ -30,6 +30,7 @@ message DeploymentInfo {
   string execution_id = 3;
   string request_id = 4;
   DeploymentType type = 5;
+  string last_message_id = 6;
 }
 
 message EngineMessageTx {
@@ -40,8 +41,9 @@ message EngineMessageTx {
 }
 
 message EngineMessageRx {
+  string message_id = 1;
   oneof request {
-    string deployment_request = 1;
-    int32 deployment_cancel = 2;
+    string deployment_request = 2;
+    int32 deployment_cancel = 3;
   }
 }
