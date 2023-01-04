@@ -1,4 +1,5 @@
 use crate::events::{EngineEvent, EventMessageVerbosity};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing;
 
 pub trait Logger: Send + Sync {
@@ -57,6 +58,21 @@ impl Logger for StdIoLogger {
                 EngineEvent::Error(_, _) => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
             };
         });
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Logger> {
+        Box::new(self.clone())
+    }
+}
+
+impl Logger for UnboundedSender<EngineEvent> {
+    fn log(&self, event: EngineEvent) {
+        match self.send(event) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Unable to send engine event to logger channel");
+            }
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn Logger> {
