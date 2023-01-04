@@ -13,10 +13,8 @@ use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::path::Path;
 
-use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::future::Future;
-use std::os::linux::raw::stat;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
@@ -530,7 +528,6 @@ async fn listen_for_new_deployments(
         Ok(upstream_msg) => upstream_msg.into_inner(),
         Err(err) => {
             error!("Error while executing deployment: {}", err);
-            tokio::time::sleep(Duration::from_secs(5)).await;
             return Err(err.into());
         }
     };
