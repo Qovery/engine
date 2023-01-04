@@ -510,6 +510,7 @@ async fn listen_for_new_deployments(
         loop {
             match engine_client.get_new_deployment(deployment_type.clone()).await {
                 Ok(deployment_info) => {
+                    info!("Got new deployment for: {:?}", deployment_info);
                     break deployment_info.into_inner();
                 }
                 Err(err) => {
