@@ -56,6 +56,7 @@ use crate::grpc::engine::{
 };
 use crate::grpc::GrpcEngineClient;
 use crate::logger::composite_logger::CompositeLogger;
+use crate::metrics::METRICS_NB_RUNNING_TASKS;
 
 use crate::models::TaskSelector;
 
@@ -63,6 +64,7 @@ mod constants;
 mod custom_error;
 mod grpc;
 mod logger;
+mod metrics;
 mod models;
 mod tokio_utils;
 mod utils;
@@ -392,6 +394,7 @@ impl DeploymentHandle {
         self.task = Some((task, task_handle));
         self.deployment_info = deployment_info;
         self.rx_old = None; // to drop the old receiver
+        METRICS_NB_RUNNING_TASKS.inc();
         if let Some(waker) = self.waker.take() {
             waker.wake();
         }
@@ -402,6 +405,7 @@ impl DeploymentHandle {
     }
 
     pub fn remove_task(&mut self) {
+        METRICS_NB_RUNNING_TASKS.dec();
         self.task = None;
         let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
         self.tx = tx;

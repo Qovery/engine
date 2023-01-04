@@ -58,6 +58,7 @@ use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 mod constants;
 mod custom_error;
 mod logger;
+mod metrics;
 mod models;
 mod nats;
 mod task_manager;

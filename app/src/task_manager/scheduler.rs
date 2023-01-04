@@ -11,15 +11,11 @@ use prometheus::{self, IntGauge};
 
 use qovery_engine::engine_task::Task;
 
+use crate::metrics::METRICS_NB_RUNNING_TASKS;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::thread::JoinHandle;
 use tracing;
-
-lazy_static! {
-    static ref METRICS_NB_RUNNING_TASKS: IntGauge =
-        register_int_gauge!("taskmanager_nb_running_tasks", "Number of tasks currently running").unwrap();
-}
 
 pub struct TaskManager {
     task_executor_tx: Sender<Box<dyn Task>>,
