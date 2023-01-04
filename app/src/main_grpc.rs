@@ -568,6 +568,7 @@ async fn listen_for_new_deployments(
                 }
                 Some(Ok(msg)) => match msg.request {
                     Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
+                        info!("Received new deployment request: {}", payload);
                         let task = to_engine_task(
                             payload,
                             &workspace_root_dir,
