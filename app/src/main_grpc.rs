@@ -568,8 +568,6 @@ async fn listen_for_new_deployments(
                     break;
                 }
                 Some(Ok(msg)) => {
-                    current_deployment.deployment_info.last_message_id = msg.message_id;
-
                     match msg.request {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                             info!("Received new deployment request: {}", payload);
@@ -595,6 +593,8 @@ async fn listen_for_new_deployments(
                             error!("Invalid payload received from grpc server. Update the protobuf !");
                         }
                     }
+                    // Record last received message
+                    current_deployment.deployment_info.last_message_id = msg.message_id;
                 },
                 Some(Err(e)) => {
                     error!("error while receiving message from grpc server: {}", e);
