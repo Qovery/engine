@@ -372,6 +372,7 @@ struct DeploymentHandle {
 impl DeploymentHandle {
     pub fn new() -> Self {
         let (engine_tx, engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
+        METRICS_NB_RUNNING_TASKS.set(0);
         Self {
             deployment_info: Default::default(),
             task: None,
