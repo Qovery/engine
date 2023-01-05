@@ -16,6 +16,7 @@ use std::path::Path;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
@@ -24,10 +25,12 @@ use std::{fs, io, process};
 
 use dirs::home_dir;
 use dotenv::dotenv;
+use futures_util::future::select;
 use futures_util::{pin_mut, stream, Stream, StreamExt};
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use retry::delay::Fixed;
 use retry::OperationResult;
+use tokio::signal::unix::SignalKind;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::{JoinError, JoinHandle};
@@ -43,8 +46,10 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::Task;
-use qovery_engine::events::EngineEvent;
+use qovery_engine::errors::EngineError;
+use qovery_engine::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
 
@@ -329,30 +334,55 @@ pub fn main() -> io::Result<()> {
         Mode::Cloud(_, _, _) => TaskSelector::Environment("environment"),
     };
 
-    let task = async move {
-        info!("Connecting to GRPC server: {:?}", grpc_server);
-        let engine_client = grpc::new_engine_client(grpc_server, &cluster_id, &cluster_jwt_token)
-            .await
-            .unwrap();
-        let mut current_deployment = DeploymentHandle::new();
+    let should_shutdown = Arc::new(AtomicBool::new(false));
+    let task_executor = {
+        let should_shutdown = should_shutdown.clone();
 
-        loop {
-            let _ = listen_for_new_deployments(
-                logger.clone(),
-                engine_client.clone(),
-                &mut current_deployment,
-                workspace_root_dir.clone(),
-                lib_root_dir.clone(),
-                docker_host.clone(),
-                docker.clone(),
-                task_selector,
-            )
-            .await;
+        async move {
+            info!("Connecting to GRPC server: {:?}", grpc_server);
+            let mut engine_client = grpc::new_engine_client(grpc_server, &cluster_id, &cluster_jwt_token)
+                .await
+                .unwrap();
+            let mut current_deployment = DeploymentHandle::new();
+
+            // Execute deployment until we are asked to be shutdown and no deployment is on-going
+            while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
+                let ret = fetch_and_exec_deployments(
+                    &mut engine_client,
+                    &mut current_deployment,
+                    logger.clone(),
+                    workspace_root_dir.clone(),
+                    lib_root_dir.clone(),
+                    docker_host.clone(),
+                    docker.clone(),
+                    task_selector,
+                )
+                .await;
+
+                if let Err(e) = ret {
+                    error!("{}", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
         }
     };
 
-    let handle = tokio_utils::launch_task(task);
-    while !handle.is_finished() {
+    let shutdown_callback = async move {
+        info!("WAITING for program to receive ctrl+c or sigterm");
+        let ctrl_c = tokio::signal::ctrl_c();
+        let mut sigterm_s = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+        let sigterm = sigterm_s.recv();
+
+        pin_mut!(ctrl_c);
+        pin_mut!(sigterm);
+        let _ = select(ctrl_c, sigterm).await;
+        info!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
+        should_shutdown.store(true, Ordering::Relaxed);
+    };
+
+    let _ = tokio_utils::launch_task(shutdown_callback);
+    let task_executor_h = tokio_utils::launch_task(task_executor);
+    while !task_executor_h.is_finished() {
         thread::sleep(Duration::from_secs(1));
     }
 
@@ -383,7 +413,7 @@ impl DeploymentHandle {
         }
     }
 
-    pub fn set_current_task(&mut self, task: Box<dyn Task>, deployment_info: DeploymentInfo) {
+    pub fn set_current_task(&mut self, task: Box<dyn Task>) {
         let task = Arc::new(task);
         let task_handle = tokio_utils::launch_blocking_task({
             let task = task.clone();
@@ -393,9 +423,6 @@ impl DeploymentHandle {
         });
 
         self.task = Some((task, task_handle));
-        self.deployment_info = deployment_info;
-        self.rx_old = None; // to drop the old receiver
-        METRICS_NB_RUNNING_TASKS.inc();
         if let Some(waker) = self.waker.take() {
             waker.wake();
         }
@@ -406,20 +433,30 @@ impl DeploymentHandle {
     }
 
     pub fn remove_task(&mut self) {
-        METRICS_NB_RUNNING_TASKS.dec();
         self.task = None;
-        let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
-        self.tx = tx;
-        self.rx_old = self.rx.take();
-        self.rx = Some(Box::new(rx));
     }
 
-    pub fn get_deployment_info(&self) -> Option<&DeploymentInfo> {
-        if self.task.is_some() {
+    pub fn get_current_deployment(&self) -> Option<&DeploymentInfo> {
+        if self.deployment_info.r#type != DeploymentType::Unknown as i32 {
             Some(&self.deployment_info)
         } else {
             None
         }
+    }
+
+    pub fn set_current_deployment(&mut self, deployment_info: DeploymentInfo) {
+        METRICS_NB_RUNNING_TASKS.inc();
+        self.deployment_info = deployment_info;
+        self.rx_old = None; // to drop the old receiver
+    }
+
+    pub fn remove_current_deployment(&mut self) {
+        METRICS_NB_RUNNING_TASKS.dec();
+        self.deployment_info = Default::default();
+        let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
+        self.tx = tx;
+        self.rx_old = self.rx.take();
+        self.rx = Some(Box::new(rx));
     }
 
     pub fn is_task_terminated(&self) -> bool {
@@ -466,6 +503,8 @@ impl DeploymentHandle {
     }
 }
 
+// Deployment handle future allows to wait for the current task to finish
+// If no task is present, it will never return
 impl Future for DeploymentHandle {
     type Output = Result<(), JoinError>;
 
@@ -481,11 +520,29 @@ impl Future for DeploymentHandle {
     }
 }
 
-// the engine can be autonomous using the nats server to receive actions
-async fn listen_for_new_deployments(
-    logger: Box<dyn Logger>,
-    mut engine_client: GrpcEngineClient,
+async fn fetch_new_deployment(
+    engine_client: &mut GrpcEngineClient,
+    deployment_request: DeploymentRequest,
+) -> Result<DeploymentInfo, anyhow::Error> {
+    return match engine_client.get_new_deployment(deployment_request.clone()).await {
+        Ok(deployment_info) => {
+            let deployment_info = deployment_info.into_inner();
+            Ok(deployment_info)
+        }
+        Err(err) => {
+            if err.code() == Code::NotFound {
+                Err(anyhow::anyhow!("No deployment found, waiting for a new one"))
+            } else {
+                Err(anyhow::anyhow!("Error while getting new deployment: {}", err))
+            }
+        }
+    };
+}
+
+async fn fetch_and_exec_deployments(
+    engine_client: &mut GrpcEngineClient,
     mut current_deployment: &mut DeploymentHandle,
+    logger: Box<dyn Logger>,
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<Url>,
@@ -503,31 +560,19 @@ async fn listen_for_new_deployments(
 
     // If there is no deployment on-going, we loop until we retrieve a new deployment to execute
     // if there is already one deployment it means, the connection broke, and we try to resume the current one
-    let deployment_info = if let Some(deployment_info) = current_deployment.get_deployment_info() {
+    let deployment_info = if let Some(deployment_info) = current_deployment.get_current_deployment() {
         info!("Resuming deployment for: {:?}", deployment_info);
         deployment_info.clone()
     } else {
-        loop {
-            match engine_client.get_new_deployment(deployment_type.clone()).await {
-                Ok(deployment_info) => {
-                    info!("Got new deployment for: {:?}", deployment_info);
-                    break deployment_info.into_inner();
-                }
-                Err(err) => {
-                    if err.code() == Code::NotFound {
-                        info!("No deployment found, waiting for a new one");
-                    } else {
-                        error!("Error while getting new deployment: {}", err);
-                    }
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-            }
-        }
+        let deployment_info = fetch_new_deployment(engine_client, deployment_type).await?;
+        info!("Got new deployment for: {:?}", deployment_info);
+        current_deployment.set_current_deployment(deployment_info.clone());
+        deployment_info
     };
 
     // Now we retrieved a deployment, claim it and execute it
     let (engine_tx, msg_stream) = current_deployment.get_message_channel();
-    let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx)]);
+    let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
 
     let msg_stream = stream::iter(vec![EngineMessageTx {
         message: Some(engine_message_tx::Message::DeploymentRequest(deployment_info.clone())),
@@ -537,33 +582,55 @@ async fn listen_for_new_deployments(
     let msg_stream = match engine_client.exec_deployment(msg_stream).await {
         Ok(upstream_msg) => upstream_msg.into_inner(),
         Err(err) => {
-            if err.code() != Code::NotFound {
-                error!("Error while getting new deployment: {}", err);
-            }
-            // Task is terminated, and the server refused to accept message for it, we can remove it
-            if current_deployment.is_task_terminated() {
-                current_deployment.remove_task();
-            }
+            return match err.code() {
+                Code::NotFound => {
+                    // Task is terminated, and the server refused to accept message for it, we can remove it
+                    info!("Current deployment does not exist anymore, removing it");
+                    if current_deployment.is_task_terminated() {
+                        current_deployment.remove_current_deployment()
+                    } else {
+                        error!("Current deployment is not terminated, but the server refused to accept message for it, this should not happen");
+                    }
 
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            return Err(err.into());
+                    Ok(())
+                }
+                _ => {
+                    error!("Error while getting new deployment: {}", err);
+                    Err(err.into())
+                }
+            };
         }
     };
+    info!("Connected to gateway, executing deployment task for: {:?}", deployment_info);
 
     pin_mut!(msg_stream);
     loop {
         tokio::select! {
             biased;
 
+            // If there is no task on-going for this deployment, we wait at max 15sec to receive a new one
+            // Before we check if the deployment is still valid
+            _ = tokio::time::sleep(Duration::from_secs(15)), if current_deployment.is_task_terminated() => {
+                info!("No new message after 15s, assuming deployment is terminated");
+                break;
+            }
+
+            // We wait for the current executing task to finish
+            // We don't put a if to avoid a race condition, if the task is terminated the future is going to never return
+            _ = &mut current_deployment => {
+                info!("Deployment task terminated");
+                current_deployment.remove_task();
+                continue;
+            }
+
+            // We wait to receive a new message from the gateway
+            // In case of error, we return to try to resume the current deployment.
+            // The server will let us know if the deployment is still valid
             msg = msg_stream.next() => match msg {
-                None => {
-                    info!("Upstream stream closed");
-                    break;
-                }
                 Some(Ok(msg)) => {
                     match msg.request {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
-                            info!("Received new deployment request: {}", payload);
+                            info!("Received new deployment task: {}", payload);
                             let task = to_engine_task(
                                 payload,
                                 &workspace_root_dir,
@@ -572,10 +639,26 @@ async fn listen_for_new_deployments(
                                 docker.clone(),
                                 &task_selector,
                                 logger_for_task.clone_dyn(),
-                            )
-                            .unwrap();
+                            );
 
-                            current_deployment.set_current_task(task, deployment_info.clone());
+                            match task {
+                                Ok(task) => {
+                                    current_deployment.set_current_task(task);
+                                }
+                                Err(err) => {
+                                    error!("Error while creating task: {}", err);
+                                    let event_details = EventDetails::new(None,
+                                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
+                                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.cluster_id).unwrap_or_default()),
+                                        deployment_info.execution_id.clone(),
+                                        Stage::Environment(EnvironmentStep::Cancelled),
+                                        Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
+                                    );
+                                    let message = EventMessage::new_from_safe("Engine received an invalid deployment request".to_string());
+                                    let err = EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details), Some(message));
+                                    let _ = engine_tx.send(err);
+                                }
+                            }
                         }
                         Some(engine_message_rx::Request::DeploymentCancel(_)) => {
                             info!("Received cancel request: {:?}", msg);
@@ -587,15 +670,23 @@ async fn listen_for_new_deployments(
                             error!("Invalid payload received from grpc server. Update the protobuf !");
                         }
                     }
-                    // Record last received message
+                    // We record the last message we received, so in case of cnx loss
+                    // we can resume the deployment and restart from the last message
                     current_deployment.deployment_info.last_message_id = msg.message_id;
                 },
+
+                // Return to try to resume the current deployment
+                None => {
+                    info!("Upstream stream closed");
+                    break;
+                }
+
+                // Return to try to resume the current deployment
                 Some(Err(e)) => {
                     error!("error while receiving message from grpc server: {}", e);
                     break;
                 }
             }
-
         }
     }
 
