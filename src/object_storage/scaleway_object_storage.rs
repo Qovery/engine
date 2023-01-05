@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
 
-use crate::io_models::domain::StringPath;
+use crate::models::domain::StringPath;
 use crate::object_storage::{Kind, ObjectStorage};
 
 use crate::io_models::context::Context;

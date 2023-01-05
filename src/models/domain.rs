@@ -93,7 +93,7 @@ impl ToTerraformString for Ipv4Addr {
 
 #[cfg(test)]
 mod tests {
-    use crate::io_models::domain::Domain;
+    use crate::models::domain::Domain;
 
     #[test]
     fn test_domain_new() {
