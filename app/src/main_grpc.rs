@@ -558,8 +558,9 @@ async fn listen_for_new_deployments(
             _ = &mut current_deployment => {
                 // Current deployment finished
                 info!("Deployment terminated for: {:?}", deployment_info);
-                current_deployment.remove_task();
-                break;
+                // current_deployment.remove_task();
+                // break;
+                continue;
             }
 
             msg = msg_stream.next() => match msg {
