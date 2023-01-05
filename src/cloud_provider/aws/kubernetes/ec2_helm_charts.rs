@@ -452,6 +452,22 @@ pub fn ec2_aws_helm_charts(
                     key: "environmentVariables.DOCKER_HOST".to_string(),
                     value: "tcp://0.0.0.0:2375".to_string(),
                 },
+                ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
+                    value: chart_config_prerequisites.infra_options.jwt_token.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: chart_config_prerequisites.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: chart_config_prerequisites.organization_long_id.to_string(),
+                },
                 // engine resources limits
                 ChartSetValue {
                     key: "engineResources.limits.cpu".to_string(),
