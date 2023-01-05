@@ -555,14 +555,6 @@ async fn listen_for_new_deployments(
         tokio::select! {
             biased;
 
-            _ = &mut current_deployment => {
-                // Current deployment finished
-                info!("Deployment terminated for: {:?}", deployment_info);
-                // current_deployment.remove_task();
-                // break;
-                continue;
-            }
-
             msg = msg_stream.next() => match msg {
                 None => {
                     info!("Upstream stream closed");
@@ -586,6 +578,7 @@ async fn listen_for_new_deployments(
                             current_deployment.set_current_task(task, deployment_info.clone());
                         }
                         Some(engine_message_rx::Request::DeploymentCancel(_)) => {
+                            info!("Received cancel request: {:?}", msg);
                             if let Some(task) = current_deployment.get_task() {
                                 let _ = task.cancel();
                             }
