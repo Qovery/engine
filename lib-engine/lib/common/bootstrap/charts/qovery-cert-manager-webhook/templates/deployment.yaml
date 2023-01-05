@@ -47,6 +47,8 @@ spec:
               port: https
           readinessProbe:
             timeoutSeconds: 5
+            initialDelaySeconds: 5
+            periodSeconds: 10
             httpGet:
               scheme: HTTPS
               path: /healthz
