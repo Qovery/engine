@@ -4,7 +4,7 @@ use crate::container_registry::ecr::ECR;
 use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
 use crate::io_models::context::Context;
-use crate::io_models::Action;
+use crate::io_models::{Action, MountedFile};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
@@ -15,7 +15,7 @@ use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
@@ -287,6 +287,8 @@ pub struct Container {
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
+    pub mounted_files: Vec<MountedFile>,
+    #[serde(default)]
     pub advanced_settings: ContainerAdvancedSettings,
 }
 
@@ -328,6 +330,10 @@ impl Container {
                         self.ports,
                         self.storages.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -352,6 +358,10 @@ impl Container {
                         self.ports,
                         self.storages.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -377,6 +387,10 @@ impl Container {
                 self.ports,
                 self.storages.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),

@@ -11,7 +11,7 @@ use qovery_engine::cloud_provider::aws::{
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes};
-use qovery_engine::cloud_provider::models::{CustomDomain, EnvironmentVariable, Route, Storage};
+use qovery_engine::cloud_provider::models::{CustomDomain, EnvironmentVariable, MountedFile, Route, Storage};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::Action;
 use qovery_engine::cloud_provider::DeploymentTarget;
@@ -21,6 +21,7 @@ use qovery_engine::io_models::application::{AdvancedSettingsProbeType, Applicati
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
@@ -180,6 +181,16 @@ fn test_env_var() -> EnvironmentVariable {
     }
 }
 
+fn test_mounted_file() -> MountedFile {
+    let mounted_file_identifier = QoveryIdentifier::new_random();
+    MountedFile {
+        id: mounted_file_identifier.short().to_string(),
+        long_id: mounted_file_identifier.to_uuid(),
+        mount_path: "/etc/mounted_file.json".to_string(),
+        file_content_b64: base64::encode(r#"{"mounted_file_key": "hello"}"#),
+    }
+}
+
 fn test_cmd_arg() -> String {
     "my_command_arg".to_string()
 }
@@ -246,6 +257,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         },
         vec![test_storage()],
         vec![test_env_var()],
+        btreeset![test_mounted_file()],
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
             deployment_delay_start_time_sec: 0,
@@ -311,6 +323,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         vec![test_port()],
         vec![test_storage()],
         vec![test_env_var()],
+        btreeset![test_mounted_file()],
         ContainerAdvancedSettings {
             deployment_custom_domain_check_enabled: true,
             network_ingress_proxy_body_size_mb: 11,
@@ -466,6 +479,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         6,
         7,
         vec![test_env_var()],
+        btreeset![test_mounted_file()],
         JobAdvancedSettings {
             job_delete_ttl_seconds_after_finished: Some(8),
             cronjob_concurrency_policy: "my_cronjob_concurrency_policy".to_string(),
