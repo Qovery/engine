@@ -71,6 +71,7 @@ dependencies = [
  "regex",
  "reqwest",
  "retry",
+ "scopeguard",
  "serde_json",
  "tokio",
  "tokio-stream",

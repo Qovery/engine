@@ -31,6 +31,7 @@ dirs = "4.0.0"
 url = "2.2.2"
 regex = "1"
 anyhow = "1.0.68"
+scopeguard = "1.1.0"
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.23.0", features = ["full"] }

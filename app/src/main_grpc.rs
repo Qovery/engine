@@ -29,8 +29,8 @@ use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
-use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::task::{JoinError, JoinHandle};
 use tonic::Code;
 use tracing::error;
@@ -338,8 +338,7 @@ struct DeploymentHandle {
     task: Option<(Arc<Box<dyn Task>>, JoinHandle<()>)>,
     waker: Option<Waker>,
     tx: UnboundedSender<EngineEvent>,
-    rx: Option<Box<UnboundedReceiver<EngineEvent>>>,
-    rx_old: Option<Box<UnboundedReceiver<EngineEvent>>>,
+    rx: Arc<Mutex<UnboundedReceiver<EngineEvent>>>,
 }
 
 impl DeploymentHandle {
@@ -351,8 +350,7 @@ impl DeploymentHandle {
             task: None,
             waker: None,
             tx: engine_tx,
-            rx: Some(Box::new(engine_rx)),
-            rx_old: None,
+            rx: Arc::new(Mutex::new(engine_rx)),
         }
     }
 
@@ -390,7 +388,6 @@ impl DeploymentHandle {
     pub fn set_current_deployment(&mut self, deployment_info: DeploymentInfo) {
         METRICS_NB_RUNNING_TASKS.inc();
         self.deployment_info = deployment_info;
-        self.rx_old = None; // to drop the old receiver
     }
 
     pub fn remove_current_deployment(&mut self) {
@@ -398,8 +395,7 @@ impl DeploymentHandle {
         self.deployment_info = Default::default();
         let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
         self.tx = tx;
-        self.rx_old = self.rx.take();
-        self.rx = Some(Box::new(rx));
+        self.rx = Arc::new(Mutex::new(rx));
     }
 
     pub fn is_task_terminated(&self) -> bool {
@@ -410,39 +406,43 @@ impl DeploymentHandle {
         }
     }
 
-    // This one is tricky/hacky due to the unsafe.
-    // The stream we give back must be 'static due to tonic/grpc requirements.
-    // and we want to be able to resume on error (i.e: cnx loss) and keep messages even if the grpc stream fails
-    // We can't move the receiver part(non clonable) into the stream because we will lose the ability to retrieve it and lose pending messages.
-    // We can't use an Arc because receiver.recv() need a mutable reference, and we can't use a Mutex because it's not Send.
-    // So we must give a static mutable reference to the stream to conserve ownership of the receiver part.
-    // For that we leak memory and re-create directly it directly to still drop it at some point.
-    // We must ensure the boxed receiver lives as long as the stream, which works in our case because we process only 1 deployment at a time.
-    pub fn get_message_channel(
+    pub async fn get_message_channel(
         &mut self,
     ) -> (
-        UnboundedSender<EngineEvent>,
-        impl Stream<Item = EngineMessageTx> + Send + 'static,
+        oneshot::Sender<()>,          // To know/stop the stream and release the rx side of the channel
+        UnboundedSender<EngineEvent>, // To feed the stream
+        impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent
     ) {
-        let engine_rx_static: &'static mut UnboundedReceiver<_> = Box::leak(self.rx.take().unwrap());
-        let engine_rx = unsafe { Box::from_raw(engine_rx_static) };
-        self.rx = Some(engine_rx);
-
-        let msg_to_upstream = stream::unfold(engine_rx_static, |event_rx| async move {
-            match event_rx.recv().await {
-                Some(engine_event) => {
-                    let event_io = EngineEventIo::from(engine_event);
-                    let grpc_message = EngineMessageTx {
-                        message: Some(engine_message_tx::Message::Log(
-                            serde_json::to_string(&event_io).unwrap_or_default(),
-                        )),
-                    };
-                    Some((grpc_message, event_rx))
-                }
-                None => None,
-            }
+        let on_drop = scopeguard::guard((), |_| {
+            info!("engine message forwarder to gateway terminated");
         });
-        (self.tx.clone(), msg_to_upstream)
+        let (abort_deployment_tx, abort_deployment_rx) = oneshot::channel::<()>();
+        let engine_msg_rx = self.rx.clone().lock_owned().await;
+        let msg_to_upstream = stream::unfold(
+            (engine_msg_rx, abort_deployment_rx, on_drop),
+            |(mut engine_msg_rx, mut should_stop, on_drop)| async move {
+                tokio::select! {
+                    biased;
+
+                    msg = engine_msg_rx.recv() => match msg {
+                        Some(engine_event) => {
+                            let event_io = EngineEventIo::from(engine_event);
+                            let grpc_message = EngineMessageTx {
+                                message: Some(engine_message_tx::Message::Log(
+                                    serde_json::to_string(&event_io).unwrap_or_default(),
+                                )),
+                            };
+                            Some((grpc_message, (engine_msg_rx, should_stop, on_drop)))
+                        }
+                        None => None,
+                    },
+
+                    // Deployment asked to be aborted, we leave to release the mutex of the channel
+                    _ = &mut should_stop => None
+                }
+            },
+        );
+        (abort_deployment_tx, self.tx.clone(), msg_to_upstream)
     }
 }
 
@@ -514,7 +514,7 @@ async fn fetch_and_exec_deployments(
     };
 
     // Now we retrieved a deployment, claim it and execute it
-    let (engine_tx, msg_stream) = current_deployment.get_message_channel();
+    let (mut abort_deployment_tx, engine_tx, msg_stream) = current_deployment.get_message_channel().await;
     let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
 
     let msg_stream = stream::iter(vec![EngineMessageTx {
@@ -564,6 +564,12 @@ async fn fetch_and_exec_deployments(
                 info!("Deployment task terminated");
                 current_deployment.remove_task();
                 continue;
+            }
+
+            // We lost the connection with gateway to forward engine message, trying to reconnect
+            _ = abort_deployment_tx.closed() => {
+                info!("EngineEvent forwarder to gateway has been close, trying to resume connection");
+                break;
             }
 
             // We wait to receive a new message from the gateway
