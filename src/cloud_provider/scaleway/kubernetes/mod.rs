@@ -69,9 +69,6 @@ pub struct KapsuleOptions {
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     pub jwt_token: String,
-    pub qovery_nats_url: String,
-    pub qovery_nats_user: String,
-    pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
     pub user_ssh_keys: Vec<String>,
@@ -97,9 +94,6 @@ impl KapsuleOptions {
         qovery_api_url: String,
         qovery_grpc_url: String,
         qoverry_cluster_jwt_token: String,
-        qovery_nats_url: String,
-        qovery_nats_user: String,
-        qovery_nats_password: String,
         qovery_ssh_key: String,
         grafana_admin_user: String,
         grafana_admin_password: String,
@@ -115,9 +109,6 @@ impl KapsuleOptions {
             qovery_api_url,
             qovery_grpc_url,
             jwt_token: qoverry_cluster_jwt_token,
-            qovery_nats_url,
-            qovery_nats_user,
-            qovery_nats_password,
             qovery_ssh_key,
             user_ssh_keys: vec![],
             grafana_admin_user,
@@ -497,9 +488,6 @@ impl Kapsule {
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
-        context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
-        context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
-        context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
         context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
         context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
 
