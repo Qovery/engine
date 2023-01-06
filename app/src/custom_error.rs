@@ -11,7 +11,6 @@ pub enum ErrorKind {
     LibsPathsMissing,
     LibsDirEmpty,
     BinVersion,
-    MissingBin,
 }
 
 impl Display for ErrorKind {
@@ -22,7 +21,6 @@ impl Display for ErrorKind {
             }
             ErrorKind::LibsDirEmpty => "Libs directory is empty, ensure you have really download the libs resources",
             ErrorKind::BinVersion => "Binary version used is not that you should use",
-            ErrorKind::MissingBin => "Binary is not installed, please install it!",
         };
         f.write_str(msg)
     }

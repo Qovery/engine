@@ -29,7 +29,6 @@ environmentVariables:
   RUST_LOG: DEBUG,rusoto_core=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info,vaultrs=info,h2=info
   #LIB_ROOT_DIR: ""
   #DOCKER_HOST: ""
-  #QOVERY_NATS_URL: ""
   #ORGANIZATION: ""
   #CLOUD_PROVIDER: ""
   #REGION: ""

@@ -13,9 +13,6 @@ Files to make images that should run for builds or Qovery application run.
 ### app
 Qovery binary application
 
-### qovery-engine-task-manager
-Task manager is made to handle coming tasks from NATS and run them with the engine.
-
 ## Prerequisites
 ### Binaries
 * docker

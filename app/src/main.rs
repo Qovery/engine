@@ -1,216 +1,43 @@
-#![allow(clippy::too_many_arguments, deprecated, dead_code)]
+#![allow(clippy::too_many_arguments)]
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate prometheus;
 #[macro_use]
 extern crate tracing;
 extern crate core;
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Error};
-use std::net::TcpStream;
+use std::io::{BufReader, Error};
 use std::path::Path;
-use std::sync::Arc;
 
-use std::borrow::Borrow;
-use std::thread::sleep;
-use std::time::Duration;
-use std::{env, thread};
-use std::{fs, io, process};
+use std::env;
+use std::{io, process};
 
-use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
 use dotenv::dotenv;
-use retry::delay::Fixed;
-use retry::OperationResult;
 use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use url::Url;
 use uuid::Uuid;
 
-use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::Task;
-use qovery_engine::errors::EngineError;
-use qovery_engine::events::InfrastructureStep::ValidateApiInput;
-use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use utils::Mode;
 
-use self::nats::nats_logger::NatsLogger;
 use crate::constants::ASCII_BANNER;
-use crate::custom_error::ErrorKind::BinVersion;
-use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::logger::composite_logger::CompositeLogger;
 
 use crate::models::TaskSelector;
-use crate::nats::subjects::{Subject, SubjectInfo};
-use crate::nats::{Connection, Message};
-use crate::task_manager::scheduler::TaskManager;
-use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
+use crate::utils::{check_libs_directory, check_versions_from};
 
 mod constants;
 mod custom_error;
 mod logger;
-mod metrics;
 mod models;
-mod nats;
-mod task_manager;
-mod tokio_utils;
 mod utils;
 
-fn to_engine_task(
-    msg: Message,
-    workspace_root_dir: &str,
-    lib_root_dir: &str,
-    docker_tcp_socket: &Option<Url>,
-    docker: Docker,
-    task_selector: &TaskSelector,
-    logger: Box<dyn Logger>,
-) -> Result<Box<dyn Task>, Box<EngineError>> {
-    let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
-        match task_selector {
-            TaskSelector::Infrastructure(_) => {
-                let request = serde_json::from_slice::<InfrastructureEngineRequest>(&msg.data)?;
-                Ok(Box::new(InfrastructureTask::new(
-                    request,
-                    workspace_root_dir.to_string(),
-                    lib_root_dir.to_string(),
-                    docker_tcp_socket.clone(),
-                    docker,
-                    logger,
-                )))
-            }
-            TaskSelector::Environment(_) => {
-                let request = serde_json::from_slice::<EnvironmentEngineRequest>(&msg.data)?;
-                Ok(Box::new(EnvironmentTask::new(
-                    request,
-                    workspace_root_dir.to_string(),
-                    lib_root_dir.to_string(),
-                    docker_tcp_socket.clone(),
-                    docker,
-                    logger,
-                )))
-            }
-        }
-    };
-
-    match mk_task() {
-        Ok(task) => Ok(task),
-        Err(err) => {
-            error!("{}", msg);
-            error!("receiving request but JSON decoding error occurred: {:?}", err);
-            let subject_info = SubjectInfo::try_parse(msg.subject);
-
-            Err(Box::new(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
-                match subject_info {
-                    Some(info) => EventDetails::new(
-                        match info.cloud_provider {
-                            Some(provider) => match provider.parse() {
-                                Ok(p) => Some(p),
-                                Err(_) => None,
-                            },
-                            None => None,
-                        },
-                        match info.organization_id {
-                            Some(id) => QoveryIdentifier::new(Uuid::parse_str(&id).unwrap_or_default()),
-                            None => QoveryIdentifier::default(),
-                        },
-                        match info.cluster_id {
-                            Some(id) => QoveryIdentifier::new(Uuid::parse_str(&id).unwrap_or_default()),
-                            None => QoveryIdentifier::default(),
-                        },
-                        match info.execution_id {
-                            Some(id) => id,
-                            None => "".to_string(),
-                        },
-                        Stage::Infrastructure(ValidateApiInput),
-                        Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
-                    ),
-                    None => EventDetails::new(
-                        None,
-                        QoveryIdentifier::default(),
-                        QoveryIdentifier::default(),
-                        "".to_string(),
-                        Stage::Infrastructure(ValidateApiInput),
-                        Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
-                    ),
-                },
-                err,
-            )))
-        }
-    }
-}
-
-pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
-    match fs::read_dir(path) {
-        Ok(out) => {
-            let is_empty = out.take(1).count() == 0;
-            match is_empty {
-                true => Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty)),
-                false => Ok(()),
-            }
-        }
-        Err(_) => Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
-    }
-}
-
-// check_versions_from will check (in file given in parameter) binaries versions
-// will assert an error if used version installed is not not the same than written in file
-fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
-    // please append this vector if you want to test more binaries
-    let bin_to_check = ["terraform"];
-
-    let lines: Vec<String> = read_lines(path)
-        .map_err(|err| {
-            error!("{}", err);
-            EngineInitError::Regular(BinVersion)
-        })?
-        .collect::<Result<Vec<String>, _>>()
-        .map_err(|err| {
-            error!("{}", err);
-            EngineInitError::Regular(BinVersion)
-        })?;
-
-    // read line by line the version file
-    for line in lines.iter() {
-        // put in lowercase and split the BINARY_VERSION to BINARY
-        let lowercase = line.to_lowercase();
-        //TODO FIX Do not parse correctly binary names in bin_versions. It should split at = instead of _
-        //Modify bin_version format and edit the parsing
-        let binary_name = lowercase.split('_').next().unwrap_or("");
-
-        // check if the binary need to be tested
-        if bin_to_check.contains(&binary_name) {
-            let result_cmd = cmd::command::run_version_command_for(binary_name);
-            let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
-
-            if !result_cmd.contains(&version) {
-                return Err(EngineInitError::Regular(BinVersion));
-            }
-
-            info!("{} is on right version {}", binary_name.to_string(), version);
-        }
-    }
-
-    Ok(())
-}
-
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(BufReader::new(file).lines())
-}
-
-fn generate_id() -> u32 {
+pub fn generate_id() -> u32 {
     Uuid::new_v4().as_fields().0
 }
 
@@ -227,43 +54,19 @@ pub fn main() -> io::Result<()> {
             tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{}: {:?}", field, value))
                 .delimited(", "),
         )
-        .with_ansi(false)
+        .with_ansi(true)
         .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
         .init();
 
-    let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());
-    let organization = env::var("ORGANIZATION");
-    let cloud_provider = env::var("CLOUD_PROVIDER");
-    let deployment_type = env::var("DEPLOYMENT_TYPE");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
-    let region = env::var("REGION");
-    let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
-    let nats_login = env::var("QOVERY_NATS_USER");
-    let nats_password = env::var("QOVERY_NATS_PASSWORD");
     let test_cluster_env_var = env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
 
-    let nats_credentials = match (nats_login, nats_password) {
-        (Ok(nats_login), Ok(nats_password)) if !nats_login.is_empty() && !nats_password.is_empty() => {
-            Some((nats_login, nats_password))
-        }
-        (_, _) => None,
-    };
-
-    let std_logger = StdIoLogger::new();
-    let mut loggers: Vec<Box<dyn Logger>> = vec![Box::new(std_logger.clone())];
-    if env::var("DEPLOY_FROM_FILE").is_err() {
-        loggers.push(Box::new(NatsLogger::new(
-            std_logger,
-            Connection::new("engine_logs", nats_server.as_str(), nats_credentials.clone())
-                .expect("cannot create NATS connection for engine logs"),
-        )));
-    };
-    let logger = CompositeLogger::new(loggers);
+    let logger: Box<dyn Logger> = Box::new(CompositeLogger::new(vec![Box::new(StdIoLogger::new())]));
 
     info!("engine id: {}", engine_id.as_str());
     info!(
@@ -311,130 +114,38 @@ pub fn main() -> io::Result<()> {
         Err(_) => true,
     };
 
-    tokio_utils::launch(http_listen_on.as_str());
-
-    // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
-    // docker daemon is slower to start than the engine
-    let disable_check_env_var = "IGNORE_DOCKER_HOST_CHECK";
-    match docker_host {
-        Some(ref docker_host) => {
-            info!("docker host: {}", docker_host);
-            let ignore_docker_host_check = match env::var(disable_check_env_var) {
-                Ok(x) if x == *"true" => {
-                    info!("ignoring docker host check");
-                    true
-                }
-                _ => false,
-            };
-
-            if docker_host.scheme() == "tcp" && !ignore_docker_host_check {
-                let docker_hostname = docker_host.host_str().unwrap_or("unkown_host");
-                let docker_port = docker_host.port().unwrap_or(2375);
-                let docker_address = format!("{}:{}", docker_hostname, docker_port);
-
-                let result = retry::retry(Fixed::from(Duration::from_secs(2)).take(300), || {
-                    match TcpStream::connect(docker_address.as_str()) {
-                        Ok(_) => OperationResult::Ok(()),
-                        Err(err) => {
-                            info!("waiting for docker host to be reachable: {}", &err);
-                            OperationResult::Retry(format!("docker host not yet reachable...{}", err))
-                        }
-                    }
-                });
-
-                match result {
-                    Err(err) => match err {
-                        retry::Error::Operation {
-                            error: e,
-                            total_delay: _,
-                            tries: _,
-                        } => {
-                            error!(
-                                "docker host is not reachable, disable the check with {} is you need: {}",
-                                disable_check_env_var, e
-                            );
-                            process::exit(1)
-                        }
-                        retry::Error::Internal(err) => {
-                            error!("internal error while checking if docker host is not reachable, disable the check with {} is you need: {}", disable_check_env_var, err);
-                            process::exit(1)
-                        }
-                    },
-                    Ok(_) => info!("docker host is reachable"),
-                }
-            }
-        }
-        None => info!("docker host is not set"),
-    };
-    // FIXME: Remove unwrap/expect
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
-
-    let mode = if let (Ok(org), Ok(cp), Ok(r)) = (organization, cloud_provider, region) {
-        info!("starting in cloud mode");
-        info!("organization: {}", org.as_str());
-        info!("cloud provider: {}", cp.as_str());
-        info!("region: {}", r.as_str());
-        Mode::Cloud(org, cp, r)
-    } else {
-        info!("starting in local mode");
-        Mode::Local
-    };
-
-    let task_selector = match mode {
-        Mode::Local => {
-            if deployment_type.map_or(false, |deployment_type| deployment_type == "ENVIRONMENT") {
-                TaskSelector::Environment("environment")
-            } else {
-                TaskSelector::Infrastructure("infrastructure")
-            }
-        }
-        Mode::Cloud(_, _, _) => TaskSelector::Environment("environment"),
-    };
-
-    match env::var("DEPLOY_FROM_FILE") {
-        Ok(deploy_from_file) => match env::var("DEPLOY_FROM_FILE_KIND") {
-            Ok(value) => match value.as_str() {
-                "infra" => using_json_path_parameter(
-                    Box::new(logger),
-                    deploy_from_file,
-                    workspace_root_dir,
-                    lib_root_dir,
-                    test_cluster,
-                    TaskSelector::Infrastructure(""),
-                    docker_host,
-                    docker,
-                ),
-                "env" => using_json_path_parameter(
-                    Box::new(logger),
-                    deploy_from_file,
-                    workspace_root_dir,
-                    lib_root_dir,
-                    test_cluster,
-                    TaskSelector::Environment(""),
-                    docker_host,
-                    docker,
-                ),
-                _ => {
-                    println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
-                    process::exit(1);
-                }
-            },
+    match env::var("DEPLOY_FROM_FILE_KIND") {
+        Ok(value) => match value.as_str() {
+            "infra" => using_json_path_parameter(
+                logger,
+                env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
+                workspace_root_dir,
+                lib_root_dir,
+                test_cluster,
+                TaskSelector::Infrastructure(""),
+                docker_host,
+                docker,
+            ),
+            "env" => using_json_path_parameter(
+                logger,
+                env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
+                workspace_root_dir,
+                lib_root_dir,
+                test_cluster,
+                TaskSelector::Environment(""),
+                docker_host,
+                docker,
+            ),
             _ => {
                 println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
                 process::exit(1);
             }
         },
-        _ => using_nats_server(
-            Box::new(logger),
-            nats_server,
-            nats_credentials,
-            workspace_root_dir,
-            lib_root_dir,
-            docker_host,
-            docker,
-            mode,
-            task_selector,
-        ),
+        _ => {
+            println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
+            process::exit(1);
+        }
     }
 }
 
@@ -458,7 +169,6 @@ pub fn using_json_path_parameter(
 
     let file = BufReader::new(File::open(deploy_from_file)?);
 
-    let mut task_manager = TaskManager::new();
     let task: Box<dyn Task> = match deployment_type {
         TaskSelector::Environment(_) => {
             let mut req: EnvironmentEngineRequest = serde_json::from_reader(file)
@@ -496,241 +206,6 @@ pub fn using_json_path_parameter(
         }
     };
 
-    task_manager.add_task(task);
-    let _ = task_manager.run();
-
-    while task_manager.remaining_tasks_to_run() > 0 {
-        sleep(Duration::from_secs(30))
-    }
-
+    task.run();
     Ok(())
-}
-
-// the engine can be autonomous using the nats server to receive actions
-fn using_nats_server(
-    logger: Box<dyn Logger>,
-    nats_server: String,
-    nats_credentials: Option<(String, String)>,
-    workspace_root_dir: String,
-    lib_root_dir: String,
-    docker_host: Option<Url>,
-    docker: Docker,
-    mode: Mode,
-    task_selector: TaskSelector,
-) -> Result<(), Error> {
-    info!("NATS server: {}", nats_server.as_str());
-
-    let engine_name = match &mode {
-        Mode::Local => "qovery-engine-app.local".to_string(),
-        Mode::Cloud(organization, cloud_provider, region) => {
-            format!("qovery-engine-app.{}.{}.{}", organization, cloud_provider, region)
-        }
-    };
-
-    info!("NATS client name: {}", engine_name.as_str());
-    info!("connect to the NATS server...");
-    let nc = Connection::new(engine_name.as_str(), nats_server.as_str(), nats_credentials)?;
-    info!("connection to the NATS server established");
-
-    let mut tm = TaskManager::new();
-    tm.run().expect("cannot run task manager");
-    let task_manager = Arc::new(tm);
-
-    let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
-    {
-        let thread_name = "sigterm-dispatcher".to_string();
-        let task_manager = task_manager.clone();
-        let _ = thread::Builder::new()
-            .name(thread_name.clone())
-            .spawn(move || {
-                let _drop_logger = LogErrorOnDrop::new(thread_name.as_str());
-                let _ = sig_term_rx
-                    .recv()
-                    .map_err(|err| error!("sigterm received with error {}", err));
-                warn!("Termination signal received - graceful termination in progress...");
-                task_manager.stop();
-                info!("Requested TaskManager to stop receiving new tasks");
-            })
-            .unwrap();
-    }
-
-    // Local engine, does not deploy anything (yet ?)
-    if let Mode::Cloud(_, _, _) = mode {
-        spawn_task_poller(
-            task_manager.clone(),
-            nc.clone(),
-            task_selector,
-            mode.clone(),
-            workspace_root_dir.clone(),
-            docker_host.clone(),
-            docker.clone(),
-            lib_root_dir.clone(),
-            engine_name.clone(),
-            sig_term_tx.clone(),
-            logger.clone(),
-        );
-    }
-
-    // Engine that run on cluster don't need to receive infrastructure requests
-    if let Mode::Local = mode {
-        spawn_task_poller(
-            task_manager.clone(),
-            nc.clone(),
-            task_selector,
-            mode,
-            workspace_root_dir,
-            docker_host,
-            docker,
-            lib_root_dir,
-            engine_name,
-            sig_term_tx.clone(),
-            logger.clone(),
-        );
-    }
-
-    ctrlc::set_handler(move || {
-        let _ = sig_term_tx
-            .send(true)
-            .map_err(|err| error!("Cannot send sigterm signal {}", err));
-    })
-    .expect("Error setting Ctrl-C (SIGTERM) handler");
-
-    info!("server started and listening for incoming requests");
-    let _ = task_manager.wait_shutdown();
-    info!("TaskManager stopped");
-
-    info!("Unsubscribed from all nats subjects");
-    let _ = nc
-        .drain()
-        .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", nc, err));
-
-    warn!("end of execution");
-    Ok(())
-}
-
-fn spawn_task_poller(
-    task_manager: Arc<TaskManager>,
-    nats: Connection,
-    task_selector: TaskSelector,
-    mode: Mode,
-    workspace_root_dir: String,
-    docker_host: Option<Url>,
-    docker: Docker,
-    lib_root_dir: String,
-    engine_name: String,
-    sig_term_tx: Sender<bool>,
-    logger: Box<dyn Logger>,
-) {
-    let task_name = match task_selector {
-        TaskSelector::Infrastructure(name) => name,
-        TaskSelector::Environment(name) => name,
-    };
-
-    let thread_name = format!("{}-poller", task_name);
-    let thread_name_logger = thread_name.clone();
-    let subject = Subject::new(&mode, &task_selector);
-
-    let func = move || {
-        let _drop_logger = LogErrorOnDrop::new(thread_name_logger.as_str());
-        let mut nb_failure = 0;
-        let mut log_request = log_no_spam_builder(format!("Requesting deployment task at {}", subject.name), 5);
-
-        // We abort the engine if we don't manage to have answer from the core after
-        // 30 * 10sec = 300 seconds == 5 min
-        while nb_failure < 30 {
-            // We ask to the Core if there is some tasks/deployment available to process
-            log_request();
-            let msg = match nats.request_timeout(&subject, engine_name.as_bytes(), Duration::from_secs(10)) {
-                Err(err) => {
-                    error!("Cannot retrieve deployment tasks from upstream: {}", err);
-                    nb_failure += 1;
-                    continue;
-                }
-                Ok(msg) => {
-                    nb_failure = 0;
-                    msg
-                }
-            };
-
-            // If msg is null, there is no task available just sleep and retry
-            if msg.data == "null".as_bytes() {
-                sleep(Duration::from_secs(5));
-                continue;
-            }
-
-            info!(
-                "{}",
-                std::str::from_utf8(&msg.data).unwrap_or("Received an invalid utf8 msg from Nats")
-            );
-
-            // Convert our nats message into an engine task
-            let engine_task = match to_engine_task(
-                msg.clone(),
-                &workspace_root_dir,
-                &lib_root_dir,
-                &docker_host,
-                docker.clone(),
-                &task_selector,
-                logger.clone(),
-            ) {
-                Ok(task) => task,
-                Err(err) => {
-                    let err_message = "Cannot converts Nats message payload to an engine task";
-                    error!("{}: {}", err_message, err.to_string());
-                    logger.log(EngineEvent::Error(
-                        *err.clone(),
-                        Some(EventMessage::new_from_safe(format!("{}.", err_message))),
-                    ));
-                    continue;
-                }
-            };
-
-            let task_id = engine_task.id().to_string();
-            let task_cancel_subscription = match nats.subscribe(&Subject::new_for_task_cancel(engine_task.borrow())) {
-                Ok(subscription) => {
-                    info!("Subscribed on {:?} for task cancellation {}", subscription, &task_id);
-                    subscription
-                }
-                Err(err) => {
-                    error!("Cannot subscribe on nats cancellation subject: {}", err);
-                    continue;
-                }
-            };
-
-            // Ask the task manager to process our task
-            task_manager.add_task(engine_task);
-
-            // We wait for the task to finish as we don't want the engine to queue them
-            loop {
-                // Wait to receive a cancel
-                if let Ok(cancel_msg) = task_cancel_subscription.next_timeout(Duration::from_secs(5)) {
-                    info!("Engine received cancel notification for task: {}", &task_id);
-                    let is_cancel_accepted = task_manager.cancel_current_task();
-                    let subject = Subject {
-                        name: cancel_msg.reply.unwrap_or_default(),
-                    };
-                    let _ = nats.publish(
-                        &subject,
-                        if is_cancel_accepted {
-                            "OK".as_bytes()
-                        } else {
-                            "NOK".as_bytes()
-                        },
-                    );
-                }
-
-                // If the task is finished to be run, go get a new one
-                if task_manager.remaining_tasks_to_run() == 0 {
-                    break;
-                }
-            }
-        }
-
-        sig_term_tx.send(true)
-    };
-
-    thread::Builder::new()
-        .name(thread_name.clone())
-        .spawn(func)
-        .unwrap_or_else(|_| panic!("Cannot spawn thread {}", thread_name));
 }

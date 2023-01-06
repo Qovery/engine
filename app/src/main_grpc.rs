@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_arguments, dead_code)]
+#![allow(clippy::too_many_arguments)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -8,8 +8,6 @@ extern crate prometheus;
 extern crate tracing;
 extern crate core;
 
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::path::Path;
 
@@ -21,7 +19,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 use std::{env, thread};
-use std::{fs, io, process};
+use std::{io, process};
 
 use dirs::home_dir;
 use dotenv::dotenv;
@@ -41,7 +39,6 @@ use url::Url;
 use uuid::Uuid;
 use warp::http::Uri;
 
-use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
@@ -51,11 +48,8 @@ use qovery_engine::events::{EngineEvent, EnvironmentStep, EventDetails, EventMes
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
-use crate::custom_error::ErrorKind::BinVersion;
-use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::grpc::engine::{
     engine_message_rx, engine_message_tx, DeploymentInfo, DeploymentRequest, DeploymentType, EngineMessageTx,
 };
@@ -64,6 +58,7 @@ use crate::logger::composite_logger::CompositeLogger;
 use crate::metrics::METRICS_NB_RUNNING_TASKS;
 
 use crate::models::TaskSelector;
+use crate::utils::{check_libs_directory, check_versions_from};
 
 mod constants;
 mod custom_error;
@@ -73,6 +68,16 @@ mod metrics;
 mod models;
 mod tokio_utils;
 mod utils;
+
+pub type CloudProvider = String;
+pub type Region = String;
+pub type Organization = String;
+
+#[derive(Clone, Debug)]
+pub enum Mode {
+    Local,
+    Cloud(Organization, CloudProvider, Region),
+}
 
 fn to_engine_task(
     msg: String,
@@ -118,68 +123,6 @@ fn to_engine_task(
             Err(err)
         }
     }
-}
-
-pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
-    match fs::read_dir(path) {
-        Ok(out) => {
-            let is_empty = out.take(1).count() == 0;
-            match is_empty {
-                true => Err(EngineInitError::Regular(ErrorKind::LibsDirEmpty)),
-                false => Ok(()),
-            }
-        }
-        Err(_) => Err(EngineInitError::Regular(ErrorKind::LibsPathsMissing)),
-    }
-}
-
-// check_versions_from will check (in file given in parameter) binaries versions
-// will assert an error if used version installed is not not the same than written in file
-fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
-    // please append this vector if you want to test more binaries
-    let bin_to_check = ["terraform"];
-
-    let lines: Vec<String> = read_lines(path)
-        .map_err(|err| {
-            error!("{}", err);
-            EngineInitError::Regular(BinVersion)
-        })?
-        .collect::<Result<Vec<String>, _>>()
-        .map_err(|err| {
-            error!("{}", err);
-            EngineInitError::Regular(BinVersion)
-        })?;
-
-    // read line by line the version file
-    for line in lines.iter() {
-        // put in lowercase and split the BINARY_VERSION to BINARY
-        let lowercase = line.to_lowercase();
-        //TODO FIX Do not parse correctly binary names in bin_versions. It should split at = instead of _
-        //Modify bin_version format and edit the parsing
-        let binary_name = lowercase.split('_').next().unwrap_or("");
-
-        // check if the binary need to be tested
-        if bin_to_check.contains(&binary_name) {
-            let result_cmd = cmd::command::run_version_command_for(binary_name);
-            let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
-
-            if !result_cmd.contains(&version) {
-                return Err(EngineInitError::Regular(BinVersion));
-            }
-
-            info!("{} is on right version {}", binary_name.to_string(), version);
-        }
-    }
-
-    Ok(())
-}
-
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(BufReader::new(file).lines())
 }
 
 pub fn main() -> io::Result<()> {

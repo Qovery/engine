@@ -259,9 +259,6 @@ function deploy_engines_infra() { ## Release GA to prod
   helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-prod qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
-environmentVariables.QOVERY_NATS_URL="tls://nats-internal.qovery.io:4222",\
-environmentVariables.QOVERY_NATS_USER="$CI_QOVERY_NATS_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$CI_QOVERY_ENGINE_NATS_INTERNAL_PASSWORD_ENGINE",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
@@ -295,9 +292,6 @@ function deploy_engines_envs() { ## Release GA to prod
   helm upgrade --kubeconfig="$CI_KUBECONFIG_ENGINES_AWS" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
-environmentVariables.QOVERY_NATS_URL="tls://nats-external.qovery.com:4242",\
-environmentVariables.QOVERY_NATS_USER="$CI_QOVERY_NATS_EXTERNAL_USER",\
-environmentVariables.QOVERY_NATS_PASSWORD="$CI_QOVERY_NATS_EXTERNAL_PASSWORD",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\

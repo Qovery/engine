@@ -188,13 +188,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .QOVERY_CLUSTER_JWT_TOKEN
                 .expect("QOVERY_CLUSTER_JWT_TOKEN is not set in secrets"),
-            secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
-            secrets
-                .QOVERY_NATS_USERNAME
-                .expect("QOVERY_NATS_USERNAME is not set in secrets"),
-            secrets
-                .QOVERY_NATS_PASSWORD
-                .expect("QOVERY_NATS_PASSWORD is not set in secrets"),
             secrets.QOVERY_SSH_USER.expect("QOVERY_SSH_USER is not set in secrets"),
             "admin".to_string(),
             "qovery".to_string(),

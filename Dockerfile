@@ -51,7 +51,6 @@ RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
-COPY --from=build /root/target/release/app .
 COPY --from=build /root/target/release/engine_grpc .
 COPY --from=build /root/docker/load.sh $HOME_DIR
 COPY --from=build /root/docker/engine/run.sh $HOME_DIR

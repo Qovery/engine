@@ -18,12 +18,6 @@ variable "organization_id" {
   type        = string
 }
 
-variable "qovery_nats_url" {
-  description = "URL of qovery nats server"
-  default = "{{ qovery_nats_url }}"
-  type = string
-}
-
 # AWS specific
 
 variable "aws_availability_zones" {

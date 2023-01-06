@@ -470,21 +470,6 @@ pub fn scw_helm_charts(
                     value: "scw-sbv-ssd-0".to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_URL".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_USER".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_user.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_PASSWORD".to_string(),
-                    value: chart_config_prerequisites
-                        .infra_options
-                        .qovery_nats_password
-                        .to_string(),
-                },
-                ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
                     value: chart_config_prerequisites.organization_id.clone(),
                 },
