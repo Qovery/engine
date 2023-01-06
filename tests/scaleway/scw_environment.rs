@@ -1,21 +1,27 @@
 use crate::helpers;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
+use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_default_infra_config;
-use crate::helpers::scaleway::{clean_environments, SCW_TEST_ZONE};
 use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
+use bstr::ByteSlice;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::container::Registry::DockerHub;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::router::{Route, Router};
-use qovery_engine::io_models::Action;
+use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use tracing::{span, warn, Level};
 use url::Url;
 use uuid::Uuid;
@@ -82,6 +88,15 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -99,7 +114,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -128,6 +143,15 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -147,7 +171,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -176,6 +200,15 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -213,7 +246,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -242,6 +275,15 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -278,7 +320,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -307,6 +349,15 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -324,7 +375,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let result = environment_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -353,6 +404,15 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
@@ -398,9 +458,96 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() {
+    // TODO(benjaminch): This test could be moved out of end to end tests as it doesn't require
+    // any cloud provider to be performed (can run on local Kubernetes).
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+
+        let mounted_file_identifier = QoveryIdentifier::new_random();
+        let mounted_file = MountedFile {
+            id: mounted_file_identifier.short().to_string(),
+            long_id: mounted_file_identifier.to_uuid(),
+            mount_path: "/this-file-should-exist".to_string(),
+            file_content_b64: base64::encode("I exist !"),
+        };
+
+        let environment = helpers::environment::working_environment_with_application_crashing_if_file_doesnt_exist(
+            &context,
+            &mounted_file,
+        );
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
+
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // check if secret exists
+        let service_id = QoveryIdentifier::new(
+            environment
+                .applications
+                .first()
+                .expect("there must be at least one application in environment")
+                .long_id,
+        )
+        .short()
+        .to_string();
+        let config_maps = kubectl_get_secret(
+            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+        )
+        .expect("unable to find secret for selector");
+        assert!(!config_maps.is_empty());
+        for cm in config_maps {
+            assert_eq!(
+                base64::decode(&mounted_file.file_content_b64)
+                    .expect("mounted file content cannot be b64 decoded")
+                    .to_str(),
+                cm.data
+                    .expect("data should be set")
+                    .get("content")
+                    .expect("content should exist")
+                    .0
+                    .to_str()
+            );
+        }
+
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     })
@@ -487,6 +634,15 @@ fn scaleway_kapsule_redeploy_same_app() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
         let infra_ctx_bis = scw_default_infra_config(&context_bis, logger.clone());
@@ -551,7 +707,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -580,6 +736,15 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
         let infra_ctx_for_not_working = scw_default_infra_config(&context_for_not_working, logger.clone());
@@ -620,7 +785,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let result = environment_for_delete.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -653,6 +818,15 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
@@ -707,7 +881,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -737,6 +911,15 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let environment = helpers::environment::non_working_environment(&context);
 
@@ -754,7 +937,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -784,6 +967,15 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
@@ -853,7 +1045,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -864,7 +1056,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-#[ignore] // TODO : fix
+#[ignore] // TODO(ENG-1423): Reactivate test.
 fn deploy_container_with_no_router_on_scw() {
     engine_run_test(|| {
         init();
@@ -934,6 +1126,7 @@ fn deploy_container_with_no_router_on_scw() {
             ],
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
 
@@ -953,7 +1146,135 @@ fn deploy_container_with_no_router_on_scw() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-#[ignore] // TODO : fix
+#[ignore] // TODO(ENG-1423): Reactivate test. Container test is not working, this one is just a variant
+fn deploy_container_on_scw_with_mounted_files_as_volume() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let mounted_file_identifier = QoveryIdentifier::new_random();
+        let mounted_file = MountedFile {
+            id: mounted_file_identifier.short().to_string(),
+            long_id: mounted_file_identifier.to_uuid(),
+            mount_path: "/this-file-should-exist".to_string(),
+            file_content_b64: base64::encode("I exist !"),
+        };
+
+        environment.routers = vec![];
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: Uuid::new_v4(),
+            name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            action: Action::Create,
+            registry: Registry::DockerHub {
+                url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
+                credentials: None,
+            },
+            image: "debian".to_string(),
+            tag: "bullseye".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; cat {} ; while true; do nc -l 8080; done", &mounted_file.mount_path),
+            ],
+            entrypoint: None,
+            cpu_request_in_mili: 250,
+            cpu_limit_in_mili: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            min_instances: 1,
+            max_instances: 1,
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    id: Uuid::new_v4().to_string(),
+                    port: 8080,
+                    name: Some("http".to_string()),
+                    is_default: true,
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    id: Uuid::new_v4().to_string(),
+                    port: 8081,
+                    name: Some("grpc".to_string()),
+                    is_default: false,
+                    publicly_accessible: false,
+                    protocol: Protocol::HTTP,
+                },
+            ],
+            storages: vec![],
+            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            mounted_files: vec![mounted_file.clone()],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // check if secret exists
+        let service_id = QoveryIdentifier::new(
+            environment
+                .containers
+                .first()
+                .expect("there must be at least one container in environment")
+                .long_id,
+        )
+        .short()
+        .to_string();
+        let config_maps = kubectl_get_secret(
+            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+        )
+        .expect("unable to find secret for selector");
+        assert!(!config_maps.is_empty());
+        for cm in config_maps {
+            assert_eq!(
+                base64::decode(&mounted_file.file_content_b64)
+                    .expect("mounted file content cannot be b64 decoded")
+                    .to_str(),
+                cm.data
+                    .expect("data should be set")
+                    .get("content")
+                    .expect("content should exist")
+                    .0
+                    .to_str()
+            );
+        }
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[named]
+#[test]
+#[ignore] // TODO(ENG-1423): Reactivate test.
 fn deploy_container_with_router_on_scw() {
     engine_run_test(|| {
         init();
@@ -1018,6 +1339,7 @@ fn deploy_container_with_router_on_scw() {
             ],
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
 
@@ -1039,6 +1361,424 @@ fn deploy_container_with_router_on_scw() {
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[test]
+#[ignore] // TODO(ENG-1424): Reactivate test.
+fn deploy_job_on_scw_kapsule() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_job_on_scw_kapsule");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
+        //environment.long_id = Uuid::default();
+        //environment.project_long_id = Uuid::default();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(), //Uuid::default(),
+            name: "job test #####".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            source: JobSource::Image {
+                registry: DockerHub {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://docker.io").unwrap(),
+                    credentials: None,
+                },
+                image: "library/debian".to_string(),
+                tag: "bullseye".to_string(),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
+                    json_output
+                ),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[test]
+#[ignore] // TODO(ENG-1424): Reactivate test.
+fn deploy_cronjob_on_scw_kapsule() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_scw_kapsule");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::default(),
+            name: "job test #####||||*_-(".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::Cron {
+                schedule: "* * * * *".to_string(),
+            },
+            source: JobSource::Image {
+                registry: DockerHub {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://docker.io").unwrap(),
+                    credentials: None,
+                },
+                image: "library/debian".to_string(),
+                tag: "bullseye".to_string(),
+            },
+            max_nb_restart: 1,
+            max_duration_in_sec: 30,
+            default_port: Some(8080),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[test]
+#[ignore] // TODO(ENG-1424): Reactivate test.
+fn deploy_cronjob_force_trigger_on_scw_kapsule() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_scw_kapsule");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####||||*_-(".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::Cron {
+                schedule: "*/10 * * * *".to_string(),
+            },
+            source: JobSource::Image {
+                registry: DockerHub {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://docker.io").unwrap(),
+                    credentials: None,
+                },
+                image: "library/debian".to_string(),
+                tag: "bullseye".to_string(),
+            },
+            max_nb_restart: 1,
+            max_duration_in_sec: 30,
+            default_port: Some(8080),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
+            ],
+            entrypoint: None,
+            force_trigger: true,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[test]
+#[ignore] // TODO(ENG-1424): Reactivate test.
+fn build_and_deploy_job_on_scw_kapsule() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_scw_kapsule");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {},
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
+                root_path: String::from("/"),
+                git_credentials: None,
+                branch: "main".to_string(),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
+                    json_output
+                ),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[test]
+#[ignore] // TODO(ENG-1424): Reactivate test.
+fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_scw_kapsule");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mounted_file_identifier = QoveryIdentifier::new_random();
+        let mounted_file = MountedFile {
+            id: mounted_file_identifier.short().to_string(),
+            long_id: mounted_file_identifier.to_uuid(),
+            mount_path: "/this-file-should-exist.json".to_string(),
+            file_content_b64: base64::encode(
+                "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}",
+            ),
+        };
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {},
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
+                root_path: String::from("/"),
+                git_credentials: None,
+                branch: "main".to_string(),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "echo starting; sleep 10; cat {} > /qovery-output/qovery-output.json",
+                    &mounted_file.mount_path,
+                ),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            mounted_files: vec![mounted_file.clone()],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // check if secret exists
+        let service_id = QoveryIdentifier::new(
+            environment
+                .jobs
+                .first()
+                .expect("there must be at least one job in environment")
+                .long_id,
+        )
+        .short()
+        .to_string();
+        let config_maps = kubectl_get_secret(
+            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+        )
+        .expect("unable to find secret for selector");
+        assert!(!config_maps.is_empty());
+        for cm in config_maps {
+            assert_eq!(
+                base64::decode(&mounted_file.file_content_b64)
+                    .expect("mounted file content cannot be b64 decoded")
+                    .to_str(),
+                cm.data
+                    .expect("data should be set")
+                    .get("content")
+                    .expect("content should exist")
+                    .0
+                    .to_str()
+            );
+        }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

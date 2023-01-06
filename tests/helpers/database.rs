@@ -1,7 +1,7 @@
-use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::aws::AWS_KUBERNETES_VERSION;
 use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
-use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
+use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use crate::helpers::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
     FuncTestsSecrets,
@@ -209,6 +209,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
+                mounted_files: vec![],
                 branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
@@ -248,6 +249,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_USERNAME".to_string() => base64::encode(database_username_2.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
+                mounted_files: vec![],
                 branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
@@ -289,6 +291,7 @@ pub fn environment_3_apps_3_databases(
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
                 },
+                mounted_files: vec![],
                 branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
@@ -411,6 +414,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             }),
             storage: vec![],
             environment_vars: BTreeMap::default(),
+            mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![],
             total_cpus: "100m".to_string(),
@@ -454,6 +458,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             }),
             storage: vec![],
             environment_vars: BTreeMap::default(),
+            mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![],
             total_cpus: "100m".to_string(),
@@ -785,6 +790,7 @@ pub fn test_pause_managed_db(
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
+
     let context_for_delete = context.clone_not_same_execution_id();
 
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
@@ -862,8 +868,22 @@ pub fn test_pause_managed_db(
     environment_pause.action = Action::Pause;
 
     let (localisation, kubernetes_version) = match provider_kind {
-        Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+        Kind::Aws => (
+            secrets
+                .AWS_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_REGION is not set")
+                .to_string(),
+            AWS_KUBERNETES_VERSION.to_string(),
+        ),
+        Kind::Scw => (
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string(),
+            SCW_KUBERNETES_VERSION.to_string(),
+        ),
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -1039,6 +1059,7 @@ pub fn test_db_on_upgrade(
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
+
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_id = Uuid::from_str("8d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap();
@@ -1052,8 +1073,8 @@ pub fn test_db_on_upgrade(
         database_host,
         context.cluster_short_id(),
         secrets
-            .clone()
             .DEFAULT_TEST_DOMAIN
+            .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
     );
 
@@ -1129,8 +1150,22 @@ pub fn test_db_on_upgrade(
     let ea_delete = environment_delete.clone();
 
     let (localisation, kubernetes_version) = match provider_kind {
-        Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+        Kind::Aws => (
+            secrets
+                .AWS_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_REGION is not set")
+                .to_string(),
+            AWS_KUBERNETES_VERSION.to_string(),
+        ),
+        Kind::Scw => (
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string(),
+            SCW_KUBERNETES_VERSION.to_string(),
+        ),
     };
 
     let infra_ctx = match provider_kind {

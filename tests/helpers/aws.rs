@@ -1,6 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 
+use crate::helpers::aws_ec2::container_registry_ecr_ec2;
 use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
@@ -24,18 +25,12 @@ use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_EC2_TEST_MANAGED_REGION: AwsRegion = AwsRegion::UsEast2;
-pub const AWS_EC2_TEST_CONTAINER_REGION: AwsRegion = AwsRegion::UsWest2;
-pub const AWS_EC2_TEST_INSTANCE_REGION: AwsRegion = AwsRegion::EuWest1;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 22;
 pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
-pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 23;
 
 pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -61,49 +56,16 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
-pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, localisation: &str) -> ECR {
-    let secrets = FuncTestsSecrets::new();
-    if secrets.AWS_ACCESS_KEY_ID.is_none() || secrets.AWS_SECRET_ACCESS_KEY.is_none() {
-        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY environment variables are set");
-        std::process::exit(1)
-    }
-
-    let region = match localisation {
-        "us-east-2" => secrets.AWS_EC2_TEST_MANAGED_REGION,
-        "us-west-2" => secrets.AWS_EC2_TEST_CONTAINER_REGION,
-        "eu-west-1" => secrets.AWS_EC2_TEST_INSTANCE_REGION,
-        _ => {
-            error!("Unknown region for EC2 tests. Please check AWS_EC2_MANAGED_TEST_REGION/AWS_EC2_CONTAINER_TEST_REGION/AWS_EC2_INSTANCE_TEST_REGION environment variables are set");
-            std::process::exit(1);
-        }
-    };
-
-    if region.is_none() {
-        error!("No region for EC2 tests");
-        std::process::exit(1);
-    }
-
-    let region = region.expect("No region found for EC2 tests");
-
-    ECR::new(
-        context.clone(),
-        format!("default-ecr-ec2-registry-{}-Qovery Test", region).as_str(),
-        Uuid::new_v4(),
-        "ea69qe62xaw3wjai",
-        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
-        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
-        region.as_str(),
-        logger,
-        hashmap! {},
-    )
-    .unwrap()
-}
-
 pub fn aws_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
+    let secrets = FuncTestsSecrets::new();
+
     AWS::docker_cr_engine(
         context,
         logger,
-        AWS_TEST_REGION.to_string().as_str(),
+        secrets
+            .AWS_TEST_CLUSTER_REGION
+            .expect("AWS_TEST_CLUSTER_REGION is not set")
+            .as_str(),
         KubernetesKind::Eks,
         AWS_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default {

@@ -1,5 +1,5 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::EnvironmentVariable;
+use crate::cloud_provider::models::{EnvironmentVariable, MountedFile};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
@@ -14,6 +14,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::string::cut;
 use crate::utilities::to_short_id;
 use serde::Serialize;
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tera::Context as TeraContext;
@@ -45,6 +46,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) ram_request_in_mib: u32,
     pub(super) ram_limit_in_mib: u32,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: JobAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -71,6 +73,7 @@ impl<T: CloudProvider> Job<T> {
         ram_request_in_mib: u32,
         ram_limit_in_mib: u32,
         environment_variables: Vec<EnvironmentVariable>,
+        mounted_files: BTreeSet<MountedFile>,
         advanced_settings: JobAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -125,6 +128,7 @@ impl<T: CloudProvider> Job<T> {
             ram_request_in_mib,
             ram_limit_in_mib,
             environment_variables,
+            mounted_files,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -223,6 +227,7 @@ impl<T: CloudProvider> Job<T> {
                     docker_json_config: docker_json.to_string(),
                 }),
             environment_variables: self.environment_variables.clone(),
+            mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
         };
 
@@ -464,5 +469,6 @@ pub(super) struct JobTeraContext {
     pub(super) service: ServiceTeraContext,
     pub(super) registry: Option<RegistryTeraContext>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
 }

@@ -1,3 +1,6 @@
+use k8s_openapi::api::core::v1::Secret;
+use kube::core::params::ListParams;
+use kube::{Api, Client};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Read;
@@ -17,6 +20,7 @@ use crate::cmd::structs::{
 };
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
+use crate::runtime::block_on;
 
 pub enum ScalingKind {
     Deployment,
@@ -1351,4 +1355,26 @@ where
         "/qovery-output/qovery-output.json",
     ];
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
+pub fn kubectl_get_secret(kube_client: Client, fields_selector: &str) -> Result<Vec<Secret>, CommandError> {
+    let secrets: Api<Secret> = Api::all(kube_client);
+
+    match block_on(secrets.list(&ListParams::default().fields(fields_selector))) {
+        Ok(secret_results) => {
+            if secret_results.items.is_empty() {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "No Secret found with fields selector `{}`",
+                    fields_selector
+                )));
+            }
+
+            Ok(secret_results.items)
+        }
+        Err(e) => Err(CommandError::new(
+            format!("Error trying to get Secret for fields selector `{}`", fields_selector),
+            Some(e.to_string()),
+            None,
+        )),
+    }
 }
