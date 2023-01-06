@@ -60,7 +60,7 @@ COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
 
 RUN ./load.sh install $BIN_DIR && \
     chown -Rf qovery. . && \
-    chmod 500 app
+    chmod 500 engine_grpc
 
 USER qovery
 RUN echo "disable_checkpoint = true" > ~/.terraform.rc
