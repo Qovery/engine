@@ -68,6 +68,7 @@ pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
+    pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
