@@ -94,6 +94,7 @@ impl KapsuleOptions {
     pub fn new(
         qovery_api_url: String,
         qovery_grpc_url: String,
+        qovery_engine_url: String,
         qoverry_cluster_jwt_token: String,
         qovery_ssh_key: String,
         grafana_admin_user: String,
@@ -109,6 +110,7 @@ impl KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
             qovery_grpc_url,
+            qovery_engine_url,
             jwt_token: qoverry_cluster_jwt_token,
             qovery_ssh_key,
             user_ssh_keys: vec![],
