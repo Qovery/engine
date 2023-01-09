@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -50,6 +51,20 @@ impl Action {
             Action::Pause => EnvironmentStep::Pause,
             Action::Delete => EnvironmentStep::Delete,
         }
+    }
+}
+
+impl Display for Action {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Action::Create => "Deployment",
+                Action::Pause => "Pause",
+                Action::Delete => "Deletion",
+            },
+        )
     }
 }
 

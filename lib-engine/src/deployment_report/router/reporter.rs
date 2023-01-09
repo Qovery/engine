@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct RouterDeploymentReporter {
     long_id: Uuid,
     logger: EnvLogger,
+    action: Action,
 }
 
 impl RouterDeploymentReporter {
@@ -18,6 +19,7 @@ impl RouterDeploymentReporter {
         RouterDeploymentReporter {
             long_id: *router.long_id(),
             logger: deployment_target.env_logger(router, action.to_environment_step()),
+            action,
         }
     }
 }
@@ -34,13 +36,16 @@ impl DeploymentReporter for RouterDeploymentReporter {
     fn new_state(&self) -> Self::DeploymentState {}
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
-        self.logger
-            .send_progress(format!("🚀 Deployment of router `{}` is starting", to_short_id(&self.long_id)));
+        self.logger.send_progress(format!(
+            "🚀 {} of router `{}` is starting",
+            self.action,
+            to_short_id(&self.long_id)
+        ));
     }
 
     fn deployment_in_progress(&self, _: &mut Self::DeploymentState) {
         self.logger
-            .send_progress("⌛️ Deployment of router in progress ...".to_string());
+            .send_progress(format!("⌛️ {} of router in progress ...", self.action));
     }
 
     fn deployment_terminated(
@@ -51,7 +56,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         let error = match result {
             Ok(_) => {
                 self.logger
-                    .send_success("✅ Deployment of router succeeded".to_string());
+                    .send_success(format!("✅ {} of router succeeded", self.action));
                 return;
             }
             Err(err) => err,
@@ -60,9 +65,12 @@ impl DeploymentReporter for RouterDeploymentReporter {
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
-                r#"
-                🚫 Deployment has been cancelled. Router has been rollback to previous version if rollout was on-going
-                "#
+                format!(
+                    r#"
+                🚫 {} has been cancelled. Router has been rollback to previous version if rollout was on-going
+                "#,
+                    self.action
+                )
                 .trim()
                 .to_string(),
                 None,
@@ -72,10 +80,10 @@ impl DeploymentReporter for RouterDeploymentReporter {
         self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
-            r#"
-❌ Deployment of router failed ! Look at the report above and to understand why.
+            format!("
+❌ {} of router failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#.trim().to_string(),
+                ", self.action),
             None,
         ));
     }
