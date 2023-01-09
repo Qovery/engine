@@ -5,6 +5,8 @@ use retry::OperationResult;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::constants::TF_PLUGIN_CACHE_DIR;
+use crate::events::{EngineEvent, EventDetails, EventMessage};
+use crate::logger::Logger;
 use rand::Rng;
 use regex::Regex;
 use retry::Error::Operation;
@@ -37,7 +39,7 @@ pub enum QuotaExceededError {
     ScwNewAccountNeedsValidation,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TerraformError {
     Unknown {
         terraform_args: Vec<String>,
@@ -722,6 +724,30 @@ fn terraform_plugins_failed_load(
     }
 
     Ok(vec![])
+}
+
+pub fn force_terraform_ec2_instance_type_switch(
+    root_dir: &str,
+    error: TerraformError,
+    logger: &dyn Logger,
+    event_details: &EventDetails,
+    dry_run: bool,
+) -> Result<Vec<String>, TerraformError> {
+    // Error: Failed to change instance type for ec2
+    let error_string = error.to_string();
+
+    if error_string.contains("InvalidInstanceType: The following supplied instance types do not exist:")
+        && error_string.contains("Error: reading EC2 Instance Type")
+    {
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Removing invalid instance type".to_string()),
+        ));
+        terraform_state_rm_entry(root_dir, "aws_instance.ec2_instance")?;
+        return terraform_run(TerraformAction::VALIDATE | TerraformAction::APPLY, root_dir, dry_run);
+    }
+
+    Err(error)
 }
 
 fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
