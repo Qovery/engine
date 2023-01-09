@@ -615,6 +615,9 @@ async fn fetch_and_exec_deployments(
                                 let _ = task.cancel();
                             }
                         }
+                        Some(engine_message_rx::Request::Terminated(_)) => {
+                            info!("Received terminated message for deployment: {:?}", msg);
+                        }
                         None => {
                             error!("Invalid payload received from grpc server. Update the protobuf !");
                         }

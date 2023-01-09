@@ -267,7 +267,7 @@ environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
 environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.GRPC_SERVER="https://grpc.qovery.com:443",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="cb13209d-4e36-48b0-80e2-07e55c414b63",\
 environmentVariables.CLUSTER_JWT_TOKEN="$INFRA_CLUSTER_JWT_TOKEN",\
@@ -299,7 +299,7 @@ environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
 environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
 environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
-environmentVariables.GRPC_SERVER="https://grpc.qovery.com:443",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="4ceb7649-ed84-4c52-a27b-e7fca06afaa5",\
 environmentVariables.CLUSTER_JWT_TOKEN="$ENV_CLUSTER_JWT_TOKEN",\
@@ -490,6 +490,14 @@ function await_docker() {
     fi
 }
 
+
+function update_engine_protobuf() {
+  rm -rf /tmp/rust-backend
+  git clone --depth 1 git@gitlab.com:qovery/backend/rust-backend.git /tmp/rust-backend
+  cp /tmp/rust-backend/common/proto/engine.proto app/proto/
+  rm -rf /tmp/rust-backend
+}
+
 function deploy_all_clusters() {
   token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$CI_ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
   curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
@@ -650,6 +658,9 @@ downgrade_on_dev)
   ;;
 deploy_all_clusters)
   deploy_all_clusters
+  ;;
+update_engine_protobuf)
+  update_engine_protobuf
   ;;
 *)
   print_help

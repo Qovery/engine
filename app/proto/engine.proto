@@ -45,5 +45,6 @@ message EngineMessageRx {
   oneof request {
     string deployment_request = 2;
     int32 deployment_cancel = 3;
+    bool terminated = 4;
   }
 }
