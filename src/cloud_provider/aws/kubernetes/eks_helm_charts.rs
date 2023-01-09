@@ -482,21 +482,6 @@ pub fn eks_aws_helm_charts(
                     value: "aws-ebs-gp2-0".to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_URL".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_USER".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_nats_user.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.QOVERY_NATS_PASSWORD".to_string(),
-                    value: chart_config_prerequisites
-                        .infra_options
-                        .qovery_nats_password
-                        .to_string(),
-                },
-                ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
                 },

@@ -58,7 +58,7 @@ spec:
       {%- endif %}
       terminationGracePeriodSeconds: 60
       securityContext: {}
-      {%- if registry %}
+      {%- if registry.secret_name %}
       imagePullSecrets:
         - name: {{ registry.secret_name }}
       {%- endif %}
@@ -132,4 +132,17 @@ spec:
             requests:
               cpu: {{ service.cpu_request_in_mili }}
               memory: {{ service.ram_request_in_mib }}
+          volumeMounts:
+            {%- for mounted_file in mounted_files %}
+            - mountPath: "{{ mounted_file.mount_path }}"
+              subPath: content
+              name: {{ mounted_file.id }}-{{ service.short_id }}
+              readOnly: true
+            {%- endfor %}
+      volumes:
+        {%- for mounted_file in mounted_files %}
+        - name: {{ mounted_file.id }}-{{ service.short_id }}
+          secret:
+            secretName: {{ mounted_file.id }}-{{ service.short_id }}
+        {%- endfor %}
 {%- endif %}

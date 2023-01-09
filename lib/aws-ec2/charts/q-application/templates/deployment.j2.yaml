@@ -121,4 +121,17 @@ spec:
             requests:
               cpu: {{ total_cpus }}
               memory: {{ total_ram_in_mib }}Mi
+          volumeMounts:
+            {%- for mounted_file in mounted_files %}
+            - mountPath: "{{ mounted_file.mount_path }}"
+              subPath: content
+              name: {{ mounted_file.id }}-{{ id }}
+              readOnly: true
+            {%- endfor %}
+      volumes:
+        {%- for mounted_file in mounted_files %}
+        - name: {{ mounted_file.id }}-{{ id }}
+          secret:
+            secretName: {{ mounted_file.id }}-{{ id }}
+        {%- endfor %}
 {%- endif %}

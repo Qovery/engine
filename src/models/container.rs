@@ -1,5 +1,5 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, Storage, StorageDataTemplate};
+use crate::cloud_provider::models::{EnvironmentVariable, MountedFile, Storage, StorageDataTemplate};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
@@ -12,6 +12,7 @@ use crate::string::cut;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
 use serde::Serialize;
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use uuid::Uuid;
 
@@ -42,6 +43,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) ports: Vec<Port>,
     pub(super) storages: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -71,6 +73,7 @@ impl<T: CloudProvider> Container<T> {
         ports: Vec<Port>,
         storages: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
+        mounted_files: BTreeSet<MountedFile>,
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -141,6 +144,7 @@ impl<T: CloudProvider> Container<T> {
             ports,
             storages,
             environment_variables,
+            mounted_files,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -223,6 +227,7 @@ impl<T: CloudProvider> Container<T> {
                     docker_json_config: docker_json.to_string(),
                 }),
             environment_variables: self.environment_variables.clone(),
+            mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
         };
 
@@ -420,5 +425,6 @@ pub(super) struct ContainerTeraContext {
     pub(super) service: ServiceTeraContext,
     pub(super) registry: Option<RegistryTeraContext>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
 }

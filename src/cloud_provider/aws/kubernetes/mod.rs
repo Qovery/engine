@@ -134,9 +134,6 @@ pub struct Options {
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub discord_api_key: String,
-    pub qovery_nats_url: String,
-    pub qovery_nats_user: String,
-    pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
     pub user_ssh_keys: Vec<String>,
@@ -583,9 +580,6 @@ fn tera_context(
 
     // qovery
     context.insert("qovery_api_url", options.qovery_api_url.as_str());
-    context.insert("qovery_nats_url", options.qovery_nats_url.as_str());
-    context.insert("qovery_nats_user", options.qovery_nats_user.as_str());
-    context.insert("qovery_nats_password", options.qovery_nats_password.as_str());
     context.insert("qovery_ssh_key", options.qovery_ssh_key.as_str());
     // AWS support only 1 ssh key
     let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());

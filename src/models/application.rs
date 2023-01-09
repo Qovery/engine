@@ -1,13 +1,14 @@
 use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
+use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, MountedFile, Storage};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
+use std::collections::BTreeSet;
 
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
@@ -38,6 +39,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) build: Build,
     pub(super) storage: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: ApplicationAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -60,6 +62,7 @@ impl<T: CloudProvider> Application<T> {
         build: Build,
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
+        mounted_files: BTreeSet<MountedFile>,
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -91,6 +94,7 @@ impl<T: CloudProvider> Application<T> {
             build,
             storage,
             environment_variables,
+            mounted_files,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -262,6 +266,7 @@ impl<T: CloudProvider> Application<T> {
             .collect::<Vec<_>>();
 
         context.insert("environment_variables", &environment_variables);
+        context.insert("mounted_files", &self.mounted_files.iter().collect::<Vec<_>>());
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
         context.insert("registry_secret", self.build().image.registry_secret_name(kubernetes.kind()));

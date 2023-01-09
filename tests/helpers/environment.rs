@@ -2,13 +2,15 @@ use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, GitCredentials, Port, Protocol};
+use qovery_engine::io_models::application::{
+    AdvancedSettingsProbeType, Application, ApplicationAdvancedSettings, GitCredentials, Port, Protocol,
+};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::router::{Route, Router};
-use qovery_engine::io_models::{Action, QoveryIdentifier};
+use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use std::collections::BTreeMap;
 use tracing::error;
 use url::Url;
@@ -52,6 +54,7 @@ pub fn working_environment(
             }),
             storage: vec![],
             environment_vars: BTreeMap::default(),
+            mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![Port {
                 id: "zdf7d6aad".to_string(),
@@ -92,12 +95,38 @@ pub fn working_environment(
 
     req
 }
+
 pub fn working_minimal_environment(context: &Context) -> EnvironmentRequest {
     working_environment(context, "", false, false)
 }
 
 pub fn working_minimal_environment_with_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
     working_environment(context, test_domain, true, false)
+}
+
+pub fn working_environment_with_application_crashing_if_file_doesnt_exist(
+    context: &Context,
+    mounted_file: &MountedFile,
+) -> EnvironmentRequest {
+    let mut environment = working_environment(context, "", false, false);
+
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+            app.branch = "app-crashing-if-file-doesnt-exist".to_string();
+            app.commit_id = "268ddf16a8446dc19a61f5916da3e6e729b88669".to_string();
+            app.advanced_settings.liveness_probe_type = AdvancedSettingsProbeType::None;
+            app.advanced_settings.readiness_probe_type = AdvancedSettingsProbeType::None;
+            app.environment_vars =
+                btreemap!["APP_FILE_PATH_TO_BE_CHECKED".to_string() => base64::encode(&mounted_file.mount_path)];
+            app.mounted_files = vec![mounted_file.clone()];
+            app
+        })
+        .collect::<Vec<qovery_engine::io_models::application::Application>>();
+
+    environment
 }
 
 pub fn environment_2_app_2_routers_1_psql(
@@ -171,6 +200,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
+                mounted_files: vec![],
                 branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
@@ -210,6 +240,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_USERNAME".to_string() => base64::encode(database_username),
                      "PG_PASSWORD".to_string() => base64::encode(database_password),
                 },
+                mounted_files: vec![],
                 branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
@@ -306,6 +337,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             environment_vars: btreemap! {
                 "ECHO_TEXT".to_string() => base64::encode("42"),
             },
+            mounted_files: vec![],
             branch: "echo-app".to_string(),
             ports: vec![Port {
                 id: "zdf7d6aad".to_string(),
@@ -381,6 +413,7 @@ pub fn environment_only_http_server(
             }),
             storage: vec![],
             environment_vars: BTreeMap::default(),
+            mounted_files: vec![],
             branch: "mini-http".to_string(),
             ports: vec![Port {
                 id: "zdf7d6aad".to_string(),

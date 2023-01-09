@@ -20,7 +20,6 @@ environmentVariables: {}
   #CLOUD_REGION: ""
   #AGENT_ID: ""
   #ES_HOST_URL: ""
-  #NATS_HOST_URL: ""
   #RUST_LOG: ""
 
 imagePullSecrets: []

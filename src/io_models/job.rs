@@ -5,7 +5,7 @@ use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action};
+use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
@@ -14,7 +14,7 @@ use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::{AWSEc2, AWS, SCW};
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -159,6 +159,8 @@ pub struct Job {
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
+    pub mounted_files: Vec<MountedFile>,
+    #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
 }
 
@@ -297,6 +299,10 @@ impl Job {
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -320,6 +326,10 @@ impl Job {
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -344,6 +354,10 @@ impl Job {
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
                 environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),

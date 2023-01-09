@@ -11,7 +11,6 @@ use qovery_engine::utilities::to_short_id;
 use tracing::{span, Level};
 
 use crate::helpers;
-use crate::helpers::aws::{AWS_EC2_TEST_CONTAINER_REGION, AWS_EC2_TEST_MANAGED_REGION};
 use crate::helpers::aws_ec2::AWS_K3S_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::database::{test_db, StorageSize};
@@ -33,13 +32,19 @@ fn test_ec2_database(
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
+        let secrets = FuncTestsSecrets::new();
+
         let logger = logger();
         let organization_id = generate_id();
         let localisation = match database_mode {
-            DatabaseMode::MANAGED => AWS_EC2_TEST_MANAGED_REGION.to_aws_format(),
-            DatabaseMode::CONTAINER => AWS_EC2_TEST_CONTAINER_REGION.to_aws_format(),
+            DatabaseMode::MANAGED => secrets
+                .AWS_EC2_TEST_MANAGED_REGION
+                .expect("AWS_EC2_TEST_MANAGED_REGION is not set"),
+            DatabaseMode::CONTAINER => secrets
+                .AWS_EC2_TEST_CONTAINER_REGION
+                .expect("AWS_EC2_TEST_CONTAINER_REGION is not set"),
         };
-        let cluster_id = generate_cluster_id(localisation);
+        let cluster_id = generate_cluster_id(&localisation);
         let context = context_for_ec2(organization_id, cluster_id);
 
         // create dedicated EC2 cluster:
@@ -57,7 +62,7 @@ fn test_ec2_database(
         let infra_ctx = AWS::docker_cr_engine(
             &context,
             logger.clone(),
-            localisation,
+            &localisation,
             Kind::Ec2,
             AWS_K3S_VERSION.to_string(),
             &cluster_domain,
@@ -82,7 +87,7 @@ fn test_ec2_database(
             database_kind,
             KubernetesKind::Ec2,
             database_mode.clone(),
-            localisation.to_string(),
+            localisation,
             is_public,
             cluster_domain,
             Some(&infra_ctx),

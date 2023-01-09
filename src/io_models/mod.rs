@@ -1,4 +1,5 @@
 use crate::build_platform::SshKey;
+use crate::cloud_provider;
 use crate::cloud_provider::service;
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
@@ -70,6 +71,25 @@ impl Action {
             Action::Create => service::Action::Create,
             Action::Pause => service::Action::Pause,
             Action::Delete => service::Action::Delete,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct MountedFile {
+    pub id: String,
+    pub long_id: Uuid,
+    pub mount_path: String,
+    pub file_content_b64: String,
+}
+
+impl MountedFile {
+    pub fn to_domain(&self) -> cloud_provider::models::MountedFile {
+        cloud_provider::models::MountedFile {
+            id: self.id.to_string(),
+            long_id: self.long_id,
+            mount_path: self.mount_path.to_string(),
+            file_content_b64: self.file_content_b64.to_string(),
         }
     }
 }

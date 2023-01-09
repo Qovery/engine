@@ -6,6 +6,7 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::TransactionResult;
+use std::str::FromStr;
 use tracing::{span, warn, Level};
 use uuid::Uuid;
 
@@ -15,13 +16,14 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::database::{database_test_environment, test_db, StorageSize};
 use crate::helpers::scaleway::{
     clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
+    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
 /**
@@ -47,6 +49,15 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -75,7 +86,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -99,6 +110,15 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -147,7 +167,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -214,9 +234,18 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) =
-            clean_environments(&context, vec![environment, environment_delete], secrets.clone(), SCW_TEST_ZONE)
-        {
+        if let Err(e) = clean_environments(
+            &context,
+            vec![environment, environment_delete],
+            secrets.clone(),
+            ScwZone::from_str(
+                secrets
+                    .SCALEWAY_TEST_CLUSTER_REGION
+                    .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                    .as_str(),
+            )
+            .expect("Unknown SCW region"),
+        ) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -243,6 +272,15 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
         let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -355,7 +393,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -371,6 +409,11 @@ fn test_oversized_volume() {
     let cluster_id = secrets
         .SCALEWAY_TEST_CLUSTER_LONG_ID
         .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let region = secrets
+        .SCALEWAY_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+        .to_string();
     let context = context_for_resource(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -389,8 +432,8 @@ fn test_oversized_volume() {
             function_name!(),
             DatabaseKind::Postgresql,
             KubernetesKind::ScwKapsule,
-            DatabaseMode::CONTAINER,
-            SCW_TEST_ZONE.to_string(),
+            CONTAINER,
+            region,
             false,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -412,6 +455,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
     let cluster_id = secrets
         .SCALEWAY_TEST_CLUSTER_LONG_ID
         .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let region = secrets
+        .SCALEWAY_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+        .to_string();
     let context = context_for_resource(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -436,7 +484,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             DatabaseKind::Postgresql,
             KubernetesKind::ScwKapsule,
             database_mode,
-            SCW_TEST_ZONE.to_string(),
+            region,
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -599,6 +647,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
     let cluster_id = secrets
         .SCALEWAY_TEST_CLUSTER_LONG_ID
         .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let region = secrets
+        .SCALEWAY_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+        .to_string();
     let context = context_for_resource(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -623,7 +676,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             DatabaseKind::Mongodb,
             KubernetesKind::ScwKapsule,
             database_mode,
-            SCW_TEST_ZONE.to_string(),
+            region,
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -706,6 +759,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
     let cluster_id = secrets
         .SCALEWAY_TEST_CLUSTER_LONG_ID
         .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let region = secrets
+        .SCALEWAY_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+        .to_string();
     let context = context_for_resource(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -730,7 +788,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             DatabaseKind::Mysql,
             KubernetesKind::ScwKapsule,
             database_mode,
-            SCW_TEST_ZONE.to_string(),
+            region,
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -800,6 +858,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
     let cluster_id = secrets
         .SCALEWAY_TEST_CLUSTER_LONG_ID
         .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let region = secrets
+        .SCALEWAY_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+        .to_string();
     let context = context_for_resource(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -824,7 +887,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             DatabaseKind::Redis,
             KubernetesKind::ScwKapsule,
             database_mode,
-            SCW_TEST_ZONE.to_string(),
+            region,
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),

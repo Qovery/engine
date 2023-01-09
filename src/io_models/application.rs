@@ -4,7 +4,7 @@ use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::io_models::context::Context;
-use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action};
+use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile};
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
@@ -14,7 +14,8 @@ use crate::models::types::{AWSEc2, AWS, SCW};
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::str;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -197,6 +198,8 @@ pub struct Application {
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
+    pub mounted_files: Vec<MountedFile>,
+    #[serde(default)]
     pub advanced_settings: ApplicationAdvancedSettings,
 }
 
@@ -233,6 +236,10 @@ impl Application {
                         build,
                         self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -252,6 +259,10 @@ impl Application {
                         build,
                         self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
                         environment_variables,
+                        self.mounted_files
+                            .iter()
+                            .map(|e| e.to_domain())
+                            .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -272,6 +283,10 @@ impl Application {
                 build,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),

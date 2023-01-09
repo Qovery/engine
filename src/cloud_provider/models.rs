@@ -14,6 +14,14 @@ pub struct EnvironmentVariableDataTemplate {
     pub value: String,
 }
 
+#[derive(Serialize, Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub struct MountedFile {
+    pub id: String,
+    pub long_id: Uuid,
+    pub mount_path: String,
+    pub file_content_b64: String,
+}
+
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Storage<T> {
     pub id: String,
