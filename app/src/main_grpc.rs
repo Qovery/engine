@@ -12,11 +12,8 @@ use std::net::TcpStream;
 use std::path::Path;
 
 use std::convert::TryFrom;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 use std::{env, thread};
 use std::{io, process};
@@ -24,14 +21,10 @@ use std::{io, process};
 use dirs::home_dir;
 use dotenv::dotenv;
 use futures_util::future::select;
-use futures_util::{pin_mut, stream, Stream, StreamExt};
-use qovery_engine::events::io::EngineEvent as EngineEventIo;
+use futures_util::{pin_mut, stream, StreamExt};
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::{mpsc, oneshot, Mutex};
-use tokio::task::{JoinError, JoinHandle};
 use tonic::Code;
 use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
@@ -50,18 +43,18 @@ use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 
 use crate::constants::ASCII_BANNER;
+use crate::deployment_manager::DeploymentManager;
 use crate::grpc::engine::{
     engine_message_rx, engine_message_tx, DeploymentInfo, DeploymentRequest, DeploymentType, EngineMessageTx,
 };
 use crate::grpc::GrpcEngineClient;
 use crate::logger::composite_logger::CompositeLogger;
-use crate::metrics::METRICS_NB_RUNNING_TASKS;
-
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, check_versions_from};
 
 mod constants;
 mod custom_error;
+mod deployment_manager;
 mod grpc;
 mod logger;
 mod metrics;
@@ -286,18 +279,28 @@ pub fn main() -> io::Result<()> {
             let mut engine_client = grpc::new_engine_client(grpc_server, &cluster_id, &cluster_jwt_token)
                 .await
                 .unwrap();
-            let mut current_deployment = DeploymentHandle::new();
+
+            let mut current_deployment = DeploymentManager::new();
+            let payload_to_engine_task =
+                |payload: String, logger: Box<dyn Logger>| -> Result<Box<dyn Task>, serde_json::Error> {
+                    to_engine_task(
+                        payload,
+                        &workspace_root_dir,
+                        &lib_root_dir,
+                        &docker_host,
+                        docker.clone(),
+                        &task_selector,
+                        logger,
+                    )
+                };
 
             // Execute deployment until we are asked to be shutdown and no deployment is on-going
             while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
                 let ret = fetch_and_exec_deployments(
                     &mut engine_client,
                     &mut current_deployment,
+                    payload_to_engine_task,
                     logger.clone(),
-                    workspace_root_dir.clone(),
-                    lib_root_dir.clone(),
-                    docker_host.clone(),
-                    docker.clone(),
                     task_selector,
                 )
                 .await;
@@ -332,137 +335,6 @@ pub fn main() -> io::Result<()> {
     Ok(())
 }
 
-struct DeploymentHandle {
-    deployment_info: DeploymentInfo,
-    #[allow(clippy::type_complexity)]
-    task: Option<(Arc<Box<dyn Task>>, JoinHandle<()>)>,
-    waker: Option<Waker>,
-    tx: UnboundedSender<EngineEvent>,
-    rx: Arc<Mutex<UnboundedReceiver<EngineEvent>>>,
-}
-
-impl DeploymentHandle {
-    pub fn new() -> Self {
-        let (engine_tx, engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
-        METRICS_NB_RUNNING_TASKS.set(0);
-        Self {
-            deployment_info: Default::default(),
-            task: None,
-            waker: None,
-            tx: engine_tx,
-            rx: Arc::new(Mutex::new(engine_rx)),
-        }
-    }
-
-    pub fn set_current_task(&mut self, task: Box<dyn Task>) {
-        let task = Arc::new(task);
-        let task_handle = tokio_utils::launch_blocking_task({
-            let task = task.clone();
-            move || {
-                task.run();
-            }
-        });
-
-        self.task = Some((task, task_handle));
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
-    }
-
-    pub fn get_task(&self) -> Option<&dyn Task> {
-        self.task.as_ref().map(|t| &**t.0)
-    }
-
-    pub fn remove_task(&mut self) {
-        self.task = None;
-    }
-
-    pub fn get_current_deployment(&self) -> Option<&DeploymentInfo> {
-        if self.deployment_info.r#type != DeploymentType::Unknown as i32 {
-            Some(&self.deployment_info)
-        } else {
-            None
-        }
-    }
-
-    pub fn set_current_deployment(&mut self, deployment_info: DeploymentInfo) {
-        METRICS_NB_RUNNING_TASKS.inc();
-        self.deployment_info = deployment_info;
-    }
-
-    pub fn remove_current_deployment(&mut self) {
-        METRICS_NB_RUNNING_TASKS.dec();
-        self.deployment_info = Default::default();
-        let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
-        self.tx = tx;
-        self.rx = Arc::new(Mutex::new(rx));
-    }
-
-    pub fn is_task_terminated(&self) -> bool {
-        if let Some(task) = &self.task {
-            task.1.is_finished()
-        } else {
-            true
-        }
-    }
-
-    pub async fn get_message_channel(
-        &mut self,
-    ) -> (
-        oneshot::Sender<()>,          // To know/stop the stream and release the rx side of the channel
-        UnboundedSender<EngineEvent>, // To feed the stream
-        impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent
-    ) {
-        let on_drop = scopeguard::guard((), |_| {
-            info!("engine message forwarder to gateway terminated");
-        });
-        let (abort_deployment_tx, abort_deployment_rx) = oneshot::channel::<()>();
-        let engine_msg_rx = self.rx.clone().lock_owned().await;
-        let msg_to_upstream = stream::unfold(
-            (engine_msg_rx, abort_deployment_rx, on_drop),
-            |(mut engine_msg_rx, mut should_stop, on_drop)| async move {
-                tokio::select! {
-                    biased;
-
-                    msg = engine_msg_rx.recv() => match msg {
-                        Some(engine_event) => {
-                            let event_io = EngineEventIo::from(engine_event);
-                            let grpc_message = EngineMessageTx {
-                                message: Some(engine_message_tx::Message::Log(
-                                    serde_json::to_string(&event_io).unwrap_or_default(),
-                                )),
-                            };
-                            Some((grpc_message, (engine_msg_rx, should_stop, on_drop)))
-                        }
-                        None => None,
-                    },
-
-                    // Deployment asked to be aborted, we leave to release the mutex of the channel
-                    _ = &mut should_stop => None
-                }
-            },
-        );
-        (abort_deployment_tx, self.tx.clone(), msg_to_upstream)
-    }
-}
-
-// Deployment handle future allows to wait for the current task to finish
-// If no task is present, it will never return
-impl Future for DeploymentHandle {
-    type Output = Result<(), JoinError>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-        return match this.task.as_mut() {
-            Some(handle) => Pin::new(&mut handle.1).poll(cx),
-            None => {
-                this.waker = Some(cx.waker().clone());
-                Poll::Pending
-            }
-        };
-    }
-}
-
 async fn fetch_new_deployment(
     engine_client: &mut GrpcEngineClient,
     deployment_request: DeploymentRequest,
@@ -484,12 +356,9 @@ async fn fetch_new_deployment(
 
 async fn fetch_and_exec_deployments(
     engine_client: &mut GrpcEngineClient,
-    mut current_deployment: &mut DeploymentHandle,
+    mut current_deployment: &mut DeploymentManager,
+    to_engine_task: impl Fn(String, Box<dyn Logger>) -> Result<Box<dyn Task>, serde_json::Error>,
     logger: Box<dyn Logger>,
-    workspace_root_dir: String,
-    lib_root_dir: String,
-    docker_host: Option<Url>,
-    docker: Docker,
     task_selector: TaskSelector,
 ) -> Result<(), anyhow::Error> {
     let deployment_type = match task_selector {
@@ -514,7 +383,7 @@ async fn fetch_and_exec_deployments(
     };
 
     // Now we retrieved a deployment, claim it and execute it
-    let (mut abort_deployment_tx, engine_tx, msg_stream) = current_deployment.get_message_channel().await;
+    let (engine_tx, msg_stream, mut abort_deployment_tx) = current_deployment.get_message_channel().await;
     let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
 
     let msg_stream = stream::iter(vec![EngineMessageTx {
@@ -528,12 +397,12 @@ async fn fetch_and_exec_deployments(
             return match err.code() {
                 Code::NotFound => {
                     // Task is terminated, and the server refused to accept message for it, we can remove it
-                    info!("Current deployment does not exist anymore, removing it");
-                    if current_deployment.is_task_terminated() {
-                        current_deployment.remove_current_deployment()
-                    } else {
-                        error!("Current deployment is not terminated, but the server refused to accept message for it, this should not happen");
+                    while !current_deployment.is_task_terminated() {
+                        info!("Current deployment does not exist anymore, but the task is not terminated, waiting for it to finish");
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                     }
+                    info!("Task terminated and current deployment does not exist anymore, removing it");
+                    current_deployment.remove_current_deployment();
 
                     Ok(())
                 }
@@ -582,17 +451,12 @@ async fn fetch_and_exec_deployments(
                             info!("Received new deployment task: {}", payload);
                             let task = to_engine_task(
                                 payload,
-                                &workspace_root_dir,
-                                &lib_root_dir,
-                                &docker_host,
-                                docker.clone(),
-                                &task_selector,
                                 logger_for_task.clone_dyn(),
                             );
 
                             match task {
                                 Ok(task) => {
-                                    current_deployment.set_current_task(task);
+                                    current_deployment.set_task(task);
                                 }
                                 Err(err) => {
                                     error!("Error while creating task: {}", err);
@@ -617,6 +481,8 @@ async fn fetch_and_exec_deployments(
                         }
                         Some(engine_message_rx::Request::Terminated(_)) => {
                             info!("Received terminated message for deployment: {:?}", msg);
+                            current_deployment.remove_current_deployment();
+                            break;
                         }
                         None => {
                             error!("Invalid payload received from grpc server. Update the protobuf !");
@@ -624,7 +490,7 @@ async fn fetch_and_exec_deployments(
                     }
                     // We record the last message we received, so in case of cnx loss
                     // we can resume the deployment and restart from the last message
-                    current_deployment.deployment_info.last_message_id = msg.message_id;
+                    current_deployment.set_last_message_id(msg.message_id);
                 },
 
                 // Return to try to resume the current deployment
