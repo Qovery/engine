@@ -184,7 +184,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         let error = match result {
             Ok(_) => {
                 self.logger
-                    .send_success(format!("✅ Deployment of {} succeeded", self.job_type));
+                    .send_success(format!("✅ {} of {} succeeded", self.action, self.job_type));
                 return;
             }
             Err(err) => err,
@@ -193,7 +193,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
-                "🚫 Deployment has been cancelled.".to_string(),
+                format!("🚫 {} has been cancelled.", self.action),
                 None,
             ));
             return;
@@ -234,9 +234,9 @@ Look at your logs in order to understand what went wrong or increase its max dur
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
-❌ Deployment of {} failed ! Look at the report above and to understand why.
+❌ {} of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type).trim().to_string(),
+                "#, self.action, self.job_type).trim().to_string(),
                 None,
             ));
         }

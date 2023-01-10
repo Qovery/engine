@@ -92,6 +92,7 @@ pub struct DatabaseDeploymentReporter {
     version: String,
     kube_client: kube::Client,
     logger: EnvLogger,
+    action: Action,
 }
 
 impl DatabaseDeploymentReporter {
@@ -108,6 +109,7 @@ impl DatabaseDeploymentReporter {
             version: db.version(),
             kube_client: deployment_target.kube.clone(),
             logger: deployment_target.env_logger(db, action.to_environment_step()),
+            action,
         }
     }
 }
@@ -129,7 +131,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         // managed db
         if self.is_managed {
             self.logger.send_progress(format!(
-                "🚀 Deployment of managed database `{}` is starting",
+                "🚀 {} of managed database `{}` is starting",
+                self.action,
                 to_short_id(&self.long_id)
             ));
             return;
@@ -145,7 +148,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             &self.namespace,
         )) {
             self.logger.send_progress(format!(
-                "🚀 Deployment of container database `{}` is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                "🚀 {} of container database `{}` is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                self.action,
                 to_short_id(&self.long_id),
                 deployment_info.pods.len(),
                 deployment_info.services.len(),
@@ -202,10 +206,10 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Ok(_) => {
                 if self.is_managed {
                     self.logger
-                        .send_success("✅ Deployment of managed database succeeded".to_string());
+                        .send_success(format!("✅ {} of managed database succeeded", self.action));
                 } else {
                     self.logger
-                        .send_success("✅ Deployment of container database succeeded".to_string());
+                        .send_success(format!("✅ {} of container database succeeded", self.action));
                 }
                 return;
             }
@@ -215,9 +219,12 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
-                r#"
-                🚫 Deployment has been cancelled. Database has been rollback to previous version if rollout was on-going
-                "#
+                format!(
+                    r#"
+                🚫 {} has been cancelled. Database has been rollback to previous version if rollout was on-going
+                "#,
+                    self.action
+                )
                 .trim()
                 .to_string(),
                 None,
@@ -228,10 +235,10 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
-            r#"
-❌ Deployment of database failed ! Look at the report above and to understand why.
+            format!(r#"
+❌ {} of database failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#.trim().to_string(),
+                "#, self.action).trim().to_string(),
             None,
         ));
     }

@@ -27,6 +27,7 @@ pub struct ApplicationDeploymentReporter<T> {
     selector: String,
     logger: EnvLogger,
     _tag: std::marker::PhantomData<T>,
+    action: Action,
 }
 
 impl<T> ApplicationDeploymentReporter<T> {
@@ -44,6 +45,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             selector: app.selector().unwrap_or_default(),
             logger: deployment_target.env_logger(app, action.to_environment_step()),
             _tag: Default::default(),
+            action,
         }
     }
 
@@ -61,6 +63,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             selector: container.selector().unwrap_or_default(),
             logger: deployment_target.env_logger(container, action.to_environment_step()),
             _tag: Default::default(),
+            action,
         }
     }
 }
@@ -86,7 +89,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             &self.namespace,
         )) {
             self.logger.send_progress(format!(
-                "🚀 Deployment of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                "🚀 {} of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                self.action,
                 self.service_type.to_string(),
                 to_short_id(&self.long_id),
                 self.tag,
@@ -142,7 +146,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
         let error = match result {
             Ok(_) => {
                 self.logger
-                    .send_success(format!("✅ Deployment of {} succeeded", self.service_type.to_string()));
+                    .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type.to_string()));
                 return;
             }
             Err(err) => err,
@@ -154,8 +158,9 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 *error.clone(),
                 format!(
                     r#"
-                🚫 Deployment has been cancelled. {} has been rollback to previous version if rollout was on-going
+                🚫 {} has been cancelled. {} has been rollback to previous version if rollout was on-going
                 "#,
+                    self.action,
                     self.service_type.to_string()
                 )
                 .trim()
@@ -179,9 +184,9 @@ Look at the report from above to understand why, and check your applications log
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
-❌ Deployment of {} failed ! Look at the report above and to understand why.
+❌ {} of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.service_type.to_string()).trim().to_string(),
+                "#, self.action, self.service_type.to_string()).trim().to_string(),
                 None,
             ));
         }

@@ -491,7 +491,7 @@ pub fn scw_helm_charts(
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_engine_url.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),

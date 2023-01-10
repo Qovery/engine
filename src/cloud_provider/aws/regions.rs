@@ -1,6 +1,6 @@
 use crate::cloud_provider::aws::regions::AwsZones::*;
 use crate::cloud_provider::aws::regions::RegionAndZoneErrors::*;
-use crate::io_models::domain::ToTerraformString;
+use crate::models::domain::ToTerraformString;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::{Display, Formatter};

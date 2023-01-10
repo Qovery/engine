@@ -27,9 +27,9 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::domain::ToHelmString;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
+use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
@@ -68,6 +68,8 @@ pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
+    #[serde(default)]
+    pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
@@ -93,6 +95,7 @@ impl KapsuleOptions {
     pub fn new(
         qovery_api_url: String,
         qovery_grpc_url: String,
+        qovery_engine_url: String,
         qoverry_cluster_jwt_token: String,
         qovery_ssh_key: String,
         grafana_admin_user: String,
@@ -108,6 +111,7 @@ impl KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
             qovery_grpc_url,
+            qovery_engine_url,
             jwt_token: qoverry_cluster_jwt_token,
             qovery_ssh_key,
             user_ssh_keys: vec![],

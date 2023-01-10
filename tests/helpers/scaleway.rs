@@ -195,7 +195,13 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     ) -> KapsuleOptions {
         KapsuleOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
-            secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
+            secrets
+                .QOVERY_GRPC_URL
+                .clone()
+                .expect("QOVERY_GRPC_URL is not set in secrets"),
+            secrets
+                .ENGINE_SERVER_URL
+                .expect("ENGINE_SERVER_URL is not set in secrets"),
             secrets
                 .QOVERY_CLUSTER_JWT_TOKEN
                 .expect("QOVERY_CLUSTER_JWT_TOKEN is not set in secrets"),

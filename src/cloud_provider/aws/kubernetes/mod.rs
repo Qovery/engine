@@ -39,16 +39,16 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
-    terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
-    TerraformError,
+    force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources,
+    terraform_init_validate_plan_apply, terraform_init_validate_state_list, TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::domain::{ToHelmString, ToTerraformString};
 use crate::io_models::QoveryIdentifier;
+use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
@@ -127,6 +127,8 @@ pub struct Options {
     // Qovery
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
+    #[serde(default)] // TODO: remove default
+    pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
@@ -939,7 +941,23 @@ fn create(
             ))?;
         };
 
-        return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
+        let mut ec2_fix = false;
+        if kubernetes.kind() == Kind::Ec2 {
+            match force_terraform_ec2_instance_type_switch(
+                temp_dir.as_str(),
+                e.clone(),
+                kubernetes.logger(),
+                &event_details,
+                kubernetes.context().is_dry_run_deploy(),
+            ) {
+                Ok(_) => ec2_fix = true,
+                Err(err) => return Err(Box::new(EngineError::new_terraform_error(event_details.clone(), err))),
+            }
+        }
+
+        if !ec2_fix {
+            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
+        }
     }
 
     let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(

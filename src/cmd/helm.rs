@@ -218,6 +218,7 @@ impl Helm {
             "--timeout",
             &timeout,
             "--wait",
+            "--debug",
         ];
 
         let mut stderr = String::new();

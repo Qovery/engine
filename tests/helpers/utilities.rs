@@ -162,6 +162,7 @@ pub struct FuncTestsSecrets {
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
     pub QOVERY_GRPC_URL: Option<String>,
+    pub ENGINE_SERVER_URL: Option<String>,
     pub QOVERY_CLUSTER_SECRET_TOKEN: Option<String>,
     pub QOVERY_CLUSTER_JWT_TOKEN: Option<String>,
     pub QOVERY_DNS_API_URL: Option<String>,
@@ -263,6 +264,7 @@ impl FuncTestsSecrets {
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
             QOVERY_GRPC_URL: None,
+            ENGINE_SERVER_URL: None,
             QOVERY_CLUSTER_SECRET_TOKEN: None,
             QOVERY_CLUSTER_JWT_TOKEN: None,
             QOVERY_DNS_API_URL: None,
@@ -408,6 +410,7 @@ impl FuncTestsSecrets {
             ),
             TERRAFORM_AWS_REGION: Self::select_secret("TERRAFORM_AWS_REGION", secrets.TERRAFORM_AWS_REGION),
             QOVERY_GRPC_URL: Self::select_secret("QOVERY_GRPC_URL", secrets.QOVERY_GRPC_URL),
+            ENGINE_SERVER_URL: Self::select_secret("ENGINE_SERVER_URL", secrets.ENGINE_SERVER_URL),
             QOVERY_CLUSTER_SECRET_TOKEN: Self::select_secret(
                 "QOVERY_CLUSTER_SECRET_TOKEN",
                 secrets.QOVERY_CLUSTER_SECRET_TOKEN,

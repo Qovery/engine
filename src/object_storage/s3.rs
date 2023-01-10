@@ -16,7 +16,7 @@ use rusoto_s3::{
 use tokio::io;
 
 use crate::io_models::context::Context;
-use crate::io_models::domain::StringPath;
+use crate::models::domain::StringPath;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::{Kind, ObjectStorage};
 use crate::runtime::block_on;

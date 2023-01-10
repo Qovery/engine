@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
 use crate::io_models::context::Context;
-use crate::io_models::domain::Domain;
+use crate::models::domain::Domain;
 
 #[derive(Clone, Debug)]
 pub struct CloudflareDnsConfig {
