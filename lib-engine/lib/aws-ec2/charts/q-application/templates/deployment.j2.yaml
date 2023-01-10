@@ -55,7 +55,7 @@ spec:
       {%- if security_service_account_name != "" %}
       serviceAccountName: {{ security_service_account_name }}
       {%- endif %}
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ deployment_termination_grace_period_seconds }}
       securityContext: {}
       {%- if is_registry_secret %}
       imagePullSecrets:
