@@ -282,7 +282,7 @@ impl Cluster<AWS, Options> for AWS {
             qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.clone().unwrap(),
-            qovery_engine_url: secrets.QOVERY_GRPC_URL.unwrap().replace("grpc.", "engine.").to_string(),
+            qovery_engine_url: secrets.ENGINE_SERVER_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             user_ssh_keys: vec![],
             user_network_config: None,
