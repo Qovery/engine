@@ -383,7 +383,7 @@ async fn fetch_and_exec_deployments(
     };
 
     // Now we retrieved a deployment, claim it and execute it
-    let (engine_tx, msg_stream, mut abort_deployment_tx) = current_deployment.get_message_channel().await;
+    let (engine_tx, msg_stream, mut abort_deployment_tx) = current_deployment.get_message_stream().await;
     let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
 
     let msg_stream = stream::iter(vec![EngineMessageTx {

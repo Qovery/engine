@@ -6,11 +6,13 @@ use qovery_engine::engine_task::Task;
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::EngineEvent;
 use std::future::Future;
+use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
+use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, OwnedMutexGuard};
 use tokio::task::{JoinError, JoinHandle};
 
 // A single deployment can receive N tasks.
@@ -28,12 +30,31 @@ pub struct DeploymentManager {
     // The same channel is re-used across all tasks, so even in case of cnx loss
     // We can resume the connection with the gateway without losing events
     tx: UnboundedSender<EngineEvent>,
-    rx: Arc<Mutex<UnboundedReceiver<EngineEvent>>>,
+    rx: Arc<Mutex<EngineMessageStreamContext>>,
 }
 
 struct TaskContext {
     task: Arc<Box<dyn Task>>,    // the engine task
     task_handle: JoinHandle<()>, // the handle for the "thread"/tokio task where is runinng the task
+}
+
+// Represent the context of the stream that the engine use to communicate with the gateway
+struct EngineMessageStreamContext {
+    receiver: UnboundedReceiver<EngineEvent>,
+    msg_buffer: Vec<EngineEventIo>,
+    buffer_duration: Duration,
+    should_stop: Option<oneshot::Receiver<()>>,
+}
+
+impl EngineMessageStreamContext {
+    fn new(receiver: UnboundedReceiver<EngineEvent>) -> Self {
+        EngineMessageStreamContext {
+            receiver,
+            msg_buffer: Vec::with_capacity(16),
+            buffer_duration: Duration::from_secs(1),
+            should_stop: None,
+        }
+    }
 }
 
 impl DeploymentManager {
@@ -45,7 +66,7 @@ impl DeploymentManager {
             task: None,
             waker: None,
             tx: engine_tx,
-            rx: Arc::new(Mutex::new(engine_rx)),
+            rx: Arc::new(Mutex::new(EngineMessageStreamContext::new(engine_rx))),
         }
     }
 
@@ -96,7 +117,7 @@ impl DeploymentManager {
         self.deployment_info = Default::default();
         let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
         self.tx = tx;
-        self.rx = Arc::new(Mutex::new(rx));
+        self.rx = Arc::new(Mutex::new(EngineMessageStreamContext::new(rx)));
         self.remove_task();
     }
 
@@ -119,43 +140,15 @@ impl DeploymentManager {
     // and release ownership of the underlying channel.
     // Calling get_message_channel without releasing the oneshot sender will lead to
     // this async never returning
-    pub async fn get_message_channel(
+    pub async fn get_message_stream(
         &mut self,
     ) -> (
         UnboundedSender<EngineEvent>,                         // To feed the stream
         impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent
         oneshot::Sender<()>, // To know/stop the stream and release the rx side of the channel
     ) {
-        let on_drop = scopeguard::guard((), |_| {
-            info!("engine message forwarder to gateway terminated");
-        });
-        let (abort_deployment_tx, abort_deployment_rx) = oneshot::channel::<()>();
-        let engine_msg_rx = self.rx.clone().lock_owned().await;
-        let msg_to_upstream = stream::unfold(
-            (engine_msg_rx, abort_deployment_rx, on_drop),
-            |(mut engine_msg_rx, mut should_stop, on_drop)| async move {
-                tokio::select! {
-                    biased;
-
-                    msg = engine_msg_rx.recv() => match msg {
-                        Some(engine_event) => {
-                            let event_io = EngineEventIo::from(engine_event);
-                            let grpc_message = EngineMessageTx {
-                                message: Some(engine_message_tx::Message::Log(
-                                    serde_json::to_string(&event_io).unwrap_or_default(),
-                                )),
-                            };
-                            Some((grpc_message, (engine_msg_rx, should_stop, on_drop)))
-                        }
-                        None => None,
-                    },
-
-                    // Deployment asked to be aborted, we leave to release the mutex of the channel
-                    _ = &mut should_stop => None
-                }
-            },
-        );
-        (self.tx.clone(), msg_to_upstream, abort_deployment_tx)
+        let (stream, abort_handle) = EngineMessageStream::new(self.rx.clone().lock_owned().await);
+        (self.tx.clone(), stream, abort_handle)
     }
 }
 
@@ -173,5 +166,70 @@ impl Future for DeploymentManager {
                 Poll::Pending
             }
         };
+    }
+}
+
+struct EngineMessageStream {
+    stream: Box<dyn Stream<Item = EngineMessageTx> + Send + 'static>,
+}
+
+impl EngineMessageStream {
+    pub fn new(mut context: OwnedMutexGuard<EngineMessageStreamContext>) -> (Self, oneshot::Sender<()>) {
+        let (abort_handle_tx, abort_handle_rx) = oneshot::channel::<()>();
+        context.should_stop = Some(abort_handle_rx);
+
+        let s = Self {
+            stream: Box::new(stream::unfold(context, Self::on_next)),
+        };
+
+        (s, abort_handle_tx)
+    }
+
+    async fn on_next(
+        mut ctx: OwnedMutexGuard<EngineMessageStreamContext>,
+    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineMessageStreamContext>)> {
+        let mut should_stop = ctx.should_stop.take().unwrap();
+
+        tokio::select! {
+            biased;
+
+            msg = ctx.receiver.recv() => match msg {
+                Some(engine_event) => {
+                    // Buffer msg to avoid flooding the gateway
+                    ctx.msg_buffer.push(EngineEventIo::from(engine_event));
+                    tokio::time::sleep(ctx.buffer_duration).await;
+                    while let Ok(engine_event) = ctx.receiver.try_recv() {
+                        ctx.msg_buffer.push(EngineEventIo::from(engine_event));
+                    }
+
+                    let grpc_message = EngineMessageTx {
+                        message: Some(engine_message_tx::Message::Log(
+                            serde_json::to_string(&ctx.msg_buffer).unwrap_or_default(),
+                        )),
+                    };
+
+                    ctx.should_stop = Some(should_stop);
+                    Some((grpc_message, ctx))
+                }
+                None => None,
+            },
+
+            // Deployment asked to be aborted, we leave to release the mutex of the channel
+            _ = &mut should_stop => None
+        }
+    }
+}
+
+impl Stream for EngineMessageStream {
+    type Item = EngineMessageTx;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        unsafe { self.map_unchecked_mut(|s| s.stream.deref_mut()).poll_next(cx) }
+    }
+}
+
+impl Drop for EngineMessageStream {
+    fn drop(&mut self) {
+        info!("engine message stream to gateway terminated");
     }
 }
