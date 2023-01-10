@@ -208,6 +208,7 @@ impl EngineMessageStream {
                         )),
                     };
 
+                    ctx.msg_buffer.clear();
                     ctx.should_stop = Some(should_stop);
                     Some((grpc_message, ctx))
                 }
