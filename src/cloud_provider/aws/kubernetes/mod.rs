@@ -813,7 +813,7 @@ fn create(
             kubernetes.cluster_name(),
             event_details.clone(),
         )) {
-            // only fails if the cluster is not found
+            // only return failures if the cluster is not absent, because it can be a VPC quota issue
             if e.tag() != &Tag::CannotGetCluster {
                 return Err(e);
             }
@@ -927,6 +927,7 @@ fn create(
     // terraform deployment dedicated to cloud resources
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
         // on EKS, clean possible nodegroup deployment failures because of quota issues
+        // do not exit on this error to avoid masking the real Terraform issue
         if kubernetes.kind() == Kind::Eks {
             kubernetes.logger().log(EngineEvent::Info(
                 event_details.clone(),
@@ -934,29 +935,31 @@ fn create(
                     "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
                 ),
             ));
-            block_on(delete_eks_failed_nodegroups(
+            if let Err(e) = block_on(delete_eks_failed_nodegroups(
                 aws_conn,
                 kubernetes.cluster_name(),
                 event_details.clone(),
-            ))?;
+            )) {
+                // only return failures if the cluster is not absent, because it can be a VPC quota issue
+                if e.tag() != &Tag::CannotGetCluster {
+                    return Err(e);
+                }
+            };
         };
 
-        let mut ec2_fix = false;
-        if kubernetes.kind() == Kind::Ec2 {
-            match force_terraform_ec2_instance_type_switch(
-                temp_dir.as_str(),
-                e.clone(),
-                kubernetes.logger(),
-                &event_details,
-                kubernetes.context().is_dry_run_deploy(),
-            ) {
-                Ok(_) => ec2_fix = true,
-                Err(err) => return Err(Box::new(EngineError::new_terraform_error(event_details.clone(), err))),
+        match kubernetes.kind() {
+            Kind::Ec2 => {
+                if let Err(err) = force_terraform_ec2_instance_type_switch(
+                    temp_dir.as_str(),
+                    e,
+                    kubernetes.logger(),
+                    &event_details,
+                    kubernetes.context().is_dry_run_deploy(),
+                ) {
+                    return Err(Box::new(EngineError::new_terraform_error(event_details.clone(), err)));
+                }
             }
-        }
-
-        if !ec2_fix {
-            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
+            _ => return Err(Box::new(EngineError::new_terraform_error(event_details, e))),
         }
     }
 
