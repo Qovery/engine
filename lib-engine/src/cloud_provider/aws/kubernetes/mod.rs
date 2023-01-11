@@ -324,6 +324,15 @@ fn tera_context(
     let mut eks_zone_b_subnet_blocks_private = format_ips(&options.eks_zone_b_subnet_blocks);
     let mut eks_zone_c_subnet_blocks_private = format_ips(&options.eks_zone_c_subnet_blocks);
 
+    context.insert(
+        "aws_enable_vpc_flow_logs",
+        &kubernetes.advanced_settings().aws_vpc_enable_flow_logs,
+    );
+    context.insert(
+        "s3_flow_logs_bucket_name",
+        format!("qovery-vpc-flow-logs-{}", kubernetes.id()).as_str(),
+    );
+
     match options.vpc_qovery_network_mode {
         VpcQoveryNetworkMode::WithNatGateways => {
             let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &eks_zone_a_subnet_blocks_private)?;

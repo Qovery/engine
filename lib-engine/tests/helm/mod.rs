@@ -111,6 +111,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 pleco_resources_ttl: 2,
                 loki_log_retention_in_week: 3,
                 aws_iam_user_mapper_group_name: "my_aws_iam_user_mapper_group_name".to_string(),
+                aws_vpc_enable_flow_logs: true,
                 cloud_provider_container_registry_tags: HashMap::new(),
             },
         )
