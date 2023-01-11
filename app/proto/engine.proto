@@ -36,6 +36,7 @@ message DeploymentInfo {
 }
 
 message EngineMessageTx {
+  google.protobuf.Timestamp message_id = 3;
   oneof message {
     DeploymentInfo deployment_request = 1;
     string log = 2;

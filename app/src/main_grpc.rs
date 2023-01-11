@@ -393,6 +393,7 @@ async fn fetch_and_exec_deployments(
     let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
 
     let msg_stream = stream::iter(vec![EngineMessageTx {
+        message_id: None,
         message: Some(engine_message_tx::Message::DeploymentRequest(deployment_info.clone())),
     }])
     .chain(msg_stream);
