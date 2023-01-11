@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 option go_package = "qovery-engine/proto";
 option java_multiple_files = true;
@@ -10,6 +11,7 @@ option java_outer_classname = "EngineProto";
 package engine;
 
 service Engine {
+  rpc IsAuthorized(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc GetNewDeployment(DeploymentRequest) returns (DeploymentInfo) {}
   rpc ExecDeployment(stream EngineMessageTx) returns (stream EngineMessageRx) {}
 }

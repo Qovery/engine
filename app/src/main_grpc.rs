@@ -275,10 +275,16 @@ pub fn main() -> io::Result<()> {
         let should_shutdown = should_shutdown.clone();
 
         async move {
+            // Connect and check we are allowed to do request
+            // If we are not allowed, we let the task die in order to be restarted
             info!("Connecting to GRPC server: {:?}", grpc_server);
             let mut engine_client = grpc::new_engine_client(grpc_server, &cluster_id, &cluster_jwt_token)
                 .await
-                .unwrap();
+                .expect("Can't connect to engine gateway");
+            engine_client
+                .is_authorized(())
+                .await
+                .expect("Engine can't connect to gateway");
 
             let mut current_deployment = DeploymentManager::new();
             let payload_to_engine_task =
