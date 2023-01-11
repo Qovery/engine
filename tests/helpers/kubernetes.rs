@@ -384,6 +384,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
+                        aws_vpc_enable_flow_logs: true,
                         ..Default::default()
                     },
                 )
@@ -413,6 +414,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 7200,
+                        aws_vpc_enable_flow_logs: false,
                         ..Default::default()
                     },
                 )
