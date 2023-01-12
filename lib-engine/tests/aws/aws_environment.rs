@@ -1997,3 +1997,144 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         "".to_string()
     })
 }
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let initial_storage_size: u32 = 10;
+        environment.applications = environment
+            .applications
+            .into_iter()
+            .map(|mut app| {
+                let id_1 = Uuid::new_v4();
+                let id_2 = Uuid::new_v4();
+                app.storage = vec![
+                    Storage {
+                        id: to_short_id(&id_1),
+                        long_id: id_1,
+                        name: "photos_1".to_string(),
+                        storage_type: StorageType::Ssd,
+                        size_in_gib: initial_storage_size,
+                        mount_point: "/mnt/photos_1".to_string(),
+                        snapshot_retention_in_days: 0,
+                    },
+                    Storage {
+                        id: to_short_id(&id_2),
+                        long_id: id_2,
+                        name: "photos_2".to_string(),
+                        storage_type: StorageType::Ssd,
+                        size_in_gib: initial_storage_size,
+                        mount_point: "/mnt/photos_2".to_string(),
+                        snapshot_retention_in_days: 0,
+                    },
+                ];
+                app
+            })
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
+
+        let mut resized_environment = environment.clone();
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
+
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        match get_pvc(&infra_ctx, Kind::Aws, environment.clone(), secrets.clone()) {
+            Ok(pvc) => {
+                assert!(pvc.items.is_some());
+                let pvcs = pvc.items.unwrap();
+                let app_storages = &environment.applications[0].storage;
+                assert_eq!(
+                    pvcs.iter()
+                        .find(|pvc| pvc.metadata.name.contains(&app_storages[0].id))
+                        .expect("Unable to get storage 1")
+                        .spec
+                        .resources
+                        .requests
+                        .storage,
+                    format!("{}Gi", initial_storage_size)
+                );
+                assert_eq!(
+                    pvcs.iter()
+                        .find(|pvc| pvc.metadata.name.contains(&app_storages[1].id))
+                        .expect("Unable to get storage 2")
+                        .spec
+                        .resources
+                        .requests
+                        .storage,
+                    format!("{}Gi", initial_storage_size)
+                );
+            }
+            Err(_) => panic!(),
+        };
+
+        let resized_size = 20;
+        resized_environment.applications[0].storage[0].size_in_gib = resized_size;
+        let resized_ea = resized_environment.clone();
+        let resized_context = context.clone_not_same_execution_id();
+        let resized_infra_ctx = aws_default_infra_config(&resized_context, logger.clone());
+        let resized_ret = resized_environment.deploy_environment(&resized_ea, &resized_infra_ctx);
+        assert!(matches!(resized_ret, TransactionResult::Ok));
+
+        match get_pvc(&resized_infra_ctx, Kind::Aws, resized_environment.clone(), secrets) {
+            Ok(pvc) => {
+                assert!(pvc.items.is_some());
+                let pvcs = pvc.items.unwrap();
+                let app_storages = &resized_environment.applications[0].storage;
+                assert_eq!(
+                    pvcs.iter()
+                        .find(|pvc| pvc.metadata.name.contains(&app_storages[0].id))
+                        .expect("Unable to get storage 1")
+                        .spec
+                        .resources
+                        .requests
+                        .storage,
+                    format!("{}Gi", resized_size)
+                );
+                assert_eq!(
+                    pvcs.iter()
+                        .find(|pvc| pvc.metadata.name.contains(&app_storages[1].id))
+                        .expect("Unable to get storage 2")
+                        .spec
+                        .resources
+                        .requests
+                        .storage,
+                    format!("{}Gi", initial_storage_size)
+                );
+            }
+            Err(_) => panic!(),
+        };
+
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        test_name.to_string()
+    })
+}

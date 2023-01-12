@@ -13,17 +13,18 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
-use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
+use crate::models::database::{
+    get_database_with_invalid_storage_size, Container, Database, DatabaseService, DatabaseType, Managed,
+};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
-use crate::cmd::kubectl::kubectl_get_pvc;
-use crate::cmd::structs::PVCItem;
+use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::k8s_external_service_name_exists;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -678,50 +679,6 @@ where
 }
 
 // For Container database
-fn is_pvc_bound(
-    target: &DeploymentTarget,
-    event_details: EventDetails,
-    db_sanitized_name: String,
-) -> Result<(), Box<EngineError>> {
-    let kubeconfig_path = target.kubernetes.get_kubeconfig_file_path()?;
-    let namespace = target.environment.namespace();
-    let creds = target.kubernetes.cloud_provider().credentials_environment_variables();
-    match kubectl_get_pvc(kubeconfig_path, namespace, creds.clone()) {
-        Ok(pvcs) => match pvcs.items {
-            None => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
-                event_details,
-                CommandError::new_from_safe_message("Unable to get pvcs".to_string()),
-            ))),
-            Some(pvcs) => {
-                let pvc_name = format!("data-{}-0", db_sanitized_name);
-                let pvc = pvcs
-                    .iter()
-                    .filter(|pvc| pvc.metadata.name == pvc_name)
-                    .collect::<Vec<&PVCItem>>();
-                if pvc.len() != 1 {
-                    return Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
-                        event_details,
-                        CommandError::new_from_safe_message(format!("Unable to get pvc for db {}", db_sanitized_name)),
-                    )));
-                };
-
-                match pvc[0].status.phase.to_lowercase().as_str() {
-                    "bound" => Ok(()),
-                    _ => Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
-                        event_details,
-                        CommandError::new_from_safe_message(format!(
-                            "Can't bound PVC for database {}",
-                            db_sanitized_name
-                        )),
-                        db_sanitized_name.as_str(),
-                    ))),
-                }
-            }
-        },
-        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details, e))),
-    }
-}
-
 impl<C: CloudProvider, T: DatabaseType<C, Container>> DeploymentAction for Database<C, Container, T>
 where
     Database<C, Container, T>: ToTeraContext,
@@ -730,6 +687,29 @@ where
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
         let run = |logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
+            match get_database_with_invalid_storage_size(
+                self,
+                &target.kube,
+                target.environment.namespace(),
+                &event_details,
+            ) {
+                Ok(invalid_statefulset_storage) => {
+                    if let Some(invalid_statefulset_storage) = invalid_statefulset_storage {
+                        update_pvcs(
+                            self.as_service(),
+                            &invalid_statefulset_storage,
+                            target.environment.namespace(),
+                            &event_details,
+                            &target.kube,
+                        )?;
+                    }
+                }
+                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(e.to_string()),
+                )),
+            }
+
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -750,7 +730,12 @@ where
             if let Err(e) = helm.on_create(target) {
                 return match e.tag() {
                     Tag::TaskCancellationRequested => Err(e),
-                    _ => match is_pvc_bound(target, event_details.clone(), self.as_service().sanitized_name()) {
+                    _ => match are_pvcs_bound(
+                        self.as_service(),
+                        target.environment.namespace(),
+                        &event_details,
+                        &target.kube,
+                    ) {
                         Ok(_) => Err(e),
                         Err(err) => {
                             logger.warning(format!("Cannot find if pvc bound: {}", err.user_log_message()));

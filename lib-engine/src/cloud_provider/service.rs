@@ -353,8 +353,11 @@ pub async fn increase_storage_size(
             EngineError::new_k8s_cannot_edit_pvc(event_details.clone(), invalid_pvc.pvc_name.to_string(), e)
         })?;
 
-        let persitent_volume_claimtemplate_name = match invalid_statefulset.service_type {
-            ServiceType::Database(_) => "data",
+        let persistent_volume_claim_template_name = match invalid_statefulset.service_type {
+            ServiceType::Database(type_) => match type_ {
+                DatabaseType::Redis => "redis-data",
+                _ => "data",
+            },
             _ => &invalid_pvc.pvc_name,
         }
         .to_string();
@@ -365,7 +368,7 @@ pub async fn increase_storage_size(
                 for volume in volumes {
                     if let Some(name) = &volume.metadata.name {
                         // find invalid volume claim template regarding invalid pvc name
-                        if persitent_volume_claimtemplate_name.starts_with(name) {
+                        if persistent_volume_claim_template_name.starts_with(name) {
                             if let Some(v_spec) = volume.spec.as_mut() {
                                 if let Some(v_res) = v_spec.resources.as_mut() {
                                     if let Some(v_req) = v_res.requests.as_mut() {

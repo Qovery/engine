@@ -1,7 +1,9 @@
 use crate::helpers;
 use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
-use crate::helpers::database::{test_db, test_pause_managed_db, StorageSize};
+use crate::helpers::database::{
+    test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db, StorageSize,
+};
 use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
@@ -370,6 +372,18 @@ fn test_oversized_volume() {
     })
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn postgresql_disk_resize() {
+    test_deploy_an_environment_with_db_and_resize_disk(
+        DatabaseKind::Postgresql,
+        "13",
+        function_name!(),
+        KubernetesKind::Eks,
+    )
+}
+
 /**
 **
 ** PostgreSQL tests
@@ -688,6 +702,18 @@ pub fn test_mongodb_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+fn mongodb_disk_resize() {
+    test_deploy_an_environment_with_db_and_resize_disk(
+        DatabaseKind::Mongodb,
+        "4.4",
+        function_name!(),
+        KubernetesKind::Eks,
+    )
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -821,6 +847,18 @@ pub fn test_mysql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+fn mysql_disk_resize() {
+    test_deploy_an_environment_with_db_and_resize_disk(
+        DatabaseKind::Mysql,
+        "8.0",
+        function_name!(),
+        KubernetesKind::Eks,
+    )
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -935,6 +973,13 @@ pub fn test_redis_configuration(
 }
 
 // Redis self-hosted environment
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn redis_disk_resize() {
+    test_deploy_an_environment_with_db_and_resize_disk(DatabaseKind::Redis, "6", function_name!(), KubernetesKind::Eks)
+}
+
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
