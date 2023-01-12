@@ -244,7 +244,7 @@ pub fn main() -> io::Result<()> {
         None => info!("docker host is not set"),
     };
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
-    let task_selector = if deployment_type.map_or(false, |deployment_type| deployment_type == "ENVIRONMENT") {
+    let task_selector = if deployment_type.map_or(true, |deployment_type| deployment_type == "ENVIRONMENT") {
         TaskSelector::Environment("environment")
     } else {
         TaskSelector::Infrastructure("infrastructure")
