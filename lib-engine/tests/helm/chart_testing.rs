@@ -1,18 +1,17 @@
 use crate::helm::{
     application_context, chart_path, container_context, container_database_context, job_context, kubeconfig_path,
-    lib_dir, managed_database_context,
+    lib_dir, managed_database_context, TestInfo,
 };
 use kube::core::DynamicObject;
 use qovery_engine::cloud_provider::helm::CommonChart;
 use qovery_engine::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use qovery_engine::cmd::helm::Helm;
 use qovery_engine::deployment_action::deploy_helm::HelmDeployment;
-use qovery_engine::events::EventDetails;
 use std::collections::HashMap;
+use std::fs;
 use std::fs::{read_dir, File};
 use std::path::{Path, PathBuf};
-use std::{env, fs};
-use tera::Context;
+use uuid::Uuid;
 
 use super::router_context;
 
@@ -23,9 +22,8 @@ fn to_kube_kind(file_path: &str) -> DynamicObject {
     obj
 }
 
-fn generate_template(chart_info: &ChartInfo) -> String {
-    let home_dir = env::var("WORKSPACE_ROOT_DIR").expect("Missing environment variable WORKSPACE_ROOT_DIR");
-    let template_dir = format!("{}/.qovery-workspace/rendered", home_dir);
+fn generate_template(chart_info: &ChartInfo, temp_dir: &str, service_type_folder: &str, chart_id: &Uuid) -> String {
+    let template_dir = format!("{}/{}/{}/{}-rendered", temp_dir, service_type_folder, chart_id, chart_info.name);
     if !Path::new(&template_dir).exists() {
         let _ = fs::create_dir(template_dir.clone());
     }
@@ -39,19 +37,19 @@ fn get_kube_resources(
     chart_original_path: &str,
     chart_info: ChartInfo,
     render_custom_values_file: Option<PathBuf>,
-    context: Context,
-    event_details: EventDetails,
+    test_info: &TestInfo,
+    chart_id: &Uuid,
 ) -> HashMap<String, DynamicObject> {
     let helm_deployment = HelmDeployment::new(
-        event_details,
-        context,
+        test_info.event_details.clone(),
+        test_info.context.clone(),
         chart_original_path.parse().unwrap(),
         render_custom_values_file,
         chart_info.clone(),
     );
     let _ = helm_deployment.prepare_helm_chart();
 
-    let template_dir = generate_template(&chart_info);
+    let template_dir = generate_template(&chart_info, &test_info.temp_dir, &test_info.service_folder_type, chart_id);
 
     let templates_path = format!("/{}/{}/templates", template_dir, &chart_info.name);
     let files = read_dir(&templates_path).unwrap_or_else(|_| panic!("Unable to read files in {}", &templates_path));
@@ -84,12 +82,13 @@ fn get_kube_resources(
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_ingress_test() {
-    let (context, event_details) = router_context();
+    let test_info = router_context();
     let chart_name = "q-ingress-tls";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -116,8 +115,8 @@ fn q_ingress_test() {
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 
@@ -128,12 +127,13 @@ fn q_ingress_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_container_test() {
-    let (context, event_details) = container_context();
+    let test_info = container_context();
     let chart_name = "q-container";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -159,8 +159,8 @@ fn q_container_test() {
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 }
@@ -168,12 +168,13 @@ fn q_container_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_application_test() {
-    let (context, event_details) = application_context();
+    let test_info = application_context();
     let chart_name = "q-application";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -199,8 +200,8 @@ fn q_application_test() {
         format!("{}/aws/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 }
@@ -208,12 +209,13 @@ fn q_application_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_container_psql_test() {
-    let (context, event_details) = container_database_context();
+    let test_info = container_database_context();
     let chart_name = "postgresql";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -239,8 +241,8 @@ fn q_container_psql_test() {
         format!("{}/common/services/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 }
@@ -248,12 +250,13 @@ fn q_container_psql_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_managed_psql_test() {
-    let (context, event_details) = managed_database_context();
+    let test_info = managed_database_context();
     let chart_name = "external-name-svc";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -279,8 +282,8 @@ fn q_managed_psql_test() {
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 }
@@ -288,12 +291,13 @@ fn q_managed_psql_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_job_test() {
-    let (context, event_details) = job_context();
+    let test_info = job_context();
     let chart_name = "q-job";
+    let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
             namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: HelmAction::Deploy,
@@ -319,8 +323,8 @@ fn q_job_test() {
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
-        context,
-        event_details,
+        &test_info,
+        &uuid,
     );
     assert!(!resources.is_empty());
 }
