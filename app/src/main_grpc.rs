@@ -136,11 +136,8 @@ pub fn main() -> io::Result<()> {
         .init();
 
     let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
-    let organization = env::var("ORGANIZATION");
-    let cloud_provider = env::var("CLOUD_PROVIDER");
     let deployment_type = env::var("DEPLOYMENT_TYPE");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
-    let region = env::var("REGION");
     let cluster_id = Uuid::parse_str(&std::env::var("CLUSTER_ID").expect("Missing Env Var for CLUSTER_ID"))
         .expect("CLUSTER_ID is an invalid uuidV4");
     let cluster_jwt_token = std::env::var("CLUSTER_JWT_TOKEN").expect("Missing Env Var for CLUSTER_JWT_TOKEN");
@@ -247,27 +244,10 @@ pub fn main() -> io::Result<()> {
         None => info!("docker host is not set"),
     };
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
-
-    let mode = if let (Ok(org), Ok(cp), Ok(r)) = (organization, cloud_provider, region) {
-        info!("starting in cloud mode");
-        info!("organization: {}", org.as_str());
-        info!("cloud provider: {}", cp.as_str());
-        info!("region: {}", r.as_str());
-        Mode::Cloud(org, cp, r)
+    let task_selector = if deployment_type.map_or(false, |deployment_type| deployment_type == "ENVIRONMENT") {
+        TaskSelector::Environment("environment")
     } else {
-        info!("starting in local mode");
-        Mode::Local
-    };
-
-    let task_selector = match mode {
-        Mode::Local => {
-            if deployment_type.map_or(false, |deployment_type| deployment_type == "ENVIRONMENT") {
-                TaskSelector::Environment("environment")
-            } else {
-                TaskSelector::Infrastructure("infrastructure")
-            }
-        }
-        Mode::Cloud(_, _, _) => TaskSelector::Environment("environment"),
+        TaskSelector::Infrastructure("infrastructure")
     };
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
