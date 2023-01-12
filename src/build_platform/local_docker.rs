@@ -414,6 +414,10 @@ impl BuildPlatform for LocalDocker {
                 raw_error: clone_error,
             });
         }
+        let _git_cleanup = scopeguard::guard(&repository_root_path, |path| {
+            info!("Removing git repository at path: {:?}", path);
+            let _ = fs::remove_dir_all(path);
+        });
 
         if is_task_canceled() {
             return Err(BuildError::Aborted {

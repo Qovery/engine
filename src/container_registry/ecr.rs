@@ -70,7 +70,6 @@ impl ECR {
         let _ = registry_url.set_username(&credentials.access_token);
         let _ = registry_url.set_password(Some(&credentials.password));
 
-        cr.log_info(format!("🔓 Login to ECR registry {}", credentials.endpoint_url));
         cr.context
             .docker
             .login(&registry_url)

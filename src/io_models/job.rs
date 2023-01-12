@@ -28,12 +28,14 @@ pub struct JobAdvancedSettings {
 
     #[serde(alias = "cronjob.concurrency_policy")]
     pub cronjob_concurrency_policy: String,
-
     #[serde(alias = "cronjob.failed_jobs_history_limit")]
     pub cronjob_failed_jobs_history_limit: u32,
-
     #[serde(alias = "cronjob.success_jobs_history_limit")]
     pub cronjob_success_jobs_history_limit: u32,
+
+    // Deployment
+    #[serde(alias = "deployment.termination_grace_period_seconds")]
+    pub deployment_termination_grace_period_seconds: u32,
 
     // Build
     #[serde(alias = "build.timeout_max_sec")]
@@ -79,6 +81,7 @@ impl Default for JobAdvancedSettings {
     fn default() -> Self {
         Self {
             job_delete_ttl_seconds_after_finished: None,
+            deployment_termination_grace_period_seconds: 60,
             cronjob_concurrency_policy: "Forbid".to_string(),
             cronjob_failed_jobs_history_limit: 1,
             cronjob_success_jobs_history_limit: 1,

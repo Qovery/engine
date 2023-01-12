@@ -159,6 +159,8 @@ pub struct ContainerAdvancedSettings {
     // Deployment
     #[serde(alias = "deployment.custom_domain_check_enabled")]
     pub deployment_custom_domain_check_enabled: bool,
+    #[serde(alias = "deployment.termination_grace_period_seconds")]
+    pub deployment_termination_grace_period_seconds: u32,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -231,6 +233,7 @@ impl Default for ContainerAdvancedSettings {
     fn default() -> Self {
         ContainerAdvancedSettings {
             security_service_account_name: "".to_string(),
+            deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,

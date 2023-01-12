@@ -37,6 +37,17 @@ pub enum EngineEvent {
     },
 }
 
+impl EngineEvent {
+    pub fn timestamp(&self) -> &DateTime<Utc> {
+        match self {
+            EngineEvent::Debug { timestamp, .. } => timestamp,
+            EngineEvent::Info { timestamp, .. } => timestamp,
+            EngineEvent::Warning { timestamp, .. } => timestamp,
+            EngineEvent::Error { timestamp, .. } => timestamp,
+        }
+    }
+}
+
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
         let timestamp = Utc::now();
