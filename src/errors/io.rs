@@ -62,6 +62,11 @@ pub enum Tag {
     K8sErrorCopySecret,
     K8sCannotGetPVCs,
     K8sCannotBoundPVC,
+    K8sCannotOrphanDelete,
+    K8sCannotPVCEdit,
+    K8sCannotGetStatefulset,
+    K8sCannotRolloutRestartStatefulset,
+    K8sCannotApplyFromFile,
     UnsupportedRegion,
     UnsupportedZone,
     CannotFindRequiredBinary,
@@ -188,6 +193,7 @@ pub enum Tag {
     JobFailure,
     DoNotRespectCloudProviderBestPractices,
     CannotListClusters,
+    CannotParseString,
     CannotDeleteNodeGroup,
 }
 
@@ -377,7 +383,13 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformStateLocked => Tag::TerraformStateLocked,
             errors::Tag::K8sCannotGetPVCs => Tag::K8sCannotGetPVCs,
             errors::Tag::K8sCannotBoundPVC => Tag::K8sCannotBoundPVC,
+            errors::Tag::K8sCannotOrphanDelete => Tag::K8sCannotOrphanDelete,
+            errors::Tag::K8sCannotPVCEdit => Tag::K8sCannotPVCEdit,
+            errors::Tag::K8sCannotGetStatefulset => Tag::K8sCannotGetStatefulset,
+            errors::Tag::K8sCannotRolloutRestartStatefulset => Tag::K8sCannotRolloutRestartStatefulset,
+            errors::Tag::K8sCannotApplyFromFile => Tag::K8sCannotApplyFromFile,
             errors::Tag::CannotListClusters => Tag::CannotListClusters,
+            errors::Tag::CannotParseString => Tag::CannotParseString,
             errors::Tag::CannotDeleteNodeGroup => Tag::CannotDeleteNodeGroup,
         }
     }

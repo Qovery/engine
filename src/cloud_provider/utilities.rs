@@ -1,11 +1,17 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use crate::cloud_provider::models::InvalidStatefulsetStorage;
+use crate::cloud_provider::service::{increase_storage_size, Service};
 use crate::cmd::command::CommandKiller;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage};
+use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::logger::Logger;
+use crate::runtime::block_on;
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use std::net::ToSocketAddrs;
@@ -207,6 +213,55 @@ pub fn print_action(
         true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
         false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
     }
+}
+
+fn are_pvcs_bound(
+    service: &dyn Service,
+    namespace: &str,
+    event_details: &EventDetails,
+    kube_client: &kube::Client,
+) -> Result<(), Box<EngineError>> {
+    if let Some(selector) = &service.selector() {
+        return match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+            kube_client,
+            namespace,
+            selector,
+        )) {
+            Ok(pvcs) => {
+                for pvc in pvcs.items {
+                    if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name) {
+                        if let Some(phase) = status.phase {
+                            if phase.to_lowercase().as_str() != "bound" {
+                                return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
+                                    event_details.clone(),
+                                    CommandError::new_from_safe_message(format!("Can't bound PVC {}", name)),
+                                    service.name(),
+                                )));
+                            };
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+            Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details.clone(), e))),
+        };
+    }
+    Ok(())
+}
+
+pub fn update_pvcs(
+    service: &dyn Service,
+    invalid_statefulset: &InvalidStatefulsetStorage,
+    namespace: &str,
+    event_details: &EventDetails,
+    client: &kube::Client,
+) -> Result<(), Box<EngineError>> {
+    block_on(increase_storage_size(namespace, invalid_statefulset, event_details, client))?;
+
+    are_pvcs_bound(service, namespace, event_details, client)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
