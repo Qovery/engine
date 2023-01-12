@@ -366,7 +366,7 @@ pub struct Storage {
     pub long_id: Uuid,
     pub name: String,
     pub storage_type: StorageType,
-    pub size_in_gib: u16,
+    pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
 }

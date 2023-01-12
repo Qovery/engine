@@ -1,6 +1,8 @@
 use crate::build_platform::Build;
+use crate::cloud_provider::models::{InvalidPVCStorage, InvalidStatefulsetStorage};
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, Action, Service, ServiceType, ServiceVersionCheckResult,
+    check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
+    ServiceType, ServiceVersionCheckResult,
 };
 use crate::cloud_provider::utilities::managed_db_name_sanitizer;
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -9,13 +11,17 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
+use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
     get_self_hosted_redis_version,
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
+use crate::runtime::block_on;
+use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -90,6 +96,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) fqdn_id: String,
     pub(crate) total_cpus: String,
     pub(crate) total_ram_in_mib: u32,
+    pub(crate) total_disk_size_in_gb: u32,
     pub(crate) database_instance_type: String,
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
@@ -110,6 +117,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         fqdn_id: &str,
         total_cpus: String,
         total_ram_in_mib: u32,
+        total_disk_size_in_gb: u32,
         database_instance_type: &str,
         publicly_accessible: bool,
         private_port: u16,
@@ -140,6 +148,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             fqdn_id: fqdn_id.to_string(),
             total_cpus: T::cpu_validate(total_cpus),
             total_ram_in_mib: T::memory_validate(total_ram_in_mib),
+            total_disk_size_in_gb,
             database_instance_type: database_instance_type.to_string(),
             publicly_accessible,
             private_port,
@@ -225,7 +234,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
     }
 }
 
-// Mzthod Only For all container database
+// Method Only For all container database
 impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> {
     pub fn helm_release_name(&self) -> String {
         format!("{}-{}", T::lib_directory_name(), self.id)
@@ -334,6 +343,8 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
     fn version(&self) -> String;
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+
+    fn total_disk_size_in_gb(&self) -> u32;
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
@@ -355,4 +366,91 @@ where
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
     }
+
+    fn total_disk_size_in_gb(&self) -> u32 {
+        self.total_disk_size_in_gb
+    }
+}
+
+pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>>(
+    database: &Database<C, M, T>,
+    kube_client: &kube::Client,
+    namespace: &str,
+    event_details: &EventDetails,
+) -> Result<Option<InvalidStatefulsetStorage>, Box<EngineError>> {
+    let selector = database.selector();
+    let (statefulset_name, statefulset_volumes) =
+        get_service_statefulset_name_and_volumes(kube_client, namespace, &selector, event_details)?;
+    let storage_err = Box::new(EngineError::new_service_missing_storage(
+        event_details.clone(),
+        &database.long_id,
+    ));
+    let volume = match statefulset_volumes {
+        None => return Err(storage_err),
+        Some(volumes) => {
+            // ATM only one volume should be bound to container database
+            if volumes.len() > 1 {
+                return Err(storage_err);
+            }
+
+            match volumes.first() {
+                None => return Err(storage_err),
+                Some(volume) => volume.clone(),
+            }
+        }
+    };
+
+    if let Some(spec) = &volume.spec {
+        if let Some(resources) = &spec.resources {
+            if let Some(requests) = &resources.requests {
+                // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
+                let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
+                    Box::new(EngineError::new_cannot_parse_string(
+                        event_details.clone(),
+                        &requests["storage"].0,
+                        e,
+                    ))
+                })?;
+
+                if database.total_disk_size_in_gb > size {
+                    // if volume size in request is bigger than effective size we get related PVC to get its infos
+                    if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+                        kube_client,
+                        namespace,
+                        &format!("app={}", statefulset_name),
+                    ))
+                    .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
+                    .items
+                    .first()
+                    {
+                        if let Some(pvc_name) = &pvc.metadata.name {
+                            return Ok(Some(InvalidStatefulsetStorage {
+                                service_type: Database::service_type(database),
+                                service_id: database.long_id,
+                                statefulset_selector: selector,
+                                statefulset_name,
+                                invalid_pvcs: vec![InvalidPVCStorage {
+                                    pvc_name: pvc_name.to_string(),
+                                    required_disk_size_in_gib: database.total_disk_size_in_gb,
+                                }],
+                            }));
+                        }
+                    };
+                }
+
+                if database.total_disk_size_in_gb < size {
+                    return Err(Box::new(EngineError::new_invalid_engine_payload(
+                        event_details.clone(),
+                        format!(
+                            "new storage size ({}) should be equal or greater than actual size ({})",
+                            database.total_disk_size_in_gb, size
+                        )
+                        .as_str(),
+                    )));
+                }
+            }
+        }
+    }
+
+    Ok(None)
 }

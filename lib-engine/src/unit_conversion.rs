@@ -1,3 +1,5 @@
+use crate::errors::CommandError;
+
 /// convert a cpu string (kubernetes like) into a float. It supports millis cpu
 /// examples:
 /// 250m = 0.25 cpu
@@ -65,10 +67,21 @@ pub fn any_to_mi<T: Into<String>>(ram: T) -> u32 {
     }
 }
 
+pub fn extract_volume_size(string_to_parse: String) -> Result<u32, CommandError> {
+    let first_non_digit_index = match string_to_parse.find(|c: char| !c.is_numeric()) {
+        None => string_to_parse.len(),
+        Some(index) => index,
+    };
+    match string_to_parse[..first_non_digit_index].parse::<u32>() {
+        Ok(value) => Ok(value),
+        Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::unit_conversion::ki_to_mi;
     use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
+    use crate::unit_conversion::{extract_volume_size, ki_to_mi};
 
     #[test]
     fn test_cpu_conversions() {
@@ -95,5 +108,23 @@ mod tests {
         assert_eq!(any_to_mi("1Gi"), 1000);
         assert_eq!(any_to_mi("1.5Gi"), 1_500);
         assert_eq!(any_to_mi("150.0Gi"), 150_000);
+    }
+
+    #[test]
+    fn test_any_extract_volume_size() {
+        assert_eq!(extract_volume_size("10Gi".to_string()).expect("unable to get volume size"), 10);
+        assert_eq!(
+            extract_volume_size("100Gi".to_string()).expect("unable to get volume size"),
+            100
+        );
+        assert_eq!(
+            extract_volume_size("1000Gi".to_string()).expect("unable to get volume size"),
+            1000
+        );
+        assert_eq!(
+            extract_volume_size("10000Gi".to_string()).expect("unable to get volume size"),
+            10000
+        );
+        assert!(extract_volume_size("toto".to_string()).is_err())
     }
 }

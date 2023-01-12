@@ -130,6 +130,7 @@ impl Infrastructure for EnvironmentRequest {
 pub enum StorageSize {
     NormalSize,
     OverSize,
+    Resize,
 }
 
 impl StorageSize {
@@ -137,6 +138,7 @@ impl StorageSize {
         match *self {
             StorageSize::NormalSize => 10,
             StorageSize::OverSize => 200000,
+            StorageSize::Resize => 20,
         }
     }
 }
@@ -542,7 +544,10 @@ pub fn test_db(
         },
     );
     let database_port = db_infos.db_port;
-    let disk_size = storage_size.size();
+    let disk_size = match storage_size {
+        StorageSize::Resize => StorageSize::NormalSize.size(),
+        _ => storage_size.size(),
+    };
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
@@ -656,6 +661,14 @@ pub fn test_db(
     match storage_size {
         StorageSize::NormalSize => assert!(matches!(ret, TransactionResult::Ok)),
         StorageSize::OverSize => assert!(matches!(ret, TransactionResult::Error(..))),
+        StorageSize::Resize => {
+            let mut resized_env = environment.clone();
+            resized_env.databases[0].disk_size_in_gib = StorageSize::Resize.size();
+            assert!(matches!(
+                resized_env.deploy_environment(&resized_env, infra_ctx),
+                TransactionResult::Ok
+            ))
+        }
     }
 
     match database_mode {
@@ -663,7 +676,7 @@ pub fn test_db(
             match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                    format!("{}Gi", disk_size)
+                    format!("{}Gi", storage_size.size())
                 ),
                 Err(e) => panic!("Error: {}", e),
             };

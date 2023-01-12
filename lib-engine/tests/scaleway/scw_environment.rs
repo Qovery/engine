@@ -419,7 +419,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let storage_size: u16 = 10;
+        let storage_size: u32 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -651,7 +651,7 @@ fn scaleway_kapsule_redeploy_same_app() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let storage_size: u16 = 10;
+        let storage_size: u32 = 10;
         environment.applications = environment
             .applications
             .into_iter()
