@@ -3,8 +3,8 @@ use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDoma
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use crate::helpers::utilities::{
-    db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
-    FuncTestsSecrets,
+    context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id, generate_password,
+    get_pvc, get_svc, get_svc_name, init, logger, FuncTestsSecrets,
 };
 use chrono::Utc;
 use core::default::Default;
@@ -1316,4 +1316,55 @@ pub fn test_db_on_upgrade(
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()
+}
+
+pub fn test_deploy_an_environment_with_db_and_resize_disk(
+    db_kind: DatabaseKind,
+    db_version: &str,
+    test_name: &str,
+    kubernetes_kind: KubernetesKind,
+) {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+    let context = context_for_resource(
+        secrets
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
+    );
+    let localisation = secrets
+        .AWS_TEST_CLUSTER_REGION
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_REGION is not set")
+        .to_string();
+
+    let environment = database_test_environment(&context);
+
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            db_version,
+            test_name,
+            db_kind,
+            kubernetes_kind,
+            CONTAINER,
+            localisation,
+            false,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
+            StorageSize::Resize,
+        )
+    })
 }

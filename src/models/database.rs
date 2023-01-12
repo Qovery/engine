@@ -417,7 +417,7 @@ pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode,
                     if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
                         kube_client,
                         namespace,
-                        &format!("app={}", statefulset_name),
+                        &format!("app={}", database.sanitized_name()),
                     ))
                     .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
                     .items

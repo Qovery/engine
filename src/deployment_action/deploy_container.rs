@@ -7,13 +7,14 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EnvironmentStep, Stage};
+use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
-use crate::models::container::{Container, ContainerService};
+use crate::models::container::{get_container_with_invalid_storage_size, Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
+use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -68,6 +69,29 @@ where
                 event_details.clone(),
             )
             .unpause_if_needed(target);
+
+            match get_container_with_invalid_storage_size(
+                self,
+                &target.kube,
+                target.environment.namespace(),
+                &event_details,
+            ) {
+                Ok(invalid_statefulset_storage) => {
+                    if let Some(invalid_statefulset_storage) = invalid_statefulset_storage {
+                        update_pvcs(
+                            self.as_service(),
+                            &invalid_statefulset_storage,
+                            target.environment.namespace(),
+                            &event_details,
+                            &target.kube,
+                        )?;
+                    }
+                }
+                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(e.to_string()),
+                )),
+            };
 
             let chart = ChartInfo {
                 name: self.helm_release_name(),
