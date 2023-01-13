@@ -8,7 +8,7 @@ use crate::deployment_report::application::reporter::ApplicationDeploymentReport
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
-use crate::kubers_utils::kube_delete_all_from_selector;
+use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::container::{Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -184,6 +184,7 @@ where
                     &target.kube,
                     &self.selector(),
                     target.environment.namespace(),
+                    KubeDeleteMode::Normal,
                 )) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),

@@ -32,6 +32,8 @@ pub struct ClusterAdvancedSettings {
     pub loki_log_retention_in_week: u32,
     #[serde(alias = "aws.iam.admin_group")]
     pub aws_iam_user_mapper_group_name: String,
+    #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
+    pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
 }
@@ -45,6 +47,7 @@ impl Default for ClusterAdvancedSettings {
             loki_log_retention_in_week: 12,
             aws_iam_user_mapper_group_name: "Admins".to_string(),
             cloud_provider_container_registry_tags: HashMap::new(),
+            aws_vpc_enable_flow_logs: false,
         }
     }
 }

@@ -14,7 +14,7 @@ use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::kubers_utils::kube_delete_all_from_selector;
+use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -535,7 +535,7 @@ fn is_pvc_bound(
     let creds = target.kubernetes.cloud_provider().credentials_environment_variables();
     match kubectl_get_pvc(kubeconfig_path, namespace, creds.clone()) {
         Ok(pvcs) => match pvcs.items {
-            None => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(
+            None => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
                 event_details,
                 CommandError::new_from_safe_message("Unable to get pvcs".to_string()),
             ))),
@@ -546,7 +546,7 @@ fn is_pvc_bound(
                     .filter(|pvc| pvc.metadata.name == pvc_name)
                     .collect::<Vec<&PVCItem>>();
                 if pvc.len() != 1 {
-                    return Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(
+                    return Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
                         event_details,
                         CommandError::new_from_safe_message(format!("Unable to get pvc for db {}", db_sanitized_name)),
                     )));
@@ -554,7 +554,7 @@ fn is_pvc_bound(
 
                 match pvc[0].status.phase.to_lowercase().as_str() {
                     "bound" => Ok(()),
-                    _ => Err(Box::new(EngineError::new_k8s_cannot_bound_pvc_for_database(
+                    _ => Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
                         event_details,
                         CommandError::new_from_safe_message(format!(
                             "Can't bound PVC for database {}",
@@ -565,7 +565,7 @@ fn is_pvc_bound(
                 }
             }
         },
-        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(event_details, e))),
+        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details, e))),
     }
 }
 
@@ -685,6 +685,7 @@ where
                     &target.kube,
                     &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
                     target.environment.namespace(),
+                    KubeDeleteMode::Normal,
                 )) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),

@@ -1,25 +1,35 @@
+use k8s_openapi::api::apps::v1::StatefulSet;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::build_platform::Build;
 use tera::Context as TeraContext;
+use tokio::time::{sleep, Instant};
 use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::models::InvalidStatefulsetStorage;
 use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::kubers_utils::{
+    kube_create_from_resource, kube_delete_all_from_selector, kube_edit_pvc_size, kube_get_resources_by_selector,
+    kube_rollout_restart_statefulset, KubeDeleteMode,
+};
 use crate::models;
 use crate::models::database::{Database, DatabaseMode};
 
 use crate::models::types::{CloudProvider, VersionsNumber};
+use crate::runtime::block_on;
 
 pub trait Service {
     fn service_type(&self) -> ServiceType;
@@ -288,5 +298,197 @@ where
             Ok(())
         }
         Err(e) => Err(Box::new(EngineError::new_k8s_service_issue(event_details, e))),
+    }
+}
+
+pub async fn increase_storage_size(
+    namespace: &str,
+    invalid_statefulset: &InvalidStatefulsetStorage,
+    event_details: &EventDetails,
+    client: &kube::Client,
+) -> Result<(), Box<EngineError>> {
+    // get current statefulset before its deletion
+    let mut current_statefulset = match kube_get_resources_by_selector::<StatefulSet>(
+        client,
+        namespace,
+        &invalid_statefulset.statefulset_selector,
+    )
+    .await
+    .map_err(|e| {
+        EngineError::new_k8s_cannot_get_statefulset(
+            event_details.clone(),
+            namespace,
+            &invalid_statefulset.statefulset_selector,
+            e,
+        )
+    })?
+    .items
+    .first()
+    {
+        None => {
+            return Err(Box::new(EngineError::new_k8s_cannot_get_statefulset(
+                event_details.clone(),
+                namespace,
+                &invalid_statefulset.statefulset_selector,
+                CommandError::new_from_safe_message(format!(
+                    "Unable to get statefulset with selector {}",
+                    invalid_statefulset.statefulset_selector
+                )),
+            )))
+        }
+        Some(statefulset) => statefulset.clone(),
+    };
+
+    // remove immutable/useless fields from statefulset
+    current_statefulset.metadata.resource_version = None;
+    current_statefulset.metadata.uid = None;
+    current_statefulset.status = None;
+
+    // adjust capacity of volume
+    for invalid_pvc in &invalid_statefulset.invalid_pvcs {
+        kube_edit_pvc_size(client, namespace, invalid_pvc).await.map_err(|e| {
+            EngineError::new_k8s_cannot_edit_pvc(event_details.clone(), invalid_pvc.pvc_name.to_string(), e)
+        })?;
+
+        let persitent_volume_claimtemplate_name = match invalid_statefulset.service_type {
+            ServiceType::Database(_) => "data",
+            _ => &invalid_pvc.pvc_name,
+        }
+        .to_string();
+
+        // edit statefulset volume claim templates in order to stick to new size
+        if let Some(spec) = current_statefulset.spec.as_mut() {
+            if let Some(volumes) = spec.volume_claim_templates.as_mut() {
+                for volume in volumes {
+                    if let Some(name) = &volume.metadata.name {
+                        // find invalid volume claim template regarding invalid pvc name
+                        if persitent_volume_claimtemplate_name.starts_with(name) {
+                            if let Some(v_spec) = volume.spec.as_mut() {
+                                if let Some(v_res) = v_spec.resources.as_mut() {
+                                    if let Some(v_req) = v_res.requests.as_mut() {
+                                        if let Some(storage) = v_req.get_mut("storage") {
+                                            // edit storage size
+                                            storage.0 = format!("{}Gi", invalid_pvc.required_disk_size_in_gib);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // orphan delete statefulset so its Pods remain in cluster
+    kube_delete_all_from_selector::<StatefulSet>(
+        client,
+        invalid_statefulset.statefulset_selector.as_str(),
+        namespace,
+        KubeDeleteMode::Orphan,
+    )
+    .await
+    .map_err(|e| {
+        Box::new(EngineError::new_k8s_cannot_orphan_delete(
+            event_details.clone(),
+            invalid_statefulset.statefulset_selector.as_str(),
+            CommandError::new_from_safe_message(e.to_string()),
+        ))
+    })?;
+
+    // await for statefulset deletion before delete
+    info!("Waiting for orphan StatefulSet deletion to perform.");
+    let now = Instant::now();
+    let deletion_timeout = Duration::from_secs(90);
+    while now.elapsed() < deletion_timeout {
+        match kube_get_resources_by_selector::<StatefulSet>(
+            client,
+            namespace,
+            &invalid_statefulset.statefulset_selector,
+        )
+        .await
+        {
+            Ok(result) => {
+                if result.items.is_empty() {
+                    break;
+                }
+            }
+            Err(e) => {
+                return Err(Box::new(EngineError::new_k8s_cannot_get_statefulset(
+                    event_details.clone(),
+                    namespace,
+                    &invalid_statefulset.statefulset_selector,
+                    e,
+                )))
+            }
+        };
+        sleep(Duration::from_secs(10)).await;
+    }
+
+    if now.elapsed() >= deletion_timeout {
+        return Err(Box::new(EngineError::new_k8s_cannot_orphan_delete(
+            event_details.clone(),
+            invalid_statefulset.statefulset_selector.as_str(),
+            CommandError::new_from_safe_message("Timeout waiting for statefulset deletion".to_string()),
+        )));
+    }
+
+    // recreate statefulset thru Helm deployment to sync with new PVC size(s)
+    kube_create_from_resource(client, namespace, current_statefulset.clone())
+        .await
+        .map_err(|e| {
+            Box::new(EngineError::new_k8s_cannot_apply_from_resource(
+                event_details.clone(),
+                current_statefulset,
+                e,
+            ))
+        })?;
+
+    // rollout restart statefulset to enforce sync
+    let statefulset_name = invalid_statefulset.statefulset_name.as_str();
+    kube_rollout_restart_statefulset(client, namespace, statefulset_name)
+        .await
+        .map_err(|e| {
+            Box::new(EngineError::new_k8s_cannot_rollout_restart_statefulset(
+                event_details.clone(),
+                statefulset_name,
+                e,
+            ))
+        })?;
+
+    Ok(())
+}
+
+pub fn get_service_statefulset_name_and_volumes(
+    kube_client: &kube::Client,
+    namespace: &str,
+    selector: &str,
+    event_details: &EventDetails,
+) -> Result<(String, Option<Vec<PersistentVolumeClaim>>), Box<EngineError>> {
+    match block_on(kube_get_resources_by_selector::<StatefulSet>(kube_client, namespace, selector)) {
+        Err(e) => Err(Box::new(EngineError::new_k8s_cannot_get_statefulset(
+            event_details.clone(),
+            namespace,
+            selector,
+            e,
+        ))),
+        Ok(result) => {
+            if let Some(statefulset) = result.items.first() {
+                if let Some(name) = &statefulset.metadata.name {
+                    if let Some(spec) = statefulset.clone().spec {
+                        return Ok((name.to_string(), spec.volume_claim_templates));
+                    }
+
+                    return Ok((name.to_string(), None));
+                }
+            }
+
+            Err(Box::new(EngineError::new_k8s_cannot_get_statefulset(
+                event_details.clone(),
+                namespace,
+                selector,
+                CommandError::new_from_safe_message("No statefulset returned".to_string()),
+            )))
+        }
     }
 }

@@ -1,16 +1,23 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, MountedFile, Storage, StorageDataTemplate};
-use crate::cloud_provider::service::{Action, Service, ServiceType};
+use crate::cloud_provider::models::{
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
+};
+use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
+use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
+use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::runtime::block_on;
 use crate::string::cut;
+use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
@@ -427,4 +434,96 @@ pub(super) struct ContainerTeraContext {
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
+}
+
+pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
+    container: &Container<T>,
+    kube_client: &kube::Client,
+    namespace: &str,
+    event_details: &EventDetails,
+) -> Result<Option<InvalidStatefulsetStorage>, Box<EngineError>> {
+    match !container.is_stateful() {
+        true => Ok(None),
+        false => {
+            let selector = Container::selector(container);
+            let (statefulset_name, statefulset_volumes) =
+                get_service_statefulset_name_and_volumes(kube_client, namespace, &selector, event_details)?;
+            let storage_err = Box::new(EngineError::new_service_missing_storage(
+                event_details.clone(),
+                &container.long_id,
+            ));
+            let volumes = match statefulset_volumes {
+                None => return Err(storage_err),
+                Some(volumes) => volumes,
+            };
+            let mut invalid_storage = InvalidStatefulsetStorage {
+                service_type: Container::service_type(container),
+                service_id: container.long_id,
+                statefulset_selector: selector,
+                statefulset_name,
+                invalid_pvcs: vec![],
+            };
+
+            for volume in volumes {
+                if let Some(spec) = &volume.spec {
+                    if let Some(resources) = &spec.resources {
+                        if let (Some(requests), Some(volume_name)) = (&resources.requests, &volume.metadata.name) {
+                            // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
+                            let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
+                                Box::new(EngineError::new_cannot_parse_string(
+                                    event_details.clone(),
+                                    &requests["storage"].0,
+                                    e,
+                                ))
+                            })?;
+                            if let Some(storage) = container
+                                .storages
+                                .iter()
+                                .find(|storage| volume_name == &storage.long_id.to_string())
+                            {
+                                if storage.size_in_gib > size {
+                                    // if volume size in request is bigger than effective size we get related PVC to get its infos
+                                    if let Some(pvc) =
+                                        block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+                                            kube_client,
+                                            namespace,
+                                            &format!("qovery.com/disk-id={}", storage.long_id),
+                                        ))
+                                        .map_err(|e| {
+                                            EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e)
+                                        })?
+                                        .items
+                                        .first()
+                                    {
+                                        if let Some(pvc_name) = &pvc.metadata.name {
+                                            invalid_storage.invalid_pvcs.push(InvalidPVCStorage {
+                                                pvc_name: pvc_name.to_string(),
+                                                required_disk_size_in_gib: storage.size_in_gib,
+                                            })
+                                        }
+                                    };
+                                }
+
+                                if storage.size_in_gib < size {
+                                    return Err(Box::new(EngineError::new_invalid_engine_payload(
+                                        event_details.clone(),
+                                        format!(
+                                            "new storage size ({}) should be equal or greater than actual size ({})",
+                                            storage.size_in_gib, size
+                                        )
+                                        .as_str(),
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            match invalid_storage.invalid_pvcs.is_empty() {
+                true => Ok(None),
+                false => Ok(Some(invalid_storage)),
+            }
+        }
+    }
 }

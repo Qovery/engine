@@ -17,10 +17,13 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use derivative::Derivative;
 use kube::error::Error as KubeError;
-use std::fmt::{Display, Formatter};
+use kube::Resource;
+use serde::de::DeserializeOwned;
+use std::fmt::{Debug, Display, Formatter};
 use std::io::Error;
 use thiserror::Error;
 use url::Url;
+use uuid::Uuid;
 
 const DEFAULT_HINT_MESSAGE: &str = "Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/";
 
@@ -627,8 +630,18 @@ pub enum Tag {
     K8sErrorCopySecret,
     /// K8sCannotGetPVC: represents an error while executing a kubectl command to get PVCs
     K8sCannotGetPVCs,
-    /// K8sCannotGetPVC: represents an error while trying to create a PVC and it can't be bound
+    /// K8sCannotBoundPVC: represents an error while trying to create a PVC and it can't be bound
     K8sCannotBoundPVC,
+    /// K8sCannotOrphanDelete: represents an error while to perform an orphan deletion.
+    K8sCannotOrphanDelete,
+    /// K8sCannotPVCEdit: represents an error while to perform a PVC edit.
+    K8sCannotPVCEdit,
+    /// K8sCannotRolloutRestartStatefulset: represents an error while to perform a rollout restart on a statefulset.
+    K8sCannotRolloutRestartStatefulset,
+    /// K8sCannotApplyFromFile: represents an error while to perform an apply from a file.
+    K8sCannotApplyFromFile,
+    /// K8sCannotGetStatefulset: represents an error while to get statefulset.
+    K8sCannotGetStatefulset,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -846,6 +859,8 @@ pub enum Tag {
     ObjectStorageCannotGetObjectFile,
     /// JobFailure: represents an error while indicating that the job failed to terminate properly
     JobFailure,
+    /// CannotParseString: represents an error while trying to parse a string
+    CannotParseString,
 }
 
 impl Tag {
@@ -2172,6 +2187,129 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for kubernetes not being able to delete a pvc.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `pvc_name`: Pvc's name.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_get_pvcs(
+        event_details: EventDetails,
+        namespace: &str,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Unable to get Kubernetes PVCs for namespace `{}`.", namespace);
+        EngineError::new(event_details, Tag::K8sCannotGetPVCs, message, Some(raw_k8s_error), None, None)
+    }
+
+    /// Creates new error for kubernetes orphan deleting.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `selector`: Selector for deletion.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_cannot_orphan_delete(
+        event_details: EventDetails,
+        selector: &str,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to orphan delete {}.", selector);
+
+        EngineError::new(event_details, Tag::K8sCannotOrphanDelete, message, Some(raw_error), None, None)
+    }
+
+    /// Creates new error for kubernetes statefulset rollout restart.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `statefulset_name`: Statefulset name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_cannot_rollout_restart_statefulset(
+        event_details: EventDetails,
+        statefulset_name: &str,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to rollout restart {}.", statefulset_name);
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotRolloutRestartStatefulset,
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for kubernetes PVC edit.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `pvc_name`: Edited PVC name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_cannot_edit_pvc(
+        event_details: EventDetails,
+        pvc_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to edit PVC {}.", pvc_name);
+
+        EngineError::new(event_details, Tag::K8sCannotPVCEdit, message, Some(raw_error), None, None)
+    }
+
+    /// Creates new error for kubernetes PVC edit.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `file_path`: path of applied file.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_cannot_apply_from_resource<K>(
+        event_details: EventDetails,
+        resource: K,
+        raw_error: CommandError,
+    ) -> EngineError
+    where
+        K: Clone + DeserializeOwned + Debug + Resource,
+        <K as Resource>::DynamicType: Default,
+    {
+        let message = format!("Error while trying to apply {:?}.", resource);
+
+        EngineError::new(event_details, Tag::K8sCannotApplyFromFile, message, Some(raw_error), None, None)
+    }
+
+    /// Creates new error for kubernetes not being able to get a pvc.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `namespace`: statefulset namespace.
+    /// * `selector`: statefulset selector
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_get_statefulset(
+        event_details: EventDetails,
+        namespace: &str,
+        selector: &str,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Unable to get statefulset with selector `{}` in namespace `{}`.",
+            selector, namespace
+        );
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotGetStatefulset,
+            message,
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error for kubernetes not being able to get crash looping pods.
     ///
     /// Arguments:
@@ -2759,7 +2897,7 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
-    pub fn new_k8s_enable_to_get_pvc_for_database(event_details: EventDetails, error: CommandError) -> EngineError {
+    pub fn new_k8s_enable_to_get_pvc(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(event_details, Tag::K8sCannotGetPVCs, error.to_string(), Some(error), None, None)
     }
 
@@ -2769,10 +2907,10 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
-    pub fn new_k8s_cannot_bound_pvc_for_database(
+    pub fn new_k8s_cannot_bound_pvc(
         event_details: EventDetails,
         error: CommandError,
-        database_name: &str,
+        service_name: &str,
     ) -> EngineError {
         EngineError::new(
             event_details,
@@ -2781,8 +2919,8 @@ impl EngineError {
             Some(error),
             None,
             Some(format!(
-                "Database {} can't be bound. Please ensure you set a proper disk size.",
-                database_name
+                "PVC for {} can't be bound. Please ensure you set a proper disk size.",
+                service_name
             )),
         )
     }
@@ -3838,6 +3976,33 @@ impl EngineError {
             None,
             Some("Please ensure Qovery has correct permissions or try again later".to_string()),
         )
+    }
+
+    /// Creates new error for service with storage(s) without volume.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `service_id`: Raw requested service uuid.
+    pub fn new_service_missing_storage(event_details: EventDetails, service_id: &Uuid) -> EngineError {
+        let message = format!("Unable to find bound volume for service {}.", service_id);
+        EngineError::new(event_details, Tag::K8sCannotGetPVCs, message, None, None, None)
+    }
+
+    /// Creates new error for string parsing.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `database_id`: Raw requested database uuid.
+    /// * `parsing_error`: Raw parsing error
+    pub fn new_cannot_parse_string(
+        event_details: EventDetails,
+        string_to_parse: &String,
+        parsing_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Unable to parse {}.", string_to_parse);
+        EngineError::new(event_details, Tag::CannotParseString, message, Some(parsing_error), None, None)
     }
 
     pub(crate) fn new_cloud_provider_error_deleting_load_balancer(

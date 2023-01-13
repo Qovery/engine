@@ -1,3 +1,4 @@
+use crate::cloud_provider::service::ServiceType;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -28,7 +29,7 @@ pub struct Storage<T> {
     pub long_id: Uuid,
     pub name: String,
     pub storage_type: T,
-    pub size_in_gib: u16,
+    pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
 }
@@ -39,7 +40,7 @@ pub struct StorageDataTemplate {
     pub long_id: Uuid,
     pub name: String,
     pub storage_type: String,
-    pub size_in_gib: u16,
+    pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
 }
@@ -119,6 +120,21 @@ pub enum KubernetesClusterAction {
     Pause,
     Resume(Option<i32>),
     Delete,
+}
+
+#[derive(Debug, Clone)]
+pub struct InvalidStatefulsetStorage {
+    pub service_type: ServiceType,
+    pub service_id: Uuid,
+    pub statefulset_selector: String,
+    pub statefulset_name: String,
+    pub invalid_pvcs: Vec<InvalidPVCStorage>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InvalidPVCStorage {
+    pub pvc_name: String,
+    pub required_disk_size_in_gib: u32,
 }
 
 /// Represents Kubernetes CPU resource unit

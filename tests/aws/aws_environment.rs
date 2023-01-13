@@ -478,7 +478,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let storage_size: u16 = 10;
+        let storage_size: u32 = 10;
         environment.applications = environment
             .applications
             .into_iter()
@@ -638,7 +638,7 @@ fn redeploy_same_app_with_ebs() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let storage_size: u16 = 10;
+        let storage_size: u32 = 10;
         environment.applications = environment
             .applications
             .into_iter()

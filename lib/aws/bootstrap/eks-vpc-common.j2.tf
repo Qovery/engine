@@ -42,11 +42,22 @@ data "aws_vpc" "eks" {
 
 {% else %}
 
+# VPC
 resource "aws_vpc" "eks" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
   tags = local.tags_eks_vpc
 }
+
+{% if aws_enable_vpc_flow_logs %}
+# VPC flow logs
+resource "aws_flow_log" "eks_vpc_flow_logs" {
+  log_destination      = aws_s3_bucket.vpc_flow_logs.arn
+  log_destination_type = "s3"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.eks.id
+}
+{% endif %}
 
 # Internet gateway
 resource "aws_internet_gateway" "eks_cluster" {

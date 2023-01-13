@@ -80,6 +80,18 @@ variable "s3_bucket_kubeconfig" {
   type = string
 }
 
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC flow logs"
+  default = {{ aws_enable_vpc_flow_logs }}
+  type = bool
+}
+
+variable "s3_flow_logs_bucket_name" {
+  description = "S3 bucket containing flow logs"
+  default = "{{ s3_flow_logs_bucket_name }}"
+  type = string
+}
+
 # Qovery features
 
 {%- if resource_expiration_in_seconds > -1 %}

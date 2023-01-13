@@ -51,6 +51,9 @@ spec:
             httpGet:
               path: /health
               port: http
+            failureThreshold: 10
+            periodSeconds: 60
+            timeoutSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
