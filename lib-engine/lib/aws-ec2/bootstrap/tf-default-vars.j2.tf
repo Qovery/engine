@@ -148,6 +148,24 @@ variable "s3_bucket_kubeconfig" {
   type = string
 }
 
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC flow logs"
+  default = {{ aws_enable_vpc_flow_logs }}
+  type = bool
+}
+
+variable "vpc_flow_logs_retention_days" {
+  description = "Set VPC flow logs retention in days"
+  default = {{ vpc_flow_logs_retention_days }}
+  type = number
+}
+
+variable "s3_flow_logs_bucket_name" {
+  description = "S3 bucket containing flow logs"
+  default = "{{ s3_flow_logs_bucket_name }}"
+  type = string
+}
+
 # RDS
 
 variable "rds_subnets_zone_a" {
