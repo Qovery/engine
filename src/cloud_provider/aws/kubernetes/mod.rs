@@ -329,6 +329,10 @@ fn tera_context(
         &kubernetes.advanced_settings().aws_vpc_enable_flow_logs,
     );
     context.insert(
+        "vpc_flow_logs_retention_days",
+        &kubernetes.advanced_settings().aws_vpc_flow_logs_retention_days,
+    );
+    context.insert(
         "s3_flow_logs_bucket_name",
         format!("qovery-vpc-flow-logs-{}", kubernetes.id()).as_str(),
     );
@@ -1813,6 +1817,11 @@ fn delete(
         let resources_to_be_removed_from_tf_state: Vec<(&str, &str)> = vec![
             ("aws_s3_bucket.loki_bucket", "S3 logs bucket"),
             ("aws_s3_bucket_lifecycle_configuration.loki_lifecycle", "S3 logs lifecycle"),
+            ("aws_s3_bucket.vpc_flow_logs", "S3 flow logs bucket"),
+            (
+                "aws_s3_bucket_lifecycle_configuration.vpc_flow_logs_lifecycle",
+                "S3 vpc log flow lifecycle",
+            ),
         ];
 
         for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
