@@ -7,7 +7,7 @@ use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
 use crate::io_models::container::Registry;
-use crate::models::container::QOVERY_MIRROR_REPOSITORY_NAME;
+use crate::models::container::get_mirror_repository_name;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
 use kube::api::ListParams;
@@ -26,11 +26,12 @@ pub fn delete_cached_image(
         if force_delete || last_image_tag != current_image_tag {
             logger.send_success(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
+            let mirror_repo_name = get_mirror_repository_name(target.kubernetes.long_id());
             let image = Image {
-                name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                name: mirror_repo_name.clone(),
                 tag: last_image_tag,
                 registry_url: target.container_registry.registry_info().endpoint.clone(),
-                repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                repository_name: mirror_repo_name,
                 ..Default::default()
             };
 
@@ -74,10 +75,11 @@ pub fn mirror_image(
     logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
     let registry_info = target.container_registry.registry_info();
 
+    let mirror_repo_name = get_mirror_repository_name(target.kubernetes.long_id());
     target
         .container_registry
         .create_repository(
-            QOVERY_MIRROR_REPOSITORY_NAME,
+            mirror_repo_name.as_str(),
             target.kubernetes.advanced_settings().registry_image_retention_time_sec,
         )
         .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
@@ -85,7 +87,7 @@ pub fn mirror_image(
     let source_image = ContainerImage::new(registry.url().clone(), image_name.to_string(), vec![tag.to_string()]);
     let dest_image = ContainerImage::new(
         target.container_registry.registry_info().endpoint.clone(),
-        (registry_info.get_image_name)(QOVERY_MIRROR_REPOSITORY_NAME),
+        (registry_info.get_image_name)(&mirror_repo_name),
         vec![tag_for_mirror],
     );
     if let Err(err) = target.docker.mirror(
