@@ -2,7 +2,7 @@ use crate::cloud_provider::models::StorageDataTemplate;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 use crate::models::aws_ec2::AwsEc2StorageType;
-use crate::models::container::Container;
+use crate::models::container::{Container, RegistryTeraContext};
 use crate::models::types::{AWSEc2, ToTeraContext};
 use tera::Context as TeraContext;
 
@@ -30,6 +30,10 @@ impl ToTeraContext for Container<AWSEc2> {
             .collect::<Vec<_>>();
 
         context.service.storages = storages;
+        context.registry = Some(RegistryTeraContext {
+            secret_name: "awsecr-cred".to_string(),
+            docker_json_config: None,
+        });
 
         Ok(TeraContext::from_serialize(context).unwrap_or_default())
     }

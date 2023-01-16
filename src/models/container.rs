@@ -233,7 +233,7 @@ impl<T: CloudProvider> Container<T> {
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
                     secret_name: format!("{}-registry", self.kube_service_name()),
-                    docker_json_config: docker_json.to_string(),
+                    docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
@@ -420,7 +420,7 @@ pub(super) struct ServiceTeraContext {
 #[derive(Serialize, Debug, Clone)]
 pub(super) struct RegistryTeraContext {
     pub(super) secret_name: String,
-    pub(super) docker_json_config: String,
+    pub(super) docker_json_config: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
