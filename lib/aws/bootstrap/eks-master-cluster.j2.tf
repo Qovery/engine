@@ -25,8 +25,8 @@ locals {
 
 resource "time_static" "on_cluster_create" {}
 
-resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_group" {
-  name = var.eks_cloudwatch_log_group
+resource "aws_cloudwatch_log_group" "eks_cloudwatch_log_groups" {
+  name = "/aws/eks/${var.eks_cloudwatch_log_group}/cluster"
   retention_in_days = 7
 
   tags = local.tags_eks
@@ -71,6 +71,6 @@ resource "aws_eks_cluster" "eks_cluster" {
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,
-    aws_cloudwatch_log_group.eks_cloudwatch_log_group,
+    aws_cloudwatch_log_group.eks_cloudwatch_log_groups,
   ]
 }
