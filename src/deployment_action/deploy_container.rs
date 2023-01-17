@@ -33,6 +33,7 @@ where
         // We first mirror the image if needed
         let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             mirror_image(
+                self.long_id(),
                 &self.registry,
                 &self.image,
                 &self.tag,

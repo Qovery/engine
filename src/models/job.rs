@@ -174,9 +174,7 @@ impl<T: CloudProvider> Job<T> {
                     format!(
                         "{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
-                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
-                            target.kubernetes.long_id()
-                        )),
+                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(self.long_id())),
                         image_tag
                     ),
                     image_tag,

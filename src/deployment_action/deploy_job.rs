@@ -150,6 +150,7 @@ where
             // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
             ImageSource::Registry { source } => {
                 mirror_image(
+                    job.long_id(),
                     &source.registry,
                     &source.image,
                     &source.tag,
