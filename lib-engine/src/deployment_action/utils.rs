@@ -13,6 +13,7 @@ use k8s_openapi::api::batch::v1::CronJob;
 use kube::api::ListParams;
 use kube::Api;
 use std::time::Duration;
+use uuid::Uuid;
 
 pub fn delete_cached_image(
     current_image_tag: String,
@@ -31,11 +32,12 @@ pub fn delete_cached_image(
                 name: mirror_repo_name.clone(),
                 tag: last_image_tag,
                 registry_url: target.container_registry.registry_info().endpoint.clone(),
-                repository_name: mirror_repo_name,
+                repository_name: mirror_repo_name.clone(),
                 ..Default::default()
             };
 
             target.container_registry.delete_image(&image)?;
+            target.container_registry.delete_repository(&mirror_repo_name)?;
         }
     }
 
@@ -43,6 +45,7 @@ pub fn delete_cached_image(
 }
 
 pub fn mirror_image(
+    service_id: &Uuid,
     registry: &Registry,
     image_name: &str,
     tag: &str,
@@ -75,7 +78,7 @@ pub fn mirror_image(
     logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
     let registry_info = target.container_registry.registry_info();
 
-    let mirror_repo_name = get_mirror_repository_name(target.kubernetes.long_id());
+    let mirror_repo_name = get_mirror_repository_name(service_id);
     target
         .container_registry
         .create_repository(

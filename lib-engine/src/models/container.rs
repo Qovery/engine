@@ -57,8 +57,8 @@ pub struct Container<T: CloudProvider> {
     pub(super) lib_root_directory: String,
 }
 
-pub fn get_mirror_repository_name(cluster_id: &Uuid) -> String {
-    format!("qovery-mirror-{}", cluster_id)
+pub fn get_mirror_repository_name(service_id: &Uuid) -> String {
+    format!("qovery-mirror-{}", service_id)
 }
 
 // Here we define the common behavior among all providers
@@ -211,7 +211,7 @@ impl<T: CloudProvider> Container<T> {
                 image_full: format!(
                     "{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(&get_mirror_repository_name(target.kubernetes.long_id())),
+                    (registry_info.get_image_name)(&get_mirror_repository_name(self.long_id())),
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),
