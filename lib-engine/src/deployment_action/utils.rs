@@ -16,18 +16,19 @@ use std::time::Duration;
 use uuid::Uuid;
 
 pub fn delete_cached_image(
+    service_id: &Uuid,
     current_image_tag: String,
     last_image: Option<String>,
-    force_delete: bool,
+    is_service_deletion: bool,
     target: &DeploymentTarget,
     logger: &EnvSuccessLogger,
 ) -> Result<(), ContainerRegistryError> {
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
-        if force_delete || last_image_tag != current_image_tag {
+        if is_service_deletion || last_image_tag != current_image_tag {
             logger.send_success(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
-            let mirror_repo_name = get_mirror_repository_name(target.kubernetes.long_id());
+            let mirror_repo_name = get_mirror_repository_name(service_id);
             let image = Image {
                 name: mirror_repo_name.clone(),
                 tag: last_image_tag,
@@ -37,7 +38,9 @@ pub fn delete_cached_image(
             };
 
             target.container_registry.delete_image(&image)?;
-            target.container_registry.delete_repository(&mirror_repo_name)?;
+            if is_service_deletion {
+                target.container_registry.delete_repository(&mirror_repo_name)?;
+            }
         }
     }
 

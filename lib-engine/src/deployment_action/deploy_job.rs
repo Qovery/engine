@@ -358,9 +358,14 @@ where
         match &job.image_source {
             ImageSource::Registry { source } => {
                 let mirrored_image_tag = source.tag_for_mirror(job.long_id());
-                if let Err(err) =
-                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
-                {
+                if let Err(err) = delete_cached_image(
+                    job.long_id(),
+                    mirrored_image_tag,
+                    state.last_deployed_image,
+                    false,
+                    target,
+                    logger,
+                ) {
                     error!("Failed to delete previous image from cache: {}", err);
                 }
             }
@@ -429,9 +434,14 @@ where
             // Delete previous image from cache to cleanup resources
             ImageSource::Registry { source } => {
                 let mirrored_image_tag = source.tag_for_mirror(job.long_id());
-                if let Err(err) =
-                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
-                {
+                if let Err(err) = delete_cached_image(
+                    job.long_id(),
+                    mirrored_image_tag,
+                    state.last_deployed_image,
+                    false,
+                    target,
+                    logger,
+                ) {
                     let user_msg = format!("Failed to delete previous image from cache: {}", err);
                     logger.send_success(user_msg);
                 }

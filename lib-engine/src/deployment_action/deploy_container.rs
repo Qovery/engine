@@ -102,11 +102,18 @@ where
 
         let post_task = |logger: &EnvSuccessLogger, state: TaskContext| {
             // Delete previous image from cache to cleanup resources
-            let _ = delete_cached_image(self.tag_for_mirror(), state.last_deployed_image, false, target, logger)
-                .map_err(|err| {
-                    error!("Error while deleting cached image: {}", err);
-                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                });
+            let _ = delete_cached_image(
+                self.long_id(),
+                self.tag_for_mirror(),
+                state.last_deployed_image,
+                false,
+                target,
+                logger,
+            )
+            .map_err(|err| {
+                error!("Error while deleting cached image: {}", err);
+                Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+            });
         };
 
         // At last we deploy our container
@@ -209,10 +216,11 @@ where
             };
 
             let _ =
-                delete_cached_image(self.tag_for_mirror(), last_deployed_image, true, target, logger).map_err(|err| {
-                    error!("Error while deleting cached image: {}", err);
-                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                });
+                delete_cached_image(self.long_id(), self.tag_for_mirror(), last_deployed_image, true, target, logger)
+                    .map_err(|err| {
+                        error!("Error while deleting cached image: {}", err);
+                        Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+                    });
         };
 
         // Trigger deployment
