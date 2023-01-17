@@ -59,7 +59,7 @@ resource "aws_s3_bucket" "loki_bucket" {
   tags = merge(
     local.tags_eks,
     {
-      {% if is_delete %}
+      {% if is_deletion_step %}
       "can_be_deleted_by_owner" = "true"
       {% endif %}
       "Name" = "Applications logs"
@@ -81,7 +81,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
       noncurrent_days = 1
     }
 
-    {% if is_delete %}
+    {% if is_deletion_step %}
     status = "Enabled"
     {% else %}
     status = "Disabled"

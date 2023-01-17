@@ -1550,7 +1550,7 @@ fn delete(
 
     // generate terraform files and copy them into temp dir
     let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
-    context.insert("is_delete", &true);
+    context.insert("is_deletion_step", &true);
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
