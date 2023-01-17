@@ -34,6 +34,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_iam_user_mapper_group_name: String,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
     pub aws_vpc_enable_flow_logs: bool,
+    #[serde(alias = "aws.vpc.flow_logs_retention_days")]
+    pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
 }
@@ -48,6 +50,7 @@ impl Default for ClusterAdvancedSettings {
             aws_iam_user_mapper_group_name: "Admins".to_string(),
             cloud_provider_container_registry_tags: HashMap::new(),
             aws_vpc_enable_flow_logs: false,
+            aws_vpc_flow_logs_retention_days: 365,
         }
     }
 }

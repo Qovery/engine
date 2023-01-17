@@ -105,7 +105,6 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
 #[cfg(feature = "test-aws-ec2-self-hosted")]
 #[named]
 #[test]
-#[ignore] // TODO(ENG-1430): Jobs / containers are not working on EC2 for the time being, should be fixed
 fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
     engine_run_test(|| {
         init();
@@ -231,7 +230,6 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
 #[test]
-#[ignore] // TODO(ENG-1430): Jobs / containers are not working on EC2 for the time being, should be fixed
 fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
     engine_run_test(|| {
         init();

@@ -1056,7 +1056,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-#[ignore] // TODO(ENG-1423): Reactivate test.
 fn deploy_container_with_no_router_on_scw() {
     engine_run_test(|| {
         init();
@@ -1146,7 +1145,6 @@ fn deploy_container_with_no_router_on_scw() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-#[ignore] // TODO(ENG-1423): Reactivate test. Container test is not working, this one is just a variant
 fn deploy_container_on_scw_with_mounted_files_as_volume() {
     engine_run_test(|| {
         init();
@@ -1274,7 +1272,6 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-#[ignore] // TODO(ENG-1423): Reactivate test.
 fn deploy_container_with_router_on_scw() {
     engine_run_test(|| {
         init();
@@ -1371,7 +1368,6 @@ fn deploy_container_with_router_on_scw() {
 
 #[cfg(feature = "test-scw-minimal")]
 #[test]
-#[ignore] // TODO(ENG-1424): Reactivate test.
 fn deploy_job_on_scw_kapsule() {
     engine_run_test(|| {
         init();
@@ -1450,7 +1446,6 @@ fn deploy_job_on_scw_kapsule() {
 
 #[cfg(feature = "test-scw-minimal")]
 #[test]
-#[ignore] // TODO(ENG-1424): Reactivate test.
 fn deploy_cronjob_on_scw_kapsule() {
     engine_run_test(|| {
         init();
@@ -1524,7 +1519,6 @@ fn deploy_cronjob_on_scw_kapsule() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[test]
-#[ignore] // TODO(ENG-1424): Reactivate test.
 fn deploy_cronjob_force_trigger_on_scw_kapsule() {
     engine_run_test(|| {
         init();
@@ -1598,7 +1592,6 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
 
 #[cfg(feature = "test-scw-minimal")]
 #[test]
-#[ignore] // TODO(ENG-1424): Reactivate test.
 fn build_and_deploy_job_on_scw_kapsule() {
     engine_run_test(|| {
         init();
@@ -1674,7 +1667,6 @@ fn build_and_deploy_job_on_scw_kapsule() {
 
 #[cfg(feature = "test-scw-minimal")]
 #[test]
-#[ignore] // TODO(ENG-1424): Reactivate test.
 fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
     engine_run_test(|| {
         init();

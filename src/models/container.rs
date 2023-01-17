@@ -57,7 +57,9 @@ pub struct Container<T: CloudProvider> {
     pub(super) lib_root_directory: String,
 }
 
-pub const QOVERY_MIRROR_REPOSITORY_NAME: &str = "qovery-mirror";
+pub fn get_mirror_repository_name(cluster_id: &Uuid) -> String {
+    format!("qovery-mirror-{}", cluster_id)
+}
 
 // Here we define the common behavior among all providers
 impl<T: CloudProvider> Container<T> {
@@ -209,7 +211,7 @@ impl<T: CloudProvider> Container<T> {
                 image_full: format!(
                     "{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(QOVERY_MIRROR_REPOSITORY_NAME),
+                    (registry_info.get_image_name)(&get_mirror_repository_name(target.kubernetes.long_id())),
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),
@@ -231,7 +233,7 @@ impl<T: CloudProvider> Container<T> {
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
                     secret_name: format!("{}-registry", self.kube_service_name()),
-                    docker_json_config: docker_json.to_string(),
+                    docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
@@ -418,7 +420,7 @@ pub(super) struct ServiceTeraContext {
 #[derive(Serialize, Debug, Clone)]
 pub(super) struct RegistryTeraContext {
     pub(super) secret_name: String,
-    pub(super) docker_json_config: String,
+    pub(super) docker_json_config: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]

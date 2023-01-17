@@ -3,7 +3,6 @@ use crate::cloud_provider::models::{EnvironmentVariable, MountedFile};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
-use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
@@ -17,7 +16,6 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::time::Duration;
-use tera::Context as TeraContext;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
@@ -176,7 +174,9 @@ impl<T: CloudProvider> Job<T> {
                     format!(
                         "{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
-                        (registry_info.get_image_name)(models::container::QOVERY_MIRROR_REPOSITORY_NAME),
+                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
+                            target.kubernetes.long_id()
+                        )),
                         image_tag
                     ),
                     image_tag,
@@ -224,7 +224,7 @@ impl<T: CloudProvider> Job<T> {
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
                     secret_name: format!("{}-registry", self.kube_service_name()),
-                    docker_json_config: docker_json.to_string(),
+                    docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
@@ -335,12 +335,6 @@ impl<T: CloudProvider> Service for Job<T> {
                 _ => None,
             },
         }
-    }
-}
-
-impl<T: CloudProvider> ToTeraContext for Job<T> {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
-        Ok(TeraContext::from_serialize(self.default_tera_context(target)).unwrap_or_default())
     }
 }
 

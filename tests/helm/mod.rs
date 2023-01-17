@@ -13,7 +13,7 @@ use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes};
 use qovery_engine::cloud_provider::models::{CustomDomain, EnvironmentVariable, MountedFile, Route, Storage};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::service::Action;
+use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::DeploymentTarget;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
@@ -32,7 +32,6 @@ use qovery_engine::models::types::{VersionsNumber, AWS as AWSType};
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,39 +53,26 @@ fn kubeconfig_path() -> PathBuf {
     kube_config
 }
 
-pub fn chart_path(chart_name: &str) -> String {
-    let home_dir = env::var("WORKSPACE_ROOT_DIR").expect("Missing environment variable WORKSPACE_ROOT_DIR");
-    format!("{}/.qovery-workspace/{}", home_dir, chart_name)
+pub fn chart_path(temp_dir: &str, service_type: &str, chart_id: &Uuid, chart_name: &str) -> String {
+    format!("{}/{}/{}/{}", temp_dir, service_type, chart_id, chart_name)
 }
 
-fn cluster_id() -> Uuid {
-    Uuid::from_str("11111111-1111-1111-1111-111111111111").unwrap()
-}
-
-fn org_id() -> Uuid {
-    Uuid::from_str("22222222-2222-2222-2222-222222222222").unwrap()
-}
-
-fn project_id() -> Uuid {
-    Uuid::from_str("33333333-3333-3333-3333-333333333333").unwrap()
-}
-
-fn env_id() -> Uuid {
-    Uuid::from_str("44444444-4444-4444-4444-444444444444").unwrap()
-}
-
-fn service_id() -> Uuid {
-    Uuid::from_str("55555555-5555-5555-5555-555555555555").unwrap()
+pub struct TestInfo {
+    context: TeraContext,
+    event_details: EventDetails,
+    temp_dir: String,
+    service_folder_type: String,
+    service_id: Uuid,
 }
 
 fn test_kubernetes() -> Box<dyn Kubernetes> {
-    let context = context_for_cluster(org_id(), cluster_id());
-    let long_id = cluster_id();
+    let cluster_id = Uuid::new_v4();
+    let context = context_for_cluster(Uuid::new_v4(), cluster_id);
     Box::new(
         EKS::new(
             context.clone(),
-            &to_short_id(&long_id),
-            long_id,
+            &to_short_id(&cluster_id),
+            cluster_id,
             "my_cluster_name",
             "my_cluster_version",
             AwsRegion::UsEast2,
@@ -99,7 +85,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             Arc::new(dns_provider_qoverydns(
                 &context,
                 &ClusterDomain::Default {
-                    cluster_id: cluster_id().to_string(),
+                    cluster_id: cluster_id.to_string(),
                 },
             )),
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
@@ -113,6 +99,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 aws_iam_user_mapper_group_name: "my_aws_iam_user_mapper_group_name".to_string(),
                 aws_vpc_enable_flow_logs: true,
                 cloud_provider_container_registry_tags: HashMap::new(),
+                aws_vpc_flow_logs_retention_days: 1,
             },
         )
         .unwrap(),
@@ -133,16 +120,18 @@ fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
 }
 
 fn test_environment(kube: &dyn Kubernetes) -> Environment {
+    let app = test_application(kube);
+    let app_id = *app.long_id();
     Environment::new(
-        env_id(),
+        Uuid::new_v4(),
         "my_test_environment".to_string(),
-        project_id(),
-        org_id(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
         Action::Create,
         kube.context(),
-        vec![Box::new(test_application(kube))],
+        vec![Box::new(app)],
         vec![Box::new(test_container(kube))],
-        vec![Box::new(test_router(kube))],
+        vec![Box::new(test_router(kube, app_id))],
         vec![
             Box::new(test_managed_database(kube)),
             Box::new(test_container_database(kube)),
@@ -203,18 +192,19 @@ fn test_custom_domain() -> CustomDomain {
     }
 }
 
-fn test_route() -> Route {
+fn test_route(uuid: Uuid) -> Route {
     Route {
         path: "my_route_path".to_string(),
-        service_long_id: service_id(),
+        service_long_id: uuid,
     }
 }
 
 #[allow(deprecated)]
 pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
+    let long_id = Uuid::new_v4();
     Application::new(
         test_kube.context(),
-        service_id(),
+        long_id,
         Action::Create,
         "my_application_name",
         vec![test_port()],
@@ -242,7 +232,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             },
             image: Image {
                 application_id: "my_application_id".to_string(),
-                application_long_id: service_id(),
+                application_long_id: long_id,
                 application_name: "my_application_name".to_string(),
                 name: "my_image_name".to_string(),
                 tag: "my_image_tag".to_string(),
@@ -304,7 +294,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
 pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
     Container::new(
         test_kube.context(),
-        service_id(),
+        Uuid::new_v4(),
         "my_container_name".to_string(),
         Action::Create,
         Registry::DockerHub {
@@ -369,7 +359,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
 pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Managed, PostgresSQL> {
     Database::new(
         test_kube.context(),
-        service_id(),
+        Uuid::new_v4(),
         Action::Create,
         "my_managed_db_name",
         VersionsNumber::new("13".to_string(), None, None, None),
@@ -403,7 +393,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
 pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, ContainerDB, PostgresSQL> {
     Database::new(
         test_kube.context(),
-        service_id(),
+        Uuid::new_v4(),
         Action::Create,
         "my_container_db_name",
         VersionsNumber::new("13".to_string(), None, None, None),
@@ -434,15 +424,16 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
     .unwrap()
 }
 
-pub fn test_router(test_kube: &dyn Kubernetes) -> Router<AWSType> {
+pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> {
+    let long_id = Uuid::new_v4();
     Router::new(
         test_kube.context(),
-        service_id(),
+        long_id,
         "my_router_name",
         Action::Create,
         "my_default_domain",
         vec![test_custom_domain()],
-        vec![test_route()],
+        vec![test_route(app_id)],
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
             custom_domain_check_enabled: true,
@@ -456,7 +447,7 @@ pub fn test_router(test_kube: &dyn Kubernetes) -> Router<AWSType> {
 fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
     Job::new(
         test_kube.context(),
-        service_id(),
+        Uuid::new_v4(),
         "my_job_name".to_string(),
         Action::Create,
         ImageSource::Registry {
@@ -522,7 +513,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         test_kube.kind(),
         test_kube.version().to_string(),
         &ClusterDomain::Default {
-            cluster_id: cluster_id().to_string(),
+            cluster_id: test_kube.long_id().to_string(),
         },
         None,
         3,
@@ -541,86 +532,134 @@ fn deployment_target<'a>(
         .unwrap_or_else(|e| panic!("Unable to create deployment target: {}", e))
 }
 
-pub fn application_context() -> (TeraContext, EventDetails) {
+pub fn application_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.applications[0]
+    TestInfo {
+        context: test_env.applications[0]
             .to_tera_context(&target)
             .expect("Unable to get application context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "applications".to_string(),
+        service_id: *test_env.applications[0].long_id(),
+    }
 }
 
-pub fn container_context() -> (TeraContext, EventDetails) {
+pub fn container_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.containers[0]
+    TestInfo {
+        context: test_env.containers[0]
             .to_tera_context(&target)
-            .expect("Unable to get container context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "containers".to_string(),
+        service_id: *test_env.containers[0].long_id(),
+    }
 }
 
-pub fn managed_database_context() -> (TeraContext, EventDetails) {
+pub fn managed_database_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.databases[0]
+    TestInfo {
+        context: test_env.databases[0]
             .to_tera_context(&target)
-            .expect("Unable to get managed database context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "databases".to_string(),
+        service_id: *test_env.databases[0].long_id(),
+    }
 }
 
-pub fn container_database_context() -> (TeraContext, EventDetails) {
+pub fn container_database_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.databases[1]
+    TestInfo {
+        context: test_env.databases[1]
             .to_tera_context(&target)
-            .expect("Unable to get container database context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "databases".to_string(),
+        service_id: *test_env.databases[1].long_id(),
+    }
 }
 
-pub fn router_context() -> (TeraContext, EventDetails) {
+pub fn router_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.routers[0]
+    TestInfo {
+        context: test_env.routers[0]
             .to_tera_context(&target)
-            .expect("Unable to get router context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "routers".to_string(),
+        service_id: *test_env.routers[0].long_id(),
+    }
 }
 
-pub fn job_context() -> (TeraContext, EventDetails) {
+pub fn job_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
 
-    (
-        test_env.jobs[0]
+    TestInfo {
+        context: test_env.jobs[0]
             .to_tera_context(&target)
-            .expect("Unable to get job context"),
-        test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
-    )
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "jobs".to_string(),
+        service_id: *test_env.jobs[0].long_id(),
+    }
 }
