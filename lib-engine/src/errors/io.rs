@@ -195,6 +195,7 @@ pub enum Tag {
     CannotListClusters,
     CannotParseString,
     CannotDeleteNodeGroup,
+    CannotRestartService,
 }
 
 impl From<errors::Tag> for Tag {
@@ -391,6 +392,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotListClusters => Tag::CannotListClusters,
             errors::Tag::CannotParseString => Tag::CannotParseString,
             errors::Tag::CannotDeleteNodeGroup => Tag::CannotDeleteNodeGroup,
+            errors::Tag::CannotRestartService => Tag::CannotRestartService,
         }
     }
 }

@@ -8,6 +8,7 @@ use crate::cloud_provider::kubernetes::{
     send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
+use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
@@ -17,7 +18,6 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
 use crate::io_models::context::Context;
-use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;

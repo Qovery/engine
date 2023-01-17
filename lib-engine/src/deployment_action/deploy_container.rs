@@ -14,6 +14,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
+use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
@@ -220,6 +221,20 @@ where
                 pre_run: &pre_task,
                 run: &long_task,
                 post_run_success: &post_task,
+            },
+        )
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        execute_long_deployment(
+            ApplicationDeploymentReporter::new_for_container(self, target, Action::Restart),
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+                let restart_service = RestartServiceAction::new(
+                    self.selector(),
+                    self.is_stateful(),
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+                );
+                restart_service.on_restart(target)
             },
         )
     }

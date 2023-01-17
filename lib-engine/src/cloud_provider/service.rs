@@ -52,6 +52,7 @@ pub enum Action {
     Create,
     Pause,
     Delete,
+    Restart,
 }
 
 impl Action {
@@ -60,6 +61,7 @@ impl Action {
             Action::Create => EnvironmentStep::Deploy,
             Action::Pause => EnvironmentStep::Pause,
             Action::Delete => EnvironmentStep::Delete,
+            Action::Restart => EnvironmentStep::Restart,
         }
     }
 }
@@ -73,6 +75,7 @@ impl Display for Action {
                 Action::Create => "Deployment",
                 Action::Pause => "Pause",
                 Action::Delete => "Deletion",
+                Action::Restart => "Restart",
             },
         )
     }

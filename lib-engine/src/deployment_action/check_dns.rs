@@ -105,4 +105,8 @@ impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
     fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
+
+    fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        Ok(())
+    }
 }

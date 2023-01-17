@@ -3,8 +3,8 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::deployment_action::DeploymentAction;
-use crate::errors::EngineError;
-use crate::events::EventDetails;
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::template::generate_and_copy_all_files_into_dir;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -125,5 +125,19 @@ impl DeploymentAction for TerraformDeployment {
             }
             Err(e) => Err(Box::new(EngineError::new_terraform_error(self.event_details.clone(), e))),
         }
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error =
+            CommandError::new_from_safe_message("Cannot restart Terraform managed resource".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            EventDetails::clone_changing_stage(
+                self.event_details.clone(),
+                Stage::Environment(EnvironmentStep::Restart),
+            ),
+            target.environment.namespace(),
+            "",
+            command_error,
+        )));
     }
 }

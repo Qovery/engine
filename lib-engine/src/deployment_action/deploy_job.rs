@@ -9,8 +9,8 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::{EngineError, ErrorMessageVerbosity};
-use crate::events::{EventDetails, Stage};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -116,6 +116,16 @@ where
             post_run_success: &post_run,
         };
         execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Delete), task)
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error = CommandError::new_from_safe_message("Cannot restart Job service".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+            target.environment.namespace(),
+            &self.selector(),
+            command_error,
+        )));
     }
 }
 

@@ -11,7 +11,7 @@ use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
-use crate::errors::EngineError;
+use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
@@ -213,6 +213,7 @@ impl EnvironmentTask {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
                 service::Action::Delete => env_deployment.on_delete(),
+                service::Action::Restart => env_deployment.on_restart(),
             };
             deployed_services = env_deployment.deployed_services;
 
@@ -234,6 +235,7 @@ impl EnvironmentTask {
                 service::Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
                 service::Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
                 service::Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
+                service::Action::Restart => Stage::Environment(EnvironmentStep::RestartedError),
             }
         };
 
@@ -325,32 +327,48 @@ impl Task for EnvironmentTask {
                 self.get_event_details(EnvironmentStep::Deleted),
                 EventMessage::new("🗑️ Environment is deleted".to_string(), None),
             )),
+            (Action::Restart, Ok(_)) => self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Restarted),
+                EventMessage::new("⟳️ Environment is restarted".to_string(), None),
+            )),
             (_, Err(err)) if err.tag().is_cancel() => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Cancelled),
                 EventMessage::new("🚫 Deployment has been canceled at user request 🚫".to_string(), None),
             )),
             (Action::Create, Err(err)) => {
-                info!("{}", err);
-                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
-                    EventMessage::new("💣 Deployment failed".to_string(), None),
+                    EventMessage::new(
+                        "💣 Deployment failed".to_string(),
+                        Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
                 ));
             }
             (Action::Pause, Err(err)) => {
-                info!("{}", err);
-                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
-                    EventMessage::new("💣 Environment failed to be paused".to_string(), None),
+                    EventMessage::new(
+                        "💣 Environment failed to be paused".to_string(),
+                        Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
                 ));
             }
             (Action::Delete, Err(err)) => {
-                info!("{}", err);
-                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeletedError),
-                    EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
+                    EventMessage::new(
+                        "💣 Environment failed to be deleted".to_string(),
+                        Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
+                ));
+            }
+            (Action::Restart, Err(err)) => {
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(EnvironmentStep::RestartedError),
+                    EventMessage::new(
+                        "💣 Environment failed to be restarted".to_string(),
+                        Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
                 ));
             }
         };

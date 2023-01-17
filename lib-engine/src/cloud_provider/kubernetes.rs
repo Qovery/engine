@@ -22,6 +22,7 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::service::Action;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cmd::kubectl::{kubectl_delete_apiservice, kubectl_delete_completed_jobs};
@@ -36,7 +37,7 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::context::Context;
-use crate::io_models::{Action, QoveryIdentifier};
+use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::domain::StringPath;
 use crate::models::types::VersionsNumber;
@@ -1152,6 +1153,7 @@ where
             "Infrastructure '{}' deletion is in progress...",
             kubernetes.name_with_id()
         )),
+        Action::Restart => None,
     };
 
     send_progress_on_long_task_with_message(kubernetes, waiting_message, action, long_task)
@@ -1204,6 +1206,9 @@ where
                         EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Delete)),
                         event_message,
                     ));
+                }
+                Action::Restart => {
+                    // restart is not implemented yet
                 }
             };
 
