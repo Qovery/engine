@@ -547,6 +547,8 @@ pub enum Tag {
     CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
+    /// CannotRestartService: represents an error while trying to restart a service.
+    CannotRestartService,
     /// NotEnoughNodesAvailableToDeployEnvironment: represents an error when trying to deploy an environment but there the desired number of nodes exceeds the maximum value.
     NotEnoughNodesAvailableToDeployEnvironment,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
@@ -4019,6 +4021,43 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Creates new error when fetching Deployment items
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `namespace`: Namespace of the environment.
+    /// * `selector`: Selector to select the deployment.
+    /// * `deployment_name`: Name of the deployment.
+    /// * `raw_error`: Source error.
+    pub fn new_cannot_restart_service(
+        event_details: EventDetails,
+        namespace: &str,
+        selector: &str,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = format!("Cannot restart service in namespace {} for selector {}", namespace, selector);
+
+        EngineError::new(
+            event_details,
+            Tag::CannotRestartService,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for cluster restart
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_cannot_restart_kubernetes_cluster(event_details: EventDetails) -> EngineError {
+        let message = "Restarting a cluster is not allowed";
+        EngineError::new(event_details, Tag::NotImplementedError, message.to_string(), None, None, None)
     }
 }
 impl Display for EngineError {

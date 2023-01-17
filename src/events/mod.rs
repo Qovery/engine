@@ -275,6 +275,12 @@ pub enum InfrastructureStep {
     Deleted,
     /// DeleteError: error on deleting a cluster.
     DeleteError,
+    /// Restart: restart a cluster
+    Restart,
+    /// Restarted: cluster restart is ok.
+    Restarted,
+    /// RestartedError: error on restarting a cluster.
+    RestartedError,
 }
 
 impl Display for InfrastructureStep {
@@ -302,6 +308,9 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 InfrastructureStep::Start => "start",
                 InfrastructureStep::Terminated => "terminated",
+                InfrastructureStep::Restart => "restart",
+                InfrastructureStep::Restarted => "restarted",
+                InfrastructureStep::RestartedError => "restart_error",
             },
         )
     }
@@ -357,6 +366,13 @@ pub enum EnvironmentStep {
     Deleted,
     /// DeleteError: Terminal error on deleting an environment/service.
     DeletedError,
+    /// Restart: Restart service pods
+    Restart,
+    /// Restarted: Service pods have been restarted
+    Restarted,
+    /// RestartedError: Error on restarting service pods
+    RestartedError,
+
     // Transfer data to core
     /// JobOutput: contains the environment variables to upsert
     JobOutput,
@@ -404,6 +420,9 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 EnvironmentStep::UnderMigration => "under-migration",
                 EnvironmentStep::JobOutput => "job-output",
+                EnvironmentStep::Restart => "restart",
+                EnvironmentStep::Restarted => "restarted",
+                EnvironmentStep::RestartedError => "restarted-error",
             },
         )
     }

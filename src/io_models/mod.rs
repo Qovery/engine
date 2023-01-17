@@ -62,6 +62,7 @@ pub enum Action {
     Create,
     Pause,
     Delete,
+    Restart,
 }
 
 impl Action {
@@ -70,6 +71,7 @@ impl Action {
             Action::Create => service::Action::Create,
             Action::Pause => service::Action::Pause,
             Action::Delete => service::Action::Delete,
+            Action::Restart => service::Action::Restart,
         }
     }
 }

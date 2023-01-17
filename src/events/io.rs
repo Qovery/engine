@@ -138,6 +138,9 @@ pub enum InfrastructureStep {
     RetrieveClusterResources,
     Start,
     Terminated,
+    Restart,
+    Restarted,
+    RestartedError,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -162,6 +165,9 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Start => InfrastructureStep::Start,
             events::InfrastructureStep::Terminated => InfrastructureStep::Terminated,
             events::InfrastructureStep::UpgradeError => InfrastructureStep::UpgradeError,
+            events::InfrastructureStep::Restart => InfrastructureStep::Restart,
+            events::InfrastructureStep::Restarted => InfrastructureStep::Restarted,
+            events::InfrastructureStep::RestartedError => InfrastructureStep::RestartedError,
         }
     }
 }
@@ -191,6 +197,9 @@ pub enum EnvironmentStep {
     RetrieveClusterResources,
     UnderMigration,
     JobOutput,
+    Restart,
+    Restarted,
+    RestartedError,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -219,6 +228,9 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
             events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
             events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
+            events::EnvironmentStep::Restart => EnvironmentStep::Restart,
+            events::EnvironmentStep::Restarted => EnvironmentStep::Restarted,
+            events::EnvironmentStep::RestartedError => EnvironmentStep::RestartedError,
         }
     }
 }

@@ -4,7 +4,7 @@ use crate::cloud_provider::kubernetes::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
-use crate::events::EventDetails;
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::api::DeleteParams;
@@ -89,5 +89,18 @@ impl DeploymentAction for NamespaceDeployment {
         });
 
         Ok(())
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error = CommandError::new_from_safe_message("Cannot restart Namespace".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            EventDetails::clone_changing_stage(
+                self.event_details.clone(),
+                Stage::Environment(EnvironmentStep::Restart),
+            ),
+            target.environment.namespace(),
+            "",
+            command_error,
+        )));
     }
 }

@@ -25,6 +25,7 @@ impl EnvLogger {
             EnvironmentStep::Pause => (EnvironmentStep::Pause, EnvironmentStep::Paused),
             EnvironmentStep::Delete => (EnvironmentStep::Delete, EnvironmentStep::Deleted),
             EnvironmentStep::Build => (EnvironmentStep::Build, EnvironmentStep::Built),
+            EnvironmentStep::Restart => (EnvironmentStep::Restart, EnvironmentStep::Restarted),
             _ => panic!("Invalid environment step for logger"),
         };
         let event_details_progress = service.get_event_details(Stage::Environment(progress_step));

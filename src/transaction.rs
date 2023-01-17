@@ -1,5 +1,6 @@
 use crate::engine::{EngineConfigError, InfrastructureContext};
 use crate::errors::EngineError;
+use crate::events::{InfrastructureStep, Stage};
 
 pub struct Transaction<'a> {
     engine: &'a InfrastructureContext,
@@ -34,6 +35,14 @@ impl<'a> Transaction<'a> {
     pub fn delete_kubernetes(&mut self) -> Result<(), Box<EngineError>> {
         self.steps.push(Step::DeleteKubernetes);
         Ok(())
+    }
+
+    pub fn restart_kubernetes(&mut self) -> Result<(), Box<EngineError>> {
+        Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
+            self.engine
+                .kubernetes()
+                .get_event_details(Stage::Infrastructure(InfrastructureStep::RestartedError)),
+        )))
     }
 
     pub fn rollback(&self) -> Result<(), RollbackError> {

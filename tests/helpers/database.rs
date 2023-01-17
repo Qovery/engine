@@ -125,6 +125,23 @@ impl Infrastructure for EnvironmentRequest {
             Err(err) => TransactionResult::Error(err),
         }
     }
+
+    fn restart_environment(
+        &self,
+        environment: &EnvironmentRequest,
+        infra_ctx: &InfrastructureContext,
+    ) -> TransactionResult {
+        let mut env = environment
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .unwrap();
+
+        env.action = qovery_engine::cloud_provider::service::Action::Restart;
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
+        match ret {
+            Ok(_) => TransactionResult::Ok,
+            Err(err) => TransactionResult::Error(err),
+        }
+    }
 }
 
 pub enum StorageSize {
