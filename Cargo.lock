@@ -184,6 +184,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-docdb"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "791f9e6ed777043af2a8872dfa25a83466aa8983de444d6e166a92e467701fd1"
+dependencies = [
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-query",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "bytes",
+ "http",
+ "tokio-stream",
+ "tower",
+]
+
+[[package]]
 name = "aws-sdk-eks"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -207,10 +230,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-elasticache"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4c379b3baff3d9b2caae90a01e349aba688fa7e455ee79ec7986186b945b140"
+dependencies = [
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-query",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "bytes",
+ "http",
+ "tokio-stream",
+ "tower",
+]
+
+[[package]]
 name = "aws-sdk-elasticloadbalancingv2"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7848a7ed2fe4b9b94476243582575f3f2ba3f0b2df9156bc332cf4e5d73d95f"
+dependencies = [
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-query",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "bytes",
+ "http",
+ "tokio-stream",
+ "tower",
+]
+
+[[package]]
+name = "aws-sdk-rds"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0420bd9b4043fa26b87ee18af3b98c5cc960ff439456a091cd4dd044cbbcc046"
 dependencies = [
  "aws-endpoint",
  "aws-http",
@@ -2528,8 +2597,11 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "aws-config",
+ "aws-sdk-docdb",
  "aws-sdk-eks",
+ "aws-sdk-elasticache",
  "aws-sdk-elasticloadbalancingv2",
+ "aws-sdk-rds",
  "aws-smithy-async",
  "aws-smithy-client",
  "aws-types",
