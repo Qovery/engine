@@ -465,8 +465,9 @@ impl Kubernetes for EKS {
         }
 
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
+        let ev = event_details.clone();
         let _guard = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
-            let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1);
+            let _ = self.set_cluster_autoscaler_replicas(ev, 1);
         });
 
         terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy())
