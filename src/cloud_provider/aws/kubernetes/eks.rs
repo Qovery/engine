@@ -465,7 +465,7 @@ impl Kubernetes for EKS {
         }
 
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
-        let _ = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
+        let _guard = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
             let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1);
         });
 
