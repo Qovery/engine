@@ -8,6 +8,7 @@ use crate::cloud_provider::kubernetes::{
     send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
+use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
@@ -17,7 +18,6 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
 use crate::io_models::context::Context;
-use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -465,8 +465,9 @@ impl Kubernetes for EKS {
         }
 
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
-        let _ = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
-            let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1);
+        let ev = event_details.clone();
+        let _guard = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
+            let _ = self.set_cluster_autoscaler_replicas(ev, 1);
         });
 
         terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy())

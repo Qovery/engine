@@ -242,6 +242,10 @@ impl DeploymentAction for PauseServiceAction {
     fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
+
+    fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        Ok(())
+    }
 }
 
 #[cfg(feature = "test-local-kube")]

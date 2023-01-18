@@ -7,13 +7,13 @@ use crate::cloud_provider::kubernetes::{
     send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
+use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
-use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;

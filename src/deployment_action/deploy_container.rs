@@ -14,6 +14,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
+use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
@@ -32,6 +33,7 @@ where
         // We first mirror the image if needed
         let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             mirror_image(
+                self.long_id(),
                 &self.registry,
                 &self.image,
                 &self.tag,
@@ -100,11 +102,18 @@ where
 
         let post_task = |logger: &EnvSuccessLogger, state: TaskContext| {
             // Delete previous image from cache to cleanup resources
-            let _ = delete_cached_image(self.tag_for_mirror(), state.last_deployed_image, false, target, logger)
-                .map_err(|err| {
-                    error!("Error while deleting cached image: {}", err);
-                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                });
+            let _ = delete_cached_image(
+                self.long_id(),
+                self.tag_for_mirror(),
+                state.last_deployed_image,
+                false,
+                target,
+                logger,
+            )
+            .map_err(|err| {
+                error!("Error while deleting cached image: {}", err);
+                Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+            });
         };
 
         // At last we deploy our container
@@ -207,10 +216,11 @@ where
             };
 
             let _ =
-                delete_cached_image(self.tag_for_mirror(), last_deployed_image, true, target, logger).map_err(|err| {
-                    error!("Error while deleting cached image: {}", err);
-                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                });
+                delete_cached_image(self.long_id(), self.tag_for_mirror(), last_deployed_image, true, target, logger)
+                    .map_err(|err| {
+                        error!("Error while deleting cached image: {}", err);
+                        Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+                    });
         };
 
         // Trigger deployment
@@ -220,6 +230,20 @@ where
                 pre_run: &pre_task,
                 run: &long_task,
                 post_run_success: &post_task,
+            },
+        )
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        execute_long_deployment(
+            ApplicationDeploymentReporter::new_for_container(self, target, Action::Restart),
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+                let restart_service = RestartServiceAction::new(
+                    self.selector(),
+                    self.is_stateful(),
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+                );
+                restart_service.on_restart(target)
             },
         )
     }

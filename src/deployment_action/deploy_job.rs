@@ -9,8 +9,8 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::{EngineError, ErrorMessageVerbosity};
-use crate::events::{EventDetails, Stage};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -117,6 +117,16 @@ where
         };
         execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Delete), task)
     }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error = CommandError::new_from_safe_message("Cannot restart Job service".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+            target.environment.namespace(),
+            &self.selector(),
+            command_error,
+        )));
+    }
 }
 
 struct TaskContext {
@@ -140,6 +150,7 @@ where
             // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
             ImageSource::Registry { source } => {
                 mirror_image(
+                    job.long_id(),
                     &source.registry,
                     &source.image,
                     &source.tag,
@@ -347,9 +358,14 @@ where
         match &job.image_source {
             ImageSource::Registry { source } => {
                 let mirrored_image_tag = source.tag_for_mirror(job.long_id());
-                if let Err(err) =
-                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
-                {
+                if let Err(err) = delete_cached_image(
+                    job.long_id(),
+                    mirrored_image_tag,
+                    state.last_deployed_image,
+                    false,
+                    target,
+                    logger,
+                ) {
                     error!("Failed to delete previous image from cache: {}", err);
                 }
             }
@@ -418,9 +434,14 @@ where
             // Delete previous image from cache to cleanup resources
             ImageSource::Registry { source } => {
                 let mirrored_image_tag = source.tag_for_mirror(job.long_id());
-                if let Err(err) =
-                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
-                {
+                if let Err(err) = delete_cached_image(
+                    job.long_id(),
+                    mirrored_image_tag,
+                    state.last_deployed_image,
+                    false,
+                    target,
+                    logger,
+                ) {
                     let user_msg = format!("Failed to delete previous image from cache: {}", err);
                     logger.send_success(user_msg);
                 }

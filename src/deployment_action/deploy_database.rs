@@ -23,6 +23,7 @@ use serde::Deserialize;
 
 use crate::cmd::kubectl::kubectl_get_pvc;
 use crate::cmd::structs::PVCItem;
+use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
 use std::thread;
@@ -522,6 +523,16 @@ where
             },
         )
     }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error = CommandError::new_from_safe_message("Cannot restart Managed Database".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+            target.environment.namespace(),
+            &self.selector(),
+            command_error,
+        )));
+    }
 }
 
 // For Container database
@@ -695,6 +706,20 @@ where
                 }
 
                 Ok(())
+            },
+        )
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Restart),
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+                let restart_service = RestartServiceAction::new(
+                    self.selector(),
+                    true,
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
+                );
+                restart_service.on_restart(target)
             },
         )
     }

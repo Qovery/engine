@@ -157,6 +157,7 @@ impl InfrastructureEngineRequest {
             Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
             Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
             Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+            Action::Restart => Stage::Infrastructure(InfrastructureStep::Restart),
         };
 
         EventDetails::new(

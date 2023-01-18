@@ -185,4 +185,22 @@ impl<'a> EnvironmentDeployment<'a> {
 
         Ok(())
     }
+
+    pub fn on_restart(&mut self) -> Result<(), Box<EngineError>> {
+        let event_details = self
+            .deployment_target
+            .environment
+            .event_details_with_step(EnvironmentStep::Pause);
+        let target = &mut self.deployment_target;
+        let should_abort = Self::should_abort_wrapper(target, &event_details);
+
+        let services = Self::services_iter(target.environment);
+        for (service_id, service, _) in services {
+            should_abort()?;
+            self.deployed_services.insert(service_id);
+            service.on_restart(target)?;
+        }
+
+        Ok(())
+    }
 }

@@ -40,7 +40,8 @@ use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources,
-    terraform_init_validate_plan_apply, terraform_init_validate_state_list, TerraformError,
+    terraform_init_validate_migrate_cloudwatch_plan_apply, terraform_init_validate_plan_apply,
+    terraform_init_validate_state_list, TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -938,7 +939,11 @@ fn create(
     ));
 
     // terraform deployment dedicated to cloud resources
-    if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
+    if let Err(e) = terraform_init_validate_migrate_cloudwatch_plan_apply(
+        temp_dir.as_str(),
+        kubernetes.context().is_dry_run_deploy(),
+        kubernetes.cluster_name().as_str(),
+    ) {
         // on EKS, clean possible nodegroup deployment failures because of quota issues
         // do not exit on this error to avoid masking the real Terraform issue
         if kubernetes.kind() == Kind::Eks {
@@ -1545,7 +1550,7 @@ fn delete(
 
     // generate terraform files and copy them into temp dir
     let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
-    context.insert("is_delete", &true);
+    context.insert("is_deletion_step", &true);
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)

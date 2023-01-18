@@ -2,8 +2,8 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
-use crate::errors::EngineError;
-use crate::events::EventDetails;
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::runtime::block_on;
 use crate::template::generate_and_copy_all_files_into_dir;
 use k8s_openapi::api::core::v1::Pod;
@@ -134,6 +134,19 @@ impl DeploymentAction for HelmDeployment {
         }
 
         Ok(())
+    }
+
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let command_error = CommandError::new_from_safe_message("Cannot restart Helm deployment".to_string());
+        return Err(Box::new(EngineError::new_cannot_restart_service(
+            EventDetails::clone_changing_stage(
+                self.event_details.clone(),
+                Stage::Environment(EnvironmentStep::Restart),
+            ),
+            target.environment.namespace(),
+            "",
+            command_error,
+        )));
     }
 }
 

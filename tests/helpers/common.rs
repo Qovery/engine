@@ -74,6 +74,12 @@ pub trait Infrastructure {
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
+
+    fn restart_environment(
+        &self,
+        environment: &EnvironmentRequest,
+        infra_ctx: &InfrastructureContext,
+    ) -> TransactionResult;
 }
 
 pub(crate) fn compute_test_cluster_endpoint(cluster_domain: &ClusterDomain, default_domain: String) -> String {
