@@ -69,7 +69,7 @@ vaultrs = "0.6.0"
 vaultrs-login = "0.1.6"
 
 # AWS deps
-tokio = { version = "1.18.1", features = ["full"] }
+tokio = { version = "1.18.4", features = ["full"] }
 rusoto_core = "0.48.0"
 rusoto_sts = "0.48.0"
 rusoto_credential = "0.48.0"
