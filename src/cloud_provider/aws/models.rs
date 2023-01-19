@@ -57,3 +57,28 @@ pub trait QoveryAwsSdkConfigEks {
         nodegroup_id: String,
     ) -> Result<DeleteNodegroupOutput, SdkError<DeleteNodegroupError>>;
 }
+
+#[async_trait]
+pub trait QoveryAwsSdkConfigManagedDatabase {
+    async fn find_managed_rds_database(
+        &self,
+        db_id: &str,
+    ) -> Result<
+        aws_sdk_rds::output::DescribeDbInstancesOutput,
+        aws_smithy_client::SdkError<aws_sdk_rds::error::DescribeDBInstancesError>,
+    >;
+    async fn find_managed_elasticache_database(
+        &self,
+        db_id: &str,
+    ) -> Result<
+        aws_sdk_elasticache::output::DescribeCacheClustersOutput,
+        aws_smithy_client::SdkError<aws_sdk_elasticache::error::DescribeCacheClustersError>,
+    >;
+    async fn find_managed_doc_db_database(
+        &self,
+        db_id: &str,
+    ) -> Result<
+        aws_sdk_docdb::output::DescribeDbClustersOutput,
+        aws_smithy_client::SdkError<aws_sdk_docdb::error::DescribeDBClustersError>,
+    >;
+}

@@ -15,6 +15,12 @@ use crate::cmd::command;
 use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
+use aws_sdk_docdb::error::DescribeDBClustersError;
+use aws_sdk_docdb::types::SdkError as DocdbSdkError;
+use aws_sdk_elasticache::error::DescribeCacheClustersError;
+use aws_sdk_elasticache::types::SdkError as ElasticacheSdkError;
+use aws_sdk_rds::error::DescribeDBInstancesError;
+use aws_sdk_rds::types::SdkError as RdsSdkError;
 use derivative::Derivative;
 use kube::error::Error as KubeError;
 use kube::Resource;
@@ -632,6 +638,8 @@ pub enum Tag {
     K8sErrorCopySecret,
     /// K8sCannotGetPVC: represents an error while executing a kubectl command to get PVCs
     K8sCannotGetPVCs,
+    /// K8sCannotGetServices: represents an error while executing a kubectl command to get Services
+    K8sCannotGetServices,
     /// K8sCannotBoundPVC: represents an error while trying to create a PVC and it can't be bound
     K8sCannotBoundPVC,
     /// K8sCannotOrphanDelete: represents an error while to perform an orphan deletion.
@@ -863,6 +871,14 @@ pub enum Tag {
     JobFailure,
     /// CannotParseString: represents an error while trying to parse a string
     CannotParseString,
+    /// AwsSdkGetClient: represents an error while trying to get AWS SDK Client
+    AwsSdkGetClient,
+    /// AwsSdkListRdsInstances: represents an error while trying to list AWS RDS instances
+    AwsSdkListRdsInstances,
+    /// AwsSdkListElasticacheClusters: represents an error while trying to list AWS Elasticache clusters
+    AwsSdkListElasticacheClusters,
+    /// AwsSdkListDocDbClusters: represents an error while trying to list AWS Document DB clusters
+    AwsSdkListDocDbClusters,
 }
 
 impl Tag {
@@ -2927,6 +2943,27 @@ impl EngineError {
         )
     }
 
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_get_services(
+        event_details: EventDetails,
+        error: CommandError,
+        services_id: &str,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotGetServices,
+            error.to_string(),
+            Some(error),
+            None,
+            Some(format!("K8s service for service {} can't be found", services_id)),
+        )
+    }
+
     /// Creates new error while trying to get any available VPC.
     ///
     /// Arguments:
@@ -3429,6 +3466,71 @@ impl EngineError {
         let message = "Error, something went wrong because it's not implemented.";
 
         EngineError::new(event_details, Tag::NotImplementedError, message.to_string(), None, None, None)
+    }
+
+    /// Creates new error when no AWS SDK client is found.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_get_client(event_details: EventDetails) -> EngineError {
+        let message = "Error, something went wrong when trying to get AWS SDK client.";
+
+        EngineError::new(event_details, Tag::AwsSdkGetClient, message.to_string(), None, None, None)
+    }
+
+    /// Creates new error when something went wrong on AWS SDK RDS Api.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_list_rds_instances(
+        event_details: EventDetails,
+        error: RdsSdkError<DescribeDBInstancesError>,
+        db_id: Option<&str>,
+    ) -> EngineError {
+        let message = match db_id {
+            None => error.to_string(),
+            Some(id) => format!("Can't get db {}: {}", id, error),
+        };
+
+        EngineError::new(event_details, Tag::AwsSdkListRdsInstances, message, None, None, None)
+    }
+
+    /// Creates new error when something went wrong because it's not implemented.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_list_elasticache_clusters(
+        event_details: EventDetails,
+        error: ElasticacheSdkError<DescribeCacheClustersError>,
+        db_id: Option<&str>,
+    ) -> EngineError {
+        let message = match db_id {
+            None => error.to_string(),
+            Some(id) => format!("Can't get db {}: {}", id, error),
+        };
+
+        EngineError::new(event_details, Tag::AwsSdkListElasticacheClusters, message, None, None, None)
+    }
+
+    /// Creates new error when something went wrong because it's not implemented.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_list_doc_db_clusters(
+        event_details: EventDetails,
+        error: DocdbSdkError<DescribeDBClustersError>,
+        db_id: Option<&str>,
+    ) -> EngineError {
+        let message = match db_id {
+            None => error.to_string(),
+            Some(id) => format!("Can't get db {}: {}", id, error),
+        };
+
+        EngineError::new(event_details, Tag::AwsSdkListDocDbClusters, message, None, None, None)
     }
 
     /// Creates new error from an Docker error

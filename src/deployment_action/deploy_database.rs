@@ -13,18 +13,30 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
-use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
+use crate::models::database::{
+    get_database_with_invalid_storage_size, Container, Database, DatabaseService, DatabaseType, Managed,
+};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
-use crate::cmd::kubectl::kubectl_get_pvc;
-use crate::cmd::structs::PVCItem;
+use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
+use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
+use crate::deployment_action::utils::k8s_external_service_name_exists;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use async_trait::async_trait;
+use aws_sdk_docdb::error::DescribeDBClustersError;
+use aws_sdk_docdb::output::DescribeDbClustersOutput;
+use aws_sdk_docdb::types::SdkError;
+use aws_sdk_elasticache::error::DescribeCacheClustersError;
+use aws_sdk_elasticache::output::DescribeCacheClustersOutput;
+use aws_sdk_rds::error::DescribeDBInstancesError;
+use aws_sdk_rds::output::DescribeDbInstancesOutput;
+use aws_types::SdkConfig;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -387,6 +399,120 @@ where
     }
 }
 
+#[async_trait]
+impl QoveryAwsSdkConfigManagedDatabase for SdkConfig {
+    async fn find_managed_rds_database(
+        &self,
+        db_id: &str,
+    ) -> Result<DescribeDbInstancesOutput, SdkError<DescribeDBInstancesError>> {
+        let client = aws_sdk_rds::Client::new(self);
+        client
+            .describe_db_instances()
+            .db_instance_identifier(db_id)
+            .send()
+            .await
+    }
+
+    async fn find_managed_elasticache_database(
+        &self,
+        db_id: &str,
+    ) -> Result<DescribeCacheClustersOutput, SdkError<DescribeCacheClustersError>> {
+        let client = aws_sdk_elasticache::Client::new(self);
+        client.describe_cache_clusters().cache_cluster_id(db_id).send().await
+    }
+
+    async fn find_managed_doc_db_database(
+        &self,
+        db_id: &str,
+    ) -> Result<DescribeDbClustersOutput, SdkError<DescribeDBClustersError>> {
+        let client = aws_sdk_docdb::Client::new(self);
+        client.describe_db_clusters().db_cluster_identifier(db_id).send().await
+    }
+}
+
+fn managed_database_exists(
+    db_type: service::DatabaseType,
+    db_id: &str,
+    event_details: &EventDetails,
+    sdk_config: Option<SdkConfig>,
+) -> Result<bool, Box<EngineError>> {
+    let aws_conn = match sdk_config {
+        Some(x) => x,
+        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone()))),
+    };
+
+    match db_type {
+        service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => {
+            let result = match block_on(aws_conn.find_managed_rds_database(db_id)) {
+                Ok(result) => result,
+                Err(e) => {
+                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
+                        true => Ok(false),
+                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_rds_instances(
+                            event_details.clone(),
+                            e,
+                            Some(db_id),
+                        ))),
+                    }
+                }
+            };
+
+            match result.db_instances() {
+                None => Ok(false),
+                Some(instances) => match instances.is_empty() {
+                    true => Ok(false),
+                    false => Ok(true),
+                },
+            }
+        }
+        service::DatabaseType::MongoDB => {
+            let result = match block_on(aws_conn.find_managed_doc_db_database(db_id)) {
+                Ok(result) => result,
+                Err(e) => {
+                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
+                        true => Ok(false),
+                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_doc_db_clusters(
+                            event_details.clone(),
+                            e,
+                            Some(db_id),
+                        ))),
+                    }
+                }
+            };
+
+            match result.db_clusters() {
+                None => Ok(false),
+                Some(clusters) => match clusters.is_empty() {
+                    true => Ok(false),
+                    false => Ok(true),
+                },
+            }
+        }
+        service::DatabaseType::Redis => {
+            let result = match block_on(aws_conn.find_managed_elasticache_database(db_id)) {
+                Ok(result) => result,
+                Err(e) => {
+                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
+                        true => Ok(false),
+                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
+                            event_details.clone(),
+                            e,
+                            Some(db_id),
+                        ))),
+                    }
+                }
+            };
+            match result.cache_clusters() {
+                None => Ok(false),
+                Some(clusters) => match clusters.is_empty() {
+                    true => Ok(false),
+                    false => Ok(true),
+                },
+            }
+        }
+    }
+}
+
 // For Managed database
 impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Database<C, Managed, T>
 where
@@ -485,7 +611,24 @@ where
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Delete),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
-                // First we must ensure the DB is created and in a ready state
+                // First we must ensure the DB is created by looking for the k8s ExternalName service and AWS side
+                if !managed_database_exists(
+                    self.db_type(),
+                    &self.fqdn_id,
+                    &event_details,
+                    target.cloud_provider.aws_sdk_client(),
+                )? && !k8s_external_service_name_exists(
+                    &target.kube,
+                    target.environment.namespace(),
+                    &self.selector(),
+                    &event_details,
+                    self.id(),
+                )? {
+                    // if no k8s ExternalName service and no result from AWS are returned, db has never been deployed. No need to go further
+                    return Ok(());
+                }
+
+                // Then if it's in a ready state
                 // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
                 on_create_managed_impl(self, event_details.clone(), target)?;
 
@@ -536,50 +679,6 @@ where
 }
 
 // For Container database
-fn is_pvc_bound(
-    target: &DeploymentTarget,
-    event_details: EventDetails,
-    db_sanitized_name: String,
-) -> Result<(), Box<EngineError>> {
-    let kubeconfig_path = target.kubernetes.get_kubeconfig_file_path()?;
-    let namespace = target.environment.namespace();
-    let creds = target.kubernetes.cloud_provider().credentials_environment_variables();
-    match kubectl_get_pvc(kubeconfig_path, namespace, creds.clone()) {
-        Ok(pvcs) => match pvcs.items {
-            None => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
-                event_details,
-                CommandError::new_from_safe_message("Unable to get pvcs".to_string()),
-            ))),
-            Some(pvcs) => {
-                let pvc_name = format!("data-{}-0", db_sanitized_name);
-                let pvc = pvcs
-                    .iter()
-                    .filter(|pvc| pvc.metadata.name == pvc_name)
-                    .collect::<Vec<&PVCItem>>();
-                if pvc.len() != 1 {
-                    return Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(
-                        event_details,
-                        CommandError::new_from_safe_message(format!("Unable to get pvc for db {}", db_sanitized_name)),
-                    )));
-                };
-
-                match pvc[0].status.phase.to_lowercase().as_str() {
-                    "bound" => Ok(()),
-                    _ => Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
-                        event_details,
-                        CommandError::new_from_safe_message(format!(
-                            "Can't bound PVC for database {}",
-                            db_sanitized_name
-                        )),
-                        db_sanitized_name.as_str(),
-                    ))),
-                }
-            }
-        },
-        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details, e))),
-    }
-}
-
 impl<C: CloudProvider, T: DatabaseType<C, Container>> DeploymentAction for Database<C, Container, T>
 where
     Database<C, Container, T>: ToTeraContext,
@@ -588,6 +687,29 @@ where
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
         let run = |logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
+            match get_database_with_invalid_storage_size(
+                self,
+                &target.kube,
+                target.environment.namespace(),
+                &event_details,
+            ) {
+                Ok(invalid_statefulset_storage) => {
+                    if let Some(invalid_statefulset_storage) = invalid_statefulset_storage {
+                        update_pvcs(
+                            self.as_service(),
+                            &invalid_statefulset_storage,
+                            target.environment.namespace(),
+                            &event_details,
+                            &target.kube,
+                        )?;
+                    }
+                }
+                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(e.to_string()),
+                )),
+            }
+
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -608,7 +730,12 @@ where
             if let Err(e) = helm.on_create(target) {
                 return match e.tag() {
                     Tag::TaskCancellationRequested => Err(e),
-                    _ => match is_pvc_bound(target, event_details.clone(), self.as_service().sanitized_name()) {
+                    _ => match are_pvcs_bound(
+                        self.as_service(),
+                        target.environment.namespace(),
+                        &event_details,
+                        &target.kube,
+                    ) {
                         Ok(_) => Err(e),
                         Err(err) => {
                             logger.warning(format!("Cannot find if pvc bound: {}", err.user_log_message()));

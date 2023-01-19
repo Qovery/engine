@@ -1124,7 +1124,7 @@ fn terraform_run_cloudwatch_migration(
 pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Result<Vec<String>, TerraformError> {
     // get terraform state list output
     let terraform_args = vec!["state", "list"];
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
@@ -1152,7 +1152,7 @@ pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Resul
         "aws_cloudwatch_log_group.eks_cloudwatch_log_groups",
         &cloudwatch_format,
     ];
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         match terraform_exec(root_dir, terraform_migrate_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
@@ -1162,19 +1162,10 @@ pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Resul
         }
     });
 
-    let _ = match result {
-        Ok(output) => output,
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => {
-            return Err(TerraformError::new(
-                terraform_args.iter().map(|e| e.to_string()).collect(),
-                "".to_string(),
-                e,
-            ))
-        }
-    };
-
-    Ok(vec![])
+    match result {
+        Ok(output) => Ok(output),
+        _ => Ok(vec![]),
+    }
 }
 
 pub fn terraform_init_validate_migrate_cloudwatch_plan_apply(

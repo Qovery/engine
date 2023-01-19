@@ -215,7 +215,7 @@ pub fn print_action(
     }
 }
 
-fn are_pvcs_bound(
+pub fn are_pvcs_bound(
     service: &dyn Service,
     namespace: &str,
     event_details: &EventDetails,

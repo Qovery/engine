@@ -62,6 +62,7 @@ pub enum Tag {
     K8sErrorCopySecret,
     K8sCannotGetPVCs,
     K8sCannotBoundPVC,
+    K8sCannotGetServices,
     K8sCannotOrphanDelete,
     K8sCannotPVCEdit,
     K8sCannotGetStatefulset,
@@ -196,6 +197,10 @@ pub enum Tag {
     CannotParseString,
     CannotDeleteNodeGroup,
     CannotRestartService,
+    AwsSdkGetClient,
+    AwsSdkListRdsInstances,
+    AwsSdkListElasticacheClusters,
+    AwsSdkListDocDbClusters,
 }
 
 impl From<errors::Tag> for Tag {
@@ -383,6 +388,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::DoNotRespectCloudProviderBestPractices => Tag::DoNotRespectCloudProviderBestPractices,
             errors::Tag::TerraformStateLocked => Tag::TerraformStateLocked,
             errors::Tag::K8sCannotGetPVCs => Tag::K8sCannotGetPVCs,
+            errors::Tag::K8sCannotGetServices => Tag::K8sCannotGetServices,
             errors::Tag::K8sCannotBoundPVC => Tag::K8sCannotBoundPVC,
             errors::Tag::K8sCannotOrphanDelete => Tag::K8sCannotOrphanDelete,
             errors::Tag::K8sCannotPVCEdit => Tag::K8sCannotPVCEdit,
@@ -393,6 +399,10 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotParseString => Tag::CannotParseString,
             errors::Tag::CannotDeleteNodeGroup => Tag::CannotDeleteNodeGroup,
             errors::Tag::CannotRestartService => Tag::CannotRestartService,
+            errors::Tag::AwsSdkGetClient => Tag::AwsSdkGetClient,
+            errors::Tag::AwsSdkListRdsInstances => Tag::AwsSdkListRdsInstances,
+            errors::Tag::AwsSdkListElasticacheClusters => Tag::AwsSdkListElasticacheClusters,
+            errors::Tag::AwsSdkListDocDbClusters => Tag::AwsSdkListDocDbClusters,
         }
     }
 }
