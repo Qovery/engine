@@ -76,6 +76,8 @@ fn should_increase_app_storage_size() {
                 infra_ctx.container_registry().registry_info(),
                 infra_ctx.context().qovery_api.clone(),
             ),
+            resized_app.command_args.clone(),
+            resized_app.entrypoint.clone(),
             storages,
             envs,
             BTreeSet::default(),
