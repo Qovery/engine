@@ -97,9 +97,12 @@ impl<T: CloudProvider> Router<T> {
         let mut context = default_tera_context(self, kubernetes, environment);
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
 
-        let custom_domain_data_templates = self
+        let cluster_domain = kubernetes.dns_provider().domain().to_string();
+        let client_custom_domains = self
             .custom_domains
             .iter()
+            // we filter out domain that belongs to our cluster, we dont need to create certificate for them
+            .filter(|domain| !domain.domain.ends_with(&cluster_domain))
             .map(|cd| CustomDomainDataTemplate {
                 domain: cd.domain.clone(),
             })
@@ -136,8 +139,7 @@ impl<T: CloudProvider> Router<T> {
             };
 
         // (custom_domain + default_domain) * (ports + default_port)
-        let mut hosts: Vec<HostDataTemplate> =
-            Vec::with_capacity((custom_domain_data_templates.len() + 1) * (ports.len() + 1));
+        let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((self.custom_domains.len() + 1) * (ports.len() + 1));
         for port in ports {
             hosts.push(HostDataTemplate {
                 domain_name: format!("p{}-{}", port.port, self.default_domain),
@@ -201,7 +203,7 @@ impl<T: CloudProvider> Router<T> {
             "router_should_declare_domain_to_external_dns",
             &router_should_declare_domain_to_external_dns,
         );
-        context.insert("custom_domains", &custom_domain_data_templates);
+        context.insert("client_custom_domains", &client_custom_domains);
         context.insert("hosts", &hosts);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
