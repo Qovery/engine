@@ -244,6 +244,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             disable_cache: false,
             timeout: Duration::from_secs(42),
         },
+        vec![],
+        None,
         vec![test_storage()],
         vec![test_env_var()],
         btreeset![test_mounted_file()],

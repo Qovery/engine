@@ -212,6 +212,8 @@ pub fn environment_3_apps_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 root_path: "/".to_string(),
                 action: Action::Create,
@@ -248,6 +250,8 @@ pub fn environment_3_apps_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
@@ -284,6 +288,8 @@ pub fn environment_3_apps_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
                 dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 action: Action::Create,
                 root_path: String::from("/"),
@@ -411,6 +417,8 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            command_args: vec![],
+            entrypoint: None,
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
@@ -451,6 +459,8 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            command_args: vec![],
+            entrypoint: None,
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
@@ -592,6 +602,8 @@ pub fn test_db(
                 protocol: Protocol::HTTP,
             }];
             app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+            app.command_args = vec![];
+            app.entrypoint = None;
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })

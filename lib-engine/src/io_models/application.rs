@@ -209,6 +209,8 @@ pub struct Application {
     pub branch: String,
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
+    pub command_args: Vec<String>,
+    pub entrypoint: Option<String>,
     pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
@@ -259,6 +261,8 @@ impl Application {
                         self.min_instances,
                         self.max_instances,
                         build,
+                        self.command_args,
+                        self.entrypoint,
                         self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
@@ -282,6 +286,8 @@ impl Application {
                         self.min_instances,
                         self.max_instances,
                         build,
+                        self.command_args,
+                        self.entrypoint,
                         self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
@@ -306,6 +312,8 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 build,
+                self.command_args,
+                self.entrypoint,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files

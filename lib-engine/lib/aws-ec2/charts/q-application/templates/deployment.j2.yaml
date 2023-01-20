@@ -64,6 +64,16 @@ spec:
       containers:
         - name: {{ sanitized_name }}
           image: "{{ image_name_with_tag }}"
+          {%- if entrypoint %}
+          command:
+            - |-
+              {{ entrypoint }}
+          {%- endif %}
+          args:
+            {%- for arg in command_args %}
+            - |-
+              {{ arg }}
+            {%- endfor %}
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"
