@@ -3,8 +3,8 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery-engine-logo.svg" width="318px" alt="Qovery logo" />
   </a>
 </p>
-<h3 align="center">The simplest way to deploy your apps in the Cloud</h3>
-<p align="center">Deploy your apps on any Cloud providers in just a few seconds ⚡</p>
+<h3 align="center">The Orchestration Engine To Deliver Self-Service Infrastructure Faster</h3>
+<p align="center">Deploy your services in just a few seconds ⚡</p>
 
 <p align="center">
 <img src="https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg?style=flat-square" alt="work in progress badge">
