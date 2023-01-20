@@ -312,6 +312,7 @@ impl<T: CloudProvider> Service for Job<T> {
     fn build(&self) -> Option<&Build> {
         match &self.image_source {
             ImageSource::Registry { .. } => None,
+            ImageSource::Build { source: build } if self.force_trigger => Some(build),
             ImageSource::Build { source: build } => match &self.schedule {
                 JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
                 JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
@@ -325,13 +326,19 @@ impl<T: CloudProvider> Service for Job<T> {
     fn build_mut(&mut self) -> Option<&mut Build> {
         match &mut self.image_source {
             ImageSource::Registry { .. } => None,
-            ImageSource::Build { source: build } => match &self.schedule {
-                JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
-                JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
-                JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
-                JobSchedule::Cron { .. } if self.action == Action::Create => Some(build),
-                _ => None,
-            },
+            ImageSource::Build { source: build } => {
+                if self.force_trigger {
+                    return Some(build);
+                }
+
+                match &self.schedule {
+                    JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
+                    JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
+                    JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
+                    JobSchedule::Cron { .. } if self.action == Action::Create => Some(build),
+                    _ => None,
+                }
+            }
         }
     }
 }
