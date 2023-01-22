@@ -16,6 +16,11 @@ autoscaler:
   maxReplicas: 10
   averageValue: 0.5
 
+podDisruptionBudget:
+  enabled: true
+  # minAvailable shouldn't be lower than autoscaler.minReplicas
+  minAvailable: 1
+
 overprovisionning:
   enabled: false
   # specify the number of over provisioned engine pods
