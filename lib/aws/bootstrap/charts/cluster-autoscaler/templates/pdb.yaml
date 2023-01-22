@@ -1,10 +1,11 @@
 {{- if .Values.podDisruptionBudget -}}
-apiVersion: policy/v1beta1
+apiVersion: {{ template "podDisruptionBudget.apiVersion" . }}
 kind: PodDisruptionBudget
 metadata:
   labels:
 {{ include "cluster-autoscaler.labels" . | indent 4 }}
   name: {{ template "cluster-autoscaler.fullname" . }}
+  namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:

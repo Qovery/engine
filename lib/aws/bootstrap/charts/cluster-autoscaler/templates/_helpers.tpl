@@ -70,8 +70,23 @@ Return the appropriate apiVersion for podsecuritypolicy.
 {{- $kubeTargetVersion := default .Capabilities.KubeVersion.GitVersion .Values.kubeTargetVersionOverride }}
 {{- if semverCompare "<1.10-0" $kubeTargetVersion -}}
 {{- print "extensions/v1beta1" -}}
+{{- if semverCompare ">1.21-0" $kubeTargetVersion -}}
+{{- print "policy/v1" -}}
 {{- else -}}
 {{- print "policy/v1beta1" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the appropriate apiVersion for podDisruptionBudget.
+*/}}
+{{- define "podDisruptionBudget.apiVersion" -}}
+{{- $kubeTargetVersion := default .Capabilities.KubeVersion.GitVersion .Values.kubeTargetVersionOverride }}
+{{- if semverCompare "<1.21-0" $kubeTargetVersion -}}
+{{- print "policy/v1beta1" -}}
+{{- else -}}
+{{- print "policy/v1" -}}
 {{- end -}}
 {{- end -}}
 
@@ -83,5 +98,35 @@ Return the service account name used by the pod.
     {{ default (include "cluster-autoscaler.fullname" .) .Values.rbac.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.rbac.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return true if the priority expander is enabled
+*/}}
+{{- define "cluster-autoscaler.priorityExpanderEnabled" -}}
+{{- $expanders := splitList "," (default "" .Values.extraArgs.expander) -}}
+{{- if has "priority" $expanders -}}
+{{- true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the autodiscoveryparameters for clusterapi.
+*/}}
+{{- define "cluster-autoscaler.capiAutodiscoveryConfig" -}}
+{{- if .Values.autoDiscovery.clusterName -}}
+{{- print "clusterName=" -}}{{ .Values.autoDiscovery.clusterName }}
+{{- end -}}
+{{- if and .Values.autoDiscovery.clusterName .Values.autoDiscovery.labels -}}
+{{- print "," -}}
+{{- end -}}
+{{- if .Values.autoDiscovery.labels -}}
+{{- range $i, $el := .Values.autoDiscovery.labels -}}
+{{- if $i -}}{{- print "," -}}{{- end -}}
+{{- range $key, $val := $el -}}
+{{- $key -}}{{- print "=" -}}{{- $val -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
