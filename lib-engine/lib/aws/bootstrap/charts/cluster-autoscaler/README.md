@@ -209,6 +209,18 @@ Install the chart with
 ```
 $ helm install my-release autoscaler/cluster-autoscaler -f myvalues.yaml
 ```
+### Cluster-API
+
+`cloudProvider: clusterapi` must be set, and then one or more of
+- `autoDiscovery.clusterName`
+- or `autoDiscovery.labels`
+See [here](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/clusterapi/README.md#configuring-node-group-auto-discovery) for more details
+
+Additional config parameters avaible, see the `values.yaml` for more details
+`clusterAPIMode`
+`clusterAPIKubeconfigSecret`
+`clusterAPIWorkloadKubeconfigPath`
+`clusterAPICloudConfigPath`
 
 ## Uninstalling the Chart
 
@@ -226,72 +238,9 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### AWS - IAM
 
-The worker running the cluster autoscaler will need access to certain resources and actions:
+The worker running the cluster autoscaler will need access to certain resources and actions depending on the version you run and your configuration of it.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances",
-        "autoscaling:DescribeLaunchConfigurations",
-        "autoscaling:DescribeTags",
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-- `DescribeTags` is required for autodiscovery.
-- `DescribeLaunchConfigurations` is required to scale up an ASG from 0.
-
-If you would like to limit the scope of the Cluster Autoscaler to ***only*** modify ASGs for a particular cluster, use the following policy instead:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances",
-        "autoscaling:DescribeLaunchConfigurations",
-        "autoscaling:DescribeTags",
-        "ec2:DescribeLaunchTemplateVersions"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup",
-        "autoscaling:UpdateAutoScalingGroup"
-      ],
-      "Resource": [
-        "arn:aws:autoscaling:<aws-region>:<account-id>:autoScalingGroup:<some-random-id>:autoScalingGroupName/node-group-1",
-        "arn:aws:autoscaling:<aws-region>:<account-id>:autoScalingGroup:<some-random-id>:autoScalingGroupName/node-group-2",
-        "arn:aws:autoscaling:<aws-region>:<account-id>:autoScalingGroup:<some-random-id>:autoScalingGroupName/node-group-3"
-      ],
-      "Condition": {
-        "StringEquals": {
-          "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled": "true",
-          "autoscaling:ResourceTag/kubernetes.io/cluster/<cluster-name>": "owned"
-        }
-      }
-    }
-  ]
-}
-```
-
-Make sure to replace the variables `<aws-region>`, `<cluster-name>`, `<account-id>`, and the ARNs of the ASGs where applicable.
+For the up-to-date IAM permissions required, please see the [cluster autoscaler's AWS Cloudprovider Readme](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md#iam-policy) and switch to the tag of the cluster autoscaler image you are using.
 
 ### AWS - IAM Roles for Service Accounts (IRSA)
 
@@ -338,7 +287,8 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 |-----|------|---------|-------------|
 | additionalLabels | object | `{}` | Labels to add to each object of the chart. |
 | affinity | object | `{}` | Affinity for pod assignment |
-| autoDiscovery.clusterName | string | `nil` | Enable autodiscovery for `cloudProvider=aws`, for groups matching `autoDiscovery.tags`. Enable autodiscovery for `cloudProvider=gce`, but no MIG tagging required. Enable autodiscovery for `cloudProvider=magnum`, for groups matching `autoDiscovery.roles`. |
+| autoDiscovery.clusterName | string | `nil` | Enable autodiscovery for `cloudProvider=aws`, for groups matching `autoDiscovery.tags`. autoDiscovery.clusterName -- Enable autodiscovery for `cloudProvider=azure`, using tags defined in https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/azure/README.md#auto-discovery-setup. Enable autodiscovery for `cloudProvider=clusterapi`, for groups matching `autoDiscovery.labels`. Enable autodiscovery for `cloudProvider=gce`, but no MIG tagging required. Enable autodiscovery for `cloudProvider=magnum`, for groups matching `autoDiscovery.roles`. |
+| autoDiscovery.labels | list | `[]` | Cluster-API labels to match  https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/clusterapi/README.md#configuring-node-group-auto-discovery |
 | autoDiscovery.roles | list | `["worker"]` | Magnum node group roles to match. |
 | autoDiscovery.tags | list | `["k8s.io/cluster-autoscaler/enabled","k8s.io/cluster-autoscaler/{{ .Values.autoDiscovery.clusterName }}"]` | ASG tags to match, run through `tpl`. |
 | autoscalingGroups | list | `[]` | For AWS, Azure AKS or Magnum. At least one element is required if not using `autoDiscovery`. For example: <pre> - name: asg1<br />   maxSize: 2<br />   minSize: 1 </pre> |
@@ -355,13 +305,19 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | azureTenantID | string | `""` | Azure tenant where the resources are located. Required if `cloudProvider=azure` |
 | azureUseManagedIdentityExtension | bool | `false` | Whether to use Azure's managed identity extension for credentials. If using MSI, ensure subscription ID, resource group, and azure AKS cluster name are set. |
 | azureVMType | string | `"AKS"` | Azure VM type. |
-| cloudConfigPath | string | `"/etc/gce.conf"` | Configuration file for cloud provider. |
-| cloudProvider | string | `"aws"` | The cloud provider where the autoscaler runs. Currently only `gce`, `aws`, `azure` and `magnum` are supported. `aws` supported for AWS. `gce` for GCE. `azure` for Azure AKS. `magnum` for OpenStack Magnum. |
+| cloudConfigPath | string | `""` | Configuration file for cloud provider. |
+| cloudProvider | string | `"aws"` | The cloud provider where the autoscaler runs. Currently only `gce`, `aws`, `azure`, `magnum` and `clusterapi` are supported. `aws` supported for AWS. `gce` for GCE. `azure` for Azure AKS. `magnum` for OpenStack Magnum, `clusterapi` for Cluster API. |
+| clusterAPICloudConfigPath | string | `"/etc/kubernetes/mgmt-kubeconfig"` | Path to kubeconfig for connecting to Cluster API Management Cluster, only used if `clusterAPIMode=kubeconfig-kubeconfig or incluster-kubeconfig` |
+| clusterAPIConfigMapsNamespace | string | `""` | Namespace on the workload cluster to store Leader election and status configmaps |
+| clusterAPIKubeconfigSecret | string | `""` | Secret containing kubeconfig for connecting to Cluster API managed workloadcluster Required if `cloudProvider=clusterapi` and `clusterAPIMode=kubeconfig-kubeconfig,kubeconfig-incluster or incluster-kubeconfig` |
+| clusterAPIMode | string | `"incluster-incluster"` | Cluster API mode, see https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/clusterapi/README.md#connecting-cluster-autoscaler-to-cluster-api-management-and-workload-clusters Syntax: workloadClusterMode-ManagementClusterMode for `kubeconfig-kubeconfig`, `incluster-kubeconfig` and `single-kubeconfig` you always must mount the external kubeconfig using either `extraVolumeSecrets` or `extraMounts` and `extraVolumes` if you dont set `clusterAPIKubeconfigSecret`and thus use an in-cluster config or want to use a non capi generated kubeconfig you must do so for the workload kubeconfig as well |
+| clusterAPIWorkloadKubeconfigPath | string | `"/etc/kubernetes/value"` | Path to kubeconfig for connecting to Cluster API managed workloadcluster, only used if `clusterAPIMode=kubeconfig-kubeconfig or kubeconfig-incluster` |
 | containerSecurityContext | object | `{}` | [Security context for container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) |
+| deployment.annotations | object | `{}` | Annotations to add to the Deployment object. |
 | dnsPolicy | string | `"ClusterFirst"` | Defaults to `ClusterFirst`. Valid values are: `ClusterFirstWithHostNet`, `ClusterFirst`, `Default` or `None`. If autoscaler does not depend on cluster DNS, recommended to set this to `Default`. |
 | envFromConfigMap | string | `""` | ConfigMap name to use as envFrom. |
 | envFromSecret | string | `""` | Secret name to use as envFrom. |
-| expanderPriorities | object | `{}` | The expanderPriorities is used if `extraArgs.expander` is set to `priority` and expanderPriorities is also set with the priorities. If `extraArgs.expander` is set to `priority`, then expanderPriorities is used to define cluster-autoscaler-priority-expander priorities. See: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/expander/priority/readme.md |
+| expanderPriorities | object | `{}` | The expanderPriorities is used if `extraArgs.expander` contains `priority` and expanderPriorities is also set with the priorities. If `extraArgs.expander` contains `priority`, then expanderPriorities is used to define cluster-autoscaler-priority-expander priorities. See: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/expander/priority/readme.md |
 | extraArgs | object | `{"logtostderr":true,"stderrthreshold":"info","v":4}` | Additional container arguments. Refer to https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-are-the-parameters-to-ca for the full list of cluster autoscaler parameters and their default values. Everything after the first _ will be ignored allowing the use of multi-string arguments. |
 | extraEnv | object | `{}` | Additional container environment variables. |
 | extraEnvConfigMaps | object | `{}` | Additional container environment variables from ConfigMaps. |
@@ -373,7 +329,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.pullSecrets | list | `[]` | Image pull secrets |
 | image.repository | string | `"k8s.gcr.io/autoscaling/cluster-autoscaler"` | Image repository |
-| image.tag | string | `"v1.21.1"` | Image tag |
+| image.tag | string | `"v1.23.0"` | Image tag |
 | kubeTargetVersionOverride | string | `""` | Allow overriding the `.Capabilities.KubeVersion.GitVersion` check. Useful for `helm template` commands. |
 | magnumCABundlePath | string | `"/etc/kubernetes/ca-bundle.crt"` | Path to the host's CA bundle, from `ca-file` in the cloud-config file. |
 | magnumClusterName | string | `""` | Cluster name or ID in Magnum. Required if `cloudProvider=magnum` and not setting `autoDiscovery.clusterName`. |
@@ -389,6 +345,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | prometheusRule.interval | string | `nil` | How often rules in the group are evaluated (falls back to `global.evaluation_interval` if not set). |
 | prometheusRule.namespace | string | `"monitoring"` | Namespace which Prometheus is running in. |
 | prometheusRule.rules | list | `[]` | Rules spec template (see https://github.com/prometheus-operator/prometheus-operator/blob/master/Documentation/api.md#rule). |
+| rbac.clusterScoped | bool | `true` | if set to false will only provision RBAC to alter resources in the current namespace. Most useful for Cluster-API |
 | rbac.create | bool | `true` | If `true`, create and use RBAC resources. |
 | rbac.pspEnabled | bool | `false` | If `true`, creates and uses RBAC resources required in the cluster with [Pod Security Policies](https://kubernetes.io/docs/concepts/policy/pod-security-policy/) enabled. Must be used with `rbac.create` set to `true`. |
 | rbac.serviceAccount.annotations | object | `{}` | Additional Service Account annotations. |
@@ -399,6 +356,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | resources | object | `{}` | Pod resource requests and limits. |
 | securityContext | object | `{}` | [Security context for pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) |
 | service.annotations | object | `{}` | Annotations to add to service |
+| service.create | bool | `true` | If `true`, a Service will be created. |
 | service.externalIPs | list | `[]` | List of IP addresses at which the service is available. Ref: https://kubernetes.io/docs/user-guide/services/#external-ips. |
 | service.labels | object | `{}` | Labels to add to service |
 | service.loadBalancerIP | string | `""` | IP address to assign to load balancer (if supported). |
@@ -406,8 +364,10 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | service.portName | string | `"http"` | Name for service port. |
 | service.servicePort | int | `8085` | Service port to expose. |
 | service.type | string | `"ClusterIP"` | Type of service to create. |
+| serviceMonitor.annotations | object | `{}` | Annotations to add to service monitor |
 | serviceMonitor.enabled | bool | `false` | If true, creates a Prometheus Operator ServiceMonitor. |
 | serviceMonitor.interval | string | `"10s"` | Interval that Prometheus scrapes Cluster Autoscaler metrics. |
+| serviceMonitor.metricRelabelings | object | `{}` | MetricRelabelConfigs to apply to samples before ingestion. |
 | serviceMonitor.namespace | string | `"monitoring"` | Namespace which Prometheus is running in. |
 | serviceMonitor.path | string | `"/metrics"` | The path to scrape for metrics; autoscaler exposes `/metrics` (this is standard) |
 | serviceMonitor.selector | object | `{"release":"prometheus-operator"}` | Default to kube-prometheus install (CoreOS recommended), but should be set according to Prometheus install. |
