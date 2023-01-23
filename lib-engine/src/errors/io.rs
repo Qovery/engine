@@ -201,6 +201,7 @@ pub enum Tag {
     AwsSdkListRdsInstances,
     AwsSdkListElasticacheClusters,
     AwsSdkListDocDbClusters,
+    AwsCloudwatchRetentionConfigurationError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -403,6 +404,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::AwsSdkListRdsInstances => Tag::AwsSdkListRdsInstances,
             errors::Tag::AwsSdkListElasticacheClusters => Tag::AwsSdkListElasticacheClusters,
             errors::Tag::AwsSdkListDocDbClusters => Tag::AwsSdkListDocDbClusters,
+            errors::Tag::AwsCloudwatchRetentionConfigurationError => Tag::AwsCloudwatchRetentionConfigurationError,
         }
     }
 }

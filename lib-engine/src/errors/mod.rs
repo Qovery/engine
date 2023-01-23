@@ -879,6 +879,8 @@ pub enum Tag {
     AwsSdkListElasticacheClusters,
     /// AwsSdkListDocDbClusters: represents an error while trying to list AWS Document DB clusters
     AwsSdkListDocDbClusters,
+    /// AwsCloudwatchRetentionConfigurationError: represents a bad configuration while trying to configure AWS Cloudwatch retention
+    AwsCloudwatchRetentionConfigurationError,
 }
 
 impl Tag {
@@ -1247,6 +1249,34 @@ impl EngineError {
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected instance type is not supported, please check provider's documentation.".to_string()),
+        )
+    }
+
+    /// Creates new error for bad cloudwatch retention configuration
+    ///
+    /// Qovery doesn't allow the requested instance type.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `retention_requested`: Raw requested instance type u32.
+    /// * `allowed_retentions`: Raw requested instance type Vec<u32>.
+    pub fn new_aws_wrong_cloudwatch_retention_configuration(
+        event_details: EventDetails,
+        retention_requested: u32,
+        possible_retentions: &[u32],
+    ) -> EngineError {
+        let message = format!(
+            "aws.vpc.cloudwatch_eks_logs_retention_days asked is {}, AWS requieres one of: {:?}",
+            retention_requested, possible_retentions
+        );
+        EngineError::new(
+            event_details,
+            Tag::AwsCloudwatchRetentionConfigurationError,
+            message,
+            None,
+            Some(Url::parse("https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/WhatIsCloudWatchLogs.html").expect("Error while trying to parse error link helper for `Tag::AwsCloudwatchRetentionConfigurationError`, URL is not valid.")),
+            None,
         )
     }
 

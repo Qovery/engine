@@ -546,6 +546,22 @@ pub struct Resources {
     pub running_nodes: u32,
 }
 
+pub fn event_details(
+    cloud_provider: &dyn CloudProvider,
+    kubernetes_id: Uuid,
+    kubernetes_name: String,
+    context: &Context,
+) -> EventDetails {
+    EventDetails::new(
+        Some(cloud_provider.kind()),
+        QoveryIdentifier::new(*context.organization_long_id()),
+        QoveryIdentifier::new(*context.cluster_long_id()),
+        context.execution_id().to_string(),
+        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+        Transmitter::Kubernetes(kubernetes_id, kubernetes_name),
+    )
+}
+
 pub fn uninstall_cert_manager<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
