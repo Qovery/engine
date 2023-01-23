@@ -7,8 +7,14 @@ use crate::cmd::kubectl::{
     kubectl_exec_with_output,
 };
 use crate::errors::{CommandError, ErrorMessageVerbosity};
+use crate::runtime::block_on;
 use crate::utilities::calculate_hash;
-use kube::Client;
+use k8s_openapi::api::core::v1::Pod;
+use kube::core::params::ListParams;
+use kube::{Api, Client, ResourceExt};
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::OperationResult;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -283,9 +289,63 @@ impl CoreDNSConfigChartChecker {
 }
 
 impl ChartInstallationChecker for CoreDNSConfigChartChecker {
-    fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO(ENG-1367): Implement chart install verification
-        Ok(())
+    fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
+        // This is a verify basic check: make sure CoreDNS pod is running
+        let pods: Api<Pod> = Api::all(kube_client.clone());
+
+        let result = retry::retry(Fixed::from_millis(5000).take(5), || {
+            match block_on(pods.list(&ListParams::default().labels("k8s-app=kube-dns"))) {
+                Ok(coredns_pods_result) => {
+                    let mut err = Ok(());
+
+                    // if no pods are there, then there is an issue
+                    if coredns_pods_result.items.is_empty() {
+                        err = Err(CommandError::new("No CoreDNS pods running".to_string(), None, None));
+                    }
+
+                    // check all CoreDNS pods are running properly
+                    for coredns_pod in coredns_pods_result.items {
+                        let mut pod_status_string = "UNKNOWN".to_string();
+                        if let Some(pod_status) = &coredns_pod.status {
+                            if let Some(pod_container_phase) = &pod_status.phase {
+                                pod_status_string = pod_container_phase.trim().to_uppercase();
+                                if pod_status_string == "RUNNING" {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        err = Err(CommandError::new(
+                            format!(
+                                "CoreDNS pod `{}` is not running but `{}`",
+                                &coredns_pod.name(),
+                                pod_status_string
+                            ),
+                            None,
+                            None,
+                        ));
+                    }
+
+                    match err {
+                        Ok(_) => OperationResult::Ok(()),
+                        Err(e) => OperationResult::Retry(e),
+                    }
+                }
+                Err(e) => OperationResult::Retry(CommandError::new(
+                    "Error trying to get CoreDNS pods".to_string(),
+                    Some(e.to_string()),
+                    None,
+                )),
+            }
+        });
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(retry::Error::Internal(e)) => {
+                Err(CommandError::new("Error trying to get CoreDNS pods".to_string(), Some(e), None))
+            }
+        }
     }
 }
 

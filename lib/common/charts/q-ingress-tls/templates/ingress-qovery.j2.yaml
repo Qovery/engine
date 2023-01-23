@@ -22,7 +22,7 @@ metadata:
     {%- else %}
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
-    {%- if custom_domains|length > 0 %}
+    {%- if client_custom_domains|length > 0 %}
     cert-manager.io/issuer: {{ id }}
     {%- else %}
     cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
@@ -59,10 +59,10 @@ metadata:
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
 spec:
   tls:
-    {%- if custom_domains|length > 0 %}
+    {%- if client_custom_domains|length > 0 %}
     - secretName: "router-tls-{{ id }}"
       hosts:
-        {%- for domain in custom_domains %}
+        {%- for domain in client_custom_domains %}
         - "{{ domain.domain }}"
         {%- endfor %}
     {%- endif %}
