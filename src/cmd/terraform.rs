@@ -1141,7 +1141,7 @@ pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Resul
 
     // check if migration has already been done
     for line in res {
-        if line.contains("eks_cloudwatch_log_groups") {
+        if line.contains("cloudwatch_eks_log_groups") {
             return Ok(vec![]);
         }
     }
@@ -1149,7 +1149,7 @@ pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Resul
     let cloudwatch_format = format!("/aws/eks/{}/cluster", cluster_name);
     let terraform_migrate_args = vec![
         "import",
-        "aws_cloudwatch_log_group.eks_cloudwatch_log_groups",
+        "aws_cloudwatch_log_group.cloudwatch_eks_log_groups",
         &cloudwatch_format,
     ];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {

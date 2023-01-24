@@ -4,7 +4,7 @@ use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
+    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -58,10 +58,11 @@ impl EC2 {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
+        advanced_settings.validate(event_details.clone())?;
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {

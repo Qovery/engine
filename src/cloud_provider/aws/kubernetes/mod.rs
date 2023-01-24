@@ -16,7 +16,6 @@ use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
-use uuid::Uuid;
 
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
@@ -46,9 +45,8 @@ use crate::cmd::terraform::{
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::QoveryIdentifier;
 use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::s3::S3;
@@ -174,22 +172,6 @@ pub struct UserNetworkConfig {
 }
 
 impl ProviderOptions for Options {}
-
-fn event_details(
-    cloud_provider: &dyn CloudProvider,
-    kubernetes_id: Uuid,
-    kubernetes_name: String,
-    context: &Context,
-) -> EventDetails {
-    EventDetails::new(
-        Some(cloud_provider.kind()),
-        QoveryIdentifier::new(*context.organization_long_id()),
-        QoveryIdentifier::new(*context.cluster_long_id()),
-        context.execution_id().to_string(),
-        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-        Transmitter::Kubernetes(kubernetes_id, kubernetes_name),
-    )
-}
 
 fn aws_zones(
     zones: Vec<String>,
@@ -402,7 +384,7 @@ fn tera_context(
 
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
-    let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", kubernetes.id());
+    let cloudwatch_eks_log_group = format!("/aws/eks/{}/cluster", kubernetes.cluster_name());
     let eks_cidr_subnet = options.eks_cidr_subnet.clone();
     let ec2_cidr_subnet = options.ec2_cidr_subnet.clone();
 
@@ -562,7 +544,11 @@ fn tera_context(
     context.insert("eks_workers_version", &kubernetes.version());
     context.insert("ec2_masters_version", &kubernetes.version());
     context.insert("ec2_workers_version", &kubernetes.version());
-    context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
+    context.insert("cloudwatch_eks_log_group", &cloudwatch_eks_log_group);
+    context.insert(
+        "aws_cloudwatch_eks_logs_retention_days",
+        &kubernetes.advanced_settings().aws_cloudwatch_eks_logs_retention_days,
+    );
     context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
     context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
 

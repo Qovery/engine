@@ -66,10 +66,16 @@ variable "eks_access_cidr_blocks" {
   type        = list(string)
 }
 
-variable "eks_cloudwatch_log_group" {
+variable "cloudwatch_eks_log_groups" {
   description = "AWS cloudwatch log group for EKS"
-  default = "qovery-{{ kubernetes_cluster_id }}"
+  default = "{{ cloudwatch_eks_log_group }}"
   type = string
+}
+
+variable "aws_cloudwatch_eks_logs_retention_days" {
+  description = "AWS cloudwatch log group retention in days"
+  default = {{ aws_cloudwatch_eks_logs_retention_days }}
+  type = number
 }
 
 # S3 bucket name

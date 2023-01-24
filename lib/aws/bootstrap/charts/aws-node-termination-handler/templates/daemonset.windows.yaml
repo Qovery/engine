@@ -81,6 +81,8 @@ spec:
               value: {{ .Values.logLevel | quote }}
             - name: JSON_LOGGING
               value: {{ .Values.jsonLogging | quote }}
+            - name: LOG_FORMAT_VERSION
+              value: {{ .Values.logFormatVersion | quote }}
             - name: ENABLE_PROMETHEUS_SERVER
               value: {{ .Values.enablePrometheusServer | quote }}
             - name: PROMETHEUS_SERVER_PORT

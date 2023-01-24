@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v1.10.1
+    version: v1.11.0
     repo_name: jetstack
   - name: external-dns
     repo_name: bitnami
@@ -21,7 +21,7 @@ charts:
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
-    version: 0.19.3
+    version: 0.20.3
   - name: aws-vpc-cni
     repo_name: aws
     dest: aws-bootstrap
@@ -33,7 +33,7 @@ charts:
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap
-    version: 9.13.1
+    version: 9.21.1
   - name: registry-creds
     repo_name: kir4h
     dest: aws-ec2-bootstrap

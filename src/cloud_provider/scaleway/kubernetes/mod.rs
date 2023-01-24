@@ -5,8 +5,8 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind, Kubernetes,
-    KubernetesUpgradeStatus, ProviderOptions,
+    self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
+    Kubernetes, KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -161,6 +161,7 @@ impl Kapsule {
         advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
+        let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
 
         for node_group in &nodes_groups {
             match ScwInstancesType::from_str(node_group.instance_type.as_str()) {
@@ -204,6 +205,8 @@ impl Kapsule {
                 }
             }
         }
+
+        advanced_settings.validate(event_details)?;
 
         let object_storage = ScalewayOS::new(
             context.clone(),

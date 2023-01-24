@@ -78,6 +78,8 @@ spec:
               value: {{ .Values.logLevel | quote }}
             - name: JSON_LOGGING
               value: {{ .Values.jsonLogging | quote }}
+            - name: LOG_FORMAT_VERSION
+              value: {{ .Values.logFormatVersion | quote }}
             - name: ENABLE_PROMETHEUS_SERVER
               value: {{ .Values.enablePrometheusServer | quote }}
             - name: PROMETHEUS_SERVER_PORT
@@ -144,14 +146,6 @@ spec:
             - name: WEBHOOK_TEMPLATE
               value: {{ .Values.webhookTemplate | quote }}
             {{- end }}
-            - name: ENABLE_SPOT_INTERRUPTION_DRAINING
-              value: {{ .Values.enableSpotInterruptionDraining | quote }}
-            - name: ENABLE_SCHEDULED_EVENT_DRAINING
-              value: {{ .Values.enableScheduledEventDraining | quote }}
-            - name: ENABLE_REBALANCE_MONITORING
-              value: {{ .Values.enableRebalanceMonitoring | quote }}
-            - name: ENABLE_REBALANCE_DRAINING
-              value: {{ .Values.enableRebalanceDraining | quote }}
             - name: ENABLE_SQS_TERMINATION_DRAINING
               value: "true"
             {{- with .Values.awsRegion }}

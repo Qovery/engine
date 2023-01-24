@@ -5,7 +5,8 @@ use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
+    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
+    KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::service::Action;
@@ -75,7 +76,7 @@ impl EKS {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
@@ -85,6 +86,7 @@ impl EKS {
             logger.log(EngineEvent::Error(*e.clone(), None));
             return Err(Box::new(*e));
         };
+        advanced_settings.validate(event_details)?;
 
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
 

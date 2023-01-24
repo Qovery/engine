@@ -1,6 +1,10 @@
-use crate::cloud_provider::Kind as KindModel;
+use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
+    0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
+];
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -36,6 +40,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
     pub aws_vpc_flow_logs_retention_days: u32,
+    #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
+    pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
 }
@@ -51,6 +57,60 @@ impl Default for ClusterAdvancedSettings {
             cloud_provider_container_registry_tags: HashMap::new(),
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
+            aws_cloudwatch_eks_logs_retention_days: 90,
         }
+    }
+}
+
+impl ClusterAdvancedSettings {
+    pub fn validate(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
+        // AWS Cloudwatch EKS logs retention days
+        if !validate_aws_cloudwatch_eks_logs_retention_days(self.aws_cloudwatch_eks_logs_retention_days) {
+            return Err(Box::new(EngineError::new_aws_wrong_cloudwatch_retention_configuration(
+                event_details,
+                self.aws_cloudwatch_eks_logs_retention_days,
+                CLOUDWATCH_RETENTION_DAYS,
+            )));
+        }
+
+        Ok(())
+    }
+}
+
+// AWS
+fn validate_aws_cloudwatch_eks_logs_retention_days(days: u32) -> bool {
+    CLOUDWATCH_RETENTION_DAYS.contains(&days)
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use crate::{
+        cloud_provider::io::validate_aws_cloudwatch_eks_logs_retention_days,
+        events::{EventDetails, Stage, Transmitter},
+        io_models::QoveryIdentifier,
+    };
+
+    #[test]
+    // avoid human mistakes and check defaults values at compile time
+    fn ensure_cluster_advanced_settings_defaults_are_valid() {
+        let settings = super::ClusterAdvancedSettings::default();
+        let event_details = EventDetails::new(
+            None,
+            QoveryIdentifier::default(),
+            QoveryIdentifier::default(),
+            "".to_string(),
+            Stage::Infrastructure(crate::events::InfrastructureStep::ValidateApiInput),
+            Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
+        );
+        assert!(settings.validate(event_details).is_ok());
+    }
+
+    #[test]
+    fn cloudwatch_eks_log_retention_days() {
+        assert!(validate_aws_cloudwatch_eks_logs_retention_days(0));
+        assert!(validate_aws_cloudwatch_eks_logs_retention_days(90));
+        assert!(!validate_aws_cloudwatch_eks_logs_retention_days(2));
     }
 }
