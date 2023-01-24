@@ -66,9 +66,9 @@ variable "eks_access_cidr_blocks" {
   type        = list(string)
 }
 
-variable "eks_cloudwatch_log_group" {
+variable "cloudwatch_eks_log_groups" {
   description = "AWS cloudwatch log group for EKS"
-  default = "{{ eks_cloudwatch_log_group }}"
+  default = "{{ cloudwatch_eks_log_group }}"
   type = string
 }
 
