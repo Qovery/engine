@@ -22,7 +22,6 @@ bitflags! {
         const APPLY = 0b00001000;
         const DESTROY = 0b00010000;
         const STATE_LIST = 0b00100000;
-        const MIGRATE_CLOUDWATCH = 0b01000000;
     }
 }
 
@@ -1083,109 +1082,6 @@ fn terraform_run(actions: TerraformAction, root_dir: &str, dry_run: bool) -> Res
 
     Ok(output)
 }
-
-// Temporary ugly stuffs to migrate cloudwatch logs, and being deleted after migration
-
-fn terraform_run_cloudwatch_migration(
-    actions: TerraformAction,
-    root_dir: &str,
-    dry_run: bool,
-    cluster_name: &str,
-) -> Result<Vec<String>, TerraformError> {
-    let mut output = vec![];
-
-    if actions.contains(TerraformAction::INIT) {
-        output.extend(terraform_init(root_dir)?);
-    }
-
-    if actions.contains(TerraformAction::VALIDATE) {
-        output.extend(terraform_validate(root_dir)?);
-    }
-
-    if actions.contains(TerraformAction::STATE_LIST) {
-        output.extend(terraform_state_list(root_dir)?);
-    }
-
-    if actions.contains(TerraformAction::MIGRATE_CLOUDWATCH) {
-        output.extend(terraform_migrate_cloudwatch(root_dir, cluster_name)?);
-    }
-
-    if actions.contains(TerraformAction::APPLY) && !dry_run {
-        output.extend(terraform_apply(root_dir)?);
-    }
-
-    if actions.contains(TerraformAction::DESTROY) && !dry_run {
-        output.extend(terraform_destroy(root_dir)?);
-    }
-
-    Ok(output)
-}
-
-pub fn terraform_migrate_cloudwatch(root_dir: &str, cluster_name: &str) -> Result<Vec<String>, TerraformError> {
-    // get terraform state list output
-    let terraform_args = vec!["state", "list"];
-    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        match terraform_exec(root_dir, terraform_args.clone()) {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => {
-                // Error while trying to run terraform state list, retrying...
-                OperationResult::Retry(err)
-            }
-        }
-    });
-
-    let res = match result {
-        Ok(output) => output,
-        _ => return Ok(vec![]),
-    };
-
-    // check if migration has already been done
-    for line in res {
-        if line.contains("cloudwatch_eks_log_groups") {
-            return Ok(vec![]);
-        }
-    }
-
-    let cloudwatch_format = format!("/aws/eks/{}/cluster", cluster_name);
-    let terraform_migrate_args = vec![
-        "import",
-        "aws_cloudwatch_log_group.cloudwatch_eks_log_groups",
-        &cloudwatch_format,
-    ];
-    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        match terraform_exec(root_dir, terraform_migrate_args.clone()) {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => {
-                // Error while trying to run terraform state list, retrying...
-                OperationResult::Retry(err)
-            }
-        }
-    });
-
-    match result {
-        Ok(output) => Ok(output),
-        _ => Ok(vec![]),
-    }
-}
-
-pub fn terraform_init_validate_migrate_cloudwatch_plan_apply(
-    root_dir: &str,
-    dry_run: bool,
-    cluster_name: &str,
-) -> Result<Vec<String>, TerraformError> {
-    // Terraform init, validate, plan and apply
-    terraform_run_cloudwatch_migration(
-        TerraformAction::INIT
-            | TerraformAction::VALIDATE
-            | TerraformAction::MIGRATE_CLOUDWATCH
-            | TerraformAction::APPLY,
-        root_dir,
-        dry_run,
-        cluster_name,
-    )
-}
-
-// End of temporary ugly migration
 
 pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<Vec<String>, TerraformError> {
     // Terraform init, validate, plan and apply
