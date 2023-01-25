@@ -888,6 +888,8 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_sticky_session() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -933,7 +935,11 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
             .routers
             .first()
             .unwrap()
-            .to_router_domain(infra_ctx.context(), true, "0.0.0.0/0".to_string(), infra_ctx.cloud_provider())
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::default(),
+                infra_ctx.cloud_provider(),
+            )
             .unwrap();
         let environment_domain = environment
             .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())

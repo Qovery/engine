@@ -267,6 +267,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             network_ingress_proxy_read_timeout_seconds: 9,
             network_ingress_proxy_buffer_size_kb: 10,
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+            network_ingress_denylist_source_range: "".to_string(),
+            network_ingress_basic_auth_env_var: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 11,
@@ -331,6 +333,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_proxy_read_timeout_seconds: 17,
             network_ingress_proxy_buffer_size_kb: 18,
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+            network_ingress_denylist_source_range: "".to_string(),
+            network_ingress_basic_auth_env_var: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Http,
             readiness_probe_http_get_path: "my_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 21,
@@ -435,7 +439,9 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
             custom_domain_check_enabled: true,
-            whitelist_source_range: "my_whitelist_source_range".to_string(),
+            whitelist_source_range: None,
+            denylist_source_range: None,
+            basic_auth: None,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
     )

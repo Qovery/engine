@@ -902,6 +902,8 @@ pub enum Tag {
     AwsSdkListDocDbClusters,
     /// AwsCloudwatchRetentionConfigurationError: represents a bad configuration while trying to configure AWS Cloudwatch retention
     AwsCloudwatchRetentionConfigurationError,
+    // Base64DecodeIssue: represents an error while trying to decode a base64 string
+    Base64DecodeIssue,
 }
 
 impl Tag {
@@ -3755,6 +3757,25 @@ impl EngineError {
             Some(raw_error),
             None,
             None,
+        )
+    }
+
+    /// Creates new error when trying base64 decode a string.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message_to_decode`: Expected string to decode or message to return to the user.
+    pub fn new_base64_decode_issue(event_details: EventDetails, message_to_decode: &str) -> EngineError {
+        let message = format!("Error while trying to decode a base64 string: {}", message_to_decode);
+
+        EngineError::new(
+            event_details,
+            Tag::Base64DecodeIssue,
+            message,
+            None,
+            None,
+            Some("Please contact Qovery support, this is a bug.".to_string()),
         )
     }
 
