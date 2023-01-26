@@ -44,6 +44,7 @@ prometheus:
   enabled: true
   prometheusSpec:
     serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
     retention: 90d
     retentionSize: "40GB"
     walCompression: true
