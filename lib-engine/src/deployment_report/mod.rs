@@ -12,6 +12,8 @@ pub mod logger;
 pub mod router;
 mod utils;
 
+const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
+
 // Object responsible to log the progress of a deployment
 // This object is going to live in his own thread and is responsible to
 // 1. Fetch information of the deployment
