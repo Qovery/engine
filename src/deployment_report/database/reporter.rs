@@ -2,7 +2,7 @@ use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::DeploymentReporter;
+use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use crate::models::database::DatabaseService;
 use crate::runtime::block_on;
@@ -10,6 +10,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::time::Instant;
 
 use uuid::Uuid;
 
@@ -116,7 +117,7 @@ impl DatabaseDeploymentReporter {
 
 impl DeploymentReporter for DatabaseDeploymentReporter {
     type DeploymentResult = ();
-    type DeploymentState = String;
+    type DeploymentState = (String, Instant);
     type Logger = EnvLogger;
 
     fn logger(&self) -> &Self::Logger {
@@ -124,7 +125,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     }
 
     fn new_state(&self) -> Self::DeploymentState {
-        String::new()
+        ("".to_string(), Instant::now())
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
@@ -187,13 +188,13 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         // Managed database don't make any progress, so display the message from time to time
-        if !self.is_managed && &rendered_report == last_report {
+        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
             return;
         }
-        *last_report = rendered_report;
+        *last_report = (rendered_report, Instant::now());
 
         // Send it to user
-        for line in last_report.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.0.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }

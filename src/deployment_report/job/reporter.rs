@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::DeploymentReporter;
+use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
@@ -20,8 +20,6 @@ use itertools::Itertools;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-
-const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
 pub(super) enum JobType {
     CronJob(String),

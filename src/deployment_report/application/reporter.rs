@@ -2,7 +2,7 @@ use crate::cloud_provider::service::{Action, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::application::renderer::render_app_deployment_report;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::DeploymentReporter;
+use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use crate::errors::Tag::HelmDeployTimeout;
 use crate::models::application::ApplicationService;
@@ -13,10 +13,8 @@ use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use uuid::Uuid;
-
-const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
 pub struct ApplicationDeploymentReporter<T> {
     long_id: Uuid,
