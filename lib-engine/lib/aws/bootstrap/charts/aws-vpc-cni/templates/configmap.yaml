@@ -1,0 +1,10 @@
+{{- if .Values.cniConfig.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aws-vpc-cni.fullname" . }}
+  labels:
+{{ include "aws-vpc-cni.labels" . | indent 4 }}
+data:
+  10-aws.conflist: {{ .Values.cniConfig.fileContents | b64enc }}
+{{- end -}}
