@@ -3312,7 +3312,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `safe_error`: Raw error message.
     pub fn new_nodegroup_delete_any_nodegroup_error(event_details: EventDetails, raw_error: String) -> EngineError {
-        let message = format!("Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider iterface and manually fix issues.\n{}", raw_error);
+        let message = format!("Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider interface and manually fix issues.\n{}", raw_error);
         EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
     }
 
