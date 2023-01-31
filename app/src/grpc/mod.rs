@@ -11,6 +11,7 @@ use tower::ServiceBuilder;
 use uuid::Uuid;
 
 pub mod engine;
+pub mod qovery_api;
 
 const GRPC_CLUSTER_ID_HEADER_NAME: &str = "x-qovery-cluster";
 

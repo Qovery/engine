@@ -47,6 +47,7 @@ use crate::deployment_manager::DeploymentManager;
 use crate::grpc::engine::{
     engine_message_rx, engine_message_tx, DeploymentInfo, DeploymentRequest, DeploymentType, EngineMessageTx,
 };
+use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::grpc::GrpcEngineClient;
 use crate::logger::composite_logger::CompositeLogger;
 use crate::models::TaskSelector;
@@ -79,6 +80,7 @@ fn to_engine_task(
     docker_tcp_socket: &Option<Url>,
     docker: Docker,
     task_selector: &TaskSelector,
+    grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
 ) -> Result<Box<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
@@ -96,6 +98,10 @@ fn to_engine_task(
             }
             TaskSelector::Environment(_) => {
                 let request = serde_json::from_slice::<EnvironmentEngineRequest>(msg.as_bytes())?;
+                let qovery_api = Box::new(GrpcCoreServiceApi::new(
+                    request.deployment_jwt_token.clone(),
+                    grpc_client.clone(),
+                ));
                 Ok(Box::new(EnvironmentTask::new(
                     request,
                     workspace_root_dir.to_string(),
@@ -103,6 +109,7 @@ fn to_engine_task(
                     docker_tcp_socket.clone(),
                     docker,
                     logger,
+                    qovery_api,
                 )))
             }
         }
@@ -267,18 +274,21 @@ pub fn main() -> io::Result<()> {
                 .expect("Engine can't connect to gateway");
 
             let mut current_deployment = DeploymentManager::new();
-            let payload_to_engine_task =
-                |payload: String, logger: Box<dyn Logger>| -> Result<Box<dyn Task>, serde_json::Error> {
-                    to_engine_task(
-                        payload,
-                        &workspace_root_dir,
-                        &lib_root_dir,
-                        &docker_host,
-                        docker.clone(),
-                        &task_selector,
-                        logger,
-                    )
-                };
+            let payload_to_engine_task = |payload: String,
+                                          grpc_client: &GrpcEngineClient,
+                                          logger: Box<dyn Logger>|
+             -> Result<Box<dyn Task>, serde_json::Error> {
+                to_engine_task(
+                    payload,
+                    &workspace_root_dir,
+                    &lib_root_dir,
+                    &docker_host,
+                    docker.clone(),
+                    &task_selector,
+                    grpc_client,
+                    logger,
+                )
+            };
 
             // Execute deployment until we are asked to be shutdown and no deployment is on-going
             while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
@@ -343,7 +353,7 @@ async fn fetch_new_deployment(
 async fn fetch_and_exec_deployments(
     engine_client: &mut GrpcEngineClient,
     mut current_deployment: &mut DeploymentManager,
-    to_engine_task: impl Fn(String, Box<dyn Logger>) -> Result<Box<dyn Task>, serde_json::Error>,
+    to_engine_task: impl Fn(String, &GrpcEngineClient, Box<dyn Logger>) -> Result<Box<dyn Task>, serde_json::Error>,
     logger: Box<dyn Logger>,
     task_selector: TaskSelector,
 ) -> Result<(), anyhow::Error> {
@@ -438,6 +448,7 @@ async fn fetch_and_exec_deployments(
                             info!("Received new deployment task: {}", payload);
                             let task = to_engine_task(
                                 payload,
+                                engine_client,
                                 logger_for_task.clone_dyn(),
                             );
 

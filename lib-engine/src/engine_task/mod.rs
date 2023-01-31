@@ -7,6 +7,7 @@ use crate::object_storage::ObjectStorage;
 use chrono::{DateTime, Utc};
 use std::borrow::Cow;
 
+pub mod core_service_api;
 pub mod environment_task;
 pub mod infrastructure_task;
 

@@ -72,7 +72,10 @@ fn should_increase_app_storage_size() {
             resized_app.total_ram_in_mib,
             resized_app.min_instances,
             resized_app.max_instances,
-            resized_app.to_build(infra_ctx.container_registry().registry_info()),
+            resized_app.to_build(
+                infra_ctx.container_registry().registry_info(),
+                infra_ctx.context().qovery_api.clone(),
+            ),
             storages,
             envs,
             BTreeSet::default(),

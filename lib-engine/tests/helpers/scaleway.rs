@@ -19,6 +19,7 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::engine_task::core_service_api::FakeCoreServiceApi;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
@@ -256,7 +257,7 @@ pub fn clean_environments(
         for build in env
             .applications
             .iter()
-            .map(|a| a.to_build(registry_url))
+            .map(|a| a.to_build(registry_url, Arc::new(Box::new(FakeCoreServiceApi {}))))
             .collect::<Vec<Build>>()
         {
             let _ = container_registry_client.delete_image(&build.image);

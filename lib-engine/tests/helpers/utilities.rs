@@ -15,6 +15,7 @@ use std::io::{Error, ErrorKind};
 use passwords::PasswordGenerator;
 
 use std::env;
+use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::helpers::scaleway::{
@@ -36,6 +37,7 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::engine_task::core_service_api::FakeCoreServiceApi;
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
@@ -85,6 +87,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
         enabled_features,
         Option::from(metadata),
         docker,
+        Arc::new(Box::new(FakeCoreServiceApi {})),
         EventDetails::new(
             None,
             QoveryIdentifier::new(organization_id),

@@ -1,10 +1,14 @@
-use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
+use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::EnvironmentVariable;
+use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
+use crate::engine_task::core_service_api::QoveryApi;
 use crate::io_models::context::Context;
-use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile};
+use crate::io_models::{
+    fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
+};
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
@@ -16,6 +20,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::str;
+use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -312,7 +317,7 @@ impl Application {
         }
     }
 
-    pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Build {
+    pub fn to_build(&self, registry_url: &ContainerRegistryInfo, qovery_api: Arc<Box<dyn QoveryApi>>) -> Build {
         // Get passphrase and public key if provided by the user
         let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars);
 
@@ -326,10 +331,12 @@ impl Application {
         let mut build = Build {
             git_repository: GitRepository {
                 url,
-                credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
-                    login: credentials.login.clone(),
-                    password: credentials.access_token.clone(),
-                }),
+                get_credentials: if self.git_credentials.is_none() {
+                    None
+                } else {
+                    let id = self.long_id;
+                    Some(Box::new(move || fetch_git_token(&**qovery_api, ServiceType::Application, &id)))
+                },
                 ssh_keys,
                 commit_id: self.commit_id.clone(),
                 dockerfile_path,

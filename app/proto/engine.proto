@@ -14,6 +14,9 @@ service Engine {
   rpc IsAuthorized(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc GetNewDeployment(DeploymentRequest) returns (DeploymentInfo) {}
   rpc ExecDeployment(stream EngineMessageTx) returns (stream EngineMessageRx) {}
+
+  rpc GetServiceVersion(ServiceVersionRequest) returns (ServiceVersionResponse) {}
+  rpc GetGitToken(GitTokenRequest) returns (GitTokenResponse) {}
 }
 
 enum DeploymentType {
@@ -50,4 +53,41 @@ message EngineMessageRx {
     int32 deployment_cancel = 3;
     bool terminated = 4;
   }
+}
+
+
+enum EngineServiceType {
+  UNKNOWN = 0; // empty value in proto map to 0
+  SHELL_AGENT = 1;
+  CLUSTER_AGENT = 2;
+  ENGINE = 3;
+}
+
+message ServiceVersionRequest {
+  string jwt_token = 1;
+  EngineServiceType service_type = 2;
+}
+
+message ServiceVersionResponse {
+  string version = 1;
+}
+
+
+
+enum ServiceType {
+  UNKNOWN_SRV = 0; // empty value in proto map to 0
+  APPLICATION = 1;
+  JOB = 2;
+}
+
+message GitTokenRequest {
+  string jwt_token = 1;
+  ServiceType service_type = 2;
+  string service_id = 3;
+}
+
+message GitTokenResponse {
+  string login = 1;
+  string accessToken = 2;
+  string expiredAt = 3;
 }

@@ -381,11 +381,15 @@ impl BuildPlatform for LocalDocker {
                 }
             }
 
-            if let Some(Credentials { login, password }) = &build.git_repository.credentials {
-                creds.push((
+            match &build.git_repository.credentials() {
+                None => {}
+                Some(Err(err)) => {
+                    logger.send_warning(format!("🗝️ Unable to get credentials for git repository: {}", err))
+                }
+                Some(Ok(Credentials { login, password })) => creds.push((
                     CredentialType::USER_PASS_PLAINTEXT,
                     Cred::userpass_plaintext(login, password).unwrap(),
-                ));
+                )),
             }
 
             creds

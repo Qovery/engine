@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use prometheus::{self, Encoder, IntCounter, TextEncoder};
+use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Mutex;
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 use warp::reply::WithHeader;
@@ -9,14 +9,12 @@ use warp::Filter;
 
 static MAX_THREADS: usize = 2;
 lazy_static! {
-    static ref TOKIO_RUNTIME: Mutex<Runtime> = Mutex::new({
-        Builder::new_multi_thread()
-            .thread_name("tokio-warp-http")
-            .max_blocking_threads(MAX_THREADS)
-            .enable_all()
-            .build()
-            .unwrap()
-    });
+    static ref TOKIO_RUNTIME: Runtime = Builder::new_multi_thread()
+        .thread_name("tokio-main-binary")
+        .max_blocking_threads(MAX_THREADS)
+        .enable_all()
+        .build()
+        .unwrap();
     static ref METRICS_PROMETHEUS_NB_CALLS: IntCounter = register_int_counter!(
         "prometheus_endpoint_nb_call",
         "Number of time since startup that the prometheus endpoint got called"
@@ -37,15 +35,19 @@ pub fn launch(listen_on: &str) -> JoinHandle<()> {
     });
 
     info!("Starting tokio runtime");
-    TOKIO_RUNTIME.lock().unwrap().spawn(launch_warp(listen_on))
+    TOKIO_RUNTIME.spawn(launch_warp(listen_on))
 }
 
-pub fn launch_task<R: Send + 'static>(future: impl std::future::Future<Output = R> + Send + 'static) -> JoinHandle<R> {
-    TOKIO_RUNTIME.lock().unwrap().spawn(future)
+pub fn launch_task<R: Send + 'static>(future: impl Future<Output = R> + Send + 'static) -> JoinHandle<R> {
+    TOKIO_RUNTIME.spawn(future)
 }
 
 pub fn launch_blocking_task<R: Send + 'static>(task: impl FnOnce() -> R + Send + 'static) -> JoinHandle<R> {
-    TOKIO_RUNTIME.lock().unwrap().spawn_blocking(task)
+    TOKIO_RUNTIME.spawn_blocking(task)
+}
+
+pub fn block_on<R>(task: impl Future<Output = R>) -> R {
+    TOKIO_RUNTIME.block_on(task)
 }
 
 /// Start warp webserver
