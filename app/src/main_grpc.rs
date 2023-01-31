@@ -465,8 +465,13 @@ async fn fetch_and_exec_deployments(
                                         Stage::Environment(EnvironmentStep::Cancelled),
                                         Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
                                     );
-                                    let message = EventMessage::new_from_safe("Engine received an invalid deployment request".to_string());
-                                    let err = EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details), Some(message));
+                                    let msg = "Engine received an invalid deployment request";
+                                    let message = EventMessage::new_from_safe(msg.to_string());
+                                    let err = EngineEvent::Error(EngineError::new_invalid_engine_payload(event_details.clone(), msg), Some(message));
+                                    let _ = engine_tx.send(err);
+
+                                    let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Terminated));
+                                    let err = EngineEvent::Info(event_details, EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None));
                                     let _ = engine_tx.send(err);
                                 }
                             }
