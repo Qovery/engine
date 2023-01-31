@@ -75,12 +75,14 @@ impl KubernetesError {
 #[derive(Clone, Debug, PartialEq)]
 pub enum KubernetesAddon {
     Cni,
+    EbsCsi,
 }
 
 impl Display for KubernetesAddon {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             KubernetesAddon::Cni => "cni",
+            KubernetesAddon::EbsCsi => "ebs-csi",
         })
     }
 }

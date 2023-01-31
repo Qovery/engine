@@ -17,6 +17,7 @@ use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
@@ -145,6 +146,8 @@ pub struct Options {
     pub user_network_config: Option<UserNetworkConfig>,
     #[serde(default)]
     pub aws_addon_cni_version_override: Option<String>,
+    #[serde(default)]
+    pub aws_addon_ebs_csi_version_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -610,8 +613,17 @@ fn tera_context(
         "eks_addon_vpc_cni",
         &(match &options.aws_addon_cni_version_override {
             None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version())
-                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details, e))?,
+                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details.clone(), e))?,
             Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+        }),
+    );
+    // EBS CSI
+    context.insert(
+        "eks_addon_ebs_csi",
+        &(match &options.aws_addon_ebs_csi_version_override {
+            None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version())
+                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details, e))?,
+            Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
         }),
     );
 
