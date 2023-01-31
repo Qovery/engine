@@ -11,6 +11,7 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
+use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::command;
 use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
@@ -518,6 +519,24 @@ impl From<TerraformError> for CommandError {
     }
 }
 
+impl From<KubernetesError> for CommandError {
+    fn from(kubernetes_error: KubernetesError) -> Self {
+        match kubernetes_error {
+            KubernetesError::AddonUnSupportedKubernetesVersion {
+                ref kubernetes_version,
+                ref addon,
+            } => CommandError::new(
+                format!(
+                    "Kubernetes addon `{}` doesn't support kubernetes version `{}`.",
+                    addon, kubernetes_version
+                ),
+                Some(kubernetes_error.to_string()),
+                None,
+            ),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
@@ -652,6 +671,8 @@ pub enum Tag {
     K8sCannotApplyFromFile,
     /// K8sCannotGetStatefulset: represents an error while to get statefulset.
     K8sCannotGetStatefulset,
+    // K8sAddonVersionNotSupported: represents an error while the given kubernetes addon has no support for the given kubernetes version.
+    K8sAddonVersionNotSupported,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -2355,6 +2376,26 @@ impl EngineError {
             Some(raw_k8s_error),
             None,
             None,
+        )
+    }
+
+    /// Creates new error for kubernetes addon not supporting the given kubernetes version.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_addon_version_not_supported(
+        event_details: EventDetails,
+        raw_k8s_error: KubernetesError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sAddonVersionNotSupported,
+            raw_k8s_error.to_safe_message(),
+            Some(raw_k8s_error.into()),
+            None,
+            Some("Addon has to be updated manually, please reach out Qovery team.".to_string()),
         )
     }
 

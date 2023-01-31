@@ -286,6 +286,7 @@ impl Cluster<AWS, Options> for AWS {
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             user_ssh_keys: vec![],
             user_network_config: None,
+            aws_addon_cni_version_override: None,
         }
     }
 }

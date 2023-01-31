@@ -14,16 +14,6 @@ use crate::errors::CommandError;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::BufReader;
-use std::iter::FromIterator;
-use std::path::Path;
-
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::{
-    is_cni_old_version_installed, AwsVpcCniChart,
-};
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -40,6 +30,12 @@ use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::models::third_parties::LetsEncryptConfig;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::BufReader;
+use std::iter::FromIterator;
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
@@ -87,7 +83,7 @@ pub fn eks_aws_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    kubernetes_config: &Path,
+    _kubernetes_config: &Path,
     envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let content_file = match File::open(qovery_terraform_config_file) {
@@ -132,13 +128,7 @@ pub fn eks_aws_helm_charts(
     .to_common_helm_chart();
 
     // AWS CNI
-    let aws_vpc_cni_chart = AwsVpcCniChart::new(
-        "1.1.21".to_string(),
-        chart_prefix_path,
-        chart_config_prerequisites.region.to_string(),
-        is_cni_old_version_installed(kubernetes_config, envs, HelmChartNamespaces::KubeSystem)?,
-        chart_config_prerequisites.cluster_name.to_string(),
-    );
+    // TODO(benjaminch): Handle migration from old CNI install to AWS plugin CNI
 
     // AWS IAM EKS user mapper
     let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
@@ -562,7 +552,6 @@ pub fn eks_aws_helm_charts(
         Box::new(aws_iam_eks_user_mapper),
         Box::new(q_storage_class),
         Box::new(coredns_config),
-        Box::new(aws_vpc_cni_chart),
         Box::new(aws_ui_view),
     ];
 
