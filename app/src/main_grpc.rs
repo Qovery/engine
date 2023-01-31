@@ -87,6 +87,10 @@ fn to_engine_task(
         match task_selector {
             TaskSelector::Infrastructure(_) => {
                 let request = serde_json::from_slice::<InfrastructureEngineRequest>(msg.as_bytes())?;
+                let qovery_api = Box::new(GrpcCoreServiceApi::new(
+                    request.deployment_jwt_token.clone(),
+                    grpc_client.clone(),
+                ));
                 Ok(Box::new(InfrastructureTask::new(
                     request,
                     workspace_root_dir.to_string(),
@@ -94,6 +98,7 @@ fn to_engine_task(
                     docker_tcp_socket.clone(),
                     docker,
                     logger,
+                    qovery_api,
                 )))
             }
             TaskSelector::Environment(_) => {

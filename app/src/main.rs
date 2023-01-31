@@ -19,9 +19,9 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd::docker::Docker;
-use qovery_engine::engine_task::core_service_api::FakeCoreServiceApi;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
+use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::engine_task::Task;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::logger::{Logger, StdIoLogger};
@@ -186,7 +186,7 @@ pub fn using_json_path_parameter(
                 docker_host,
                 docker,
                 logger,
-                Box::new(FakeCoreServiceApi {}),
+                Box::new(FakeQoveryApi {}),
             ))
         }
         TaskSelector::Infrastructure(_) => {
@@ -204,6 +204,7 @@ pub fn using_json_path_parameter(
                 docker_host,
                 docker,
                 logger,
+                Box::new(FakeQoveryApi {}),
             ))
         }
     };

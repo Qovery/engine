@@ -3,7 +3,7 @@ use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
-use crate::engine_task::core_service_api::QoveryApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;

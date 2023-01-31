@@ -2,7 +2,7 @@ use super::Task;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
-use crate::engine_task::core_service_api::FakeCoreServiceApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::EngineError;
 use crate::events::Stage::{self, Infrastructure};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
@@ -23,6 +23,7 @@ pub struct InfrastructureTask {
     docker: Docker,
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
+    qovery_api: Arc<Box<dyn QoveryApi>>,
 }
 
 impl InfrastructureTask {
@@ -33,6 +34,7 @@ impl InfrastructureTask {
         docker_host: Option<Url>,
         docker: Docker,
         logger: Box<dyn Logger>,
+        qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
         InfrastructureTask {
             workspace_root_dir,
@@ -41,6 +43,7 @@ impl InfrastructureTask {
             docker,
             request,
             logger,
+            qovery_api: Arc::new(qovery_api),
         }
     }
 
@@ -56,7 +59,7 @@ impl InfrastructureTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
-            Arc::new(Box::new(FakeCoreServiceApi {})),
+            self.qovery_api.clone(),
             self.request.event_details(),
         )
     }
