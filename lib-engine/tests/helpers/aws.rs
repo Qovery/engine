@@ -287,6 +287,7 @@ impl Cluster<AWS, Options> for AWS {
             user_ssh_keys: vec![],
             user_network_config: None,
             aws_addon_cni_version_override: None,
+            aws_addon_ebs_csi_version_override: None,
         }
     }
 }
