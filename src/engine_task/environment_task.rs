@@ -11,6 +11,7 @@ use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
+use crate::engine_task::core_service_api::QoveryApi;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
@@ -35,6 +36,7 @@ pub struct EnvironmentTask {
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
+    qovery_api: Arc<Box<dyn QoveryApi>>,
 }
 
 impl EnvironmentTask {
@@ -45,6 +47,7 @@ impl EnvironmentTask {
         docker_host: Option<Url>,
         docker: Docker,
         logger: Box<dyn Logger>,
+        qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
         EnvironmentTask {
             workspace_root_dir,
@@ -54,6 +57,7 @@ impl EnvironmentTask {
             request,
             logger,
             cancel_requested: Arc::new(AtomicBool::from(false)),
+            qovery_api: Arc::new(qovery_api),
         }
     }
 
@@ -69,6 +73,7 @@ impl EnvironmentTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.qovery_api.clone(),
             self.request.event_details(),
         )
     }

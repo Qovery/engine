@@ -1,9 +1,11 @@
 use crate::cmd::docker::Docker;
+use crate::engine_task::core_service_api::QoveryApi;
 use crate::events::{EventDetails, Transmitter};
 use crate::utilities::to_short_id;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
 
@@ -21,6 +23,7 @@ pub struct Context {
     features: Vec<Features>,
     metadata: Option<Metadata>,
     pub docker: Docker,
+    pub qovery_api: Arc<Box<dyn QoveryApi>>,
     event_details: EventDetails,
 }
 
@@ -36,6 +39,7 @@ impl Context {
         features: Vec<Features>,
         metadata: Option<Metadata>,
         docker: Docker,
+        qovery_api: Arc<Box<dyn QoveryApi>>,
         event_details: EventDetails,
     ) -> Self {
         Context {
@@ -51,6 +55,7 @@ impl Context {
             features,
             metadata,
             docker,
+            qovery_api,
             event_details,
         }
     }

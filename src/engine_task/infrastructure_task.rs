@@ -2,6 +2,7 @@ use super::Task;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
+use crate::engine_task::core_service_api::FakeCoreServiceApi;
 use crate::errors::EngineError;
 use crate::events::Stage::{self, Infrastructure};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
@@ -11,10 +12,10 @@ use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::transaction::{Transaction, TransactionResult};
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 use std::{env, fs};
 use url::Url;
 
-#[derive(Clone)]
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -55,6 +56,7 @@ impl InfrastructureTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            Arc::new(Box::new(FakeCoreServiceApi {})),
             self.request.event_details(),
         )
     }

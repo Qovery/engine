@@ -1,6 +1,8 @@
-use crate::build_platform::SshKey;
+use crate::build_platform::{Credentials, SshKey};
 use crate::cloud_provider;
 use crate::cloud_provider::service;
+use crate::cloud_provider::service::ServiceType;
+use crate::engine_task::core_service_api::QoveryApi;
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -161,4 +163,23 @@ pub fn normalize_root_and_dockerfile_path(
     });
 
     (root_path, dockerfile_path)
+}
+
+pub fn fetch_git_token(
+    qovery_api: &dyn QoveryApi,
+    service_type: ServiceType,
+    service_id: &Uuid,
+) -> anyhow::Result<Credentials> {
+    let creds = match qovery_api.git_token(service_type, service_id) {
+        Ok(creds) => creds,
+        Err(err) => {
+            error!("Unable to get git credentials for {:?}({}): {}", service_type, service_id, err);
+            return Err(err);
+        }
+    };
+
+    Ok(Credentials {
+        login: creds.login,
+        password: creds.access_token,
+    })
 }

@@ -4,7 +4,7 @@ use crate::helpers::utilities::{context_for_resource, generate_id, get_svc_name,
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Application, Port, Protocol, Storage, StorageType};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -162,11 +162,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![
                     Storage {
                         id: to_short_id(&storage_1_id),

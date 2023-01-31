@@ -1,11 +1,15 @@
-use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
+use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
+use crate::engine_task::core_service_api::QoveryApi;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile};
+use crate::io_models::{
+    fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
+};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
@@ -15,6 +19,7 @@ use crate::models::types::{AWSEc2, AWS, SCW};
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -168,7 +173,7 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Option<Build> {
+    pub fn to_build(&self, registry_url: &ContainerRegistryInfo, qovery_api: Arc<Box<dyn QoveryApi>>) -> Option<Build> {
         let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
             JobSource::Docker {
                 git_url,
@@ -197,10 +202,12 @@ impl Job {
         let mut build = Build {
             git_repository: GitRepository {
                 url,
-                credentials: git_credentials.as_ref().map(|credentials| Credentials {
-                    login: credentials.login.clone(),
-                    password: credentials.access_token.clone(),
-                }),
+                get_credentials: if git_credentials.is_none() {
+                    None
+                } else {
+                    let id = self.long_id;
+                    Some(Box::new(move || fetch_git_token(&**qovery_api, ServiceType::Job, &id)))
+                },
                 ssh_keys,
                 commit_id: commit_id.clone(),
                 dockerfile_path,
@@ -253,7 +260,8 @@ impl Job {
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
-                let build = match self.to_build(default_container_registry.registry_info()) {
+                let build = match self.to_build(default_container_registry.registry_info(), context.qovery_api.clone())
+                {
                     Some(build) => Ok(build),
                     None => Err(JobError::InvalidConfig(
                         "Cannot convert docker JobSoure to Build source".to_string(),

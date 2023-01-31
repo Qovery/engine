@@ -20,7 +20,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
 
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol};
+use qovery_engine::io_models::application::{Application, Port, Protocol};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
@@ -215,11 +215,7 @@ pub fn environment_3_apps_3_databases(
                 buildpack_language: None,
                 root_path: "/".to_string(),
                 action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![],
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
@@ -255,11 +251,7 @@ pub fn environment_3_apps_3_databases(
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![],
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name_2.clone()),
@@ -295,11 +287,7 @@ pub fn environment_3_apps_3_databases(
                 buildpack_language: None,
                 action: Action::Create,
                 root_path: String::from("/"),
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![],
                 environment_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode("false"),
@@ -426,11 +414,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
+            git_credentials: None,
             storage: vec![],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
@@ -470,11 +454,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
+            git_credentials: None,
             storage: vec![],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
