@@ -17,6 +17,7 @@ use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
 };
@@ -56,6 +57,7 @@ use crate::{cmd, secret_manager};
 
 use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
 
+mod addons;
 pub mod ec2;
 mod ec2_helm_charts;
 pub mod eks;
@@ -141,6 +143,8 @@ pub struct Options {
     pub tls_email_report: String,
     #[serde(default)]
     pub user_network_config: Option<UserNetworkConfig>,
+    #[serde(default)]
+    pub aws_addon_cni_version_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -469,7 +473,10 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
+                        EngineError::new_missing_required_env_variable(
+                            event_details.clone(),
+                            "VAULT_SECRET_ID".to_string(),
+                        ),
                         None,
                     )),
                 }
@@ -595,6 +602,17 @@ fn tera_context(
     context.insert(
         "resource_expiration_in_seconds",
         &kubernetes.advanced_settings().pleco_resources_ttl,
+    );
+
+    // EKS Addons
+    // CNI
+    context.insert(
+        "eks_addon_vpc_cni",
+        &(match &options.aws_addon_cni_version_override {
+            None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version())
+                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details, e))?,
+            Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+        }),
     );
 
     Ok(context)

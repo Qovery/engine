@@ -50,6 +50,41 @@ use super::models::NodeGroupsWithDesiredState;
 
 pub trait ProviderOptions {}
 
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum KubernetesError {
+    /// Triggered if an addon version is not supporting the given kubernetes version
+    #[error("Addon `{addon}` doesn't support kubernetes version `{kubernetes_version}`.")]
+    AddonUnSupportedKubernetesVersion {
+        kubernetes_version: String,
+        addon: KubernetesAddon,
+    },
+}
+
+impl KubernetesError {
+    /// Returns safe Kubernetes error message part (not full error message).
+    pub fn to_safe_message(&self) -> String {
+        match self {
+            KubernetesError::AddonUnSupportedKubernetesVersion {
+                kubernetes_version,
+                addon,
+            } => format!("Addon `{addon}` doesn't support kubernetes version `{kubernetes_version}`."),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum KubernetesAddon {
+    Cni,
+}
+
+impl Display for KubernetesAddon {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            KubernetesAddon::Cni => "cni",
+        })
+    }
+}
+
 pub trait Kubernetes {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
