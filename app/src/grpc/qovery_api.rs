@@ -6,6 +6,9 @@ use chrono::DateTime;
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::engine_task::core_service_api::{EngineServiceType, QoveryApi};
 use qovery_engine::io_models::application::GitCredentials;
+use std::future::Future;
+use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub struct GrpcCoreServiceApi {
@@ -19,9 +22,32 @@ impl GrpcCoreServiceApi {
     }
 }
 
+fn with_max_retry<T, F, Fut>(f: F, max_retry: usize) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    let mut retry = 0;
+    let mut retry_delay = Duration::from_secs(0);
+    loop {
+        match block_on(f()) {
+            Ok(v) => return Ok(v),
+            Err(err) => {
+                error!("retrying due to error: {:?}", err);
+                if retry > max_retry {
+                    return Err(err);
+                }
+                retry += 1;
+                thread::sleep(retry_delay);
+                retry_delay += Duration::from_secs(1);
+            }
+        }
+    }
+}
+
 impl QoveryApi for GrpcCoreServiceApi {
     fn service_version(&self, service_type: EngineServiceType) -> anyhow::Result<String> {
-        let call = async {
+        let call = || async {
             info!("Getting service version for {:?}", service_type);
             let response = self
                 .client
@@ -41,11 +67,11 @@ impl QoveryApi for GrpcCoreServiceApi {
             Ok(response.version)
         };
 
-        block_on(call)
+        with_max_retry(call, 5)
     }
 
     fn git_token(&self, service_type: ServiceType, service_id: &Uuid) -> anyhow::Result<GitCredentials> {
-        let call = async {
+        let call = || async {
             info!("Fetching git token for service type: {:?}({})", service_type, service_id);
             let response = self
                 .client
@@ -77,6 +103,6 @@ impl QoveryApi for GrpcCoreServiceApi {
             })
         };
 
-        block_on(call)
+        with_max_retry(call, 5)
     }
 }
