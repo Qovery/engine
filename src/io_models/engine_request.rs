@@ -40,6 +40,7 @@ pub struct EngineRequest<T> {
     pub id: String,
     pub organization_id: String,
     pub organization_long_id: Uuid,
+    pub deployment_jwt_token: String,
     pub created_at: DateTime<Utc>,
     pub action: Action,
     pub features: Vec<Features>,

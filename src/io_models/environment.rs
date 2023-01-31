@@ -56,7 +56,7 @@ impl EnvironmentRequest {
         for app in &self.applications {
             match app.clone().to_application_domain(
                 context,
-                app.to_build(container_registry.registry_info()),
+                app.to_build(container_registry.registry_info(), context.qovery_api.clone()),
                 cloud_provider,
             ) {
                 Ok(app) => applications.push(app),

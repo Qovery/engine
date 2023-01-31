@@ -116,12 +116,17 @@ pub struct SshKey {
 
 pub struct GitRepository {
     pub url: Url,
-    pub credentials: Option<Credentials>,
+    pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials>>>,
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<PathBuf>,
     pub root_path: PathBuf,
     pub buildpack_language: Option<String>,
+}
+impl GitRepository {
+    fn credentials(&self) -> Option<anyhow::Result<Credentials>> {
+        self.get_credentials.as_ref().map(|f| f())
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

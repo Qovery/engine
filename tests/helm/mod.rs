@@ -2,7 +2,7 @@ use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
 use chrono::Utc;
-use qovery_engine::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
+use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::{
     kubernetes::eks::EKS,
     regions::{AwsRegion, AwsZones},
@@ -217,10 +217,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         Build {
             git_repository: GitRepository {
                 url: Url::parse("https://my_git_url.com").unwrap(),
-                credentials: Some(Credentials {
-                    login: "my_git_login".to_string(),
-                    password: "my_git_password".to_string(),
-                }),
+                get_credentials: None,
                 ssh_keys: vec![SshKey {
                     private_key: "my_private_ssh_key".to_string(),
                     passphrase: Some("my_ssh_passphrase".to_string()),

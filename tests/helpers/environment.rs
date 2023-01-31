@@ -3,7 +3,7 @@ use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{
-    AdvancedSettingsProbeType, Application, ApplicationAdvancedSettings, GitCredentials, Port, Protocol,
+    AdvancedSettingsProbeType, Application, ApplicationAdvancedSettings, Port, Protocol,
 };
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
@@ -47,11 +47,7 @@ pub fn working_environment(
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
+            git_credentials: None,
             storage: vec![],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
@@ -187,11 +183,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![],
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
@@ -227,11 +219,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
+                git_credentials: None,
                 storage: vec![],
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name),
@@ -328,11 +316,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
+            git_credentials: None,
             storage: vec![],
             environment_vars: btreemap! {
                 "ECHO_TEXT".to_string() => base64::encode("42"),
@@ -406,11 +390,7 @@ pub fn environment_only_http_server(
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
+            git_credentials: None,
             storage: vec![],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
