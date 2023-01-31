@@ -132,11 +132,8 @@ pub struct Options {
     pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
-    pub engine_version_controller_token: String,
-    pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
-    pub discord_api_key: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
     pub user_ssh_keys: Vec<String>,
@@ -407,9 +404,6 @@ fn tera_context(
     context.insert("organization_id", kubernetes.cloud_provider().organization_id());
     context.insert("qovery_api_url", &qovery_api_url);
 
-    context.insert("engine_version_controller_token", &options.engine_version_controller_token);
-    context.insert("agent_version_controller_token", &options.agent_version_controller_token);
-
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
 
     context.insert("force_upgrade", &kubernetes.context().requires_forced_upgrade());
@@ -595,7 +589,6 @@ fn tera_context(
     // AWS support only 1 ssh key
     let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
     context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
-    context.insert("discord_api_key", options.discord_api_key.as_str());
 
     // Advanced settings
     context.insert(
@@ -1227,6 +1220,7 @@ fn create(
                 Some(&temp_dir),
                 kubeconfig_path,
                 &credentials_environment_variables,
+                &**kubernetes.context().qovery_api,
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
@@ -1272,6 +1266,7 @@ fn create(
                 Some(&temp_dir),
                 kubeconfig_path,
                 &credentials_environment_variables,
+                &**kubernetes.context().qovery_api,
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }

@@ -4,7 +4,7 @@ use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
-use crate::engine_task::core_service_api::QoveryApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::context::Context;
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
