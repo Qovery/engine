@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::{BufReader, Error};
 use std::path::Path;
 
+use std::collections::HashMap;
 use std::env;
 use std::{io, process};
 
@@ -21,7 +22,7 @@ use uuid::Uuid;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
-use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
+use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
 use qovery_engine::engine_task::Task;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::logger::{Logger, StdIoLogger};
@@ -31,6 +32,8 @@ use crate::logger::composite_logger::CompositeLogger;
 
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, check_versions_from};
+use reqwest::header;
+use serde::{Deserialize, Serialize};
 
 mod constants;
 mod custom_error;
@@ -204,11 +207,41 @@ pub fn using_json_path_parameter(
                 docker_host,
                 docker,
                 logger,
-                Box::new(FakeQoveryApi {}),
+                Box::new(StaticQoveryApi {
+                    versions: get_qovery_app_version("api.qovery.com").unwrap(),
+                }),
             ))
         }
     };
 
     task.run();
     Ok(())
+}
+
+pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
+    #[derive(Deserialize)]
+    struct QoveryServiceVersion {
+        version: String,
+    }
+
+    let mut headers = header::HeaderMap::new();
+    headers.insert("Content-Type", "application/json".parse().unwrap());
+    let http = reqwest::blocking::Client::new();
+
+    let services_version = vec![
+        (EngineServiceType::Engine, "ENGINE"),
+        (EngineServiceType::ShellAgent, "SHELL_AGENT"),
+        (EngineServiceType::ClusterAgent, "CLUSTER_AGENT"),
+    ]
+    .into_iter()
+    .flat_map(|(service_type, service_type_name)| {
+        let url = format!("https://{}/engine/serviceVersion?serviceType={}", api_fqdn, service_type_name);
+        info!("fetching version : {}", url);
+
+        let payload = http.get(url).headers(headers.clone()).send()?;
+        Result::<_, anyhow::Error>::Ok((service_type, payload.json::<QoveryServiceVersion>()?.version))
+    })
+    .collect();
+
+    Ok(services_version)
 }
