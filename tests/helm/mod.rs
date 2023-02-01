@@ -54,7 +54,7 @@ fn kubeconfig_path() -> PathBuf {
 }
 
 pub fn chart_path(temp_dir: &str, service_type: &str, chart_id: &Uuid, chart_name: &str) -> String {
-    format!("{}/{}/{}/{}", temp_dir, service_type, chart_id, chart_name)
+    format!("{temp_dir}/{service_type}/{chart_id}/{chart_name}")
 }
 
 pub struct TestInfo {
@@ -112,10 +112,10 @@ fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
         .get_temp_dir(test_env.event_details().clone())
         .expect("Unable to get temp dir");
     let short_id = to_short_id(kube.long_id());
-    let kubeconfig_dir_path = format!("{}/qovery-kubeconfigs-{}", temp_dir, short_id);
+    let kubeconfig_dir_path = format!("{temp_dir}/qovery-kubeconfigs-{short_id}");
     fs::create_dir(&kubeconfig_dir_path)
         .unwrap_or_else(|e| panic!("Unable to create directory {}: {}", &kubeconfig_dir_path, e));
-    let local_kubeconfig = format!("{}/qovery-kubeconfigs-{}/{}.yaml", temp_dir, short_id, short_id);
+    let local_kubeconfig = format!("{temp_dir}/qovery-kubeconfigs-{short_id}/{short_id}.yaml");
     let _ = fs::copy(kubeconfig_path(), &local_kubeconfig)
         .unwrap_or_else(|e| panic!("Unable to create file {}: {}", &local_kubeconfig, e));
 }
@@ -535,7 +535,7 @@ fn deployment_target<'a>(
 ) -> DeploymentTarget<'a> {
     create_fake_kubeconfig(test_kube, test_env);
     DeploymentTarget::new(infra_ctx, test_env, &|| false)
-        .unwrap_or_else(|e| panic!("Unable to create deployment target: {}", e))
+        .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 
 pub fn application_context() -> TestInfo {

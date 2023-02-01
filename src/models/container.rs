@@ -58,7 +58,7 @@ pub struct Container<T: CloudProvider> {
 }
 
 pub fn get_mirror_repository_name(service_id: &Uuid) -> String {
-    format!("qovery-mirror-{}", service_id)
+    format!("qovery-mirror-{service_id}")
 }
 
 // Here we define the common behavior among all providers
@@ -126,7 +126,7 @@ impl<T: CloudProvider> Container<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("containers/{}", long_id),
+            format!("containers/{long_id}"),
         )
         .map_err(|_| ContainerError::InvalidConfig("Can't create workspace directory".to_string()))?;
 

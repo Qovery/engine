@@ -625,7 +625,7 @@ where
             logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
-                    format!("Encountering issues while trying to get objects kind {}", object,),
+                    format!("Encountering issues while trying to get objects kind {object}",),
                     Some(e.message(ErrorMessageVerbosity::FullDetails)),
                 ),
             ));
@@ -640,7 +640,7 @@ where
                 Err(e) => {
                     logger.log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(format!("Failed to delete all {} objects, retrying...", object,), None),
+                        EventMessage::new(format!("Failed to delete all {object} objects, retrying...",), None),
                     ));
                     OperationResult::Retry(e)
                 }
@@ -1038,8 +1038,7 @@ fn check_kubernetes_upgrade_status(
             Some(node_type) => match node_type {
                 KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
                 KubernetesNodesType::Workers => format!(
-                    "Kubernetes workers upgrade required, need to update {}/{} nodes",
-                    non_up_to_date_workers, total_workers
+                    "Kubernetes workers upgrade required, need to update {non_up_to_date_workers}/{total_workers} nodes"
                 ),
             },
         }),
@@ -1116,7 +1115,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
     if upgrade_required.upgraded_required {
         let old = format!("{}.{}", deployed_version.major, deployed_minor_version);
         let new = format!("{}.{}", wished_version.major, wished_minor_version);
-        final_message = format!("Kubernetes cluster upgrade is required {} -> {} !!!", old, new);
+        final_message = format!("Kubernetes cluster upgrade is required {old} -> {new} !!!");
     }
     messages.push(final_message.as_str());
     upgrade_required.message = Some(messages.join(". "));

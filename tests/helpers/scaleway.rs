@@ -58,9 +58,9 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{random_id}").as_str(),
         Uuid::new_v4(),
-        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{random_id}").as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         ScwZone::from_str(

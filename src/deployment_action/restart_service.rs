@@ -59,7 +59,7 @@ impl DeploymentAction for RestartServiceAction {
 
             Ok(Err(kube_error)) => {
                 let command_error =
-                    CommandError::new("Cannot restart service".to_string(), Some(format!("{}", kube_error)), None);
+                    CommandError::new("Cannot restart service".to_string(), Some(format!("{kube_error}")), None);
                 return Err(Box::new(EngineError::new_cannot_restart_service(
                     self.event_details.clone(),
                     target.environment.namespace(),

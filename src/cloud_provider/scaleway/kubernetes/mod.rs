@@ -189,8 +189,7 @@ impl Kapsule {
                             ),
                             node_group.instance_type.as_str(),
                             CommandError::new_from_safe_message(format!(
-                                "`{}` instance type is not supported",
-                                instance_type
+                                "`{instance_type}` instance type is not supported"
                             )),
                         );
 
@@ -1254,8 +1253,7 @@ impl Kapsule {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!(
-                                    "Namespace `{}` deleted successfully.",
-                                    namespace_to_delete
+                                    "Namespace `{namespace_to_delete}` deleted successfully."
                                 )),
                             )),
                             Err(e) => {
@@ -1263,8 +1261,7 @@ impl Kapsule {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
-                                            "Can't delete the namespace `{}`",
-                                            namespace_to_delete
+                                            "Can't delete the namespace `{namespace_to_delete}`"
                                         )),
                                     ));
                                 }
@@ -1368,13 +1365,13 @@ impl Kapsule {
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
                         event_details.clone(),
-                        EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                        EventMessage::new_from_safe(format!("Namespace {qovery_namespace} is fully deleted")),
                     )),
                     Err(e) => {
                         if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
-                                EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
+                                EventMessage::new_from_safe(format!("Can't delete namespace {qovery_namespace}.")),
                             ))
                         }
                     }

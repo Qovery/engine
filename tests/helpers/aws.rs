@@ -95,7 +95,7 @@ impl Cluster<AWS, Options> for AWS {
         let container_registry = match kubernetes_kind {
             Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
             Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), localisation)),
-            _ => panic!("Invalid cluster kind {}", kubernetes_kind),
+            _ => panic!("Invalid cluster kind {kubernetes_kind}"),
         };
 
         // use LocalDocker
@@ -150,7 +150,7 @@ impl Cluster<AWS, Options> for AWS {
                 .expect("AWS region not supported"),
             "eu-west-1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
                 .expect("AWS region not supported"),
-            _ => panic!("Invalid cluster localisation {}", localisation),
+            _ => panic!("Invalid cluster localisation {localisation}"),
         };
 
         Box::new(AWS::new(

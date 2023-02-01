@@ -172,7 +172,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
                 self.logger
-                    .send_warning(format!("Error while retrieving deployment information: {}", err));
+                    .send_warning(format!("Error while retrieving deployment information: {err}"));
                 return;
             }
         };
@@ -182,7 +182,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
                 self.logger
-                    .send_progress(format!("Cannot render deployment status report. Please contact us: {}", err));
+                    .send_progress(format!("Cannot render deployment status report. Please contact us: {err}"));
                 return;
             }
         };

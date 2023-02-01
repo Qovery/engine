@@ -36,7 +36,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 
         // Deploy
         if let Err(err) = tx.create_kubernetes() {
-            panic!("{:?}", err)
+            panic!("{err:?}")
         }
 
         assert!(matches!(tx.commit(), TransactionResult::Ok));
@@ -76,7 +76,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
 
         // Destroy
         if let Err(err) = tx.delete_kubernetes() {
-            panic!("{:?}", err)
+            panic!("{err:?}")
         }
         let ret = tx.commit();
         assert!(matches!(ret, TransactionResult::Ok));

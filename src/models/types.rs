@@ -84,8 +84,7 @@ impl FromStr for VersionsNumber {
             }
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
-                    "please check the version you've sent ({}), it can't be checked",
-                    version
+                    "please check the version you've sent ({version}), it can't be checked"
                 )))
             }
         };

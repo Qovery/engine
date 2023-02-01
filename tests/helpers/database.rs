@@ -177,12 +177,7 @@ pub fn environment_3_apps_3_databases(
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_password(CONTAINER);
     let database_uri_mongo = format!(
-        "mongodb://{}:{}@{}:{}/{}",
-        database_username_mongo,
-        database_password_mongo,
-        database_host_mongo,
-        database_port_mongo,
-        database_db_name_mongo
+        "mongodb://{database_username_mongo}:{database_password_mongo}@{database_host_mongo}:{database_port_mongo}/{database_db_name_mongo}"
     );
     let version_mongo = "4.4";
 
@@ -287,7 +282,7 @@ pub fn environment_3_apps_3_databases(
                 name: app_name_3,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
-                dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
+                dockerfile_path: Some(format!("Dockerfile-{version_mongo}")),
                 command_args: vec![],
                 entrypoint: None,
                 buildpack_language: None,
@@ -601,7 +596,7 @@ pub fn test_db(
                 publicly_accessible: true,
                 protocol: Protocol::HTTP,
             }];
-            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+            app.dockerfile_path = Some(format!("Dockerfile-{version}"));
             app.command_args = vec![];
             app.entrypoint = None;
             app.environment_vars = db_infos.app_env_vars.clone();
@@ -687,7 +682,7 @@ pub fn test_db(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size.size())
                 ),
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
 
             match get_svc(infra_ctx, provider_kind, environment, secrets) {
@@ -702,7 +697,7 @@ pub fn test_db(
                         false => 0,
                     }
                 ),
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
         MANAGED => {
@@ -728,7 +723,7 @@ pub fn test_db(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
     }
@@ -962,9 +957,9 @@ pub fn test_pause_managed_db(
             match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                    format!("{}Gi", storage_size)
+                    format!("{storage_size}Gi")
                 ),
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
 
             match get_svc(infra_ctx, provider_kind, environment, secrets) {
@@ -982,7 +977,7 @@ pub fn test_pause_managed_db(
                         }
                     );
                 }
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
         MANAGED => {
@@ -1005,7 +1000,7 @@ pub fn test_pause_managed_db(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
     }
@@ -1089,7 +1084,7 @@ pub fn test_db_on_upgrade(
     let database_password = "uxoyf358jojkemj".to_string();
     let db_kind_str = db_kind.name().to_string();
     let db_id = "c2dn5so3dltod3s".to_string();
-    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_host = format!("{db_id}-{db_kind_str}");
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
@@ -1160,7 +1155,7 @@ pub fn test_db_on_upgrade(
                 publicly_accessible: true,
                 protocol: Protocol::HTTP,
             }];
-            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+            app.dockerfile_path = Some(format!("Dockerfile-{version}"));
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })
@@ -1229,9 +1224,9 @@ pub fn test_db_on_upgrade(
             match get_pvc(&infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                    format!("{}Gi", storage_size)
+                    format!("{storage_size}Gi")
                 ),
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
 
             match get_svc(&infra_ctx, provider_kind.clone(), environment, secrets) {
@@ -1246,7 +1241,7 @@ pub fn test_db_on_upgrade(
                         false => 0,
                     }
                 ),
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
         MANAGED => {
@@ -1268,7 +1263,7 @@ pub fn test_db_on_upgrade(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             };
         }
     }

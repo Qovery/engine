@@ -52,7 +52,7 @@ impl Environment {
 
         Environment {
             event_details,
-            namespace: format!("{}-{}", project_id, env_id),
+            namespace: format!("{project_id}-{env_id}"),
             id: env_id,
             long_id,
             project_id,

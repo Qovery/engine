@@ -22,12 +22,12 @@ fn test_delete_bucket() {
         let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
         let secrets = FuncTestsSecrets::new();
         let id = generate_id();
-        let name = format!("test-{}", id);
+        let name = format!("test-{id}");
         let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
         let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+            .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
 
         let aws_os = S3::new(
             context,
@@ -75,12 +75,12 @@ fn test_create_bucket() {
         let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
         let secrets = FuncTestsSecrets::new();
         let id = generate_id();
-        let name = format!("test-{}", id);
+        let name = format!("test-{id}");
         let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
         let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+            .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
 
         let aws_os = S3::new(
             context,
@@ -127,12 +127,12 @@ fn test_recreate_bucket() {
         let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
         let secrets = FuncTestsSecrets::new();
         let id = generate_id();
-        let name = format!("test-{}", id);
+        let name = format!("test-{id}");
         let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
         let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+            .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
 
         let aws_os = S3::new(
             context,
@@ -180,12 +180,12 @@ fn test_put_file() {
         let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
         let secrets = FuncTestsSecrets::new();
         let id = generate_id();
-        let name = format!("test-{}", id);
+        let name = format!("test-{id}");
         let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
         let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+            .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
 
         let aws_os = S3::new(
             context,
@@ -239,12 +239,12 @@ fn test_get_file() {
         let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
         let secrets = FuncTestsSecrets::new();
         let id = generate_id();
-        let name = format!("test-{}", id);
+        let name = format!("test-{id}");
         let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
         let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+            .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
 
         let aws_os = S3::new(
             context,
@@ -270,7 +270,7 @@ fn test_get_file() {
 
         aws_os
             .put(bucket_name.as_str(), object_key.as_str(), tempfile_path)
-            .unwrap_or_else(|_| panic!("error while putting file {} into bucket {}", tempfile_path, bucket_name));
+            .unwrap_or_else(|_| panic!("error while putting file {tempfile_path} into bucket {bucket_name}"));
 
         // compute:
         let result = aws_os.get(bucket_name.as_str(), object_key.as_str(), false);

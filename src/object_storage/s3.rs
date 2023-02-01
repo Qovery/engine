@@ -259,7 +259,7 @@ impl ObjectStorage for S3 {
             raw_error_message: err.to_string(),
         })?;
 
-        let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
+        let file_path = format!("{workspace_directory}/{bucket_name}/{object_key}");
 
         if use_cache {
             // does config file already exists?

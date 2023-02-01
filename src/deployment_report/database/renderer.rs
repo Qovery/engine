@@ -202,7 +202,7 @@ mod test {
 
         let ctx = tera::Context::from_serialize(render_ctx).unwrap();
         let rendered_report = get_tera_instance().render_str(CONTAINER_REPORT_TEMPLATE, &ctx).unwrap();
-        println!("{}", rendered_report);
+        println!("{rendered_report}");
 
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -266,7 +266,7 @@ mod test {
 
         let ctx = tera::Context::from_serialize(render_ctx).unwrap();
         let rendered_report = get_tera_instance().render_str(MANAGED_REPORT_TEMPLATE, &ctx).unwrap();
-        println!("{}", rendered_report);
+        println!("{rendered_report}");
 
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

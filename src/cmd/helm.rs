@@ -548,7 +548,7 @@ impl Helm {
 
             // Try do define/specify a bit more the message
             let stderr_msg: String = error_message.into_iter().collect();
-            let stderr_msg = format!("{}: {}", stderr_msg, err,);
+            let stderr_msg = format!("{stderr_msg}: {err}",);
 
             // If the helm command has been canceled by the user, propagate correctly the killed error
             match err {
@@ -933,7 +933,7 @@ mod tests {
             move || {
                 barrier.wait();
                 thread::sleep(Duration::from_millis(5000));
-                let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{}", chart_name)], &[]);
+                let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{chart_name}")], &[]);
                 let _ = cmd.exec();
             }
         });
@@ -984,7 +984,7 @@ mod tests {
             move || {
                 barrier.wait();
                 thread::sleep(Duration::from_millis(5000));
-                let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{}", chart_name)], &[]);
+                let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{chart_name}")], &[]);
                 let _ = cmd.exec();
             }
         });

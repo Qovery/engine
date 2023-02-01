@@ -157,7 +157,7 @@ impl ClusterSecretsAws {
             Ok(x) => Ok(x),
             Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
                 event_details,
-                CommandError::new("Vault secret couldn't be retrieved".to_string(), Some(format!("{}", e)), None),
+                CommandError::new("Vault secret couldn't be retrieved".to_string(), Some(format!("{e}")), None),
             ))),
         }
     }
@@ -197,7 +197,7 @@ impl ClusterSecretsAws {
                 event_details,
                 CommandError::new(
                     "Vault secret couldn't be created or updated".to_string(),
-                    Some(format!("{:?}", e)),
+                    Some(format!("{e:?}")),
                     None,
                 ),
             ))),
@@ -217,7 +217,7 @@ impl ClusterSecretsAws {
                 event_details,
                 CommandError::new(
                     "Vault secret couldn't be created or updated".to_string(),
-                    Some(format!("{:?}", e)),
+                    Some(format!("{e:?}")),
                     None,
                 ),
             ))),

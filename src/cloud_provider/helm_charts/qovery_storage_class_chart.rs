@@ -96,19 +96,18 @@ impl ChartInstallationChecker for QoveryStorageClassChartInstallationChecker {
         for required_storage_class in self.storage_types_to_be_checked_after_install.iter() {
             match block_on(
                 storage_classes
-                    .list(&ListParams::default().labels(format!("qovery-type={}", required_storage_class).as_str())),
+                    .list(&ListParams::default().labels(format!("qovery-type={required_storage_class}").as_str())),
             ) {
                 Ok(storage_classes_result) => {
                     if storage_classes_result.items.is_empty() {
                         return Err(CommandError::new_from_safe_message(format!(
-                            "Error: q-storage-class (qovery-type={}) is not set",
-                            required_storage_class
+                            "Error: q-storage-class (qovery-type={required_storage_class}) is not set"
                         )));
                     }
                 }
                 Err(e) => {
                     return Err(CommandError::new(
-                        format!("Error trying to get q-storage-class (qovery-type={})", required_storage_class),
+                        format!("Error trying to get q-storage-class (qovery-type={required_storage_class})"),
                         Some(e.to_string()),
                         None,
                     ))
@@ -154,7 +153,7 @@ mod tests {
         let values_file = std::fs::File::open(&chart_path);
 
         // verify:
-        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+        assert!(values_file.is_ok(), "Chart directory should exist: `{chart_path}`");
     }
 
     /// Makes sure chart values file exists.
@@ -181,7 +180,7 @@ mod tests {
         let values_file = std::fs::File::open(&chart_values_path);
 
         // verify:
-        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+        assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
     /// Make sure rust code doesn't set a value not declared inside values file.

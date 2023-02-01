@@ -421,8 +421,8 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
             _router.routes.clear();
 
             let cd = CustomDomain {
-                domain: format!("fake-custom-domain-{}.qovery.io", idx),
-                target_domain: format!("validation-domain-{}", idx),
+                domain: format!("fake-custom-domain-{idx}.qovery.io"),
+                target_domain: format!("validation-domain-{idx}"),
             };
 
             router.custom_domains = vec![cd];
@@ -511,7 +511,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         match get_pvc(&infra_ctx, Kind::Aws, environment, secrets) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
+                format!("{storage_size}Gi")
             ),
             Err(_) => panic!(),
         };
@@ -674,7 +674,7 @@ fn redeploy_same_app_with_ebs() {
         match get_pvc(&infra_ctx, Kind::Aws, environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
+                format!("{storage_size}Gi")
             ),
             Err(_) => panic!(),
         };
@@ -1444,10 +1444,7 @@ fn deploy_job_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!(
-                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
-                    json_output
-                ),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -1665,10 +1662,7 @@ fn build_and_deploy_job_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!(
-                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
-                    json_output
-                ),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -2085,7 +2079,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         .resources
                         .requests
                         .storage,
-                    format!("{}Gi", initial_storage_size)
+                    format!("{initial_storage_size}Gi")
                 );
                 assert_eq!(
                     pvcs.iter()
@@ -2095,7 +2089,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         .resources
                         .requests
                         .storage,
-                    format!("{}Gi", initial_storage_size)
+                    format!("{initial_storage_size}Gi")
                 );
             }
             Err(_) => panic!(),
@@ -2122,7 +2116,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         .resources
                         .requests
                         .storage,
-                    format!("{}Gi", resized_size)
+                    format!("{resized_size}Gi")
                 );
                 assert_eq!(
                     pvcs.iter()
@@ -2132,7 +2126,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         .resources
                         .requests
                         .storage,
-                    format!("{}Gi", initial_storage_size)
+                    format!("{initial_storage_size}Gi")
                 );
             }
             Err(_) => panic!(),

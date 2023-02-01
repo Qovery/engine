@@ -17,7 +17,7 @@ pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box
             cluster_id,
             secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set")
         ),
-        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain,),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{cluster_id}.{domain}",),
     });
     Box::new(Cloudflare::new(
         context.clone(),
@@ -38,7 +38,7 @@ pub fn dns_provider_qoverydns(context: &Context, cluster_domain: &ClusterDomain)
             cluster_id,
             secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set")
         ),
-        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain,),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{cluster_id}.{domain}",),
     });
     Box::new(QoveryDns::new(
         context.clone(),

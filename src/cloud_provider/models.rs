@@ -150,7 +150,7 @@ impl Display for KubernetesCpuResourceUnit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match &self {
-                KubernetesCpuResourceUnit::MilliCpu(v) => format!("{}m", v),
+                KubernetesCpuResourceUnit::MilliCpu(v) => format!("{v}m"),
             }
             .as_str(),
         )
@@ -176,10 +176,10 @@ impl Display for KubernetesMemoryResourceUnit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match &self {
-                KubernetesMemoryResourceUnit::MebiByte(v) => format!("{}Mi", v),
-                KubernetesMemoryResourceUnit::MegaByte(v) => format!("{}M", v),
-                KubernetesMemoryResourceUnit::GibiByte(v) => format!("{}Gi", v),
-                KubernetesMemoryResourceUnit::GigaByte(v) => format!("{}G", v),
+                KubernetesMemoryResourceUnit::MebiByte(v) => format!("{v}Mi"),
+                KubernetesMemoryResourceUnit::MegaByte(v) => format!("{v}M"),
+                KubernetesMemoryResourceUnit::GibiByte(v) => format!("{v}Gi"),
+                KubernetesMemoryResourceUnit::GigaByte(v) => format!("{v}G"),
             }
             .as_str(),
         )

@@ -116,7 +116,7 @@ fn await_resolve<R>(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name).replace('_', "-")
+    format!("{prefix}-{name}").replace('_', "-")
 }
 
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
@@ -143,8 +143,8 @@ pub enum TcpCheckSource<'a> {
 impl fmt::Display for TcpCheckSource<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TcpCheckSource::SocketAddr(x) => write!(f, "{}", x),
-            TcpCheckSource::DnsName(x) => write!(f, "{}", x),
+            TcpCheckSource::SocketAddr(x) => write!(f, "{x}"),
+            TcpCheckSource::DnsName(x) => write!(f, "{x}"),
         }
     }
 }
@@ -155,7 +155,7 @@ pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(),
     let ip = match address {
         TcpCheckSource::SocketAddr(x) => *x,
         TcpCheckSource::DnsName(x) => {
-            let address = format!("{}:{}", x, port);
+            let address = format!("{x}:{port}");
             match address.to_socket_addrs() {
                 Ok(x) => {
                     let ips: Vec<SocketAddr> = x.collect();
@@ -185,7 +185,7 @@ pub fn wait_until_port_is_open(
         Err(e) => {
             logger.log(EngineEvent::Info(
                 event_details.clone(),
-                EventMessage::new_from_safe(format!("{}:{} is still not ready: {:?}. retrying...", address, port, e)),
+                EventMessage::new_from_safe(format!("{address}:{port} is still not ready: {e:?}. retrying...")),
             ));
             OperationResult::Retry(e)
         }
@@ -208,7 +208,7 @@ pub fn print_action(
     event_details: EventDetails,
     logger: &dyn Logger,
 ) {
-    let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
+    let msg = format!("{cloud_provider_name}.{struct_name}.{fn_name} called for {item_name}");
     match fn_name.contains("error") {
         true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
         false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
@@ -234,7 +234,7 @@ pub fn are_pvcs_bound(
                             if phase.to_lowercase().as_str() != "bound" {
                                 return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
                                     event_details.clone(),
-                                    CommandError::new_from_safe_message(format!("Can't bound PVC {}", name)),
+                                    CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
                                     service.name(),
                                 )));
                             };

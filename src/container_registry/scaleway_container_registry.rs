@@ -53,7 +53,7 @@ impl ScalewayCR {
                 &secret_token,
                 zone.region().as_str(),
             )),
-            get_image_name: Box::new(move |img_name| format!("{}/{}", img_name, img_name)),
+            get_image_name: Box::new(move |img_name| format!("{img_name}/{img_name}")),
             get_repository_name: Box::new(|img_name| img_name.to_string()),
         };
 
@@ -276,7 +276,7 @@ impl ScalewayCR {
             format!(
                 r#"{{"auths":{{"rg.{}.scw.cloud":{{"auth":"{}"}}}}}}"#,
                 region,
-                base64::encode(format!("{}:{}", login, secret_token).as_bytes())
+                base64::encode(format!("{login}:{secret_token}").as_bytes())
             )
             .as_bytes(),
         )
