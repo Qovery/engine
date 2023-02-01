@@ -15,6 +15,7 @@ trap "exit 1" 10
 ARGS_NUM=$#
 PROC="$$"
 QOVERY_API="api.qovery.com"
+QOVERY_ADMIN_API="admin.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=lib-engine
 
@@ -243,12 +244,12 @@ function prod_release() { ## Release a new engine version with commit ID as tag 
 
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(generate_image_tag)
-  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
+  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
 }
 
 function get_release_ga() { ## Get globally available release version
   echo -e "Last defined GA version: "
-  curl -s -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga"  || exit 1
+  curl -s -H 'Content-Type: application/json' "https://${QOVERY_API}/engine/serviceVersion?serviceType=ENGINE"  || exit 1
 }
 
 function deploy_engines_infra() { ## Release GA to prod
