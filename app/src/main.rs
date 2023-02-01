@@ -33,7 +33,7 @@ use crate::logger::composite_logger::CompositeLogger;
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, check_versions_from};
 use reqwest::header;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 mod constants;
 mod custom_error;
@@ -46,7 +46,7 @@ pub fn generate_id() -> u32 {
 }
 
 pub fn main() -> io::Result<()> {
-    println!("{}", ASCII_BANNER);
+    println!("{ASCII_BANNER}");
 
     // Load env variable from .env file
     dotenv().ok();
@@ -55,7 +55,7 @@ pub fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .fmt_fields(
-            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{}: {:?}", field, value))
+            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}"))
                 .delimited(", "),
         )
         .with_ansi(true)
@@ -235,7 +235,7 @@ pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineSe
     ]
     .into_iter()
     .flat_map(|(service_type, service_type_name)| {
-        let url = format!("https://{}/engine/serviceVersion?serviceType={}", api_fqdn, service_type_name);
+        let url = format!("https://{api_fqdn}/engine/serviceVersion?serviceType={service_type_name}");
         info!("fetching version : {}", url);
 
         let payload = http.get(url).headers(headers.clone()).send()?;

@@ -205,7 +205,7 @@ fn start_stop_managed_database(
                 "aws",
                 &[
                     "rds",
-                    &format!("{}-db-instance", action),
+                    &format!("{action}-db-instance"),
                     "--db-instance-identifier",
                     db_id,
                 ],
@@ -218,7 +218,7 @@ fn start_stop_managed_database(
                 "aws",
                 &[
                     "docdb",
-                    &format!("{}-db-cluster", action),
+                    &format!("{action}-db-cluster"),
                     "--db-cluster-identifier",
                     db_id,
                 ],
@@ -385,8 +385,7 @@ where
             db.id.to_string(),
             db.db_type().to_string(),
             Some(CommandError::new_from_safe_message(format!(
-                "Timeout reached waiting for the database to be in {} state",
-                DB_READY_STATE
+                "Timeout reached waiting for the database to be in {DB_READY_STATE} state"
             ))),
         ))),
         // Error ;'(
@@ -592,8 +591,7 @@ where
                     Err(None) => Err(Box::new(EngineError::new_cannot_pause_managed_database(
                         event_details.clone(),
                         CommandError::new_from_safe_message(format!(
-                            "Timeout reached waiting for the database to be in {} state",
-                            DB_STOPPED_STATE
+                            "Timeout reached waiting for the database to be in {DB_STOPPED_STATE} state"
                         )),
                     ))),
                     // Error ;'(

@@ -334,7 +334,7 @@ mod test {
                 assert!(json.contains(r#"{"type":"infrastructure","step":"CreateError"}"#))
             }
             Err(e) => {
-                panic!("Panic ! Error: {}", e)
+                panic!("Panic ! Error: {e}")
             }
         }
     }

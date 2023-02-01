@@ -131,7 +131,7 @@ fn to_engine_task(
 }
 
 pub fn main() -> io::Result<()> {
-    println!("{}", ASCII_BANNER);
+    println!("{ASCII_BANNER}");
 
     // Load env variable from .env file
     dotenv().ok();
@@ -140,7 +140,7 @@ pub fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .fmt_fields(
-            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{}: {:?}", field, value))
+            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}"))
                 .delimited(", "),
         )
         .with_ansi(false)
@@ -159,7 +159,7 @@ pub fn main() -> io::Result<()> {
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
     let grpc_server = std::env::var("GRPC_SERVER").expect("Missing Env Var for GRPC_SERVER");
     let grpc_server = if !grpc_server.starts_with("http") {
-        format!("https://{}", grpc_server)
+        format!("https://{grpc_server}")
     } else {
         grpc_server
     };
@@ -219,14 +219,14 @@ pub fn main() -> io::Result<()> {
             if docker_host.scheme() == "tcp" && !ignore_docker_host_check {
                 let docker_hostname = docker_host.host_str().unwrap_or("unkown_host");
                 let docker_port = docker_host.port().unwrap_or(2375);
-                let docker_address = format!("{}:{}", docker_hostname, docker_port);
+                let docker_address = format!("{docker_hostname}:{docker_port}");
 
                 let result = retry::retry(Fixed::from(Duration::from_secs(2)).take(300), || {
                     match TcpStream::connect(docker_address.as_str()) {
                         Ok(_) => OperationResult::Ok(()),
                         Err(err) => {
                             info!("waiting for docker host to be reachable: {}", &err);
-                            OperationResult::Retry(format!("docker host not yet reachable...{}", err))
+                            OperationResult::Retry(format!("docker host not yet reachable...{err}"))
                         }
                     }
                 });
@@ -327,7 +327,7 @@ pub fn main() -> io::Result<()> {
         should_shutdown.store(true, Ordering::Relaxed);
     };
 
-    let _ = tokio_utils::launch_task(shutdown_callback);
+    tokio_utils::launch_task(shutdown_callback);
     let task_executor_h = tokio_utils::launch_task(task_executor);
     while !task_executor_h.is_finished() {
         thread::sleep(Duration::from_secs(1));

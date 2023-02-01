@@ -129,7 +129,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("databases/{}", long_id),
+            format!("databases/{long_id}"),
         )
         .map_err(|_| DatabaseError::InvalidConfig("Can't create workspace directory".to_string()))?;
 

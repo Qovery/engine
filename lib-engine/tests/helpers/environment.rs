@@ -483,7 +483,7 @@ pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
                 error!("Unable to parse {:?}", value);
                 false
             }
-            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={}", max_age).as_str()),
+            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={max_age}").as_str()),
         },
     };
 

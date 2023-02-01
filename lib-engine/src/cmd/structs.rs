@@ -662,7 +662,7 @@ mod tests {
                 // OK
             }
             Err(e) => {
-                panic!("Panic ! Error: {}", e)
+                panic!("Panic ! Error: {e}")
             }
         }
     }
@@ -914,7 +914,7 @@ mod tests {
                 // OK
             }
             Err(e) => {
-                panic!("Panic ! Error: {}", e)
+                panic!("Panic ! Error: {e}")
             }
         }
     }
@@ -2743,7 +2743,7 @@ mod tests {
                 // OK
             }
             Err(e) => {
-                panic!("Panic ! Error: {}", e)
+                panic!("Panic ! Error: {e}")
             }
         }
     }
@@ -2762,7 +2762,7 @@ mod tests {
                 // OK
             }
             Err(e) => {
-                panic!("Panic ! Error: {}", e)
+                panic!("Panic ! Error: {e}")
             }
         }
     }

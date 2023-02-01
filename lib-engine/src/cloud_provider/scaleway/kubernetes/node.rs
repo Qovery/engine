@@ -282,8 +282,7 @@ impl FromStr for ScwInstancesType {
             "x64-30gb" => Ok(ScwInstancesType::X64_30GB),
             "x64-60gb" => Ok(ScwInstancesType::X64_60GB),
             _ => Err(CommandError::new_from_safe_message(format!(
-                "`{}` instance type is not supported",
-                s
+                "`{s}` instance type is not supported"
             ))),
         }
     }

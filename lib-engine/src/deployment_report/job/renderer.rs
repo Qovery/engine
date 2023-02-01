@@ -99,7 +99,7 @@ mod test {
         tera.register_filter("fmt_event_type", fmt_event_type);
 
         let rendered_report = tera.render_str(REPORT_TEMPLATE, &ctx).unwrap();
-        println!("{}", rendered_report);
+        println!("{rendered_report}");
 
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

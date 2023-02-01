@@ -29,7 +29,7 @@ impl Display for ErrorKind {
 impl Display for EngineInitError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            EngineInitError::Regular(ref err) => write!(f, "A regular error occurred {:?}", err),
+            EngineInitError::Regular(ref err) => write!(f, "A regular error occurred {err:?}"),
         }
     }
 }

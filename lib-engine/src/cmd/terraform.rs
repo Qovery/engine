@@ -524,26 +524,24 @@ impl TerraformError {
                 action,
                 ..
             } => format!(
-                "Error, user `{}` cannot perform `{}` on `{}`.",
-                user, action, resource_type_and_name
+                "Error, user `{user}` cannot perform `{action}` on `{resource_type_and_name}`."
             ),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 ..
-            } => format!("Wasn't able to delete terraform lock file `{}`.", terraform_provider_lock,),
+            } => format!("Wasn't able to delete terraform lock file `{terraform_provider_lock}`.",),
             TerraformError::ConfigFileNotFound { path, .. } => {
-                format!("Error while trying to get Terraform configuration file `{}`.", path,)
+                format!("Error while trying to get Terraform configuration file `{path}`.",)
             }
             TerraformError::ConfigFileInvalidContent { path, .. } => {
                 format!(
-                    "Error while trying to read Terraform configuration file, content is invalid `{}`.",
-                    path,
+                    "Error while trying to read Terraform configuration file, content is invalid `{path}`.",
                 )
             }
             TerraformError::CannotRemoveEntryOutOfStateList {
                 entry_to_be_removed, ..
             } => {
-                format!("Error while trying to remove entry `{}` from state list.", entry_to_be_removed,)
+                format!("Error while trying to remove entry `{entry_to_be_removed}` from state list.",)
             }
             TerraformError::ContextUnsupportedParameterValue {
                 service_type,
@@ -552,8 +550,7 @@ impl TerraformError {
                 ..
             } => {
                 format!(
-                    "Error {} value `{}` not supported for parameter `{}`.",
-                    service_type, parameter_value, parameter_name,
+                    "Error {service_type} value `{parameter_value}` not supported for parameter `{parameter_name}`.",
                 )
             }
             TerraformError::QuotasExceeded { sub_type, .. } => {
@@ -570,45 +567,45 @@ impl TerraformError {
                             resource_type,
                             match max_resource_count {
                                 None => "".to_string(),
-                                Some(count) => format!(" of {}", count),
+                                Some(count) => format!(" of {count}"),
                             }
                         ),
                     },
                 )
             }
             TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
-                format!("Error, service `{}` requiring an opt-in is not activated.", service_type,)
+                format!("Error, service `{service_type}` requiring an opt-in is not activated.",)
             }
             TerraformError::AlreadyExistingResource { resource_type, .. } => {
-                format!("Error, resource {} already exists.", resource_type)
+                format!("Error, resource {resource_type} already exists.")
             }
             TerraformError::ResourceDependencyViolation { resource_name, resource_kind, .. } => {
-                format!("Error, resource {} `{}` has dependency violation.", resource_kind, resource_name)
+                format!("Error, resource {resource_kind} `{resource_name}` has dependency violation.")
             }
             TerraformError::WaitingTimeoutResource {
                 resource_type,
                 resource_identifier,
                 ..
             } => {
-                format!("Error, waiting for resource {}:{} timeout.", resource_type, resource_identifier)
+                format!("Error, waiting for resource {resource_type}:{resource_identifier} timeout.")
             }
             TerraformError::WrongExpectedState {
                 resource_name: resource_type,
                 resource_kind,
                 raw_message,
-            } => format!("Error, resource {}:{} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {}", resource_type, resource_kind, raw_message),
+            } => format!("Error, resource {resource_type}:{resource_kind} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {raw_message}"),
             TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, requested instance type{} doesn't exist in cluster region.", match instance_type {
-                Some(instance_type) => format!(" `{}`", instance_type),
+                Some(instance_type) => format!(" `{instance_type}`"),
                 None => "".to_string(),
             }),
             TerraformError::InstanceVolumeCannotBeDownSized { instance_id, volume_id, .. } => {
-                format!("Error, instance (`{}`) volume (`{}`) cannot be smaller than existing size.", instance_id, volume_id)
+                format!("Error, instance (`{instance_id}`) volume (`{volume_id}`) cannot be smaller than existing size.")
             },
             TerraformError::InvalidCIDRBlock {cidr,..} => {
-                format!("Error, the CIDR block `{}` can't be used.", cidr)
+                format!("Error, the CIDR block `{cidr}` can't be used.")
             }
             TerraformError::StateLocked { lock_id, .. } => {
-                format!("Error, terraform state is locked (lock_id: {})", lock_id)
+                format!("Error, terraform state is locked (lock_id: {lock_id})")
             }
         }
     }
@@ -913,7 +910,7 @@ pub fn terraform_apply_with_tf_workers_resources(
 ) -> Result<Vec<String>, TerraformError> {
     let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
     for x in tf_workers_resources {
-        terraform_args_string.push(format!("-target={}", x));
+        terraform_args_string.push(format!("-target={x}"));
     }
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
@@ -1146,7 +1143,7 @@ fn terraform_exec_from_command(cmd: &mut impl ExecutableCommand) -> Result<Vec<S
 fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, TerraformError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
-        Some(val) => format!("{:?}", val)
+        Some(val) => format!("{val:?}")
             .trim_start_matches('"')
             .trim_end_matches('"')
             .to_string(),

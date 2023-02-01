@@ -84,7 +84,7 @@ pub struct VpcCustomRoutingTable {
 
 impl fmt::Display for VpcQoveryNetworkMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -299,7 +299,7 @@ fn tera_context(
     }
 
     let format_ips =
-        |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
+        |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{ip}\"")).collect::<Vec<_>>() };
 
     let aws_zones = zones
         .iter()
@@ -1169,8 +1169,7 @@ fn create(
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
-                    "Cannot patch kube proxy for user configured network: {}",
-                    e
+                    "Cannot patch kube proxy for user configured network: {e}"
                 )),
             )
         })?;
@@ -1660,8 +1659,7 @@ fn delete(
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!(
-                                "Namespace `{}` deleted successfully.",
-                                namespace_to_delete
+                                "Namespace `{namespace_to_delete}` deleted successfully."
                             )),
                         )),
                         Err(e) => {
@@ -1669,8 +1667,7 @@ fn delete(
                                 kubernetes.logger().log(EngineEvent::Warning(
                                     event_details.clone(),
                                     EventMessage::new_from_safe(format!(
-                                        "Can't delete the namespace `{}`",
-                                        namespace_to_delete
+                                        "Can't delete the namespace `{namespace_to_delete}`"
                                     )),
                                 ));
                             }
@@ -1772,13 +1769,13 @@ fn delete(
             match deletion {
                 Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                     event_details.clone(),
-                    EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                    EventMessage::new_from_safe(format!("Namespace {qovery_namespace} is fully deleted")),
                 )),
                 Err(e) => {
                     if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                         kubernetes.logger().log(EngineEvent::Warning(
                             event_details.clone(),
-                            EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
+                            EventMessage::new_from_safe(format!("Can't delete namespace {qovery_namespace}.")),
                         ))
                     }
                 }

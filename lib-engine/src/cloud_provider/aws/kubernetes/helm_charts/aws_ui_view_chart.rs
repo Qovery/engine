@@ -88,6 +88,6 @@ mod tests {
         let values_file = std::fs::File::open(&chart_path);
 
         // verify:
-        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+        assert!(values_file.is_ok(), "Chart directory should exist: `{chart_path}`");
     }
 }

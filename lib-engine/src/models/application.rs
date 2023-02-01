@@ -84,7 +84,7 @@ impl<T: CloudProvider> Application<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("applications/{}", long_id),
+            format!("applications/{long_id}"),
         )
         .map_err(|_| ApplicationError::InvalidConfig("Can't create workspace directory".to_string()))?;
 

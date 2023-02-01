@@ -197,7 +197,7 @@ pub fn cluster_test(
 
     // Deploy
     if let Err(err) = deploy_tx.create_kubernetes() {
-        panic!("{:?}", err)
+        panic!("{err:?}")
     }
     assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
@@ -209,7 +209,7 @@ pub fn cluster_test(
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
         if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
-            panic!("{:?}", ret)
+            panic!("{ret:?}")
         }
     }
 
@@ -222,13 +222,13 @@ pub fn cluster_test(
 
             // Pause
             if let Err(err) = pause_tx.pause_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
             assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
 
             // Resume
             if let Err(err) = resume_tx.create_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
 
             assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
@@ -266,13 +266,13 @@ pub fn cluster_test(
 
             // Upgrade
             if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
             assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
 
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
             assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
@@ -312,13 +312,13 @@ pub fn cluster_test(
             let mut delete_tx = Transaction::new(&engine).unwrap();
             // Upgrade
             if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
             assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
 
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{:?}", err)
+                panic!("{err:?}")
             }
             assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
             return test_name.to_string();
@@ -333,13 +333,13 @@ pub fn cluster_test(
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
         if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
-            panic!("{:?}", ret)
+            panic!("{ret:?}")
         }
     }
 
     // Delete
     if let Err(err) = delete_tx.delete_kubernetes() {
-        panic!("{:?}", err)
+        panic!("{err:?}")
     }
     assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 

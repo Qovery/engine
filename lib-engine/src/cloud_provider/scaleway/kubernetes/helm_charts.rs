@@ -153,7 +153,7 @@ pub fn scw_helm_charts(
         Ok(config) => config,
         Err(e) => {
             return Err(CommandError::new(
-                format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
+                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
                 Some(e.to_string()),
                 Some(envs.to_vec()),
             ));
@@ -161,9 +161,9 @@ pub fn scw_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
+    let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_name = format!("loki.{}.svc:3100", loki_namespace);
+    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
     // Qovery storage class
     let q_storage_class =

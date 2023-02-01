@@ -110,7 +110,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
                 self.logger
-                    .send_progress(format!("Error while retrieving deployment information: {}", err));
+                    .send_progress(format!("Error while retrieving deployment information: {err}"));
                 return;
             }
         };
@@ -120,7 +120,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
                 self.logger
-                    .send_progress(format!("Cannot render deployment status report. Please contact us: {}", err));
+                    .send_progress(format!("Cannot render deployment status report. Please contact us: {err}"));
                 return;
             }
         };

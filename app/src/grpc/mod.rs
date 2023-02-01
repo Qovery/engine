@@ -52,8 +52,8 @@ pub async fn new_engine_client(
         .connect()
         .await?;
 
-    let token = MetadataValue::try_from(format!("Bearer {}", cluster_token).as_str())
-        .unwrap_or_else(|_| MetadataValue::from(0));
+    let token =
+        MetadataValue::try_from(format!("Bearer {cluster_token}").as_str()).unwrap_or_else(|_| MetadataValue::from(0));
     let cluster_id = MetadataValue::try_from(&cluster_id.to_string()).unwrap_or_else(|_| MetadataValue::from(0));
     let channel = ServiceBuilder::new()
         .layer(tonic::service::interceptor(QoveryInterceptor { token, cluster_id }))

@@ -28,10 +28,7 @@ lazy_static! {
 /// Spawn a thread that block until the webserver stop (never)
 pub fn launch(listen_on: &str) -> JoinHandle<()> {
     let listen_on: SocketAddr = listen_on.parse().unwrap_or_else(|_| {
-        panic!(
-            "Cannot parse webserver listen_on parameter, should be ip:port instead {}",
-            listen_on
-        )
+        panic!("Cannot parse webserver listen_on parameter, should be ip:port instead {listen_on}")
     });
 
     info!("Starting tokio runtime");

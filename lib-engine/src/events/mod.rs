@@ -177,7 +177,7 @@ impl EventMessage {
                             details,
                             env_vars
                                 .iter()
-                                .map(|(k, v)| format!("{}={}", k, v))
+                                .map(|(k, v)| format!("{k}={v}"))
                                 .collect::<Vec<String>>()
                                 .join(" "),
                         )
@@ -470,19 +470,19 @@ impl Display for Transmitter {
             f,
             "{}",
             match &self {
-                Transmitter::TaskManager(id, name) => format!("engine_task_manager({}, {})", id, name),
-                Transmitter::BuildPlatform(id, name) => format!("build_platform({}, {})", id, name),
-                Transmitter::ContainerRegistry(id, name) => format!("container_registry({}, {})", id, name),
-                Transmitter::CloudProvider(id, name) => format!("cloud_provider({}, {})", id, name),
-                Transmitter::Kubernetes(id, name) => format!("kubernetes({}, {})", id, name),
-                Transmitter::DnsProvider(id, name) => format!("dns_provider({}, {})", id, name),
-                Transmitter::ObjectStorage(id, name) => format!("object_strorage({}, {})", id, name),
-                Transmitter::Environment(id, name) => format!("environment({}, {})", id, name),
-                Transmitter::Database(id, name) => format!("database({}, {})", id, name),
-                Transmitter::Application(id, name) => format!("application({}, {})", id, name),
-                Transmitter::Router(id, name) => format!("router({}, {})", id, name),
-                Transmitter::Container(id, name) => format!("container({}, {})", id, name),
-                Transmitter::Job(id, name) => format!("job({}, {})", id, name),
+                Transmitter::TaskManager(id, name) => format!("engine_task_manager({id}, {name})"),
+                Transmitter::BuildPlatform(id, name) => format!("build_platform({id}, {name})"),
+                Transmitter::ContainerRegistry(id, name) => format!("container_registry({id}, {name})"),
+                Transmitter::CloudProvider(id, name) => format!("cloud_provider({id}, {name})"),
+                Transmitter::Kubernetes(id, name) => format!("kubernetes({id}, {name})"),
+                Transmitter::DnsProvider(id, name) => format!("dns_provider({id}, {name})"),
+                Transmitter::ObjectStorage(id, name) => format!("object_strorage({id}, {name})"),
+                Transmitter::Environment(id, name) => format!("environment({id}, {name})"),
+                Transmitter::Database(id, name) => format!("database({id}, {name})"),
+                Transmitter::Application(id, name) => format!("application({id}, {name})"),
+                Transmitter::Router(id, name) => format!("router({id}, {name})"),
+                Transmitter::Container(id, name) => format!("container({id}, {name})"),
+                Transmitter::Job(id, name) => format!("job({id}, {name})"),
             }
         )
     }
@@ -767,7 +767,7 @@ mod tests {
         );
 
         // execute:
-        let res = format!("{:?}", event_message);
+        let res = format!("{event_message:?}");
 
         // verify:
         assert!(!res.contains("my_secret"));

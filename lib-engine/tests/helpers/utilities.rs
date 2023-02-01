@@ -69,7 +69,7 @@ pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineSe
     ]
     .into_iter()
     .flat_map(|(service_type, service_type_name)| {
-        let url = format!("https://{}/engine/serviceVersion?serviceType={}", api_fqdn, service_type_name);
+        let url = format!("https://{api_fqdn}/engine/serviceVersion?serviceType={service_type_name}");
         info!("fetching version : {}", url);
 
         let payload = http.get(url).headers(headers.clone()).send()?;
@@ -317,7 +317,7 @@ impl FuncTestsSecrets {
         let client = match hashicorp_vault::Client::new(vault_config.address, vault_config.token) {
             Ok(x) => x,
             Err(e) => {
-                println!("error: wasn't able to contact Vault server. {:?}", e);
+                println!("error: wasn't able to contact Vault server. {e:?}");
                 return empty_secrets;
             }
         };
@@ -556,7 +556,7 @@ fn curl_path(path: &str) -> bool {
         Ok(_) => true,
 
         Err(e) => {
-            println!("TEST Error : while trying to call {}", e);
+            println!("TEST Error : while trying to call {e}");
             false
         }
     }
@@ -753,8 +753,7 @@ pub fn db_infos(
             let database_port = 27017;
             let database_db_name = db_id;
             let database_uri = format!(
-                "mongodb://{}:{}@{}:{}/{}",
-                database_username, database_password, db_fqdn, database_port, database_db_name
+                "mongodb://{database_username}:{database_password}@{db_fqdn}:{database_port}/{database_db_name}"
             );
             DBInfos {
                 db_port: database_port,
