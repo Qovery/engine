@@ -14,8 +14,8 @@ fi
 trap "exit 1" 10
 ARGS_NUM=$#
 PROC="$$"
-QOVERY_API="api-admin.qovery.com"
-QOVERY_ADMIN_API="admin.qovery.com"
+QOVERY_API="api.qovery.com"
+QOVERY_ADMIN_API="api-admin.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=lib-engine
 
