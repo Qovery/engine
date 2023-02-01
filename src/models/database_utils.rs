@@ -103,8 +103,7 @@ pub fn get_supported_version_to_use(
             Some(version) => Ok(version.to_string()),
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
-                    "{} {} version is not supported",
-                    database_name, version_to_check
+                    "{database_name} {version_to_check} version is not supported"
                 )));
             }
         };
@@ -116,8 +115,7 @@ pub fn get_supported_version_to_use(
             Some(version) => Ok(version.to_string()),
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
-                    "{} {} version is not supported",
-                    database_name, version_to_check
+                    "{database_name} {version_to_check} version is not supported"
                 )));
             }
         };
@@ -127,8 +125,7 @@ pub fn get_supported_version_to_use(
     match all_supported_versions.get(&version.major) {
         Some(version) => Ok(version.to_string()),
         None => Err(CommandError::new_from_safe_message(format!(
-            "{} {} version is not supported",
-            database_name, version_to_check
+            "{database_name} {version_to_check} version is not supported"
         ))),
     }
 }
@@ -158,30 +155,30 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
+                supported_versions.insert(format!("{major}.{minor_max}"), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
-                    supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                    supported_versions.insert(version.clone(), format!("{version}{suffix}"));
                 } else {
                     for update in update_min.unwrap()..update_max.unwrap() + 1 {
-                        let version = format!("{}.{}.{}", major, minor_min, update);
-                        supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                        let version = format!("{major}.{minor_min}.{update}");
+                        supported_versions.insert(version.clone(), format!("{version}{suffix}"));
                     }
                 }
             } else {
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major, minor),
+                        format!("{major}.{minor}"),
                         format!("{}.{}.{}", major, minor, update_max.unwrap()),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
-                        supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                        supported_versions.insert(version.clone(), format!("{version}{suffix}"));
                     } else {
                         for update in update_min.unwrap()..update_max.unwrap() + 1 {
-                            let version = format!("{}.{}.{}", major, minor, update);
-                            supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                            let version = format!("{major}.{minor}.{update}");
+                            supported_versions.insert(version.clone(), format!("{version}{suffix}"));
                         }
                     }
                 }
@@ -189,10 +186,10 @@ pub fn generate_supported_version(
         }
         // manage minor without updates
         None => {
-            latest_major_version = format!("{}.{}{}", major, minor_max, suffix);
+            latest_major_version = format!("{major}.{minor_max}{suffix}");
             for minor in minor_min..minor_max + 1 {
-                let version = format!("{}.{}", major, minor);
-                supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
+                let version = format!("{major}.{minor}");
+                supported_versions.insert(version.clone(), format!("{version}{suffix}"));
             }
         }
     };

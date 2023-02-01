@@ -81,7 +81,7 @@ where
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, Error> {
     let workspace_dir = root_workspace_directory(working_root_dir, execution_id)?;
-    let tgz_file_path = format!("{}/.qovery-workspace/{}.tgz", working_root_dir, execution_id);
+    let tgz_file_path = format!("{working_root_dir}/.qovery-workspace/{execution_id}.tgz");
     let tgz_file = File::create(tgz_file_path.as_str())?;
 
     let enc = GzEncoder::new(tgz_file, Compression::fast());
@@ -139,8 +139,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
             error!(
                 "{}",
                 format!(
-                    "error trying to get workspace directory from working_root_dir: '{}' execution_id: {}, error: {}",
-                    working_root_dir, execution_id, err
+                    "error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}"
                 )
             );
             Err(err)
@@ -203,7 +202,7 @@ where
     let mut file = match File::create(path) {
         Err(e) => {
             return Err(CommandError::new(
-                format!("Unable to create YAML backup file for chart {}.", chart_name),
+                format!("Unable to create YAML backup file for chart {chart_name}."),
                 Some(e.to_string()),
                 None,
             ))
@@ -213,22 +212,19 @@ where
 
     match file.write(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
-            format!("Unable to edit YAML backup file for chart {}.", chart_name),
+            format!("Unable to edit YAML backup file for chart {chart_name}."),
             Some(e.to_string()),
             None,
         )),
         Ok(_) => Ok(path.to_str().map(|e| e.to_string()).ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Unable to get YAML backup file path for chart {}.",
-                chart_name
-            ))
+            CommandError::new_from_safe_message(format!("Unable to get YAML backup file path for chart {chart_name}."))
         })?),
     }
 }
 
 pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<String, CommandError> {
     let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
-        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+        CommandError::new(format!("Unable to open YAML backup file {path}."), Some(e.to_string()), None)
     })?;
 
     let mut content = BufReader::new(file.try_clone().unwrap())
@@ -248,12 +244,12 @@ pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<S
         .truncate(true)
         .open(path.as_str())
         .map_err(|e| {
-            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+            CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
     match file.write(content.join("\n").as_bytes()) {
         Err(e) => Err(CommandError::new(
-            format!("Unable to edit YAML backup file {}.", path),
+            format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),
             None,
         )),
@@ -263,7 +259,7 @@ pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<S
 
 pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<String, CommandError> {
     let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
-        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+        CommandError::new(format!("Unable to open YAML backup file {path}."), Some(e.to_string()), None)
     })?;
 
     let content_vec = BufReader::new(file.try_clone().unwrap())
@@ -283,12 +279,12 @@ pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<Stri
         .truncate(true)
         .open(path.as_str())
         .map_err(|e| {
-            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+            CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
     match file.write(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
-            format!("Unable to edit YAML backup file {}.", path),
+            format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),
             None,
         )),
@@ -298,7 +294,7 @@ pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<Stri
 
 pub fn indent_file(path: String) -> Result<String, CommandError> {
     let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
-        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+        CommandError::new(format!("Unable to open YAML backup file {path}."), Some(e.to_string()), None)
     })?;
 
     let file_content = BufReader::new(file.try_clone().unwrap())
@@ -313,12 +309,12 @@ pub fn indent_file(path: String) -> Result<String, CommandError> {
         .truncate(true)
         .open(path.as_str())
         .map_err(|e| {
-            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+            CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
     match file.write(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
-            format!("Unable to edit YAML backup file {}.", path),
+            format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),
             None,
         )),
@@ -340,7 +336,7 @@ where
             .file_name()
             .to_str()
             .ok_or_else(|| {
-                CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+                CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {file:?}."))
             })?
             .to_string()
             .contains("-q-backup.yaml")
@@ -349,7 +345,7 @@ where
                 file.path()
                     .to_str()
                     .ok_or_else(|| {
-                        CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+                        CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {file:?}."))
                     })?
                     .to_string(),
             )
@@ -411,16 +407,16 @@ mod tests {
 
         let directories_to_create = vec![
             root_dir.to_string(),
-            format!("{}/.terraform", root_dir),
-            format!("{}/.terraform/dir-1", root_dir),
-            format!("{}/dir-1", root_dir),
-            format!("{}/dir-1/.terraform", root_dir),
-            format!("{}/dir-1/.terraform/dir-1", root_dir),
-            format!("{}/dir-2", root_dir),
-            format!("{}/dir-2/.terraform", root_dir),
-            format!("{}/dir-2/dir-1/.terraform", root_dir),
-            format!("{}/dir-2/dir-1/.terraform/dir-1", root_dir),
-            format!("{}/dir-2/.terraform/dir-1", root_dir),
+            format!("{root_dir}/.terraform"),
+            format!("{root_dir}/.terraform/dir-1"),
+            format!("{root_dir}/dir-1"),
+            format!("{root_dir}/dir-1/.terraform"),
+            format!("{root_dir}/dir-1/.terraform/dir-1"),
+            format!("{root_dir}/dir-2"),
+            format!("{root_dir}/dir-2/.terraform"),
+            format!("{root_dir}/dir-2/dir-1/.terraform"),
+            format!("{root_dir}/dir-2/dir-1/.terraform/dir-1"),
+            format!("{root_dir}/dir-2/.terraform/dir-1"),
         ];
         directories_to_create
             .iter()

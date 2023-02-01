@@ -68,6 +68,7 @@ pub enum Tag {
     K8sCannotGetStatefulset,
     K8sCannotRolloutRestartStatefulset,
     K8sCannotApplyFromFile,
+    K8sAddonVersionNotSupported,
     UnsupportedRegion,
     UnsupportedZone,
     CannotFindRequiredBinary,
@@ -202,6 +203,7 @@ pub enum Tag {
     AwsSdkListElasticacheClusters,
     AwsSdkListDocDbClusters,
     AwsCloudwatchRetentionConfigurationError,
+    Base64DecodeIssue,
 }
 
 impl From<errors::Tag> for Tag {
@@ -396,6 +398,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sCannotGetStatefulset => Tag::K8sCannotGetStatefulset,
             errors::Tag::K8sCannotRolloutRestartStatefulset => Tag::K8sCannotRolloutRestartStatefulset,
             errors::Tag::K8sCannotApplyFromFile => Tag::K8sCannotApplyFromFile,
+            errors::Tag::K8sAddonVersionNotSupported => Tag::K8sAddonVersionNotSupported,
             errors::Tag::CannotListClusters => Tag::CannotListClusters,
             errors::Tag::CannotParseString => Tag::CannotParseString,
             errors::Tag::CannotDeleteNodeGroup => Tag::CannotDeleteNodeGroup,
@@ -405,6 +408,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::AwsSdkListElasticacheClusters => Tag::AwsSdkListElasticacheClusters,
             errors::Tag::AwsSdkListDocDbClusters => Tag::AwsSdkListDocDbClusters,
             errors::Tag::AwsCloudwatchRetentionConfigurationError => Tag::AwsCloudwatchRetentionConfigurationError,
+            errors::Tag::Base64DecodeIssue => Tag::Base64DecodeIssue,
         }
     }
 }

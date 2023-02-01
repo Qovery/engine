@@ -54,7 +54,7 @@ fn kubeconfig_path() -> PathBuf {
 }
 
 pub fn chart_path(temp_dir: &str, service_type: &str, chart_id: &Uuid, chart_name: &str) -> String {
-    format!("{}/{}/{}/{}", temp_dir, service_type, chart_id, chart_name)
+    format!("{temp_dir}/{service_type}/{chart_id}/{chart_name}")
 }
 
 pub struct TestInfo {
@@ -112,10 +112,10 @@ fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
         .get_temp_dir(test_env.event_details().clone())
         .expect("Unable to get temp dir");
     let short_id = to_short_id(kube.long_id());
-    let kubeconfig_dir_path = format!("{}/qovery-kubeconfigs-{}", temp_dir, short_id);
+    let kubeconfig_dir_path = format!("{temp_dir}/qovery-kubeconfigs-{short_id}");
     fs::create_dir(&kubeconfig_dir_path)
         .unwrap_or_else(|e| panic!("Unable to create directory {}: {}", &kubeconfig_dir_path, e));
-    let local_kubeconfig = format!("{}/qovery-kubeconfigs-{}/{}.yaml", temp_dir, short_id, short_id);
+    let local_kubeconfig = format!("{temp_dir}/qovery-kubeconfigs-{short_id}/{short_id}.yaml");
     let _ = fs::copy(kubeconfig_path(), &local_kubeconfig)
         .unwrap_or_else(|e| panic!("Unable to create file {}: {}", &local_kubeconfig, e));
 }
@@ -244,6 +244,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             disable_cache: false,
             timeout: Duration::from_secs(42),
         },
+        vec![],
+        None,
         vec![test_storage()],
         vec![test_env_var()],
         btreeset![test_mounted_file()],
@@ -267,6 +269,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             network_ingress_proxy_read_timeout_seconds: 9,
             network_ingress_proxy_buffer_size_kb: 10,
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+            network_ingress_denylist_source_range: "".to_string(),
+            network_ingress_basic_auth_env_var: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 11,
@@ -331,6 +335,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_proxy_read_timeout_seconds: 17,
             network_ingress_proxy_buffer_size_kb: 18,
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+            network_ingress_denylist_source_range: "".to_string(),
+            network_ingress_basic_auth_env_var: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Http,
             readiness_probe_http_get_path: "my_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 21,
@@ -435,7 +441,9 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
             custom_domain_check_enabled: true,
-            whitelist_source_range: "my_whitelist_source_range".to_string(),
+            whitelist_source_range: None,
+            denylist_source_range: None,
+            basic_auth: None,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
     )
@@ -527,7 +535,7 @@ fn deployment_target<'a>(
 ) -> DeploymentTarget<'a> {
     create_fake_kubeconfig(test_kube, test_env);
     DeploymentTarget::new(infra_ctx, test_env, &|| false)
-        .unwrap_or_else(|e| panic!("Unable to create deployment target: {}", e))
+        .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 
 pub fn application_context() -> TestInfo {

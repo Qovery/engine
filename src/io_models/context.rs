@@ -1,5 +1,5 @@
 use crate::cmd::docker::Docker;
-use crate::engine_task::core_service_api::QoveryApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::events::{EventDetails, Transmitter};
 use crate::utilities::to_short_id;
 use rand::distributions::Alphanumeric;

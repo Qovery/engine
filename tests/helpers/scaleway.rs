@@ -19,7 +19,7 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::engine_task::core_service_api::FakeCoreServiceApi;
+use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
@@ -58,9 +58,9 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{random_id}").as_str(),
         Uuid::new_v4(),
-        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{random_id}").as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         ScwZone::from_str(
@@ -209,13 +209,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets.QOVERY_SSH_USER.expect("QOVERY_SSH_USER is not set in secrets"),
             "admin".to_string(),
             "qovery".to_string(),
-            secrets
-                .QOVERY_AGENT_CONTROLLER_TOKEN
-                .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
             engine_location,
-            secrets
-                .QOVERY_ENGINE_CONTROLLER_TOKEN
-                .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),
             secrets
                 .SCALEWAY_DEFAULT_PROJECT_ID
                 .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
@@ -257,7 +251,7 @@ pub fn clean_environments(
         for build in env
             .applications
             .iter()
-            .map(|a| a.to_build(registry_url, Arc::new(Box::new(FakeCoreServiceApi {}))))
+            .map(|a| a.to_build(registry_url, Arc::new(Box::new(FakeQoveryApi {}))))
             .collect::<Vec<Build>>()
         {
             let _ = container_registry_client.delete_image(&build.image);

@@ -281,7 +281,7 @@ mod tests {
         let hpa = get_simple_hpa();
 
         let app_name = deployment.metadata.name.clone().unwrap_or_default();
-        let selector = format!("app={}", app_name);
+        let selector = format!("app={app_name}");
 
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
@@ -330,7 +330,7 @@ mod tests {
         let statefulsets: Api<StatefulSet> = Api::namespaced(kube_client.clone(), &namespace);
         let statefulset: StatefulSet = get_simple_statefulset();
         let app_name = statefulset.metadata.name.clone().unwrap_or_default();
-        let selector = format!("app={}", app_name);
+        let selector = format!("app={app_name}");
 
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
@@ -380,7 +380,7 @@ mod tests {
         let hpa = get_simple_hpa();
 
         let app_name = deployment.metadata.name.clone().unwrap_or_default();
-        let selector = format!("app={}", app_name);
+        let selector = format!("app={app_name}");
 
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;

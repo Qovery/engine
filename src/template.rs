@@ -20,29 +20,26 @@ where
         Ok(rt) => rt,
         Err(e) => {
             let error_msg = match e.kind {
-                tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
-                tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
+                tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {x}"),
+                tera::ErrorKind::Msg(x) => format!("tera error: {x}"),
                 tera::ErrorKind::CircularExtend { tpl, inheritance_chain } => {
-                    format!(
-                        "circular extend - template: {}, inheritance chain: {:?}",
-                        tpl, inheritance_chain
-                    )
+                    format!("circular extend - template: {tpl}, inheritance chain: {inheritance_chain:?}")
                 }
                 tera::ErrorKind::MissingParent { current, parent } => {
-                    format!("missing parent - current: {}, parent: {}", current, parent)
+                    format!("missing parent - current: {current}, parent: {parent}")
                 }
-                tera::ErrorKind::FilterNotFound(x) => format!("filter not found: {}", x),
-                tera::ErrorKind::TestNotFound(x) => format!("test not found: {}", x),
+                tera::ErrorKind::FilterNotFound(x) => format!("filter not found: {x}"),
+                tera::ErrorKind::TestNotFound(x) => format!("test not found: {x}"),
                 tera::ErrorKind::InvalidMacroDefinition(x) => {
-                    format!("invalid macro definition: {}", x)
+                    format!("invalid macro definition: {x}")
                 }
-                tera::ErrorKind::FunctionNotFound(x) => format!("function not found: {}", x),
-                tera::ErrorKind::Json(x) => format!("json error: {:?}", x),
-                tera::ErrorKind::CallFunction(x) => format!("call function: {}", x),
-                tera::ErrorKind::CallFilter(x) => format!("call filter: {}", x),
-                tera::ErrorKind::CallTest(x) => format!("call test: {}", x),
+                tera::ErrorKind::FunctionNotFound(x) => format!("function not found: {x}"),
+                tera::ErrorKind::Json(x) => format!("json error: {x:?}"),
+                tera::ErrorKind::CallFunction(x) => format!("call function: {x}"),
+                tera::ErrorKind::CallFilter(x) => format!("call filter: {x}"),
+                tera::ErrorKind::CallTest(x) => format!("call test: {x}"),
                 tera::ErrorKind::__Nonexhaustive => "non exhaustive error".to_string(),
-                tera::ErrorKind::Io(x) => format!("io error {:?}", x),
+                tera::ErrorKind::Io(x) => format!("io error {x:?}"),
                 tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
@@ -81,7 +78,7 @@ where
     //TODO: sort on fly context should be implemented to optimize reading
     debug!("context: {:#?}", context);
     let root_dir_str = root_dir.as_ref().to_str().unwrap();
-    let tera_template_string = format!("{}/**/*.j2.*", root_dir_str);
+    let tera_template_string = format!("{root_dir_str}/**/*.j2.*");
 
     let tera = Tera::new(tera_template_string.as_str())?;
 

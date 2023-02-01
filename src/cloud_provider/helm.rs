@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
-use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryShellAgent};
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cmd::helm::{to_command_error, Helm};
 use crate::cmd::helm_utils::{
     apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade, update_crds_on_upgrade,
@@ -535,8 +535,8 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
 // Shell Agent
 
 pub struct ShellAgentContext<'a> {
+    pub version: String,
     pub api_url: &'a str,
-    pub api_token: &'a str,
     pub organization_long_id: &'a Uuid,
     pub cluster_id: &'a str,
     pub cluster_long_id: &'a Uuid,
@@ -549,12 +549,6 @@ pub fn get_chart_for_shell_agent(
     chart_path: impl Fn(&str) -> String,
     custom_resources: Option<Vec<ChartSetValue>>,
 ) -> Result<CommonChart, CommandError> {
-    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
-        QoveryAppName::ShellAgent,
-        context.api_token,
-        context.api_url,
-        context.cluster_id,
-    )?;
     let mut shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),
@@ -563,7 +557,7 @@ pub fn get_chart_for_shell_agent(
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
-                    value: shell_agent_version.version,
+                    value: context.version,
                 },
                 ChartSetValue {
                     key: "replicaCount".to_string(),
@@ -634,8 +628,8 @@ pub fn get_chart_for_shell_agent(
 // Cluster Agent
 
 pub struct ClusterAgentContext<'a> {
+    pub version: String,
     pub api_url: &'a str,
-    pub api_token: &'a str,
     pub organization_long_id: &'a Uuid,
     pub cluster_id: &'a str,
     pub cluster_long_id: &'a Uuid,
@@ -650,12 +644,6 @@ pub fn get_chart_for_cluster_agent(
     chart_path: impl Fn(&str) -> String,
     custom_resources: Option<Vec<ChartSetValue>>,
 ) -> Result<CommonChart, CommandError> {
-    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
-        QoveryAppName::ClusterAgent,
-        context.api_token,
-        context.api_url,
-        context.cluster_id,
-    )?;
     let mut cluster_agent = CommonChart {
         chart_info: ChartInfo {
             name: "cluster-agent".to_string(),
@@ -664,7 +652,7 @@ pub fn get_chart_for_cluster_agent(
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
-                    value: shell_agent_version.version,
+                    value: context.version,
                 },
                 ChartSetValue {
                     key: "replicaCount".to_string(),

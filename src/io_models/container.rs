@@ -153,6 +153,7 @@ impl Registry {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct ContainerAdvancedSettings {
+    // Security
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
 
@@ -191,6 +192,10 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_proxy_buffer_size_kb: u32,
     #[serde(alias = "network.ingress.whitelist_source_range")]
     pub network_ingress_whitelist_source_range: String,
+    #[serde(alias = "network.ingress.denylist_source_range")]
+    pub network_ingress_denylist_source_range: String,
+    #[serde(alias = "network.ingress.basic_auth_env_var")]
+    pub network_ingress_basic_auth_env_var: String,
 
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
@@ -249,6 +254,8 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_proxy_read_timeout_seconds: 60,
             network_ingress_proxy_buffer_size_kb: 4,
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
+            network_ingress_denylist_source_range: "".to_string(),
+            network_ingress_basic_auth_env_var: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "/".to_string(),
             readiness_probe_initial_delay_seconds: 30,

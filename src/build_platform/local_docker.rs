@@ -94,14 +94,13 @@ impl LocalDocker {
         }
 
         let msg = format!(
-            "Purging docker images to reclaim disk space. Only {} % disk free space, This may take some time",
-            disk_free_space_percent
+            "Purging docker images to reclaim disk space. Only {disk_free_space_percent} % disk free space, This may take some time"
         );
         info!("{}", msg);
 
         // Request a purge if a disk is being low on space
         if let Err(err) = self.context.docker.prune_images() {
-            let msg = format!("Error while purging docker images: {}", err);
+            let msg = format!("Error while purging docker images: {err}");
             error!("{}", msg);
         }
     }
@@ -126,7 +125,7 @@ impl LocalDocker {
             Err(err) => {
                 return Err(BuildError::InvalidConfig {
                     application: build.image.application_id.clone(),
-                    raw_error_message: format!("Cannot extract env vars from your dockerfile {}", err),
+                    raw_error_message: format!("Cannot extract env vars from your dockerfile {err}"),
                 });
             }
         };
@@ -155,16 +154,16 @@ impl LocalDocker {
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
-        logger.send_progress(format!("🕵️ Checking if image already exist remotely {}", image_name));
+        logger.send_progress(format!("🕵️ Checking if image already exist remotely {image_name}"));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
-            logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
+            logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {image_name}"));
 
             // skip build
             build_result.image_exists_remotely(true);
             return Ok(build_result);
         }
 
-        logger.send_progress(format!("⛏️ Building image. It does not exist remotely {}", image_name));
+        logger.send_progress(format!("⛏️ Building image. It does not exist remotely {image_name}"));
 
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
@@ -241,7 +240,7 @@ impl LocalDocker {
             let mut args_buffer = Vec::with_capacity(build.environment_variables.len());
             for (key, value) in &build.environment_variables {
                 args_buffer.push("--env".to_string());
-                args_buffer.push(format!("{}={}", key, value));
+                args_buffer.push(format!("{key}={value}"));
             }
             buildpacks_args.extend(args_buffer.iter().map(|value| value.as_str()).collect::<Vec<&str>>());
 
@@ -267,8 +266,7 @@ impl LocalDocker {
                         return Err(BuildError::InvalidConfig {
                             application: build.image.application_id.clone(),
                             raw_error_message: format!(
-                                "Invalid buildpacks language format: expected `builder[@version]` got {}",
-                                buildpacks_language
+                                "Invalid buildpacks language format: expected `builder[@version]` got {buildpacks_language}"
                             ),
                         });
                     }
@@ -383,9 +381,7 @@ impl BuildPlatform for LocalDocker {
 
             match &build.git_repository.credentials() {
                 None => {}
-                Some(Err(err)) => {
-                    logger.send_warning(format!("🗝️ Unable to get credentials for git repository: {}", err))
-                }
+                Some(Err(err)) => logger.send_warning(format!("🗝️ Unable to get credentials for git repository: {err}")),
                 Some(Ok(Credentials { login, password })) => creds.push((
                     CredentialType::USER_PASS_PLAINTEXT,
                     Cred::userpass_plaintext(login, password).unwrap(),

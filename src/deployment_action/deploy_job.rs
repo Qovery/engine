@@ -298,7 +298,7 @@ where
                     JobStatus::Success => return Ok(state),
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),
                     JobStatus::Failure { reason, message } => {
-                        let msg = format!("Job failed to correctly run due to {} {}", reason, message);
+                        let msg = format!("Job failed to correctly run due to {reason} {message}");
                         Err(EngineError::new_job_error(event_details.clone(), msg))
                     }
                 };
@@ -331,7 +331,7 @@ where
                 status: None,
             };
             block_on(k8s_job_api.create(&PostParams::default(), &job_to_start)).map_err(|err| {
-                EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {}", err))
+                EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {err}"))
             })?;
 
             let job = block_on(await_condition(k8s_job_api, &job.kube_service_name(), is_job_terminated())).map_err(
@@ -344,7 +344,7 @@ where
                 JobStatus::Success => Ok(()),
                 JobStatus::NotRunning | JobStatus::Running => unreachable!(),
                 JobStatus::Failure { reason, message } => {
-                    let msg = format!("Job failed to correctly run due to {} {}", reason, message);
+                    let msg = format!("Job failed to correctly run due to {reason} {message}");
                     Err(EngineError::new_job_error(event_details.clone(), msg))
                 }
             }?;
@@ -442,7 +442,7 @@ where
                     target,
                     logger,
                 ) {
-                    let user_msg = format!("Failed to delete previous image from cache: {}", err);
+                    let user_msg = format!("Failed to delete previous image from cache: {err}");
                     logger.send_success(user_msg);
                 }
             }
@@ -454,7 +454,7 @@ where
                     .container_registry
                     .delete_repository(source.image.repository_name())
                 {
-                    let user_msg = format!("❌ Failed to delete container registry of the application: {}", err);
+                    let user_msg = format!("❌ Failed to delete container registry of the application: {err}");
                     logger.send_success(user_msg);
                 }
             }

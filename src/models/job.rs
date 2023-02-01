@@ -101,9 +101,9 @@ impl<T: CloudProvider> Job<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("jobs/{}", long_id),
+            format!("jobs/{long_id}"),
         )
-        .map_err(|err| JobError::InvalidConfig(format!("Can't create workspace directory: {}", err)))?;
+        .map_err(|err| JobError::InvalidConfig(format!("Can't create workspace directory: {err}")))?;
 
         let event_details = mk_event_details(Transmitter::Job(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);

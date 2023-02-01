@@ -40,7 +40,7 @@ impl Domain {
     }
 
     pub fn new_with_subdomain(raw: String, sub_domain: String) -> Self {
-        Domain::new(format!("{}.{}", sub_domain, raw))
+        Domain::new(format!("{sub_domain}.{raw}"))
     }
 
     pub fn with_sub_domain(&self, sub_domain: String) -> Domain {
@@ -87,7 +87,7 @@ impl ToHelmString for Domain {
 
 impl ToTerraformString for Ipv4Addr {
     fn to_terraform_format_string(&self) -> String {
-        format!("{{{}}}", self)
+        format!("{{{self}}}")
     }
 }
 

@@ -372,13 +372,13 @@ impl Docker {
         // Do some checks
         if !dockerfile.is_file() {
             return Err(DockerError::InvalidConfig {
-                raw_error_message: format!("provided dockerfile `{:?}` is not a valid file", dockerfile),
+                raw_error_message: format!("provided dockerfile `{dockerfile:?}` is not a valid file"),
             });
         }
 
         if !context.is_dir() {
             return Err(DockerError::InvalidConfig {
-                raw_error_message: format!("provided docker build context `{:?}` is not a valid directory", context),
+                raw_error_message: format!("provided docker build context `{context:?}` is not a valid directory"),
             });
         }
 
@@ -457,7 +457,7 @@ impl Docker {
 
         for (k, v) in build_args {
             args_string.push("--build-arg".to_string());
-            args_string.push(format!("{}={}", k, v));
+            args_string.push(format!("{k}={v}"));
         }
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
@@ -529,7 +529,7 @@ impl Docker {
 
         for (k, v) in build_args {
             args_string.push("--build-arg".to_string());
-            args_string.push(format!("{}={}", k, v));
+            args_string.push(format!("{k}={v}"));
         }
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
@@ -694,8 +694,8 @@ mod tests {
         };
         let ret = docker.pull(
             &image,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Err(_)));
@@ -709,8 +709,8 @@ mod tests {
 
         let ret = docker.pull(
             &image,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
@@ -718,8 +718,8 @@ mod tests {
         // Should timeout
         let ret = docker.pull(
             &image,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::from_timeout(Duration::from_secs(0)),
         );
         assert!(matches!(ret, Err(DockerError::Timeout { .. })));
@@ -748,8 +748,8 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
 
@@ -763,8 +763,8 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
 
@@ -795,8 +795,8 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
 
@@ -809,8 +809,8 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
 
@@ -841,8 +841,8 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
@@ -855,16 +855,16 @@ mod tests {
 
         let ret = docker.push(
             &image_to_build,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
 
         let ret = docker.pull(
             &image_to_build,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
@@ -890,16 +890,16 @@ mod tests {
         let ret = docker.mirror(
             &image_source,
             &image_dest,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
 
         let ret = docker.pull(
             &image_dest,
-            &mut |msg| println!("{}", msg),
-            &mut |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));

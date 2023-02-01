@@ -103,10 +103,10 @@ mod tests {
         // setup:
         let orga_id = QoveryIdentifier::new(Uuid::new_v4());
         let cluster_id = QoveryIdentifier::new(Uuid::new_v4());
-        let cluster_name = format!("qovery-{}", cluster_id);
+        let cluster_name = format!("qovery-{cluster_id}");
         let execution_id = QoveryIdentifier::new(Uuid::new_v4());
         let app_id = QoveryIdentifier::new(Uuid::new_v4());
-        let app_name = format!("simple-app-{}", app_id);
+        let app_name = format!("simple-app-{app_id}");
         let user_message = "User message";
         let safe_message = "Safe message";
         let raw_message = "Raw message";
@@ -211,7 +211,7 @@ mod tests {
                 tc.description
             );
             assert!(
-                logs_contain(format!("execution_id=\"{}\"", execution_id).as_str()),
+                logs_contain(format!("execution_id=\"{execution_id}\"").as_str()),
                 "{}",
                 tc.description
             );

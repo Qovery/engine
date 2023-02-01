@@ -44,6 +44,8 @@ pub fn working_environment(
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            command_args: vec![],
+            entrypoint: None,
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
@@ -180,6 +182,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
@@ -216,6 +220,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
@@ -313,6 +319,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            command_args: vec![],
+            entrypoint: None,
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
@@ -387,6 +395,8 @@ pub fn environment_only_http_server(
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
+            command_args: vec![],
+            entrypoint: None,
             buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
@@ -473,7 +483,7 @@ pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
                 error!("Unable to parse {:?}", value);
                 false
             }
-            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={}", max_age).as_str()),
+            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={max_age}").as_str()),
         },
     };
 

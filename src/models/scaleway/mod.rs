@@ -156,7 +156,7 @@ impl FromStr for ScwZone {
             "fr-par-3" => Ok(ScwZone::Paris3),
             "nl-ams-1" => Ok(ScwZone::Amsterdam1),
             "pl-waw-1" => Ok(ScwZone::Warsaw1),
-            _ => Err(CommandError::new_from_safe_message(format!("`{}` zone is not supported", s))),
+            _ => Err(CommandError::new_from_safe_message(format!("`{s}` zone is not supported"))),
         }
     }
 }

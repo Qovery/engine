@@ -29,7 +29,7 @@ pub fn delete_cached_image(
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
         if is_service_deletion || last_image_tag != current_image_tag {
-            logger.send_success(format!("🪓 Deleting previous cached image {}", last_image_tag));
+            logger.send_success(format!("🪓 Deleting previous cached image {last_image_tag}"));
 
             let mirror_repo_name = get_mirror_repository_name(service_id);
             let image = Image {
@@ -109,7 +109,7 @@ pub fn mirror_image(
         let err = EngineError::new_docker_error(event_details, err);
         let user_err = EngineError::new_engine_error(
             err.clone(),
-            format!("❌ Failed to mirror image {}/{}: {}", image_name, tag, err),
+            format!("❌ Failed to mirror image {image_name}/{tag}: {err}"),
             None,
         );
 

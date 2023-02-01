@@ -77,9 +77,7 @@ pub struct KapsuleOptions {
     pub user_ssh_keys: Vec<String>,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
-    pub agent_version_controller_token: String,
     pub qovery_engine_location: EngineLocation,
-    pub engine_version_controller_token: String,
 
     // Scaleway
     pub scaleway_project_id: String,
@@ -101,9 +99,7 @@ impl KapsuleOptions {
         qovery_ssh_key: String,
         grafana_admin_user: String,
         grafana_admin_password: String,
-        agent_version_controller_token: String,
         qovery_engine_location: EngineLocation,
-        engine_version_controller_token: String,
         scaleway_project_id: String,
         scaleway_access_key: String,
         scaleway_secret_key: String,
@@ -118,9 +114,7 @@ impl KapsuleOptions {
             user_ssh_keys: vec![],
             grafana_admin_user,
             grafana_admin_password,
-            agent_version_controller_token,
             qovery_engine_location,
-            engine_version_controller_token,
             scaleway_project_id,
             scaleway_access_key,
             scaleway_secret_key,
@@ -195,8 +189,7 @@ impl Kapsule {
                             ),
                             node_group.instance_type.as_str(),
                             CommandError::new_from_safe_message(format!(
-                                "`{}` instance type is not supported",
-                                instance_type
+                                "`{instance_type}` instance type is not supported"
                             )),
                         );
 
@@ -496,8 +489,6 @@ impl Kapsule {
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 
         context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
-        context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
-        context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
 
         // Qovery features
         context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
@@ -955,6 +946,7 @@ impl Kapsule {
             Some(&temp_dir),
             kubeconfig_path,
             &credentials_environment_variables,
+            &**self.context.qovery_api,
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
@@ -1261,8 +1253,7 @@ impl Kapsule {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!(
-                                    "Namespace `{}` deleted successfully.",
-                                    namespace_to_delete
+                                    "Namespace `{namespace_to_delete}` deleted successfully."
                                 )),
                             )),
                             Err(e) => {
@@ -1270,8 +1261,7 @@ impl Kapsule {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
-                                            "Can't delete the namespace `{}`",
-                                            namespace_to_delete
+                                            "Can't delete the namespace `{namespace_to_delete}`"
                                         )),
                                     ));
                                 }
@@ -1375,13 +1365,13 @@ impl Kapsule {
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
                         event_details.clone(),
-                        EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                        EventMessage::new_from_safe(format!("Namespace {qovery_namespace} is fully deleted")),
                     )),
                     Err(e) => {
                         if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
-                                EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
+                                EventMessage::new_from_safe(format!("Can't delete namespace {qovery_namespace}.")),
                             ))
                         }
                     }

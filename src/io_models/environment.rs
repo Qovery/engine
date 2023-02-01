@@ -1,4 +1,3 @@
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::Application;
@@ -13,6 +12,8 @@ use crate::models::container::ContainerError;
 use crate::models::database::DatabaseError;
 use crate::models::job::JobError;
 use crate::models::router::RouterError;
+use crate::utilities::base64_replace_comma_to_new_line;
+use crate::{cloud_provider::environment::Environment, models::router::RouterAdvancedSettings};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -81,18 +82,43 @@ impl EnvironmentRequest {
 
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
-            let mut custom_domain_check_enabled = true;
-            let mut whitelist_source_range = "0.0.0.0/0".to_string();
+            let mut router_advanced_settings = RouterAdvancedSettings::default();
 
             for app in &self.applications {
                 for route in &router.routes {
                     if route.service_long_id == app.long_id {
+                        // disable custom domain check for this router
                         if !app.advanced_settings.deployment_custom_domain_check_enabled {
-                            // disable custom domain check for this router
-                            custom_domain_check_enabled = false;
+                            router_advanced_settings.custom_domain_check_enabled = false;
                         }
-
-                        whitelist_source_range = app.advanced_settings.network_ingress_whitelist_source_range.clone();
+                        // whitelist source range
+                        if app.advanced_settings.network_ingress_whitelist_source_range
+                            != RouterAdvancedSettings::whitelist_source_range_default_value()
+                        {
+                            router_advanced_settings.whitelist_source_range =
+                                Some(app.advanced_settings.network_ingress_whitelist_source_range.clone());
+                        }
+                        // denylist source range
+                        if app.advanced_settings.network_ingress_denylist_source_range != *"" {
+                            router_advanced_settings.denylist_source_range =
+                                Some(app.advanced_settings.network_ingress_denylist_source_range.clone());
+                        }
+                        // basic auth
+                        if app.advanced_settings.network_ingress_basic_auth_env_var != *"" {
+                            match app
+                                .environment_vars
+                                .get(&app.advanced_settings.network_ingress_basic_auth_env_var)
+                            {
+                                Some(value) => {
+                                    let secret = base64_replace_comma_to_new_line(
+                                        value.clone(),
+                                    )
+                                    .map_err(|_| DomainError::RouterError(RouterError::Base64DecodeError("couldn't decode environment variable inside 'basic auth' declared in the 'advanced settings'".to_string())))?;
+                                    router_advanced_settings.basic_auth = Some(secret);
+                                }
+                                None => return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound)),
+                            }
+                        }
                     }
                 }
             }
@@ -100,21 +126,51 @@ impl EnvironmentRequest {
             for container in &self.containers {
                 for route in &router.routes {
                     if route.service_long_id == container.long_id {
+                        // disable custom domain check for this router
                         if !container.advanced_settings.deployment_custom_domain_check_enabled {
-                            // disable custom domain check for this router
-                            custom_domain_check_enabled = false;
+                            router_advanced_settings.custom_domain_check_enabled = false;
                         }
-
-                        whitelist_source_range = container
-                            .advanced_settings
-                            .network_ingress_whitelist_source_range
-                            .clone();
+                        // whitelist source range
+                        if container.advanced_settings.network_ingress_whitelist_source_range
+                            != RouterAdvancedSettings::whitelist_source_range_default_value()
+                        {
+                            router_advanced_settings.whitelist_source_range = Some(
+                                container
+                                    .advanced_settings
+                                    .network_ingress_whitelist_source_range
+                                    .clone(),
+                            );
+                        }
+                        // denylist source range
+                        if container.advanced_settings.network_ingress_denylist_source_range != *"" {
+                            router_advanced_settings.denylist_source_range = Some(
+                                container
+                                    .advanced_settings
+                                    .network_ingress_denylist_source_range
+                                    .clone(),
+                            );
+                        }
+                        // basic auth
+                        if container.advanced_settings.network_ingress_basic_auth_env_var != *"" {
+                            match container
+                                .environment_vars
+                                .get(&container.advanced_settings.network_ingress_basic_auth_env_var)
+                            {
+                                Some(value) => {
+                                    let secret = base64_replace_comma_to_new_line(
+                                        value.clone(),
+                                    )
+                                    .map_err(|_| DomainError::RouterError(RouterError::Base64DecodeError("couldn't decode environment variable inside 'basic auth' declared in the 'advanced settings'".to_string())))?;
+                                    router_advanced_settings.basic_auth = Some(secret);
+                                }
+                                None => return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound)),
+                            }
+                        }
                     }
                 }
             }
 
-            match router.to_router_domain(context, custom_domain_check_enabled, whitelist_source_range, cloud_provider)
-            {
+            match router.to_router_domain(context, router_advanced_settings, cloud_provider) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     return Err(DomainError::RouterError(err));

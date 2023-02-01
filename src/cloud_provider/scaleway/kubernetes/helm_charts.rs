@@ -5,7 +5,7 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -23,6 +23,7 @@ use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionTy
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -131,6 +132,7 @@ pub fn scw_helm_charts(
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
     envs: &[(String, String)],
+    qovery_api: &dyn QoveryApi,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     info!("preparing chart configuration to be deployed");
 
@@ -151,7 +153,7 @@ pub fn scw_helm_charts(
         Ok(config) => config,
         Err(e) => {
             return Err(CommandError::new(
-                format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
+                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
                 Some(e.to_string()),
                 Some(envs.to_vec()),
             ));
@@ -159,9 +161,9 @@ pub fn scw_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
+    let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_name = format!("loki.{}.svc:3100", loki_namespace);
+    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
     // Qovery storage class
     let q_storage_class =
@@ -401,8 +403,12 @@ pub fn scw_helm_charts(
     };
 
     let cluster_agent_context = ClusterAgentContext {
+        version: qovery_api
+            .service_version(EngineServiceType::ClusterAgent)
+            .map_err(|e| {
+                CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None)
+            })?,
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
         organization_long_id: &chart_config_prerequisites.organization_long_id,
         cluster_id: &chart_config_prerequisites.cluster_id,
         cluster_long_id: &chart_config_prerequisites.cluster_long_id,
@@ -417,8 +423,10 @@ pub fn scw_helm_charts(
     let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
 
     let shell_context = ShellAgentContext {
+        version: qovery_api
+            .service_version(EngineServiceType::ShellAgent)
+            .map_err(|e| CommandError::new("cannot get shell agent version".to_string(), Some(e.to_string()), None))?,
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
         organization_long_id: &chart_config_prerequisites.organization_long_id,
         cluster_id: &chart_config_prerequisites.cluster_id,
         cluster_long_id: &chart_config_prerequisites.cluster_long_id,
@@ -438,13 +446,6 @@ pub fn scw_helm_charts(
         ..Default::default()
     };
 
-    let qovery_engine_version: QoveryEngine = get_qovery_app_version(
-        QoveryAppName::Engine,
-        &chart_config_prerequisites.infra_options.engine_version_controller_token,
-        &chart_config_prerequisites.infra_options.qovery_api_url,
-        &chart_config_prerequisites.cluster_id,
-    )?;
-
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
@@ -455,7 +456,9 @@ pub fn scw_helm_charts(
             values: vec![
                 ChartSetValue {
                     key: "image.tag".to_string(),
-                    value: qovery_engine_version.version,
+                    value: qovery_api.service_version(EngineServiceType::Engine).map_err(|e| {
+                        CommandError::new("cannot get engine version".to_string(), Some(e.to_string()), None)
+                    })?,
                 },
                 ChartSetValue {
                     key: "autoscaler.min_replicas".to_string(),

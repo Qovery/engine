@@ -94,7 +94,7 @@ fn should_increase_db_storage_size() {
                 }
                 None => panic!("No invalid storage returned"),
             },
-            Err(e) => panic!("No invalid storage returned: {}", e),
+            Err(e) => panic!("No invalid storage returned: {e}"),
         };
 
         let ret = update_pvcs(

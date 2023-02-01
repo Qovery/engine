@@ -18,11 +18,50 @@ use uuid::Uuid;
 pub enum RouterError {
     #[error("Router invalid configuration: {0}")]
     InvalidConfig(String),
+    #[error("Error decoding base64 secret: {0}")]
+    Base64DecodeError(String),
+    #[error("Basic Auth environment variable not found but defined in the advanced settings")]
+    BasicAuthEnvVarNotFound,
 }
 
 pub struct RouterAdvancedSettings {
     pub custom_domain_check_enabled: bool,
-    pub whitelist_source_range: String,
+    pub whitelist_source_range: Option<String>,
+    pub denylist_source_range: Option<String>,
+    pub basic_auth: Option<String>,
+}
+
+impl Default for RouterAdvancedSettings {
+    fn default() -> Self {
+        Self {
+            custom_domain_check_enabled: true,
+            whitelist_source_range: None,
+            denylist_source_range: None,
+            basic_auth: None,
+        }
+    }
+}
+
+impl RouterAdvancedSettings {
+    pub fn new(
+        custom_domain_check_enabled: bool,
+        whitelist_source_range: Option<String>,
+        denylist_source_range: Option<String>,
+        basic_auth: Option<String>,
+    ) -> Self {
+        let definitive_whitelist =
+            whitelist_source_range.filter(|whitelist| whitelist != &Self::whitelist_source_range_default_value());
+        Self {
+            custom_domain_check_enabled,
+            whitelist_source_range: definitive_whitelist,
+            denylist_source_range,
+            basic_auth,
+        }
+    }
+
+    pub fn whitelist_source_range_default_value() -> String {
+        "0.0.0.0/0".to_string()
+    }
 }
 
 pub struct Router<T: CloudProvider> {
@@ -57,7 +96,7 @@ impl<T: CloudProvider> Router<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("databases/{}", long_id),
+            format!("databases/{long_id}"),
         )
         .map_err(|_| RouterError::InvalidConfig("Can't create workspace directory".to_string()))?;
 
@@ -129,7 +168,7 @@ impl<T: CloudProvider> Router<T> {
                     .containers
                     .iter()
                     .find(|container| container.long_id() == &service_id)
-                    .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details))?;
+                    .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
 
                 (
                     container.kube_service_name(),
@@ -173,12 +212,10 @@ impl<T: CloudProvider> Router<T> {
         }
 
         // whitelist source ranges
-        if self.advanced_settings.whitelist_source_range.contains("0.0.0.0") {
-            // if whitelist source range contains 0.0.0.0, then we don't need to add the whitelist source range
-            context.insert("whitelist_source_range_enabled", &false);
-        } else {
-            context.insert("whitelist_source_range_enabled", &true);
-        }
+        context.insert(
+            "whitelist_source_range_enabled",
+            &self.advanced_settings.whitelist_source_range.is_some(),
+        );
 
         // autoscaler
         context.insert("nginx_enable_horizontal_autoscaler", "false");
@@ -217,25 +254,28 @@ impl<T: CloudProvider> Router<T> {
         // Nginx
         context.insert("sticky_sessions_enabled", &sticky_session_enabled);
 
-        // ingress advanced settings
+        // basic auth
+        context.insert("basic_auth_htaccess", &self.advanced_settings.basic_auth);
+
+        // ingress advanced settings + basic auth
         // 1 app == 1 ingress, we filter only on the app to retrieve advanced settings
         if let Some(route) = self.routes.first() {
-            if let Some(advanced_settings) = environment
+            if let Some(application) = environment
                 .applications
                 .iter()
                 .find(|app| app.long_id() == &route.service_long_id)
-                .map(|app| app.advanced_settings())
             {
-                context.insert("advanced_settings", &advanced_settings);
+                // advanced settings
+                context.insert("advanced_settings", &application.advanced_settings());
             }
 
-            if let Some(advanced_settings) = environment
+            if let Some(container) = environment
                 .containers
                 .iter()
                 .find(|app| app.long_id() == &route.service_long_id)
-                .map(|app| app.advanced_settings())
             {
-                context.insert("advanced_settings", &advanced_settings);
+                // advanced settings
+                context.insert("advanced_settings", &container.advanced_settings());
             }
         };
 
@@ -318,5 +358,17 @@ where
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RouterAdvancedSettings;
+
+    #[test]
+    pub fn test_router_advanced_settings() {
+        // this should be true by default
+        let router_advanced_settings_defaults = RouterAdvancedSettings::default();
+        assert!(router_advanced_settings_defaults.custom_domain_check_enabled);
     }
 }

@@ -69,9 +69,9 @@ pub async fn kube_edit_pvc_size(
     let mut params = PatchParams::apply("qovery");
     params.force = true;
     let patch = Patch::Apply(&patch);
-    api.patch(&invalid_pvc.pvc_name, &params, &patch).await.map_err(|e| {
-        CommandError::new(format!("Unable to update pvc {} size.", obj_name), Some(e.to_string()), None)
-    })?;
+    api.patch(&invalid_pvc.pvc_name, &params, &patch)
+        .await
+        .map_err(|e| CommandError::new(format!("Unable to update pvc {obj_name} size."), Some(e.to_string()), None))?;
     Ok(())
 }
 
@@ -91,7 +91,7 @@ where
     let params = ListParams::default().labels(selector);
     let resources = api.list(&params).await.map_err(|e| {
         CommandError::new(
-            format!("Unable to get {} with selector {}.", obj_name, selector),
+            format!("Unable to get {obj_name} with selector {selector}."),
             Some(e.to_string()),
             None,
         )
@@ -117,7 +117,7 @@ where
     let ret = api
         .create(&post_params, &resource)
         .await
-        .map_err(|e| CommandError::new(format!("Unable to create {}", obj_name), Some(e.to_string()), None))?;
+        .map_err(|e| CommandError::new(format!("Unable to create {obj_name}"), Some(e.to_string()), None))?;
     info!("Creation of k8s {} returned {:?}", obj_name, ret);
 
     Ok(())
@@ -133,7 +133,7 @@ pub async fn kube_rollout_restart_statefulset(
     let api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
     let ret = api.restart(statefulset_name).await.map_err(|e| {
         CommandError::new(
-            format!("Unable to restart StatefulSet {}", statefulset_name),
+            format!("Unable to restart StatefulSet {statefulset_name}"),
             Some(e.to_string()),
             None,
         )

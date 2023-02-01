@@ -18,12 +18,11 @@ const DEFAULT_CHECK_FREQUENCY: Duration = Duration::from_secs(30);
 fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), should_abort: &dyn Fn() -> bool) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
-        "🌍 Checking DNS Ip resolution for domain {}. Please wait, it can take some time...",
-        domain
+        "🌍 Checking DNS Ip resolution for domain {domain}. Please wait, it can take some time..."
     ));
 
     let get_domain = || {
-        (log)(format!("🌍 Waiting domain {} resolve to an Ip address...", domain));
+        (log)(format!("🌍 Waiting domain {domain} resolve to an Ip address..."));
         domain
     };
 

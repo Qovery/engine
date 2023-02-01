@@ -169,9 +169,9 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
     );
 
     let f = std::fs::File::open(&chart_values_path)
-        .unwrap_or_else(|_| panic!("Impossible to open chart values file: `{}`", chart_values_path));
+        .unwrap_or_else(|_| panic!("Impossible to open chart values file: `{chart_values_path}`"));
     let data: serde_yaml::Value =
-        serde_yaml::from_reader(f).unwrap_or_else(|_| panic!("Impossible to parse YAML file: `{}`", chart_values_path));
+        serde_yaml::from_reader(f).unwrap_or_else(|_| panic!("Impossible to parse YAML file: `{chart_values_path}`"));
 
     let mut missing_fields = vec![];
 

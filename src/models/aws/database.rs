@@ -320,7 +320,7 @@ where
                 ),
             )));
         };
-        let aws_az_list = aws_azs.iter().map(|az| format!("\"{}\"", az)).collect::<Vec<String>>(); // terraform pre-formated list
+        let aws_az_list = aws_azs.iter().map(|az| format!("\"{az}\"")).collect::<Vec<String>>(); // terraform pre-formated list
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);

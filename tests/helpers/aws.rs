@@ -95,7 +95,7 @@ impl Cluster<AWS, Options> for AWS {
         let container_registry = match kubernetes_kind {
             Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
             Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), localisation)),
-            _ => panic!("Invalid cluster kind {}", kubernetes_kind),
+            _ => panic!("Invalid cluster kind {kubernetes_kind}"),
         };
 
         // use LocalDocker
@@ -150,7 +150,7 @@ impl Cluster<AWS, Options> for AWS {
                 .expect("AWS region not supported"),
             "eu-west-1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
                 .expect("AWS region not supported"),
-            _ => panic!("Invalid cluster localisation {}", localisation),
+            _ => panic!("Invalid cluster localisation {localisation}"),
         };
 
         Box::new(AWS::new(
@@ -274,11 +274,8 @@ impl Cluster<AWS, Options> for AWS {
             elasticsearch_cidr_subnet: "23".to_string(),
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
             qovery_engine_location: engine_location,
-            engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
-            agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
             grafana_admin_user: "admin".to_string(),
             grafana_admin_password: "qovery".to_string(),
-            discord_api_key: secrets.DISCORD_API_URL.unwrap(),
             qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.clone().unwrap(),
@@ -286,6 +283,8 @@ impl Cluster<AWS, Options> for AWS {
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             user_ssh_keys: vec![],
             user_network_config: None,
+            aws_addon_cni_version_override: None,
+            aws_addon_ebs_csi_version_override: None,
         }
     }
 }

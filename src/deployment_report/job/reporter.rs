@@ -124,8 +124,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                     ));
                 } else {
                     self.logger.send_progress(format!(
-                        "🚀 Skipping deployment of Job as it should trigger on {:?}",
-                        trigger_on_action
+                        "🚀 Skipping deployment of Job as it should trigger on {trigger_on_action:?}"
                     ));
                 }
             }
@@ -147,7 +146,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
                 self.logger
-                    .send_warning(format!("Error while retrieving deployment information: {}", err));
+                    .send_warning(format!("Error while retrieving deployment information: {err}"));
                 return;
             }
         };
@@ -157,7 +156,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
                 self.logger
-                    .send_progress(format!("Cannot render deployment status report. Please contact us: {}", err));
+                    .send_progress(format!("Cannot render deployment status report. Please contact us: {err}"));
                 return;
             }
         };

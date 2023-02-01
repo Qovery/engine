@@ -177,7 +177,7 @@ impl ECR {
                 registry_name: imge.registry_name.clone(),
                 repository_name: imge.registry_name.clone(),
                 image_name: imge.name(),
-                raw_error_message: format!("{}", e),
+                raw_error_message: format!("{e}"),
             }),
         }
     }

@@ -38,8 +38,7 @@ impl Router {
     pub fn to_router_domain(
         &self,
         context: &Context,
-        custom_domain_check_enabled: bool,
-        whitelist_source_range: String,
+        advanced_settings: RouterAdvancedSettings,
         cloud_provider: &dyn CloudProvider,
     ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
@@ -59,11 +58,6 @@ impl Router {
                 service_long_id: x.service_long_id,
             })
             .collect::<Vec<_>>();
-
-        let advanced_settings = RouterAdvancedSettings {
-            custom_domain_check_enabled,
-            whitelist_source_range,
-        };
 
         match cloud_provider.kind() {
             CPKind::Aws => {

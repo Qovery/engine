@@ -2566,8 +2566,7 @@ impl FromStr for AwsInstancesType {
             "z1d.large" => Ok(AwsInstancesType::Z1D_LARGE),
             "z1d.xlarge" => Ok(AwsInstancesType::Z1D_XLARGE),
             _ => Err(CommandError::new_from_safe_message(format!(
-                "`{}` instance type is not supported",
-                s
+                "`{s}` instance type is not supported"
             ))),
         }
     }

@@ -172,7 +172,7 @@ pub fn get_database_terraform_config(
         Err(e) => {
             return Err(TerraformError::ConfigFileNotFound {
                 path: database_terraform_config_file.to_string(),
-                raw_message: format!("Terraform config error, database config cannot be found.\n{}", e),
+                raw_message: format!("Terraform config error, database config cannot be found.\n{e}"),
             });
         }
     };
@@ -182,7 +182,7 @@ pub fn get_database_terraform_config(
         Ok(config) => Ok(config),
         Err(e) => Err(TerraformError::ConfigFileInvalidContent {
             path: database_terraform_config_file.to_string(),
-            raw_message: format!("Terraform config error, database config cannot be parsed.\n{}", e),
+            raw_message: format!("Terraform config error, database config cannot be parsed.\n{e}"),
         }),
     }
 }

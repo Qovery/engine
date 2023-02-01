@@ -153,7 +153,7 @@ impl EKS {
         };
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{}`.", autoscaler_new_state)),
+            EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{autoscaler_new_state}`.")),
         ));
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let selector = "cluster-autoscaler-aws-cluster-autoscaler";
@@ -812,7 +812,7 @@ pub async fn delete_eks_failed_nodegroups(
                                     .join(", "),
                                 None => "can't get nodegroup status from cloud provider".to_string(),
                             };
-                            format!("Nodegroup {} health is: {}", nodegroup_name, nodegroup_status)
+                            format!("Nodegroup {nodegroup_name} health is: {nodegroup_status}")
                         }
                         None => "".to_string(),
                     })
@@ -839,7 +839,7 @@ pub async fn delete_eks_failed_nodegroups(
             None => {
                 return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                     event_details,
-                    format!("{:?}", nodegroup),
+                    format!("{nodegroup:?}"),
                 )))
             }
         };

@@ -402,7 +402,7 @@ fn common_chart_check<P>(
 ) -> Result<(), CommandError> {
     let result = retry::retry(Fixed::from(Duration::from_secs(interval)).take(retries), || match &check {
         Ok(_) => OperationResult::Ok(()),
-        Err(err) => OperationResult::Retry(format!("command error: {}", err)),
+        Err(err) => OperationResult::Retry(format!("command error: {err}")),
     });
 
     let error_message_safe = format!(

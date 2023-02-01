@@ -165,7 +165,7 @@ mod tests {
         let values_file = std::fs::File::open(&chart_path);
 
         // verify:
-        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+        assert!(values_file.is_ok(), "Chart directory should exist: `{chart_path}`");
     }
 
     /// Makes sure chart values file exists.
@@ -200,7 +200,7 @@ mod tests {
         let values_file = std::fs::File::open(&chart_values_path);
 
         // verify:
-        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+        assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
     /// Make sure rust code doesn't set a value not declared inside values file.

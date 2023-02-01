@@ -2,7 +2,7 @@ use crate::build_platform::{Credentials, SshKey};
 use crate::cloud_provider;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::ServiceType;
-use crate::engine_task::core_service_api::QoveryApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

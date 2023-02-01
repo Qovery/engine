@@ -1,3 +1,4 @@
+use base64::DecodeError;
 use kube::config::{KubeConfigOptions, Kubeconfig, KubeconfigError};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
@@ -12,7 +13,7 @@ use uuid::Uuid;
 pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
-    headers.insert("Authorization", format!("Bearer {}", token).parse().unwrap());
+    headers.insert("Authorization", format!("Bearer {token}").parse().unwrap());
     headers
 }
 
@@ -89,9 +90,16 @@ pub async fn create_kube_client<P: AsRef<Path>>(
     Ok(kube_client)
 }
 
+pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<String, DecodeError> {
+    let decoded_value_byte = base64::decode(multiple_credentials)?;
+    let decoded_value = decoded_value_byte.iter().map(|c| *c as char).collect::<String>();
+    let replaced_comma = decoded_value.replace(',', "\n");
+    Ok(base64::encode(replaced_comma))
+}
+
 #[cfg(test)]
 mod tests_utilities {
-    use crate::utilities::compute_image_tag;
+    use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
     use std::collections::BTreeMap;
 
     #[test]
@@ -148,5 +156,15 @@ mod tests_utilities {
         );
 
         assert_eq!(image_tag_4, image_tag_5);
+    }
+
+    #[test]
+    pub fn test_comma_to_new_line_base64_replacement() {
+        // check basic_auth vars replacement
+        let env_var_base64 = base64::encode(b"dennis:ritchie,linus:torvalds");
+        let basic_auth_replacement = base64_replace_comma_to_new_line(env_var_base64).unwrap();
+        let decoded_res = base64::decode(basic_auth_replacement).unwrap();
+        let decoded_res_string = decoded_res.iter().map(|c| *c as char).collect::<String>();
+        assert_eq!(decoded_res_string, "dennis:ritchie\nlinus:torvalds".to_string());
     }
 }

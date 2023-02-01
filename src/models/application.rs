@@ -45,6 +45,8 @@ pub struct Application<T: CloudProvider> {
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) build: Build,
+    pub(super) command_args: Vec<String>,
+    pub(super) entrypoint: Option<String>,
     pub(super) storage: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
@@ -68,6 +70,8 @@ impl<T: CloudProvider> Application<T> {
         min_instances: u32,
         max_instances: u32,
         build: Build,
+        command_args: Vec<String>,
+        entrypoint: Option<String>,
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
@@ -80,7 +84,7 @@ impl<T: CloudProvider> Application<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("applications/{}", long_id),
+            format!("applications/{long_id}"),
         )
         .map_err(|_| ApplicationError::InvalidConfig("Can't create workspace directory".to_string()))?;
 
@@ -100,6 +104,8 @@ impl<T: CloudProvider> Application<T> {
             min_instances,
             max_instances,
             build,
+            command_args,
+            entrypoint,
             storage,
             environment_variables,
             mounted_files,
@@ -147,6 +153,8 @@ impl<T: CloudProvider> Application<T> {
         context.insert("total_ram_in_mib", &self.total_ram_in_mib());
         context.insert("min_instances", &self.min_instances());
         context.insert("max_instances", &self.max_instances());
+        context.insert("command_args", &self.command_args());
+        context.insert("entrypoint", &self.entrypoint());
 
         context.insert(
             "security_service_account_name",
@@ -350,6 +358,14 @@ impl<T: CloudProvider> Application<T> {
 
     pub fn build_mut(&mut self) -> &mut Build {
         &mut self.build
+    }
+
+    pub fn command_args(&self) -> Vec<String> {
+        self.command_args.clone()
+    }
+
+    pub fn entrypoint(&self) -> Option<String> {
+        self.entrypoint.clone()
     }
 
     pub fn sanitized_name(&self) -> String {

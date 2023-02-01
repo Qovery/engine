@@ -155,12 +155,12 @@ where
             Ok(is_ready) => match is_ready {
                 Some(true) => OperationResult::Ok(true),
                 _ => {
-                    let t = format!("pod with selector: {} is not ready yet", selector);
+                    let t = format!("pod with selector: {selector} is not ready yet");
                     info!("{}", t.as_str());
                     OperationResult::Retry(t)
                 }
             },
-            Err(err) => OperationResult::Err(format!("command error: {:?}", err)),
+            Err(err) => OperationResult::Err(format!("command error: {err:?}")),
         }
     });
 
@@ -682,7 +682,7 @@ where
     environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
 
     let arg_namespace = match namespace {
-        Some(n) => format!("-n {}", n),
+        Some(n) => format!("-n {n}"),
         None => "-A".to_string(),
     };
 
@@ -741,10 +741,7 @@ where
     P: AsRef<Path>,
 {
     let pods = specific_pod_name.unwrap_or("*");
-    let api_url = format!(
-        "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
-        namespace, pods, metric_name
-    );
+    let api_url = format!("/apis/custom.metrics.k8s.io/v1beta1/namespaces/{namespace}/pods/{pods}/{metric_name}");
     kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 
@@ -773,7 +770,7 @@ where
         ScalingKind::Deployment => "deployment.v1.apps",
         ScalingKind::Statefulset => "statefulset.v1.apps",
     };
-    let kind_with_name = format!("{}/{}", kind_formatted, name);
+    let kind_with_name = format!("{kind_formatted}/{name}");
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -1242,7 +1239,7 @@ pub fn kubectl_create_secret<P>(
 where
     P: AsRef<Path>,
 {
-    let secret_arg = format!("--from-literal={}=\"{}\"", key, value);
+    let secret_arg = format!("--from-literal={key}=\"{value}\"");
     let mut cmd_args = vec!["create", "secret", "generic", secret_name.as_str(), secret_arg.as_str()];
     match namespace {
         Some(n) => {
@@ -1364,15 +1361,14 @@ pub fn kubectl_get_secret(kube_client: Client, fields_selector: &str) -> Result<
         Ok(secret_results) => {
             if secret_results.items.is_empty() {
                 return Err(CommandError::new_from_safe_message(format!(
-                    "No Secret found with fields selector `{}`",
-                    fields_selector
+                    "No Secret found with fields selector `{fields_selector}`"
                 )));
             }
 
             Ok(secret_results.items)
         }
         Err(e) => Err(CommandError::new(
-            format!("Error trying to get Secret for fields selector `{}`", fields_selector),
+            format!("Error trying to get Secret for fields selector `{fields_selector}`"),
             Some(e.to_string()),
             None,
         )),

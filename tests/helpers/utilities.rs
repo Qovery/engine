@@ -8,7 +8,7 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use dotenv::dotenv;
 use gethostname;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use std::io::{Error, ErrorKind};
 
@@ -30,6 +30,7 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
+use reqwest::header;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
@@ -37,7 +38,7 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::engine_task::core_service_api::FakeCoreServiceApi;
+use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
@@ -50,6 +51,34 @@ use time::Instant;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
+
+pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
+    #[derive(Deserialize)]
+    struct QoveryServiceVersion {
+        version: String,
+    }
+
+    let mut headers = header::HeaderMap::new();
+    headers.insert("Content-Type", "application/json".parse().unwrap());
+    let http = reqwest::blocking::Client::new();
+
+    let services_version = vec![
+        (EngineServiceType::Engine, "ENGINE"),
+        (EngineServiceType::ShellAgent, "SHELL_AGENT"),
+        (EngineServiceType::ClusterAgent, "CLUSTER_AGENT"),
+    ]
+    .into_iter()
+    .flat_map(|(service_type, service_type_name)| {
+        let url = format!("https://{api_fqdn}/engine/serviceVersion?serviceType={service_type_name}");
+        info!("fetching version : {}", url);
+
+        let payload = http.get(url).headers(headers.clone()).send()?;
+        Result::<_, anyhow::Error>::Ok((service_type, payload.json::<QoveryServiceVersion>()?.version))
+    })
+    .collect();
+
+    Ok(services_version)
+}
 
 fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
     let execution_id = execution_id();
@@ -75,6 +104,8 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
         is_first_cluster_deployment: None,
     };
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    let secrets = FuncTestsSecrets::new();
+    let versions = get_qovery_app_version(&secrets.QOVERY_API_URL.unwrap()).unwrap();
 
     Context::new(
         organization_id,
@@ -87,7 +118,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
         enabled_features,
         Option::from(metadata),
         docker,
-        Arc::new(Box::new(FakeCoreServiceApi {})),
+        Arc::new(Box::new(StaticQoveryApi { versions })),
         EventDetails::new(
             None,
             QoveryIdentifier::new(organization_id),
@@ -286,7 +317,7 @@ impl FuncTestsSecrets {
         let client = match hashicorp_vault::Client::new(vault_config.address, vault_config.token) {
             Ok(x) => x,
             Err(e) => {
-                println!("error: wasn't able to contact Vault server. {:?}", e);
+                println!("error: wasn't able to contact Vault server. {e:?}");
                 return empty_secrets;
             }
         };
@@ -525,7 +556,7 @@ fn curl_path(path: &str) -> bool {
         Ok(_) => true,
 
         Err(e) => {
-            println!("TEST Error : while trying to call {}", e);
+            println!("TEST Error : while trying to call {e}");
             false
         }
     }
@@ -722,8 +753,7 @@ pub fn db_infos(
             let database_port = 27017;
             let database_db_name = db_id;
             let database_uri = format!(
-                "mongodb://{}:{}@{}:{}/{}",
-                database_username, database_password, db_fqdn, database_port, database_db_name
+                "mongodb://{database_username}:{database_password}@{db_fqdn}:{database_port}/{database_db_name}"
             );
             DBInfos {
                 db_port: database_port,

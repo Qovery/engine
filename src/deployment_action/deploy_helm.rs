@@ -182,7 +182,7 @@ mod tests {
             Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         );
 
-        let dest_folder = PathBuf::from(format!("/tmp/{}", namespace));
+        let dest_folder = PathBuf::from(format!("/tmp/{namespace}"));
         let chart = ChartInfo::new_from_custom_namespace(
             "test_app_helm_deployment".to_string(),
             dest_folder.to_string_lossy().to_string(),

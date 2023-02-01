@@ -84,8 +84,8 @@ pub trait Infrastructure {
 
 pub(crate) fn compute_test_cluster_endpoint(cluster_domain: &ClusterDomain, default_domain: String) -> String {
     match cluster_domain {
-        ClusterDomain::Default { cluster_id } => format!("{}.{}", cluster_id, default_domain),
-        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain),
+        ClusterDomain::Default { cluster_id } => format!("{cluster_id}.{default_domain}"),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{cluster_id}.{domain}"),
         ClusterDomain::Custom { domain } => domain.to_string(),
     }
 }

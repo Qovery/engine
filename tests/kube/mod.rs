@@ -159,6 +159,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
+                command_args: vec![],
+                entrypoint: None,
                 buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,

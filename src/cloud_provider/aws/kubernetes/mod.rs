@@ -17,6 +17,8 @@ use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
+use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
 };
@@ -56,6 +58,7 @@ use crate::{cmd, secret_manager};
 
 use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
 
+mod addons;
 pub mod ec2;
 mod ec2_helm_charts;
 pub mod eks;
@@ -81,7 +84,7 @@ pub struct VpcCustomRoutingTable {
 
 impl fmt::Display for VpcQoveryNetworkMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -129,11 +132,8 @@ pub struct Options {
     pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
-    pub engine_version_controller_token: String,
-    pub agent_version_controller_token: String,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
-    pub discord_api_key: String,
     pub qovery_ssh_key: String,
     #[serde(default)]
     pub user_ssh_keys: Vec<String>,
@@ -141,6 +141,10 @@ pub struct Options {
     pub tls_email_report: String,
     #[serde(default)]
     pub user_network_config: Option<UserNetworkConfig>,
+    #[serde(default)]
+    pub aws_addon_cni_version_override: Option<String>,
+    #[serde(default)]
+    pub aws_addon_ebs_csi_version_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,7 +299,7 @@ fn tera_context(
     }
 
     let format_ips =
-        |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
+        |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{ip}\"")).collect::<Vec<_>>() };
 
     let aws_zones = zones
         .iter()
@@ -400,9 +404,6 @@ fn tera_context(
     context.insert("organization_id", kubernetes.cloud_provider().organization_id());
     context.insert("qovery_api_url", &qovery_api_url);
 
-    context.insert("engine_version_controller_token", &options.engine_version_controller_token);
-    context.insert("agent_version_controller_token", &options.agent_version_controller_token);
-
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
 
     context.insert("force_upgrade", &kubernetes.context().requires_forced_upgrade());
@@ -469,7 +470,10 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
+                        EngineError::new_missing_required_env_variable(
+                            event_details.clone(),
+                            "VAULT_SECRET_ID".to_string(),
+                        ),
                         None,
                     )),
                 }
@@ -585,7 +589,6 @@ fn tera_context(
     // AWS support only 1 ssh key
     let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
     context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
-    context.insert("discord_api_key", options.discord_api_key.as_str());
 
     // Advanced settings
     context.insert(
@@ -595,6 +598,26 @@ fn tera_context(
     context.insert(
         "resource_expiration_in_seconds",
         &kubernetes.advanced_settings().pleco_resources_ttl,
+    );
+
+    // EKS Addons
+    // CNI
+    context.insert(
+        "eks_addon_vpc_cni",
+        &(match &options.aws_addon_cni_version_override {
+            None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version())
+                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details.clone(), e))?,
+            Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+        }),
+    );
+    // EBS CSI
+    context.insert(
+        "eks_addon_ebs_csi",
+        &(match &options.aws_addon_ebs_csi_version_override {
+            None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version())
+                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details, e))?,
+            Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
+        }),
     );
 
     Ok(context)
@@ -1146,8 +1169,7 @@ fn create(
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
-                    "Cannot patch kube proxy for user configured network: {}",
-                    e
+                    "Cannot patch kube proxy for user configured network: {e}"
                 )),
             )
         })?;
@@ -1197,6 +1219,7 @@ fn create(
                 Some(&temp_dir),
                 kubeconfig_path,
                 &credentials_environment_variables,
+                &**kubernetes.context().qovery_api,
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
@@ -1242,6 +1265,7 @@ fn create(
                 Some(&temp_dir),
                 kubeconfig_path,
                 &credentials_environment_variables,
+                &**kubernetes.context().qovery_api,
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
@@ -1635,8 +1659,7 @@ fn delete(
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!(
-                                "Namespace `{}` deleted successfully.",
-                                namespace_to_delete
+                                "Namespace `{namespace_to_delete}` deleted successfully."
                             )),
                         )),
                         Err(e) => {
@@ -1644,8 +1667,7 @@ fn delete(
                                 kubernetes.logger().log(EngineEvent::Warning(
                                     event_details.clone(),
                                     EventMessage::new_from_safe(format!(
-                                        "Can't delete the namespace `{}`",
-                                        namespace_to_delete
+                                        "Can't delete the namespace `{namespace_to_delete}`"
                                     )),
                                 ));
                             }
@@ -1747,13 +1769,13 @@ fn delete(
             match deletion {
                 Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                     event_details.clone(),
-                    EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                    EventMessage::new_from_safe(format!("Namespace {qovery_namespace} is fully deleted")),
                 )),
                 Err(e) => {
                     if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                         kubernetes.logger().log(EngineEvent::Warning(
                             event_details.clone(),
-                            EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
+                            EventMessage::new_from_safe(format!("Can't delete namespace {qovery_namespace}.")),
                         ))
                     }
                 }

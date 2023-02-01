@@ -94,8 +94,7 @@ impl QVaultClient {
                         let cmd_error = CommandError::new(
                             "error: wasn't able to contact Vault server".to_string(),
                             Some(format!(
-                                "error: wasn't able to contact Vault server with the given token. {:?}",
-                                e
+                                "error: wasn't able to contact Vault server with the given token. {e:?}"
                             )),
                             None,
                         );
@@ -118,8 +117,7 @@ impl QVaultClient {
                         let cmd_error = CommandError::new(
                             "error: wasn't able to contact Vault server".to_string(),
                             Some(format!(
-                                "error: wasn't able to contact Vault server with the given role and secret id. {:?}",
-                                e
+                                "error: wasn't able to contact Vault server with the given role and secret id. {e:?}"
                             )),
                             None,
                         );

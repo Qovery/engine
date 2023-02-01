@@ -11,7 +11,7 @@ use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
-use crate::engine_task::core_service_api::QoveryApi;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
@@ -133,7 +133,7 @@ impl EnvironmentTask {
 
             // If image already exist in the registry, skip the build
             if !option.force_build && cr_registry.does_image_exists(&build.image) {
-                let msg = format!("✅ Container image {} already exists and ready to use", image_name);
+                let msg = format!("✅ Container image {image_name} already exists and ready to use");
                 logger.send_success(msg);
                 continue;
             }

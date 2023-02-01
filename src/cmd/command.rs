@@ -401,7 +401,7 @@ pub fn command_to_string<P>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> 
 where
     P: AsRef<Path>,
 {
-    let _envs = envs.iter().map(|(k, v)| format!("{}={}", k, v)).join(" ");
+    let _envs = envs.iter().map(|(k, v)| format!("{k}={v}")).join(" ");
     format!("{} {:?} {}", _envs, binary.as_ref().as_os_str(), args.join(" "))
 }
 

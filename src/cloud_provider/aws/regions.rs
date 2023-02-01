@@ -102,7 +102,7 @@ pub enum AwsZones {
 
 impl ToTerraformString for AwsZones {
     fn to_terraform_format_string(&self) -> String {
-        format!("\"{}\"", self)
+        format!("\"{self}\"")
     }
 }
 
@@ -330,7 +330,7 @@ impl AwsZones {
 
 impl Display for AwsRegion {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -405,7 +405,7 @@ impl Display for AwsZones {
             SaEast1C => "sa-east-1c",
         };
 
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 
@@ -424,7 +424,7 @@ mod tests {
 
         // ensure all zones are supported
         for zone in AwsZones::iter() {
-            let sanitized_zone = format!("{:?}", zone);
+            let sanitized_zone = format!("{zone:?}");
             let current_zone = AwsZones::from_string(sanitized_zone.to_lowercase());
             assert_eq!(current_zone.unwrap(), zone);
         }
@@ -450,7 +450,7 @@ mod tests {
         assert_eq!(AwsRegion::from_str("euwest"), Err(()));
 
         for region in AwsRegion::iter() {
-            let aws_region = format!("{:?}", region);
+            let aws_region = format!("{region:?}");
             assert!(AwsRegion::from_str(aws_region.as_str()).is_ok());
         }
     }

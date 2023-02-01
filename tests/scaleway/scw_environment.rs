@@ -450,7 +450,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
+                format!("{storage_size}Gi")
             ),
             Err(_) => panic!(),
         };
@@ -686,7 +686,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                format!("{}Gi", storage_size)
+                format!("{storage_size}Gi")
             ),
             Err(_) => panic!(),
         };
@@ -950,6 +950,8 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -1004,7 +1006,11 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .routers
             .first()
             .unwrap()
-            .to_router_domain(infra_ctx.context(), true, "0.0.0.0/0".to_string(), infra_ctx.cloud_provider())
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::new(true, None, None, None),
+                infra_ctx.cloud_provider(),
+            )
             .unwrap();
         let environment_domain = environment
             .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
@@ -1415,10 +1421,7 @@ fn deploy_job_on_scw_kapsule() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!(
-                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
-                    json_output
-                ),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -1636,10 +1639,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!(
-                    "echo starting; sleep 10; echo '{}' > /qovery-output/qovery-output.json",
-                    json_output
-                ),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
             ],
             entrypoint: None,
             force_trigger: false,
