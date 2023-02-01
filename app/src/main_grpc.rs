@@ -26,7 +26,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
 use tonic::Code;
-use tracing::{error, Span};
+use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use url::Url;
 use uuid::Uuid;
