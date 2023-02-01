@@ -11,7 +11,6 @@ use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::transaction::{Transaction, TransactionResult};
-use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use std::{env, fs};
 use url::Url;
@@ -137,10 +136,6 @@ impl InfrastructureTask {
 }
 
 impl Task for InfrastructureTask {
-    fn created_at(&self) -> &DateTime<Utc> {
-        &self.request.created_at
-    }
-
     fn id(&self) -> &str {
         self.request.id.as_str()
     }
