@@ -4,7 +4,6 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
-use chrono::{DateTime, Utc};
 use std::borrow::Cow;
 
 pub mod environment_task;
@@ -12,7 +11,6 @@ pub mod infrastructure_task;
 pub mod qovery_api;
 
 pub trait Task: Send + Sync {
-    fn created_at(&self) -> &DateTime<Utc>;
     fn id(&self) -> &str;
     fn run(&self);
     fn cancel(&self) -> bool;

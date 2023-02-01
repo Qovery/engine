@@ -19,7 +19,6 @@ use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::transaction::DeploymentOption;
-use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -275,10 +274,6 @@ impl EnvironmentTask {
 }
 
 impl Task for EnvironmentTask {
-    fn created_at(&self) -> &DateTime<Utc> {
-        &self.request.created_at
-    }
-
     fn id(&self) -> &str {
         self.request.id.as_str()
     }
