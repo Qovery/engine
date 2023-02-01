@@ -41,7 +41,7 @@ impl InfrastructureTask {
             "infrastructure_task",
             organization_id = request.organization_long_id.to_string(),
             cluster_id = request.kubernetes.long_id.to_string(),
-            execution_id = request.id.to_string(),
+            execution_id = request.id,
         );
 
         InfrastructureTask {
