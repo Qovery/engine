@@ -16,6 +16,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
+use tracing::Span;
 use uuid::Uuid;
 
 use crate::cloud_provider::aws::regions::AwsZones;
@@ -1228,10 +1229,12 @@ where
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
 
     let (tx, rx) = mpsc::channel();
+    let span = Span::current();
 
     // monitor thread to notify user while the blocking task is executed
     let handle = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
         // stop the thread when the blocking task is done
+        let _span = span.enter();
         let action = action;
         let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
