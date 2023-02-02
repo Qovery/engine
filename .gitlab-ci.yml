@@ -179,6 +179,7 @@ aws-infra:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+  when: manual
 
 aws-ec2-infra:
   stage: tests
@@ -205,6 +206,7 @@ aws-ec2-infra:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+  when: manual
 
 aws-managed-services:
   stage: tests
@@ -335,6 +337,7 @@ aws-whole-enchilada:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+  when: manual
 
 #aws-ec2-whole-enchilada:
 #  stage: tests
@@ -387,6 +390,7 @@ scw-infra:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+  when: manual
 
 scw-managed-services:
   stage: tests
@@ -465,6 +469,7 @@ scw-whole-enchilada:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+  when: manual
 
 ##########
 # DEPLOY #
