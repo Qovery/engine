@@ -37,6 +37,7 @@ pub struct EnvironmentTask {
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
+    span: tracing::Span,
 }
 
 impl EnvironmentTask {
@@ -49,6 +50,13 @@ impl EnvironmentTask {
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
+        let span = info_span!(
+            "environment_task",
+            organization_id = request.organization_long_id.to_string(),
+            cluster_id = request.kubernetes.long_id.to_string(),
+            execution_id = request.id,
+        );
+
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
@@ -58,6 +66,7 @@ impl EnvironmentTask {
             logger,
             cancel_requested: Arc::new(AtomicBool::from(false)),
             qovery_api: Arc::new(qovery_api),
+            span,
         }
     }
 
@@ -275,6 +284,7 @@ impl Task for EnvironmentTask {
     }
 
     fn run(&self) {
+        let _span = self.span.enter();
         info!("environment task {} started", self.id());
 
         self.logger.log(EngineEvent::Info(

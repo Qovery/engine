@@ -24,6 +24,7 @@ pub struct InfrastructureTask {
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
+    span: tracing::Span,
 }
 
 impl InfrastructureTask {
@@ -36,6 +37,13 @@ impl InfrastructureTask {
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
+        let span = info_span!(
+            "infrastructure_task",
+            organization_id = request.organization_long_id.to_string(),
+            cluster_id = request.kubernetes.long_id.to_string(),
+            execution_id = request.id,
+        );
+
         InfrastructureTask {
             workspace_root_dir,
             lib_root_dir,
@@ -44,6 +52,7 @@ impl InfrastructureTask {
             request,
             logger,
             qovery_api: Arc::new(qovery_api),
+            span,
         }
     }
 
@@ -137,6 +146,7 @@ impl Task for InfrastructureTask {
     }
 
     fn run(&self) {
+        let _span = self.span.enter();
         info!(
             "infrastructure task {} started with infrastructure id {}-{}-{}",
             self.id(),
