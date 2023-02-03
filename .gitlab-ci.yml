@@ -78,7 +78,9 @@ gitguardian:
   only:
     - merge_requests
     - main
-  script: ggshield secret scan ci 
+  before_script:
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+  script: ggshield secret scan ci
   interruptible: true
   tags:
     - vm-250mcpu-1gmem-0g

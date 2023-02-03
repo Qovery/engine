@@ -7,6 +7,9 @@ use crate::helpers::utilities::{
 };
 use ::function_name::named;
 use bstr::ByteSlice;
+use k8s_openapi::api::batch::v1::CronJob;
+use kube::api::ListParams;
+use kube::Api;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
@@ -16,6 +19,7 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
@@ -1568,8 +1572,10 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.applications = vec![];
+
+        let cronjob_uuid = Uuid::new_v4();
         environment.jobs = vec![Job {
-            long_id: Uuid::new_v4(),
+            long_id: cronjob_uuid,
             name: "job test #####||||*_-(".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {
@@ -1609,6 +1615,32 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
+        // verify cronjob is well uninstalled
+        let cronjob_namespace = format!(
+            "{}-{}",
+            to_short_id(&environment.project_long_id),
+            to_short_id(&environment.long_id)
+        );
+        let cronjob_label = format!("qovery.com/service-id={cronjob_uuid}");
+
+        let k8s_cronjob_api: Api<CronJob> = Api::namespaced(
+            infra_ctx
+                .kubernetes()
+                .kube_client()
+                .expect("should always contain kube_client"),
+            &cronjob_namespace,
+        );
+        let result_list_cronjobs = block_on(k8s_cronjob_api.list(&ListParams::default().labels(&cronjob_label)));
+        match result_list_cronjobs {
+            Ok(list) => {
+                assert!(list.items.is_empty());
+            }
+            Err(kube_error) => {
+                panic!("{kube_error}");
+            }
+        }
+
+        // delete environment
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
