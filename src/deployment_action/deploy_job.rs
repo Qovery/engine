@@ -202,11 +202,13 @@ where
             // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
             helm.on_delete(target)?;
         }
-        helm.on_create(target)?;
 
         // Wait for the job to terminate in order to have his status
         // For cronjob we dont care as we don't control when it is executed
         if job.schedule().is_job() {
+            // create job
+            helm.on_create(target)?;
+
             // Get kube config file
             let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file_path()?;
             let job_pod_selector = format!("job-name={}", job.kube_service_name());
@@ -311,9 +313,22 @@ where
             }
         }
 
-        // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
+        // Cronjob will be installed
+        if job.is_cron_job() && !job.is_force_trigger() {
+            // create cronjob
+            helm.on_create(target)?;
+        }
+
+        // Cronjob will be force triggered
         if job.is_cron_job() && job.is_force_trigger() {
+            // check if cronjob is installed
             let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(&job.kube_service_name())).is_ok();
+
+            // create cronjob
+            helm.on_create(target)?;
+
+            // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
             let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
             let cronjob = block_on(k8s_cronjob_api.get(&job.kube_service_name())).map_err(|err| {
                 EngineError::new_job_error(
@@ -340,14 +355,22 @@ where
                 },
             )?;
 
-            match job_status(&job.as_ref()) {
+            let cronjob_result = match job_status(&job.as_ref()) {
                 JobStatus::Success => Ok(()),
                 JobStatus::NotRunning | JobStatus::Running => unreachable!(),
                 JobStatus::Failure { reason, message } => {
                     let msg = format!("Job failed to correctly run due to {reason} {message}");
                     Err(EngineError::new_job_error(event_details.clone(), msg))
                 }
-            }?;
+            };
+
+            // uninstall cronjob if it was already present
+            if !cronjob_is_already_installed {
+                helm.on_delete(target)?;
+            }
+
+            // propagate if result is an error
+            cronjob_result?;
         }
 
         Ok(state)

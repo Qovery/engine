@@ -31,7 +31,7 @@ use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 22;
+pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 23;
 pub const SCW_KUBERNETES_VERSION: &str = formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
