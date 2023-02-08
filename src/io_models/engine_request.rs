@@ -7,6 +7,7 @@ use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubernetes::KubernetesVersion;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
@@ -291,7 +292,8 @@ impl Kubernetes {
                 self.id.as_str(),
                 self.long_id,
                 self.name.as_str(),
-                self.version.as_str(),
+                KubernetesVersion::from_str(&self.version)
+                    .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 cloud_provider.zones().clone(),
                 cloud_provider,
@@ -309,7 +311,8 @@ impl Kubernetes {
                 context.clone(),
                 self.long_id,
                 self.name.clone(),
-                self.version.clone(),
+                KubernetesVersion::from_str(&self.version)
+                    .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                 ScwZone::from_str(self.region.as_str()).unwrap_or_else(|_| {
                     panic!(
                         "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
@@ -343,7 +346,8 @@ impl Kubernetes {
                     self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
-                    self.version.as_str(),
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                     cloud_provider.zones().clone(),
                     cloud_provider,

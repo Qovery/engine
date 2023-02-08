@@ -11,7 +11,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -43,7 +43,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     context: &Context,
     cluster_id: String,
     cluster_name: String,
-    boot_version: String,
+    boot_version: KubernetesVersion,
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
@@ -69,7 +69,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cluster_id.as_str(),
                     Uuid::new_v4(),
                     cluster_name.as_str(),
-                    boot_version.as_str(),
+                    boot_version,
                     aws_region,
                     aws_zones,
                     cloud_provider,
@@ -99,7 +99,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cluster_id.as_str(),
                     Uuid::new_v4(),
                     cluster_name.as_str(),
-                    boot_version.as_str(),
+                    boot_version,
                     aws_region,
                     aws_zones,
                     cloud_provider,
@@ -148,8 +148,7 @@ pub fn cluster_test(
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     test_type: ClusterTestType,
-    major_boot_version: u8,
-    minor_boot_version: u8,
+    kubernetes_boot_version: KubernetesVersion,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     environment_to_deploy: Option<&EnvironmentRequest>,
@@ -158,14 +157,13 @@ pub fn cluster_test(
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
-    let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
     let engine = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
             localisation,
             kubernetes_kind,
-            boot_version,
+            kubernetes_boot_version,
             cluster_domain,
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
@@ -177,7 +175,7 @@ pub fn cluster_test(
             logger.clone(),
             localisation,
             kubernetes_kind,
-            boot_version,
+            kubernetes_boot_version,
             cluster_domain,
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
@@ -234,7 +232,9 @@ pub fn cluster_test(
             assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
         }
         ClusterTestType::WithUpgrade => {
-            let upgrade_to_version = format!("{}.{}", major_boot_version, (minor_boot_version + 1));
+            let upgrade_to_version = kubernetes_boot_version.next_version().unwrap_or_else(|| {
+                panic!("Kubernetes version `{kubernetes_boot_version}` has no next version defined for now",)
+            });
             let engine = match provider_kind {
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
@@ -281,7 +281,7 @@ pub fn cluster_test(
         ClusterTestType::WithNodesResize => {
             let min_nodes = 11;
             let max_nodes = 15;
-            let kubernetes_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
+            let kubernetes_version = kubernetes_boot_version;
             let engine = match provider_kind {
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
@@ -349,7 +349,7 @@ pub fn cluster_test(
 pub fn get_environment_test_kubernetes(
     context: &Context,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_version: &str,
+    kubernetes_version: KubernetesVersion,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     logger: Box<dyn Logger>,
     localisation: &str,
@@ -428,7 +428,7 @@ pub fn get_environment_test_kubernetes(
                     context.clone(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()),
-                    kubernetes_version.to_string(),
+                    kubernetes_version,
                     zone,
                     cloud_provider,
                     dns_provider,

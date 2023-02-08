@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::aws::{
 };
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
-use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes};
+use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{CustomDomain, EnvironmentVariable, MountedFile, Route, Storage};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
@@ -74,7 +74,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             &to_short_id(&cluster_id),
             cluster_id,
             "my_cluster_name",
-            "my_cluster_version",
+            KubernetesVersion::V1_23,
             AwsRegion::UsEast2,
             vec![
                 AwsZones::UsEast2A.to_string(),
@@ -517,7 +517,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         logger(),
         test_kube.region(),
         test_kube.kind(),
-        test_kube.version().to_string(),
+        test_kube.version(),
         &ClusterDomain::Default {
             cluster_id: test_kube.long_id().to_string(),
         },

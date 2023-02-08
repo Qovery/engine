@@ -1,15 +1,15 @@
 use std::str::FromStr;
 
-use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 
+use crate::helpers::aws::AWS_KUBERNETES_VERSION;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KKind, KubernetesVersion};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::utilities::to_short_id;
 
@@ -17,8 +17,7 @@ use qovery_engine::utilities::to_short_id;
 fn create_and_destroy_eks_cluster(
     region: String,
     test_type: ClusterTestType,
-    major_boot_version: u8,
-    minor_boot_version: u8,
+    kubernetes_boot_version: KubernetesVersion,
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
 ) {
@@ -35,8 +34,7 @@ fn create_and_destroy_eks_cluster(
             region.to_aws_format(),
             Some(zones),
             test_type,
-            major_boot_version,
-            minor_boot_version,
+            kubernetes_boot_version,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
             },
@@ -59,8 +57,7 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::Classic,
-        AWS_KUBERNETES_MAJOR_VERSION,
-        AWS_KUBERNETES_MINOR_VERSION,
+        AWS_KUBERNETES_VERSION,
         WithoutNatGateways,
         function_name!(),
     );
@@ -74,8 +71,7 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_us_east_2() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::Classic,
-        AWS_KUBERNETES_MAJOR_VERSION,
-        AWS_KUBERNETES_MINOR_VERSION,
+        AWS_KUBERNETES_VERSION,
         WithNatGateways,
         function_name!(),
     );
@@ -90,8 +86,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::Classic,
-        AWS_KUBERNETES_MAJOR_VERSION,
-        AWS_KUBERNETES_MINOR_VERSION,
+        AWS_KUBERNETES_VERSION,
         WithoutNatGateways,
         function_name!(),
     );
@@ -105,8 +100,7 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::WithPause,
-        AWS_KUBERNETES_MAJOR_VERSION,
-        AWS_KUBERNETES_MINOR_VERSION,
+        AWS_KUBERNETES_VERSION,
         WithoutNatGateways,
         function_name!(),
     );
@@ -122,8 +116,7 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::WithUpgrade,
-        AWS_KUBERNETES_MAJOR_VERSION,
-        AWS_KUBERNETES_MINOR_VERSION,
+        AWS_KUBERNETES_VERSION,
         WithoutNatGateways,
         function_name!(),
     );
