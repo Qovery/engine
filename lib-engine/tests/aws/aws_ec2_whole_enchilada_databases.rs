@@ -11,7 +11,7 @@ use qovery_engine::utilities::to_short_id;
 use tracing::{span, Level};
 
 use crate::helpers;
-use crate::helpers::aws_ec2::AWS_K3S_VERSION;
+use crate::helpers::aws_ec2::K3S_KUBERNETES_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::database::{test_db, StorageSize};
 
@@ -64,7 +64,7 @@ fn test_ec2_database(
             logger.clone(),
             &localisation,
             Kind::Ec2,
-            AWS_K3S_VERSION.to_string(),
+            K3S_KUBERNETES_VERSION,
             &cluster_domain,
             None,
             1,

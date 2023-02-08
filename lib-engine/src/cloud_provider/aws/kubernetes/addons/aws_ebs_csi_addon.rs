@@ -1,4 +1,4 @@
-use crate::cloud_provider::kubernetes::{KubernetesAddon, KubernetesError};
+use crate::cloud_provider::kubernetes::KubernetesVersion;
 use serde_derive::Serialize;
 
 /// AWS EBS CSI addon
@@ -9,22 +9,17 @@ pub struct AwsEbsCsiAddon {
 }
 
 impl AwsEbsCsiAddon {
-    pub fn new_from_k8s_version(k8s_version: &str) -> Result<Self, KubernetesError> {
-        Ok(AwsEbsCsiAddon {
+    pub fn new_from_k8s_version(k8s_version: KubernetesVersion) -> Self {
+        AwsEbsCsiAddon {
             // Get current default build of an aws-ebs-csi add-on:
             // aws eks describe-addon-versions --kubernetes-version 1.22 --addon-name aws-ebs-csi-driver | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
-                "1.22" => "v1.14.0-eksbuild.1",
-                "1.23" => "v1.15.0-eksbuild.1",
-                _ => {
-                    return Err(KubernetesError::AddonUnSupportedKubernetesVersion {
-                        kubernetes_version: k8s_version.to_string(),
-                        addon: KubernetesAddon::EbsCsi,
-                    })
-                }
+                KubernetesVersion::V1_22 => "v1.14.0-eksbuild.1",
+                KubernetesVersion::V1_23 => "v1.15.0-eksbuild.1",
+                KubernetesVersion::V1_24 => "v1.15.0-eksbuild.1",
             }
             .to_string(),
-        })
+        }
     }
 
     pub fn new_with_overridden_version(addon_version: &str) -> Self {
@@ -37,42 +32,28 @@ impl AwsEbsCsiAddon {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
-    use crate::cloud_provider::kubernetes::{KubernetesAddon, KubernetesError};
+    use crate::cloud_provider::kubernetes::KubernetesVersion;
 
     #[test]
     fn aws_addon_ebs_csi_new_test() {
         // setup:
-        struct TestCase<'a> {
-            k8s_version: &'a str,
-            expected: Result<AwsEbsCsiAddon, KubernetesError>,
+        struct TestCase {
+            k8s_version: KubernetesVersion,
+            expected: AwsEbsCsiAddon,
         }
 
         let tests_cases = vec![
             TestCase {
-                k8s_version: "1.22",
-                expected: Ok(AwsEbsCsiAddon {
+                k8s_version: KubernetesVersion::V1_22,
+                expected: AwsEbsCsiAddon {
                     version: "v1.14.0-eksbuild.1".to_string(),
-                }),
+                },
             },
             TestCase {
-                k8s_version: "1.23",
-                expected: Ok(AwsEbsCsiAddon {
+                k8s_version: KubernetesVersion::V1_23,
+                expected: AwsEbsCsiAddon {
                     version: "v1.15.0-eksbuild.1".to_string(),
-                }),
-            },
-            TestCase {
-                k8s_version: "1.21",
-                expected: Err(KubernetesError::AddonUnSupportedKubernetesVersion {
-                    kubernetes_version: "1.21".to_string(),
-                    addon: KubernetesAddon::EbsCsi,
-                }),
-            },
-            TestCase {
-                k8s_version: "1.24",
-                expected: Err(KubernetesError::AddonUnSupportedKubernetesVersion {
-                    kubernetes_version: "1.24".to_string(),
-                    addon: KubernetesAddon::EbsCsi,
-                }),
+                },
             },
         ];
 

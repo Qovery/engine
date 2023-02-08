@@ -6,7 +6,7 @@ use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
-    Kubernetes, KubernetesUpgradeStatus, ProviderOptions,
+    Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -128,7 +128,7 @@ pub struct Kapsule {
     id: String,
     long_id: Uuid,
     name: String,
-    version: String,
+    version: KubernetesVersion,
     zone: ScwZone,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
     dns_provider: Arc<Box<dyn DnsProvider>>,
@@ -145,7 +145,7 @@ impl Kapsule {
         context: Context,
         long_id: Uuid,
         name: String,
-        version: String,
+        version: KubernetesVersion,
         zone: ScwZone,
         cloud_provider: Arc<Box<dyn CloudProvider>>,
         dns_provider: Arc<Box<dyn DnsProvider>>,
@@ -481,7 +481,7 @@ impl Kapsule {
         context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.cluster_name().as_str());
-        context.insert("kubernetes_cluster_version", self.version());
+        context.insert("kubernetes_cluster_version", &self.version.to_string());
 
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
@@ -598,7 +598,7 @@ impl Kapsule {
         match self.get_kubeconfig_file() {
             Ok((path, _)) => match is_kubernetes_upgrade_required(
                 path,
-                &self.version,
+                self.version,
                 self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1472,8 +1472,8 @@ impl Kubernetes for Kapsule {
         self.name.as_str()
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> KubernetesVersion {
+        self.version
     }
 
     fn region(&self) -> &str {
