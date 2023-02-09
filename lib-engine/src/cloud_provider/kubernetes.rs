@@ -147,6 +147,8 @@ impl FromStr for KubernetesVersion {
             "1.22" => Ok(KubernetesVersion::V1_22),
             "1.23" => Ok(KubernetesVersion::V1_23),
             "1.24" => Ok(KubernetesVersion::V1_24),
+            // EC2 specifics
+            "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23), // TODO(bchastanier): remove this one once EC2 version are properly handled
             _ => Err(()),
         }
     }
