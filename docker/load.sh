@@ -2,7 +2,17 @@
 
 set -e
 
-ARCH="amd64"
+case $(uname -m) in
+  'aarch64')
+     ARCH="aarch64"
+     ARCH_HASHICORP="arm64"
+     ;;
+  'x86_64')
+     ARCH="amd64"
+     ARCH_HASHICORP="amd64"
+     ;;
+esac
+
 SYSTEM="linux"
 ARGS_NUM=$#
 TMP_FOLDER="/tmp/binaries"
@@ -18,7 +28,7 @@ function check_num_args() {
 source bin_versions
 
 function download() { ## Download prerequisites binaries for the engine
-  echo "Downloading binaries"
+  echo "Downloading binaries for architecture ${ARCH}"
 
   mkdir -p $TMP_FOLDER && cd $TMP_FOLDER
   mkdir $BIN_DEST_FOLDER
@@ -31,19 +41,19 @@ function download() { ## Download prerequisites binaries for the engine
 
   # terraform
   echo "Downloading terraform"
-  curl -so terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${SYSTEM}_${ARCH}.zip
+  curl -so terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${SYSTEM}_${ARCH_HASHICORP}.zip
   unzip terraform.zip
   mv terraform $BIN_DEST_FOLDER/terraform${TERRAFORM_VERSION}
 
   # helm
   echo "Downloading helm"
-  curl -so helm.tgz https://get.helm.sh/helm-v${HELM_VERSION}-${SYSTEM}-${ARCH}.tar.gz
+  curl -so helm.tgz https://get.helm.sh/helm-v${HELM_VERSION}-${SYSTEM}-${ARCH_HASHICORP}.tar.gz
   tar -zxf helm.tgz
-  mv linux-amd64/helm $BIN_DEST_FOLDER/helm${HELM_VERSION}
+  mv linux-${ARCH_HASHICORP}/helm $BIN_DEST_FOLDER/helm${HELM_VERSION}
 
   # kubectl
   echo "Downloading kubectl"
-  curl -so kubectl https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl
+  curl -so kubectl https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/${ARCH_HASHICORP}/kubectl
   mv kubectl $BIN_DEST_FOLDER/kubectl${KUBECTL_VERSION}
 
   # Aws iam authenticator
@@ -51,19 +61,14 @@ function download() { ## Download prerequisites binaries for the engine
   curl -sLo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_${SYSTEM}_${ARCH}
   mv aws-iam-authenticator $BIN_DEST_FOLDER/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION}
 
-  # Dumb init
-  echo "Downloading Dumb init"
-  curl -sLo dumb-init https://github.com/Yelp/dumb-init/releases/download/v${DUMB_INIT_VERSION}/dumb-init_${DUMB_INIT_VERSION}_x86_64
-  mv dumb-init $BIN_DEST_FOLDER/
-
   # Vault
   echo "Downloading Vault"
-  curl -so vault.zip https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_${SYSTEM}_${ARCH}.zip
+  curl -so vault.zip https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_${SYSTEM}_${ARCH_HASHICORP}.zip
   unzip vault.zip
   mv vault $BIN_DEST_FOLDER/vault${VAULT_VERSION}
 
   # Clean
-  chmod 755 $BIN_DEST_FOLDER/*
+  chmod 755 -R $BIN_DEST_FOLDER/
   rm -Rf $TMP_FOLDER
   cd ~
 }

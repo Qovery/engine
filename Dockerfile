@@ -20,11 +20,12 @@ RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
+# TODO: Make an image for ARM
 RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq -r .tag_name) && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
     chmod 755 /usr/bin/sccache
 
-# build engine
+## build engine
 RUN sccache --version && sccache --show-stats && cargo build --release && sccache --show-stats
 
 # Final image
@@ -40,9 +41,9 @@ ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 
 RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
+    echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
     apt-get update &&\
-    apt-get -y install docker-ce docker-ce-cli containerd.io awscli procps netcat-openbsd iproute2 gdb && \
+    apt-get -y install docker-ce docker-ce-cli containerd.io awscli procps netcat-openbsd iproute2 dumb-init && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
