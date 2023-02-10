@@ -88,6 +88,72 @@ impl Display for KubernetesAddon {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum KubernetesVersion {
+    V1_22,
+    V1_23,
+    V1_24,
+    // TODO(benjaminch): handle K3S case
+}
+
+impl KubernetesVersion {
+    pub fn major(&self) -> u8 {
+        match &self {
+            KubernetesVersion::V1_22 => 1,
+            KubernetesVersion::V1_23 => 1,
+            KubernetesVersion::V1_24 => 1,
+        }
+    }
+
+    pub fn minor(&self) -> u8 {
+        match &self {
+            KubernetesVersion::V1_22 => 22,
+            KubernetesVersion::V1_23 => 23,
+            KubernetesVersion::V1_24 => 24,
+        }
+    }
+
+    pub fn next_version(&self) -> Option<Self> {
+        match self {
+            KubernetesVersion::V1_22 => Some(KubernetesVersion::V1_23),
+            KubernetesVersion::V1_23 => Some(KubernetesVersion::V1_24),
+            KubernetesVersion::V1_24 => None,
+        }
+    }
+}
+
+impl Display for KubernetesVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}.{}", self.major(), self.minor()))
+    }
+}
+
+impl From<KubernetesVersion> for VersionsNumber {
+    fn from(val: KubernetesVersion) -> Self {
+        VersionsNumber {
+            major: val.major().to_string(),
+            minor: Some(val.minor().to_string()),
+            patch: None,
+            suffix: None,
+        }
+    }
+}
+
+impl FromStr for KubernetesVersion {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "1.22" => Ok(KubernetesVersion::V1_22),
+            "1.23" => Ok(KubernetesVersion::V1_23),
+            "1.24" => Ok(KubernetesVersion::V1_24),
+            // EC2 specifics
+            "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23), // TODO(bchastanier): remove this one once EC2 version are properly handled
+            _ => Err(()),
+        }
+    }
+}
+
 pub trait Kubernetes {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
@@ -100,7 +166,7 @@ pub trait Kubernetes {
     fn cluster_name(&self) -> String {
         format!("qovery-{}", self.id())
     }
-    fn version(&self) -> &str;
+    fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
     fn zone(&self) -> &str;
     fn aws_zones(&self) -> Option<Vec<AwsZones>>;
@@ -704,7 +770,7 @@ impl NodeGroupsWithDesiredState {
 
 pub fn is_kubernetes_upgrade_required<P>(
     kubernetes_config: P,
-    requested_version: &str,
+    requested_version: KubernetesVersion,
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
     logger: &dyn Logger,
@@ -933,7 +999,7 @@ pub struct KubernetesUpgradeStatus {
 /// * is the requested version is older than the current deployed
 ///
 fn check_kubernetes_upgrade_status(
-    requested_version: &str,
+    requested_version: KubernetesVersion,
     deployed_masters_version: VersionsNumber,
     deployed_workers_version: Vec<VersionsNumber>,
     event_details: EventDetails,
@@ -945,16 +1011,7 @@ fn check_kubernetes_upgrade_status(
     let mut older_masters_version_detected = false;
     let mut older_workers_version_detected = false;
 
-    let wished_version = match VersionsNumber::from_str(requested_version) {
-        Ok(v) => v,
-        Err(e) => {
-            return Err(Box::new(EngineError::new_cannot_determine_k8s_requested_upgrade_version(
-                event_details,
-                requested_version.to_string(),
-                Some(e),
-            )));
-        }
-    };
+    let wished_version: VersionsNumber = requested_version.into();
 
     // check master versions
     match compare_kubernetes_cluster_versions_for_upgrade(&deployed_masters_version, &wished_version) {
@@ -1442,6 +1499,7 @@ mod tests {
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
 
+    use crate::cloud_provider::kubernetes::KubernetesVersion as K8sVersion;
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         filter_svc_loadbalancers, kube_create_namespace_if_not_exists, kube_does_secret_exists, kube_list_services,
@@ -1545,8 +1603,8 @@ mod tests {
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
-        let version_1_16 = VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None);
-        let version_1_17 = VersionsNumber::new("1".to_string(), Some("17".to_string()), None, None);
+        let version_1_22: VersionsNumber = K8sVersion::V1_22.into();
+        let version_1_23: VersionsNumber = K8sVersion::V1_23.into();
         let event_details = EventDetails::new(
             None,
             QoveryIdentifier::new_random(),
@@ -1559,37 +1617,37 @@ mod tests {
 
         // test full cluster upgrade (masters + workers)
         let result = check_kubernetes_upgrade_status(
-            "1.17",
-            version_1_16.clone(),
-            vec![version_1_16.clone()],
+            K8sVersion::V1_23,
+            version_1_22.clone(),
+            vec![version_1_22.clone()],
             event_details.clone(),
             &logger,
         )
         .unwrap();
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Masters); // master should be performed first
-        assert_eq!(result.deployed_masters_version, version_1_16);
-        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.deployed_masters_version, version_1_22);
+        assert_eq!(result.deployed_workers_version, version_1_22);
         assert!(!result.older_masters_version_detected);
         assert!(!result.older_workers_version_detected);
         let result = check_kubernetes_upgrade_status(
-            "1.17",
-            version_1_17.clone(),
-            vec![version_1_16.clone()],
+            K8sVersion::V1_23,
+            version_1_23.clone(),
+            vec![version_1_22.clone()],
             event_details.clone(),
             &logger,
         )
         .unwrap();
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers); // then workers
-        assert_eq!(result.deployed_masters_version, version_1_17);
-        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.deployed_masters_version, version_1_23);
+        assert_eq!(result.deployed_workers_version, version_1_22);
         assert!(!result.older_masters_version_detected);
         assert!(!result.older_workers_version_detected);
 
         // everything is up to date, no upgrade required
         let result = check_kubernetes_upgrade_status(
-            "1.17",
-            version_1_17.clone(),
-            vec![version_1_17.clone()],
+            K8sVersion::V1_23,
+            version_1_23.clone(),
+            vec![version_1_23.clone()],
             event_details.clone(),
             &logger,
         )
@@ -1600,9 +1658,9 @@ mod tests {
 
         // downgrade should be detected
         let result = check_kubernetes_upgrade_status(
-            "1.16",
-            version_1_17.clone(),
-            vec![version_1_17.clone()],
+            K8sVersion::V1_22,
+            version_1_23.clone(),
+            vec![version_1_23.clone()],
             event_details.clone(),
             &logger,
         )
@@ -1613,16 +1671,16 @@ mod tests {
 
         // mixed workers version
         let result = check_kubernetes_upgrade_status(
-            "1.17",
-            version_1_17.clone(),
-            vec![version_1_17.clone(), version_1_16.clone()],
+            K8sVersion::V1_23,
+            version_1_23.clone(),
+            vec![version_1_23.clone(), version_1_22.clone()],
             event_details,
             &logger,
         )
         .unwrap();
         assert_eq!(result.required_upgrade_on.unwrap(), KubernetesNodesType::Workers);
-        assert_eq!(result.deployed_masters_version, version_1_17);
-        assert_eq!(result.deployed_workers_version, version_1_16);
+        assert_eq!(result.deployed_masters_version, version_1_23);
+        assert_eq!(result.deployed_workers_version, version_1_22);
         assert!(!result.older_masters_version_detected); // not true because we're in an upgrade process
         assert!(!result.older_workers_version_detected); // not true because we're in an upgrade process
     }

@@ -25,7 +25,7 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
-use crate::helpers::aws_ec2::AWS_K3S_VERSION;
+use crate::helpers::aws_ec2::K3S_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
@@ -610,9 +610,9 @@ pub fn test_db(
     let ea_delete = environment_delete.clone();
 
     let kubernetes_version = match kubernetes_kind {
-        KubernetesKind::Eks => AWS_KUBERNETES_VERSION.to_string(),
-        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION.to_string(),
-        KubernetesKind::Ec2 => AWS_K3S_VERSION.to_string(),
+        KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
+        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
+        KubernetesKind::Ec2 => K3S_KUBERNETES_VERSION,
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -625,7 +625,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -637,7 +637,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     1,
@@ -649,7 +649,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -891,7 +891,7 @@ pub fn test_pause_managed_db(
                 .as_ref()
                 .expect("AWS_TEST_CLUSTER_REGION is not set")
                 .to_string(),
-            AWS_KUBERNETES_VERSION.to_string(),
+            AWS_KUBERNETES_VERSION,
         ),
         Kind::Scw => (
             secrets
@@ -899,7 +899,7 @@ pub fn test_pause_managed_db(
                 .as_ref()
                 .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
                 .to_string(),
-            SCW_KUBERNETES_VERSION.to_string(),
+            SCW_KUBERNETES_VERSION,
         ),
     };
 
@@ -913,7 +913,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -925,7 +925,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     1,
@@ -937,7 +937,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -1173,7 +1173,7 @@ pub fn test_db_on_upgrade(
                 .as_ref()
                 .expect("AWS_TEST_CLUSTER_REGION is not set")
                 .to_string(),
-            AWS_KUBERNETES_VERSION.to_string(),
+            AWS_KUBERNETES_VERSION,
         ),
         Kind::Scw => (
             secrets
@@ -1181,7 +1181,7 @@ pub fn test_db_on_upgrade(
                 .as_ref()
                 .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
                 .to_string(),
-            SCW_KUBERNETES_VERSION.to_string(),
+            SCW_KUBERNETES_VERSION,
         ),
     };
 
@@ -1191,7 +1191,7 @@ pub fn test_db_on_upgrade(
             logger.clone(),
             localisation.as_str(),
             KubernetesKind::Eks,
-            kubernetes_version.clone(),
+            kubernetes_version,
             &ClusterDomain::Default {
                 cluster_id: context.cluster_short_id().to_string(),
             },
@@ -1205,7 +1205,7 @@ pub fn test_db_on_upgrade(
             logger.clone(),
             localisation.as_str(),
             KubernetesKind::ScwKapsule,
-            kubernetes_version.clone(),
+            kubernetes_version,
             &ClusterDomain::Default {
                 cluster_id: context.cluster_short_id().to_string(),
             },

@@ -1,7 +1,7 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::InstanceEc2;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::container_registry::ecr::ECR;
@@ -11,9 +11,7 @@ use qovery_engine::logger::Logger;
 use tracing::error;
 use uuid::Uuid;
 
-pub const AWS_K3S_VERSION: &str = "v1.23.6+k3s1";
-pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 23;
+pub const K3S_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23; // version is hardcoded in TF "v1.23.6+k3s1";
 pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
 
@@ -53,7 +51,7 @@ pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) 
             .expect("AWS_EC2_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::Ec2,
-        AWS_K3S_VERSION.to_string(),
+        K3S_KUBERNETES_VERSION,
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
         },

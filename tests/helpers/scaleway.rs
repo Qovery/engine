@@ -1,14 +1,13 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use const_format::formatcp;
 use rand::Rng;
 use tracing::error;
 use uuid::Uuid;
 
 use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
@@ -30,9 +29,7 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 23;
-pub const SCW_KUBERNETES_VERSION: &str = formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23;
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -85,7 +82,7 @@ pub fn scw_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> I
             .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::ScwKapsule,
-        SCW_KUBERNETES_VERSION.to_string(),
+        SCW_KUBERNETES_VERSION,
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
         },
@@ -102,7 +99,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         logger: Box<dyn Logger>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
-        kubernetes_version: String,
+        kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
@@ -123,7 +120,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let cluster = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
-            kubernetes_version.as_str(),
+            kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
             localisation,

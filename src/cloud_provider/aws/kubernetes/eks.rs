@@ -6,7 +6,7 @@ use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
-    KubernetesUpgradeStatus,
+    KubernetesUpgradeStatus, KubernetesVersion,
 };
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::service::Action;
@@ -47,7 +47,7 @@ pub struct EKS {
     id: String,
     long_id: Uuid,
     name: String,
-    version: String,
+    version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZones>,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
@@ -66,7 +66,7 @@ impl EKS {
         id: &str,
         long_id: Uuid,
         name: &str,
-        version: &str,
+        version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
         cloud_provider: Arc<Box<dyn CloudProvider>>,
@@ -96,7 +96,7 @@ impl EKS {
             id: id.to_string(),
             long_id,
             name: name.to_string(),
-            version: version.to_string(),
+            version,
             region,
             zones: aws_zones,
             cloud_provider,
@@ -209,8 +209,8 @@ impl Kubernetes for EKS {
         self.name.as_str()
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> KubernetesVersion {
+        self.version
     }
 
     fn region(&self) -> &str {

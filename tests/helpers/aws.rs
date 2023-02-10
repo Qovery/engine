@@ -2,11 +2,10 @@ extern crate serde;
 extern crate serde_derive;
 
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
-use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
@@ -25,9 +24,7 @@ use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 23;
-pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23;
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
@@ -67,7 +64,7 @@ pub fn aws_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> I
             .expect("AWS_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::Eks,
-        AWS_KUBERNETES_VERSION.to_string(),
+        AWS_KUBERNETES_VERSION,
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
         },
@@ -84,7 +81,7 @@ impl Cluster<AWS, Options> for AWS {
         logger: Box<dyn Logger>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
-        kubernetes_version: String,
+        kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
@@ -109,7 +106,7 @@ impl Cluster<AWS, Options> for AWS {
         let kubernetes = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
-            kubernetes_version.as_str(),
+            kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
             localisation,

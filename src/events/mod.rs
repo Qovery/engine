@@ -387,6 +387,7 @@ impl EnvironmentStep {
                 | EnvironmentStep::DeployedError
                 | EnvironmentStep::PausedError
                 | EnvironmentStep::DeletedError
+                | EnvironmentStep::RestartedError
         )
     }
 }

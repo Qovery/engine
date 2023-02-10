@@ -5,7 +5,7 @@ use crate::helpers::utilities::FuncTestsSecrets;
 
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::engine::InfrastructureContext;
@@ -34,7 +34,7 @@ pub trait Cluster<T, U> {
         logger: Box<dyn Logger>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
-        kubernetes_version: String,
+        kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,

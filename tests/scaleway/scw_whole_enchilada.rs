@@ -1,13 +1,13 @@
 use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
-use crate::helpers::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
 };
@@ -45,8 +45,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             zone.as_str(),
             None,
             ClusterTestType::Classic,
-            SCW_KUBERNETES_MAJOR_VERSION,
-            SCW_KUBERNETES_MINOR_VERSION,
+            SCW_KUBERNETES_VERSION,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
@@ -88,8 +87,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             zone.as_str(),
             None,
             ClusterTestType::WithPause,
-            SCW_KUBERNETES_MAJOR_VERSION,
-            SCW_KUBERNETES_MINOR_VERSION,
+            SCW_KUBERNETES_VERSION,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
@@ -131,8 +129,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             zone.as_str(),
             None,
             ClusterTestType::WithUpgrade,
-            SCW_KUBERNETES_MAJOR_VERSION,
-            SCW_KUBERNETES_MINOR_VERSION,
+            SCW_KUBERNETES_VERSION,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),

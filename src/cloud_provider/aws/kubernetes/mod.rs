@@ -470,10 +470,7 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(
-                            event_details.clone(),
-                            "VAULT_SECRET_ID".to_string(),
-                        ),
+                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
                         None,
                     )),
                 }
@@ -543,10 +540,10 @@ fn tera_context(
     context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
     context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
     context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
-    context.insert("eks_masters_version", &kubernetes.version());
-    context.insert("eks_workers_version", &kubernetes.version());
-    context.insert("ec2_masters_version", &kubernetes.version());
-    context.insert("ec2_workers_version", &kubernetes.version());
+    context.insert("eks_masters_version", &kubernetes.version().to_string());
+    context.insert("eks_workers_version", &kubernetes.version().to_string());
+    context.insert("ec2_masters_version", &kubernetes.version().to_string());
+    context.insert("ec2_workers_version", &kubernetes.version().to_string());
     context.insert("cloudwatch_eks_log_group", &cloudwatch_eks_log_group);
     context.insert(
         "aws_cloudwatch_eks_logs_retention_days",
@@ -605,8 +602,7 @@ fn tera_context(
     context.insert(
         "eks_addon_vpc_cni",
         &(match &options.aws_addon_cni_version_override {
-            None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version())
-                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details.clone(), e))?,
+            None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
             Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
         }),
     );
@@ -614,8 +610,7 @@ fn tera_context(
     context.insert(
         "eks_addon_ebs_csi",
         &(match &options.aws_addon_ebs_csi_version_override {
-            None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version())
-                .map_err(|e| EngineError::new_k8s_addon_version_not_supported(event_details, e))?,
+            None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
             Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
         }),
     );

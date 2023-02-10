@@ -5,6 +5,7 @@ use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
+    KubernetesVersion,
 };
 use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -29,7 +30,7 @@ pub struct EC2 {
     id: String,
     long_id: Uuid,
     name: String,
-    version: String,
+    version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZones>,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
@@ -48,7 +49,7 @@ impl EC2 {
         id: &str,
         long_id: Uuid,
         name: &str,
-        version: &str,
+        version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
         cloud_provider: Arc<Box<dyn CloudProvider>>,
@@ -85,7 +86,7 @@ impl EC2 {
             id: id.to_string(),
             long_id,
             name: name.to_string(),
-            version: version.to_string(),
+            version,
             region,
             zones: aws_zones,
             cloud_provider,
@@ -144,8 +145,8 @@ impl Kubernetes for EC2 {
         self.name.as_str()
     }
 
-    fn version(&self) -> &str {
-        self.version.as_str()
+    fn version(&self) -> KubernetesVersion {
+        self.version
     }
 
     fn region(&self) -> &str {
