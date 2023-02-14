@@ -13,16 +13,15 @@ pub enum ScwInstancesType {
     DEV1_M,
     DEV1_S,
     DEV1_XL,
-    ENT1_2XL,
     ENT1_L,
     ENT1_M,
     ENT1_S,
-    ENT1_XL,
+    ENT1_XS,
+    ENT1_XXS,
     GP1_L,
     GP1_M,
     GP1_S,
     GP1_VIZ,
-    GP1_XL,
     GP1_XS,
     GPU_3070_S,
     PLAY2_MICRO,
@@ -53,16 +52,15 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
             ScwInstancesType::DEV1_XL => "dev1-xl",
-            ScwInstancesType::ENT1_2XL => "ent1-2xl",
             ScwInstancesType::ENT1_L => "ent1-l",
             ScwInstancesType::ENT1_M => "ent1-m",
             ScwInstancesType::ENT1_S => "ent1-s",
-            ScwInstancesType::ENT1_XL => "ent1-xl",
+            ScwInstancesType::ENT1_XS => "ent1-xs",
+            ScwInstancesType::ENT1_XXS => "ent1-xxs",
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
             ScwInstancesType::GP1_VIZ => "gp1-viz",
-            ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
@@ -97,6 +95,8 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::ENT1_L
                 | ScwInstancesType::ENT1_M
                 | ScwInstancesType::ENT1_S
+                | ScwInstancesType::ENT1_XS
+                | ScwInstancesType::ENT1_XXS
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
@@ -131,6 +131,8 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::ENT1_L
                 | ScwInstancesType::ENT1_M
                 | ScwInstancesType::ENT1_S
+                | ScwInstancesType::ENT1_XS
+                | ScwInstancesType::ENT1_XXS
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
@@ -164,16 +166,15 @@ impl ScwInstancesType {
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
             ScwInstancesType::DEV1_XL => "dev1-xl",
-            ScwInstancesType::ENT1_2XL => "ent1-2xl",
             ScwInstancesType::ENT1_L => "ent1-l",
             ScwInstancesType::ENT1_M => "ent1-m",
             ScwInstancesType::ENT1_S => "ent1-s",
-            ScwInstancesType::ENT1_XL => "ent1-xl",
+            ScwInstancesType::ENT1_XS => "ent1-xs",
+            ScwInstancesType::ENT1_XXS => "ent1-xxs",
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
             ScwInstancesType::GP1_VIZ => "gp1-viz",
-            ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
@@ -206,16 +207,15 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::DEV1_M => write!(f, "dev1-m"),
             ScwInstancesType::DEV1_S => write!(f, "dev1-s"),
             ScwInstancesType::DEV1_XL => write!(f, "dev1-xl"),
-            ScwInstancesType::ENT1_2XL => write!(f, "ent1-2xl"),
             ScwInstancesType::ENT1_L => write!(f, "ent1-l"),
             ScwInstancesType::ENT1_M => write!(f, "ent1-m"),
             ScwInstancesType::ENT1_S => write!(f, "ent1-s"),
-            ScwInstancesType::ENT1_XL => write!(f, "ent1-xl"),
+            ScwInstancesType::ENT1_XS => write!(f, "ent1-xs"),
+            ScwInstancesType::ENT1_XXS => write!(f, "ent1-xxs"),
             ScwInstancesType::GP1_L => write!(f, "gp1-l"),
             ScwInstancesType::GP1_M => write!(f, "gp1-m"),
             ScwInstancesType::GP1_S => write!(f, "gp1-s"),
             ScwInstancesType::GP1_VIZ => write!(f, "gp1-viz"),
-            ScwInstancesType::GP1_XL => write!(f, "gp1-xl"),
             ScwInstancesType::GP1_XS => write!(f, "gp1-xs"),
             ScwInstancesType::GPU_3070_S => write!(f, "gpu-3070-s"),
             ScwInstancesType::PLAY2_MICRO => write!(f, "play2-micro"),
@@ -250,16 +250,15 @@ impl FromStr for ScwInstancesType {
             "dev1-m" => Ok(ScwInstancesType::DEV1_M),
             "dev1-s" => Ok(ScwInstancesType::DEV1_S),
             "dev1-xl" => Ok(ScwInstancesType::DEV1_XL),
-            "ent1-2xl" => Ok(ScwInstancesType::ENT1_2XL),
             "ent1-l" => Ok(ScwInstancesType::ENT1_L),
             "ent1-m" => Ok(ScwInstancesType::ENT1_M),
             "ent1-s" => Ok(ScwInstancesType::ENT1_S),
-            "ent1-xl" => Ok(ScwInstancesType::ENT1_XL),
+            "ent1-xs" => Ok(ScwInstancesType::ENT1_XS),
+            "ent1-xxs" => Ok(ScwInstancesType::ENT1_XXS),
             "gp1-l" => Ok(ScwInstancesType::GP1_L),
             "gp1-m" => Ok(ScwInstancesType::GP1_M),
             "gp1-s" => Ok(ScwInstancesType::GP1_S),
             "gp1-viz" => Ok(ScwInstancesType::GP1_VIZ),
-            "gp1-xl" => Ok(ScwInstancesType::GP1_XL),
             "gp1-xs" => Ok(ScwInstancesType::GP1_XS),
             "gpu-3070-s" => Ok(ScwInstancesType::GPU_3070_S),
             "play2-micro" => Ok(ScwInstancesType::PLAY2_MICRO),
@@ -282,7 +281,7 @@ impl FromStr for ScwInstancesType {
             "x64-30gb" => Ok(ScwInstancesType::X64_30GB),
             "x64-60gb" => Ok(ScwInstancesType::X64_60GB),
             _ => Err(CommandError::new_from_safe_message(format!(
-                "`{s}` instance type is not supported"
+                "`{s}` instance type is not supported",
             ))),
         }
     }
