@@ -203,6 +203,8 @@ pub enum Tag {
     AwsSdkListElasticacheClusters,
     AwsSdkListDocDbClusters,
     AwsCloudwatchRetentionConfigurationError,
+    AwsSdkListEC2Volumes,
+    AwsSdkDetachEC2Volumes,
     Base64DecodeIssue,
 }
 
@@ -408,6 +410,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::AwsSdkListElasticacheClusters => Tag::AwsSdkListElasticacheClusters,
             errors::Tag::AwsSdkListDocDbClusters => Tag::AwsSdkListDocDbClusters,
             errors::Tag::AwsCloudwatchRetentionConfigurationError => Tag::AwsCloudwatchRetentionConfigurationError,
+            errors::Tag::AwsSdkListEC2Volumes => Tag::AwsSdkListEC2Volumes,
+            errors::Tag::AwsSdkDetachEC2Volumes => Tag::AwsSdkDetachEC2Volumes,
             errors::Tag::Base64DecodeIssue => Tag::Base64DecodeIssue,
         }
     }

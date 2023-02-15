@@ -2,6 +2,8 @@ use crate::helpers::aws_ec2::ec2_kubernetes_instance;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
+use crate::helpers::aws::AWS_KUBERNETES_VERSION;
+use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
@@ -148,7 +150,6 @@ pub fn cluster_test(
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     test_type: ClusterTestType,
-    kubernetes_boot_version: KubernetesVersion,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     environment_to_deploy: Option<&EnvironmentRequest>,
@@ -157,13 +158,24 @@ pub fn cluster_test(
 
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
+
+    let kubernetes_boot_version = match kubernetes_kind {
+        KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
+        KubernetesKind::Ec2 => KubernetesVersion::V1_23 {
+            prefix: Some('v'.to_string()),
+            patch: Some(16),
+            suffix: Some("+k3s1".to_string()),
+        },
+        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
+    };
+
     let engine = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
             localisation,
             kubernetes_kind,
-            kubernetes_boot_version,
+            kubernetes_boot_version.clone(),
             cluster_domain,
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
@@ -175,7 +187,7 @@ pub fn cluster_test(
             logger.clone(),
             localisation,
             kubernetes_kind,
-            kubernetes_boot_version,
+            kubernetes_boot_version.clone(),
             cluster_domain,
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
@@ -281,14 +293,13 @@ pub fn cluster_test(
         ClusterTestType::WithNodesResize => {
             let min_nodes = 11;
             let max_nodes = 15;
-            let kubernetes_version = kubernetes_boot_version;
             let engine = match provider_kind {
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
                     localisation,
                     KubernetesKind::Eks,
-                    kubernetes_version,
+                    kubernetes_boot_version,
                     cluster_domain,
                     vpc_network_mode,
                     min_nodes,
@@ -300,7 +311,7 @@ pub fn cluster_test(
                     logger.clone(),
                     localisation,
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version,
+                    kubernetes_boot_version,
                     cluster_domain,
                     vpc_network_mode,
                     min_nodes,

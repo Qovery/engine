@@ -1,11 +1,10 @@
 use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KKind, KubernetesVersion};
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
-use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
@@ -14,7 +13,6 @@ use qovery_engine::utilities::to_short_id;
 fn create_and_destroy_kapsule_cluster(
     zone: ScwZone,
     test_type: ClusterTestType,
-    kubernetes_boot_version: KubernetesVersion,
     test_name: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) {
@@ -29,7 +27,6 @@ fn create_and_destroy_kapsule_cluster(
             zone.as_str(),
             None,
             test_type,
-            kubernetes_boot_version,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
             },
@@ -45,7 +42,7 @@ fn create_and_destroy_kapsule_cluster(
 #[test]
 fn create_and_destroy_kapsule_cluster_par_1() {
     let zone = ScwZone::Paris1;
-    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, SCW_KUBERNETES_VERSION, function_name!(), None);
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -53,7 +50,7 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 #[test]
 fn create_and_destroy_kapsule_cluster_par_2() {
     let zone = ScwZone::Paris2;
-    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, SCW_KUBERNETES_VERSION, function_name!(), None);
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -61,13 +58,7 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[test]
 fn create_pause_and_destroy_kapsule_cluster_ams_1() {
     let zone = ScwZone::Amsterdam1;
-    create_and_destroy_kapsule_cluster(
-        zone,
-        ClusterTestType::WithPause,
-        SCW_KUBERNETES_VERSION,
-        function_name!(),
-        None,
-    );
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithPause, function_name!(), None);
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -75,7 +66,7 @@ fn create_pause_and_destroy_kapsule_cluster_ams_1() {
 #[test]
 fn create_and_destroy_kapsule_cluster_war_1() {
     let zone = ScwZone::Warsaw1;
-    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, SCW_KUBERNETES_VERSION, function_name!(), None);
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
@@ -85,13 +76,7 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = ScwZone::Paris1;
-    create_and_destroy_kapsule_cluster(
-        zone,
-        ClusterTestType::WithUpgrade,
-        SCW_KUBERNETES_VERSION,
-        function_name!(),
-        None,
-    );
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
@@ -101,13 +86,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
     let zone = ScwZone::Paris2;
-    create_and_destroy_kapsule_cluster(
-        zone,
-        ClusterTestType::WithUpgrade,
-        SCW_KUBERNETES_VERSION,
-        function_name!(),
-        None,
-    );
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
@@ -117,13 +96,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
     let zone = ScwZone::Amsterdam1;
-    create_and_destroy_kapsule_cluster(
-        zone,
-        ClusterTestType::WithUpgrade,
-        SCW_KUBERNETES_VERSION,
-        function_name!(),
-        None,
-    );
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
@@ -133,11 +106,5 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
     let zone = ScwZone::Warsaw1;
-    create_and_destroy_kapsule_cluster(
-        zone,
-        ClusterTestType::WithUpgrade,
-        SCW_KUBERNETES_VERSION,
-        function_name!(),
-        None,
-    );
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }

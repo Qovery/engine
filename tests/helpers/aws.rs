@@ -24,7 +24,11 @@ use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23;
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23 {
+    prefix: None,
+    patch: None,
+    suffix: None,
+};
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
@@ -282,6 +286,7 @@ impl Cluster<AWS, Options> for AWS {
             user_network_config: None,
             aws_addon_cni_version_override: None,
             aws_addon_ebs_csi_version_override: None,
+            ec2_exposed_port: Some(9876),
         }
     }
 }

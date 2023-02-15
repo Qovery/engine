@@ -10,6 +10,8 @@ use aws_sdk_elasticloadbalancingv2::{
     model::{LoadBalancer, TagDescription},
 };
 
+use crate::errors::EngineError;
+use crate::events::EventDetails;
 use aws_smithy_client::SdkError;
 
 #[async_trait]
@@ -81,4 +83,18 @@ pub trait QoveryAwsSdkConfigManagedDatabase {
         aws_sdk_docdb::output::DescribeDbClustersOutput,
         aws_smithy_client::SdkError<aws_sdk_docdb::error::DescribeDBClustersError>,
     >;
+}
+
+#[async_trait]
+pub trait QoveryAwsSdkConfigEc2 {
+    async fn get_volume_by_instance_id(
+        &self,
+        instance_id: String,
+    ) -> Result<aws_sdk_ec2::output::DescribeVolumesOutput, SdkError<aws_sdk_ec2::error::DescribeVolumesError>>;
+    async fn detach_instance_volume(
+        &self,
+        volume_id: String,
+    ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>>;
+    async fn detach_ec2_volumes(&self, instance_id: &str, event_details: &EventDetails)
+        -> Result<(), Box<EngineError>>;
 }
