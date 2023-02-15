@@ -71,6 +71,48 @@ fn aws_test_build_phase() {
     })
 }
 
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn aws_test_build_phase_with_git_lfs() {
+    // This test tries to run up to the build phase of the engine
+    // basically building and pushing each applications
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let environment = helpers::environment::working_minimal_environment(&context);
+
+        let mut ea = environment.clone();
+
+        ea.applications[0].git_url = "https://github.com/qovery/engine-testing-lfs".to_string();
+        ea.applications[0].commit_id = "1252dacc15a605c860e9f3c02e676daf02611011".to_string();
+        let (env, ret) = environment.build_environment(&ea, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // Check the the image exist in the registry
+        let img_exist = infra_ctx
+            .container_registry()
+            .does_image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        test_name.to_string()
+    })
+}
+
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
