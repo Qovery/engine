@@ -5,7 +5,7 @@ ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV BIN_DIR=$BIN_DEST_FOLDER
 
-RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim lldb \
+RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim lldb git-lfs \
     apt-transport-https ca-certificates curl gnupg lsb-release cmake protobuf-compiler libprotobuf-dev &&\
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
@@ -46,6 +46,7 @@ RUN echo "disable_checkpoint = true" > ~/.terraform.rc
 # https://github.com/docker/docker/tree/master/hack/dind
 ENV DIND_COMMIT ed89041433a031cafc0a0f19cfe573c31688d377
 
+RUN git lfs install
 RUN set -eux; \
     curl -so /usr/local/bin/dind "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind"; \
     chmod +x /usr/local/bin/dind

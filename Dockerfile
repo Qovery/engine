@@ -11,7 +11,7 @@ ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
 RUN apt-get update && \
-  apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev
+  apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs
 ADD . .
 
 # run release build
@@ -43,7 +43,7 @@ RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
     echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
     apt-get update &&\
-    apt-get -y install docker-ce docker-ce-cli containerd.io awscli procps netcat-openbsd iproute2 dumb-init && \
+    apt-get -y install docker-ce docker-ce-cli containerd.io awscli procps netcat-openbsd iproute2 dumb-init git-lfs && \
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
