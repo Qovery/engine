@@ -74,7 +74,11 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             &to_short_id(&cluster_id),
             cluster_id,
             "my_cluster_name",
-            KubernetesVersion::V1_23,
+            KubernetesVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             AwsRegion::UsEast2,
             vec![
                 AwsZones::UsEast2A.to_string(),

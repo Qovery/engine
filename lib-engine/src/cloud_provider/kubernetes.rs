@@ -88,43 +88,99 @@ impl Display for KubernetesAddon {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KubernetesVersion {
-    V1_22,
-    V1_23,
-    V1_24,
-    // TODO(benjaminch): handle K3S case
+    V1_22 {
+        prefix: Option<String>,
+        patch: Option<u8>,
+        suffix: Option<String>,
+    },
+    V1_23 {
+        prefix: Option<String>,
+        patch: Option<u8>,
+        suffix: Option<String>,
+    },
+    V1_24 {
+        prefix: Option<String>,
+        patch: Option<u8>,
+        suffix: Option<String>,
+    },
 }
 
 impl KubernetesVersion {
+    pub fn prefix(&self) -> &Option<String> {
+        match &self {
+            KubernetesVersion::V1_22 { prefix, .. } => prefix,
+            KubernetesVersion::V1_23 { prefix, .. } => prefix,
+            KubernetesVersion::V1_24 { prefix, .. } => prefix,
+        }
+    }
+
     pub fn major(&self) -> u8 {
         match &self {
-            KubernetesVersion::V1_22 => 1,
-            KubernetesVersion::V1_23 => 1,
-            KubernetesVersion::V1_24 => 1,
+            KubernetesVersion::V1_22 { .. } => 1,
+            KubernetesVersion::V1_23 { .. } => 1,
+            KubernetesVersion::V1_24 { .. } => 1,
         }
     }
 
     pub fn minor(&self) -> u8 {
         match &self {
-            KubernetesVersion::V1_22 => 22,
-            KubernetesVersion::V1_23 => 23,
-            KubernetesVersion::V1_24 => 24,
+            KubernetesVersion::V1_22 { .. } => 22,
+            KubernetesVersion::V1_23 { .. } => 23,
+            KubernetesVersion::V1_24 { .. } => 24,
+        }
+    }
+
+    pub fn patch(&self) -> &Option<u8> {
+        match &self {
+            KubernetesVersion::V1_22 { patch, .. } => patch,
+            KubernetesVersion::V1_23 { patch, .. } => patch,
+            KubernetesVersion::V1_24 { patch, .. } => patch,
+        }
+    }
+
+    pub fn suffix(&self) -> &Option<String> {
+        match &self {
+            KubernetesVersion::V1_22 { suffix, .. } => suffix,
+            KubernetesVersion::V1_23 { suffix, .. } => suffix,
+            KubernetesVersion::V1_24 { suffix, .. } => suffix,
         }
     }
 
     pub fn next_version(&self) -> Option<Self> {
         match self {
-            KubernetesVersion::V1_22 => Some(KubernetesVersion::V1_23),
-            KubernetesVersion::V1_23 => Some(KubernetesVersion::V1_24),
-            KubernetesVersion::V1_24 => None,
+            KubernetesVersion::V1_22 { .. } => Some(KubernetesVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_23 { .. } => Some(KubernetesVersion::V1_24 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_24 { .. } => None,
         }
     }
 }
 
 impl Display for KubernetesVersion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}.{}", self.major(), self.minor()))
+        let prefix = match self.prefix() {
+            None => "",
+            Some(p) => p,
+        };
+
+        let suffix = match self.suffix() {
+            None => "",
+            Some(s) => s,
+        };
+
+        match self.patch() {
+            None => f.write_fmt(format_args!("{}{}.{}{}", prefix, self.major(), self.minor(), suffix)),
+            Some(patch) => f.write_fmt(format_args!("{}{}.{}.{}{}", prefix, self.major(), self.minor(), patch, suffix)),
+        }
     }
 }
 
@@ -133,8 +189,14 @@ impl From<KubernetesVersion> for VersionsNumber {
         VersionsNumber {
             major: val.major().to_string(),
             minor: Some(val.minor().to_string()),
-            patch: None,
-            suffix: None,
+            patch: match val.patch().is_some() {
+                true => Some(val.patch().as_ref().unwrap_or(&0).to_string()),
+                false => None,
+            },
+            suffix: match val.suffix().is_some() {
+                true => Some(val.suffix().as_ref().unwrap_or(&"".to_string()).to_string()),
+                false => None,
+            },
         }
     }
 }
@@ -144,11 +206,32 @@ impl FromStr for KubernetesVersion {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "1.22" => Ok(KubernetesVersion::V1_22),
-            "1.23" => Ok(KubernetesVersion::V1_23),
-            "1.24" => Ok(KubernetesVersion::V1_24),
+            "1.22" => Ok(KubernetesVersion::V1_22 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            "1.23" => Ok(KubernetesVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            "1.24" => Ok(KubernetesVersion::V1_24 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
             // EC2 specifics
-            "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23), // TODO(bchastanier): remove this one once EC2 version are properly handled
+            "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23 {
+                prefix: Some('v'.to_string()),
+                patch: Some(8),
+                suffix: Some("+k3s1".to_string()),
+            }),
+            "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
+                prefix: Some('v'.to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            }),
             _ => Err(()),
         }
     }
@@ -633,7 +716,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Eks => "EKS",
-            Kind::Ec2 => "EC2",
+            Kind::Ec2 => "KS3",
             Kind::ScwKapsule => "ScwKapsule",
         })
     }
@@ -1603,8 +1686,18 @@ mod tests {
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
-        let version_1_22: VersionsNumber = K8sVersion::V1_22.into();
-        let version_1_23: VersionsNumber = K8sVersion::V1_23.into();
+        let version_1_22: VersionsNumber = K8sVersion::V1_22 {
+            prefix: None,
+            patch: None,
+            suffix: None,
+        }
+        .into();
+        let version_1_23: VersionsNumber = K8sVersion::V1_23 {
+            prefix: None,
+            patch: None,
+            suffix: None,
+        }
+        .into();
         let event_details = EventDetails::new(
             None,
             QoveryIdentifier::new_random(),
@@ -1617,7 +1710,11 @@ mod tests {
 
         // test full cluster upgrade (masters + workers)
         let result = check_kubernetes_upgrade_status(
-            K8sVersion::V1_23,
+            K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             version_1_22.clone(),
             vec![version_1_22.clone()],
             event_details.clone(),
@@ -1630,7 +1727,11 @@ mod tests {
         assert!(!result.older_masters_version_detected);
         assert!(!result.older_workers_version_detected);
         let result = check_kubernetes_upgrade_status(
-            K8sVersion::V1_23,
+            K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             version_1_23.clone(),
             vec![version_1_22.clone()],
             event_details.clone(),
@@ -1645,7 +1746,11 @@ mod tests {
 
         // everything is up to date, no upgrade required
         let result = check_kubernetes_upgrade_status(
-            K8sVersion::V1_23,
+            K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             version_1_23.clone(),
             vec![version_1_23.clone()],
             event_details.clone(),
@@ -1658,7 +1763,11 @@ mod tests {
 
         // downgrade should be detected
         let result = check_kubernetes_upgrade_status(
-            K8sVersion::V1_22,
+            K8sVersion::V1_22 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             version_1_23.clone(),
             vec![version_1_23.clone()],
             event_details.clone(),
@@ -1671,7 +1780,11 @@ mod tests {
 
         // mixed workers version
         let result = check_kubernetes_upgrade_status(
-            K8sVersion::V1_23,
+            K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            },
             version_1_23.clone(),
             vec![version_1_23.clone(), version_1_22.clone()],
             event_details,
@@ -2023,5 +2136,168 @@ mod tests {
                 cpu_limit: "1".to_string()
             }
         );
+    }
+
+    #[test]
+    pub fn test_kubernetes_version_from_string() {
+        // EKS / Kapsule
+        assert_eq!(
+            K8sVersion::from_str("1.23"),
+            Ok(K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+
+        // K3S
+        assert_eq!(
+            K8sVersion::from_str("v1.23.16+k3s1"),
+            Ok(K8sVersion::V1_23 {
+                prefix: Some("v".to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            })
+        );
+
+        // failing tests
+        assert!(K8sVersion::from_str("toto").is_err());
+    }
+
+    #[test]
+    pub fn test_kubernetes_version_into_version_number() {
+        // EKS / Kapsule
+        assert_eq!(
+            VersionsNumber::from(K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            VersionsNumber::new(1.to_string(), Some(23.to_string()), None, None)
+        );
+
+        // K3S
+        assert_eq!(
+            VersionsNumber::from(K8sVersion::V1_23 {
+                prefix: Some("v".to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            }),
+            VersionsNumber::new(
+                1.to_string(),
+                Some(23.to_string()),
+                Some(16.to_string()),
+                Some("+k3s1".to_string())
+            )
+        );
+    }
+
+    #[test]
+    pub fn test_kubernetes_version_next_version() {
+        // EKS / Kapsule
+        assert_eq!(
+            K8sVersion::V1_22 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }
+            .next_version(),
+            Some(K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+        assert_eq!(
+            K8sVersion::V1_23 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }
+            .next_version(),
+            Some(K8sVersion::V1_24 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+        assert_eq!(
+            K8sVersion::V1_24 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }
+            .next_version(),
+            None
+        );
+
+        // K3S
+        assert_eq!(
+            K8sVersion::V1_23 {
+                prefix: Some("v".to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            }
+            .next_version(),
+            Some(K8sVersion::V1_24 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+        assert_eq!(
+            K8sVersion::V1_24 {
+                prefix: Some("v".to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            }
+            .next_version(),
+            None
+        );
+    }
+
+    #[test]
+    pub fn test_kubernetes_version_functions() {
+        let version_1_22 = K8sVersion::V1_22 {
+            prefix: None,
+            patch: None,
+            suffix: None,
+        };
+        assert_eq!(version_1_22.prefix().clone(), None);
+        assert_eq!(version_1_22.major(), 1);
+        assert_eq!(version_1_22.minor(), 22);
+        assert_eq!(version_1_22.patch().clone(), None);
+        assert_eq!(version_1_22.suffix().clone(), None);
+        assert_eq!(version_1_22.to_string(), "1.22".to_string());
+
+        let version_1_23 = K8sVersion::V1_23 {
+            prefix: None,
+            patch: None,
+            suffix: None,
+        };
+        assert_eq!(version_1_23.prefix().clone(), None);
+        assert_eq!(version_1_23.major(), 1);
+        assert_eq!(version_1_23.minor(), 23);
+        assert_eq!(version_1_23.patch().clone(), None);
+        assert_eq!(version_1_23.suffix().clone(), None);
+        assert_eq!(version_1_23.to_string(), "1.23".to_string());
+
+        let version_full = K8sVersion::V1_24 {
+            prefix: Some("v".to_string()),
+            patch: Some(16),
+            suffix: Some("+k3s1".to_string()),
+        };
+        assert_eq!(
+            version_full.prefix().clone().expect("Unable to get version's prefix"),
+            "v".to_string()
+        );
+        assert_eq!(version_full.major(), 1);
+        assert_eq!(version_full.minor(), 24);
+        assert_eq!(version_full.patch().expect("Unable to get version's patch"), 16);
+        assert_eq!(
+            version_full.suffix().clone().expect("Unable to get version's suffix"),
+            "+k3s1".to_string()
+        );
+        assert_eq!(version_full.to_string(), "v1.24.16+k3s1".to_string())
     }
 }

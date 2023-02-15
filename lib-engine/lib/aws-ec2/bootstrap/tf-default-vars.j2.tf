@@ -49,6 +49,7 @@ variable "ec2_instance" {
     "instance_type" = "{{ eks_worker_nodes[0].instance_type }}"
     "disk_size_in_gb" = "{{ eks_worker_nodes[0].disk_size_in_gib }}"
     "user_data_logs_path" = "/var/log/user_data.log" # install error logs location
+    "volume_device_name" = "/dev/sdf"
   }
   type = map(string)
 }
@@ -56,9 +57,10 @@ variable "ec2_instance" {
 variable "k3s_config" {
   description = "K3s configuration"
   default = {
-    "version" = "v1.23.8+k3s1" // TODO: Kubernetes version to be dynamic
+    "version" = "{{ k3s_version }}"
     "channel" = "stable"
-    "exec" = "--disable=traefik --disable=metrics-server"
+    "exposed_port" = "{{ ec2_port }}"
+    "exec" = "--disable=traefik --disable=metrics-server" # remove when migration is done
   }
   type = map(string)
 }

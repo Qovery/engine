@@ -84,6 +84,7 @@ aws-sdk-eks = "0.21.0"
 aws-sdk-rds = "0.21.0"
 aws-sdk-elasticache = "0.21.0"
 aws-sdk-docdb = "0.21.0"
+aws-sdk-ec2 = "0.21.0"
 aws-types = "0.51.0"
 aws-smithy-client = { version="0.51.0", features=["rt-tokio"] }
 aws-smithy-async = { version="0.51.0", features=["rt-tokio"] }
