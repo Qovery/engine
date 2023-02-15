@@ -553,12 +553,14 @@ fn tera_context(
     if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
         if suffix == "+k3s1" && patch == &8 {
             context.insert("is_old_k3s_version", &true);
+            context.insert("ec2_port", &9876.to_string());
         }
     }
 
     if let Some(port) = options.ec2_exposed_port {
         context.insert("ec2_port", &port.to_string());
     }
+
     context.insert("cloudwatch_eks_log_group", &cloudwatch_eks_log_group);
     context.insert(
         "aws_cloudwatch_eks_logs_retention_days",
