@@ -11,7 +11,6 @@ use qovery_engine::logger::Logger;
 use tracing::error;
 use uuid::Uuid;
 
-pub const K3S_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23; // version is hardcoded in TF "v1.23.6+k3s1";
 pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
 
@@ -51,7 +50,11 @@ pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) 
             .expect("AWS_EC2_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::Ec2,
-        K3S_KUBERNETES_VERSION,
+        KubernetesVersion::V1_23 {
+            prefix: Some('v'.to_string()),
+            patch: Some(16),
+            suffix: Some("+k3s1".to_string()),
+        },
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
         },

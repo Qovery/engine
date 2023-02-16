@@ -18,6 +18,8 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use aws_sdk_docdb::error::DescribeDBClustersError;
 use aws_sdk_docdb::types::SdkError as DocdbSdkError;
+use aws_sdk_ec2::error::{DescribeVolumesError, DetachVolumeError};
+use aws_sdk_ec2::types::SdkError as Ec2SdkError;
 use aws_sdk_elasticache::error::DescribeCacheClustersError;
 use aws_sdk_elasticache::types::SdkError as ElasticacheSdkError;
 use aws_sdk_rds::error::DescribeDBInstancesError;
@@ -872,7 +874,11 @@ pub enum Tag {
     AwsSdkListDocDbClusters,
     /// AwsCloudwatchRetentionConfigurationError: represents a bad configuration while trying to configure AWS Cloudwatch retention
     AwsCloudwatchRetentionConfigurationError,
-    // Base64DecodeIssue: represents an error while trying to decode a base64 string
+    /// AwsSdkListEC2Volumes: represents an error while trying to list AWS EC2 volumes
+    AwsSdkListEC2Volumes,
+    /// AwsSdkDetachEC2Volumes: represents an error while trying to detach AWS EC2 volumes
+    AwsSdkDetachEC2Volumes,
+    /// Base64DecodeIssue: represents an error while trying to decode a base64 string
     Base64DecodeIssue,
 }
 
@@ -3487,11 +3493,18 @@ impl EngineError {
         db_id: Option<&str>,
     ) -> EngineError {
         let message = match db_id {
-            None => error.to_string(),
-            Some(id) => format!("Can't get db {id}: {error}"),
+            None => "Can't list RDS databases".to_string(),
+            Some(id) => format!("Can't get RDS database {id}"),
         };
 
-        EngineError::new(event_details, Tag::AwsSdkListRdsInstances, message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkListRdsInstances,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
     }
 
     /// Creates new error when something went wrong because it's not implemented.
@@ -3505,11 +3518,18 @@ impl EngineError {
         db_id: Option<&str>,
     ) -> EngineError {
         let message = match db_id {
-            None => error.to_string(),
-            Some(id) => format!("Can't get db {id}: {error}"),
+            None => "Can't list ElastiCache databases".to_string(),
+            Some(id) => format!("Can't get ElastiCache database {id}"),
         };
 
-        EngineError::new(event_details, Tag::AwsSdkListElasticacheClusters, message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkListElasticacheClusters,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
     }
 
     /// Creates new error when something went wrong because it's not implemented.
@@ -3523,11 +3543,66 @@ impl EngineError {
         db_id: Option<&str>,
     ) -> EngineError {
         let message = match db_id {
-            None => error.to_string(),
-            Some(id) => format!("Can't get db {id}: {error}"),
+            None => "Can't list DocumentDb databases".to_string(),
+            Some(id) => format!("Can't get DocumentDb database {id}"),
         };
 
-        EngineError::new(event_details, Tag::AwsSdkListDocDbClusters, message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkListDocDbClusters,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when something went wrong on AWS SDK EC2 Api.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_list_ec2_volumes(
+        event_details: EventDetails,
+        error: Ec2SdkError<DescribeVolumesError>,
+        instance_id: Option<&str>,
+    ) -> EngineError {
+        let message = match instance_id {
+            None => "Can't list volumes for instances".to_string(),
+            Some(id) => format!("Can't get volumes for instance {id}"),
+        };
+
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkListEC2Volumes,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when something went wrong on AWS SDK EC2 Api.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_detach_ec2_volumes(
+        event_details: EventDetails,
+        error: Ec2SdkError<DetachVolumeError>,
+        instance_id: &str,
+        volume_id: &str,
+    ) -> EngineError {
+        let message = format!("Can't detach volume {volume_id} for instance {instance_id}");
+
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkDetachEC2Volumes,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
     }
 
     /// Creates new error from an Docker error

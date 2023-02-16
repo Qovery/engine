@@ -29,7 +29,11 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23;
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23 {
+    prefix: None,
+    patch: None,
+    suffix: None,
+};
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";

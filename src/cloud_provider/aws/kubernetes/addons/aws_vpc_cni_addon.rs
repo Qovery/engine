@@ -14,9 +14,9 @@ impl AwsVpcCniAddon {
             // Get current default build of an aws-cni add-on:
             // aws eks describe-addon-versions --kubernetes-version 1.23 --addon-name vpc-cni | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
-                KubernetesVersion::V1_22 => "v1.11.4-eksbuild.1",
-                KubernetesVersion::V1_23 => "v1.12.1-eksbuild.1",
-                KubernetesVersion::V1_24 => "v1.12.1-eksbuild.1",
+                KubernetesVersion::V1_22 { .. } => "v1.11.4-eksbuild.1",
+                KubernetesVersion::V1_23 { .. } => "v1.12.1-eksbuild.1",
+                KubernetesVersion::V1_24 { .. } => "v1.12.1-eksbuild.1",
             }
             .to_string(),
         }
@@ -44,13 +44,21 @@ mod tests {
 
         let tests_cases = vec![
             TestCase {
-                k8s_version: KubernetesVersion::V1_22,
+                k8s_version: KubernetesVersion::V1_22 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
                 expected: AwsVpcCniAddon {
                     version: "v1.11.4-eksbuild.1".to_string(),
                 },
             },
             TestCase {
-                k8s_version: KubernetesVersion::V1_23,
+                k8s_version: KubernetesVersion::V1_23 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
                 expected: AwsVpcCniAddon {
                     version: "v1.12.1-eksbuild.1".to_string(),
                 },

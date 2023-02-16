@@ -1,9 +1,8 @@
 use crate::helpers::utilities::{context_for_ec2, engine_run_test, generate_id, logger, FuncTestsSecrets};
 use ::function_name::named;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KKind, KubernetesVersion};
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use std::str::FromStr;
 
-use crate::helpers::aws_ec2::K3S_KUBERNETES_VERSION;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::generate_cluster_id;
@@ -15,11 +14,10 @@ use qovery_engine::utilities::to_short_id;
 
 fn create_and_destroy_aws_ec2_k3s_cluster(
     test_type: ClusterTestType,
-    kubernetes_boot_version: KubernetesVersion,
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
 ) {
-    engine_run_test(|| -> String {
+    engine_run_test(|| {
         let secrets = FuncTestsSecrets::new();
 
         let localisation = AwsRegion::from_str(
@@ -40,7 +38,6 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             localisation.to_aws_format(),
             Some(zones),
             test_type,
-            kubernetes_boot_version,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
             },
@@ -53,11 +50,6 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
 #[cfg(feature = "test-aws-ec2-infra")]
 #[named]
 #[test]
-fn create_and_destroy_aws_ec2_k3s_cluster_us_east_2() {
-    create_and_destroy_aws_ec2_k3s_cluster(
-        ClusterTestType::Classic,
-        K3S_KUBERNETES_VERSION,
-        WithoutNatGateways,
-        function_name!(),
-    );
+fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_1() {
+    create_and_destroy_aws_ec2_k3s_cluster(ClusterTestType::Classic, WithoutNatGateways, function_name!());
 }

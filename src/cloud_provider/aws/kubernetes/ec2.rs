@@ -1,6 +1,7 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
@@ -13,11 +14,15 @@ use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, InfrastructureStep, Stage};
+use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
+use async_trait::async_trait;
+use aws_sdk_ec2::model::{Filter, VolumeState};
+use aws_sdk_ec2::types::SdkError;
+use aws_types::SdkConfig;
 use function_name::named;
 use std::borrow::Borrow;
 use std::str::FromStr;
@@ -146,7 +151,7 @@ impl Kubernetes for EC2 {
     }
 
     fn version(&self) -> KubernetesVersion {
-        self.version
+        self.version.clone()
     }
 
     fn region(&self) -> &str {
@@ -223,7 +228,6 @@ impl Kubernetes for EC2 {
     }
 
     fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
-        // TODO
         Ok(())
     }
 
@@ -323,5 +327,79 @@ impl Kubernetes for EC2 {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
+    }
+}
+
+#[async_trait]
+impl QoveryAwsSdkConfigEc2 for SdkConfig {
+    async fn get_volume_by_instance_id(
+        &self,
+        instance_id: String,
+    ) -> Result<aws_sdk_ec2::output::DescribeVolumesOutput, SdkError<aws_sdk_ec2::error::DescribeVolumesError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        client
+            .describe_volumes()
+            .filters(
+                Filter::builder()
+                    .name("tag:ClusterId".to_string())
+                    .values(instance_id.to_string())
+                    .build(),
+            )
+            .send()
+            .await
+    }
+    async fn detach_instance_volume(
+        &self,
+        volume_id: String,
+    ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        client.detach_volume().volume_id(volume_id).send().await
+    }
+    async fn detach_ec2_volumes(
+        &self,
+        instance_id: &str,
+        event_details: &EventDetails,
+    ) -> Result<(), Box<EngineError>> {
+        let result = match self.get_volume_by_instance_id(instance_id.to_string()).await {
+            Ok(result) => result,
+            Err(e) => {
+                return Err(Box::new(EngineError::new_aws_sdk_cannot_list_ec2_volumes(
+                    event_details.clone(),
+                    e,
+                    Some(instance_id),
+                )))
+            }
+        };
+
+        if let Some(volumes) = result.volumes() {
+            for volume in volumes {
+                if let (Some(id), Some(attachments), Some(state)) =
+                    (volume.volume_id(), volume.attachments(), volume.state())
+                {
+                    let mut skip_root_volume = false;
+                    for attachment in attachments {
+                        if let Some(device) = attachment.device() {
+                            if device.to_string().contains("/dev/xvda") || state != &VolumeState::InUse {
+                                skip_root_volume = true;
+                            }
+                        }
+                    }
+                    if skip_root_volume {
+                        continue;
+                    }
+
+                    if let Err(e) = self.detach_instance_volume(id.to_string()).await {
+                        return Err(Box::new(EngineError::new_aws_sdk_cannot_detach_ec2_volumes(
+                            event_details.clone(),
+                            e,
+                            instance_id,
+                            id,
+                        )));
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }

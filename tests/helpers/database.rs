@@ -13,7 +13,7 @@ use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
@@ -25,7 +25,6 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
-use crate::helpers::aws_ec2::K3S_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
@@ -612,7 +611,11 @@ pub fn test_db(
     let kubernetes_version = match kubernetes_kind {
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => K3S_KUBERNETES_VERSION,
+        KubernetesKind::Ec2 => KubernetesVersion::V1_23 {
+            prefix: Some('v'.to_string()),
+            patch: Some(16),
+            suffix: Some("+k3s1".to_string()),
+        },
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -625,7 +628,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -637,7 +640,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     1,
@@ -649,7 +652,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -913,7 +916,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -925,7 +928,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     1,
@@ -937,7 +940,7 @@ pub fn test_pause_managed_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version,
+                    kubernetes_version.clone(),
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -1191,7 +1194,7 @@ pub fn test_db_on_upgrade(
             logger.clone(),
             localisation.as_str(),
             KubernetesKind::Eks,
-            kubernetes_version,
+            kubernetes_version.clone(),
             &ClusterDomain::Default {
                 cluster_id: context.cluster_short_id().to_string(),
             },
@@ -1205,7 +1208,7 @@ pub fn test_db_on_upgrade(
             logger.clone(),
             localisation.as_str(),
             KubernetesKind::ScwKapsule,
-            kubernetes_version,
+            kubernetes_version.clone(),
             &ClusterDomain::Default {
                 cluster_id: context.cluster_short_id().to_string(),
             },

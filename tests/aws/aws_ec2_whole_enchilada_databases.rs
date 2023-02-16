@@ -3,7 +3,7 @@ use crate::helpers::utilities::{
 };
 use function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::{Transaction, TransactionResult};
@@ -11,7 +11,6 @@ use qovery_engine::utilities::to_short_id;
 use tracing::{span, Level};
 
 use crate::helpers;
-use crate::helpers::aws_ec2::K3S_KUBERNETES_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::database::{test_db, StorageSize};
 
@@ -64,7 +63,11 @@ fn test_ec2_database(
             logger.clone(),
             &localisation,
             Kind::Ec2,
-            K3S_KUBERNETES_VERSION,
+            KubernetesVersion::V1_23 {
+                prefix: Some('v'.to_string()),
+                patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            },
             &cluster_domain,
             None,
             1,

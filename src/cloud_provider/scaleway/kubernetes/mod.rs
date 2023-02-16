@@ -598,7 +598,7 @@ impl Kapsule {
         match self.get_kubeconfig_file() {
             Ok((path, _)) => match is_kubernetes_upgrade_required(
                 path,
-                self.version,
+                self.version.clone(),
                 self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1473,7 +1473,7 @@ impl Kubernetes for Kapsule {
     }
 
     fn version(&self) -> KubernetesVersion {
-        self.version
+        self.version.clone()
     }
 
     fn region(&self) -> &str {

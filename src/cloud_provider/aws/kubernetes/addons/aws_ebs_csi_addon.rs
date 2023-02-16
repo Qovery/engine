@@ -14,9 +14,9 @@ impl AwsEbsCsiAddon {
             // Get current default build of an aws-ebs-csi add-on:
             // aws eks describe-addon-versions --kubernetes-version 1.22 --addon-name aws-ebs-csi-driver | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
-                KubernetesVersion::V1_22 => "v1.14.0-eksbuild.1",
-                KubernetesVersion::V1_23 => "v1.15.0-eksbuild.1",
-                KubernetesVersion::V1_24 => "v1.15.0-eksbuild.1",
+                KubernetesVersion::V1_22 { .. } => "v1.14.0-eksbuild.1",
+                KubernetesVersion::V1_23 { .. } => "v1.15.0-eksbuild.1",
+                KubernetesVersion::V1_24 { .. } => "v1.15.0-eksbuild.1",
             }
             .to_string(),
         }
@@ -44,13 +44,21 @@ mod tests {
 
         let tests_cases = vec![
             TestCase {
-                k8s_version: KubernetesVersion::V1_22,
+                k8s_version: KubernetesVersion::V1_22 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
                 expected: AwsEbsCsiAddon {
                     version: "v1.14.0-eksbuild.1".to_string(),
                 },
             },
             TestCase {
-                k8s_version: KubernetesVersion::V1_23,
+                k8s_version: KubernetesVersion::V1_23 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
                 expected: AwsEbsCsiAddon {
                     version: "v1.15.0-eksbuild.1".to_string(),
                 },

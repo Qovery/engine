@@ -36,6 +36,7 @@ resource "aws_security_group" "ec2_instance" {
   }
 
   // kubernetes
+{% if is_old_k3s_version %}
   ingress {
     description = "Kubernetes access"
     from_port   = random_integer.kubernetes_external_port.result
@@ -43,6 +44,15 @@ resource "aws_security_group" "ec2_instance" {
     to_port     = random_integer.kubernetes_external_port.result
     cidr_blocks = ["0.0.0.0/0"]
   }
+{% else %}
+  ingress {
+    description = "Kubernetes access"
+    from_port   = var.k3s_config.exposed_port
+    protocol    = "tcp"
+    to_port     = var.k3s_config.exposed_port
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+{%- endif %}
 
   // SSH
   ingress {

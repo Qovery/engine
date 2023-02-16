@@ -10,11 +10,12 @@ use sysinfo::{DiskExt, RefreshKind, SystemExt};
 use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
-use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
+use crate::build_platform::{Build, BuildError, BuildPlatform, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
+use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::deployment_report::logger::EnvLogger;
 
 use crate::fs::workspace_directory;
@@ -38,6 +39,9 @@ pub struct LocalDocker {
     name: String,
 }
 
+const MAX_GIT_LFS_SIZE_GB: u64 = 5;
+const MAX_GIT_LFS_SIZE_KB: u64 = MAX_GIT_LFS_SIZE_GB * 1024 * 1024; // 5GB
+
 impl LocalDocker {
     pub fn new(context: Context, long_id: Uuid, name: &str) -> Result<Self, BuildError> {
         Ok(LocalDocker {
@@ -60,7 +64,7 @@ impl LocalDocker {
         // ensure there is enough disk space left before building a new image
         // For CI, we should skip this job
         if env::var_os("CI").is_some() {
-            info!("CI environment detected, skipping reclaim space job (docker pruine)");
+            info!("CI environment detected, skipping reclaim space job (docker prune)");
             return;
         }
 
@@ -367,6 +371,16 @@ impl BuildPlatform for LocalDocker {
             repository_root_path.to_string_lossy()
         ));
 
+        // Retrieve git credentials
+        let git_user_creds = match build.git_repository.credentials() {
+            None => None,
+            Some(Ok(creds)) => Some(creds),
+            Some(Err(err)) => {
+                logger.send_warning(format!("🗝️ Unable to get credentials for git repository: {err}"));
+                None
+            }
+        };
+
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
         let get_credentials = |user: &str| {
@@ -379,13 +393,11 @@ impl BuildPlatform for LocalDocker {
                 }
             }
 
-            match &build.git_repository.credentials() {
-                None => {}
-                Some(Err(err)) => logger.send_warning(format!("🗝️ Unable to get credentials for git repository: {err}")),
-                Some(Ok(Credentials { login, password })) => creds.push((
+            if let Some(git_creds) = &git_user_creds {
+                creds.push((
                     CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(login, password).unwrap(),
-                )),
+                    Cred::userpass_plaintext(&git_creds.login, &git_creds.password).unwrap(),
+                ));
             }
 
             creds
@@ -430,6 +442,51 @@ impl BuildPlatform for LocalDocker {
         self.reclaim_space_if_needed();
 
         let app_id = build.image.application_id.clone();
+
+        // Fetch git-lfs/big files for the repository if necessary
+        let git_lfs = if let Some(creds) = git_user_creds {
+            GitLfs::new(creds.login, creds.password)
+        } else {
+            GitLfs::default()
+        };
+        let cmd_killer = CommandKiller::from_cancelable(is_task_canceled);
+        let size_estimate_kb = git_lfs
+            .files_size_estimate_in_kb(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
+            .unwrap_or(0);
+
+        if size_estimate_kb > 0 {
+            if size_estimate_kb > MAX_GIT_LFS_SIZE_KB {
+                return Err(BuildError::InvalidConfig {
+                    application: app_id,
+                    raw_error_message: format!(
+                        "GIT LFS files size are too big and are over the max allowed size of {MAX_GIT_LFS_SIZE_GB} GB"
+                    ),
+                });
+            }
+
+            info!("fetching git-lfs files");
+            logger.send_progress("🗜️ Fetching git-lfs files for repository".to_string());
+            match git_lfs.checkout_files_for_commit(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
+            {
+                Ok(_) => {}
+                Err(GitLfsError::Aborted { .. }) => return Err(BuildError::Aborted { application: app_id }),
+                Err(GitLfsError::Timeout { .. }) => return Err(BuildError::Aborted { application: app_id }),
+                Err(GitLfsError::ExecutionError { raw_error }) => {
+                    return Err(BuildError::IoError {
+                        application: app_id,
+                        action_description: "git lfs checkout".to_string(),
+                        raw_error,
+                    })
+                }
+                Err(GitLfsError::ExitStatusError { .. }) => {
+                    return Err(BuildError::IoError {
+                        application: app_id,
+                        action_description: "git lfs checkout".to_string(),
+                        raw_error: Error::new(ErrorKind::Other, "git lfs checkout failed"),
+                    })
+                }
+            }
+        }
 
         // Check that the build context is correct
         let build_context_path = repository_root_path.join(&build.git_repository.root_path);

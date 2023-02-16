@@ -25,6 +25,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
+use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -145,6 +146,8 @@ pub struct Options {
     pub aws_addon_cni_version_override: Option<String>,
     #[serde(default)]
     pub aws_addon_ebs_csi_version_override: Option<String>,
+    #[serde(default)]
+    pub ec2_exposed_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -544,6 +547,20 @@ fn tera_context(
     context.insert("eks_workers_version", &kubernetes.version().to_string());
     context.insert("ec2_masters_version", &kubernetes.version().to_string());
     context.insert("ec2_workers_version", &kubernetes.version().to_string());
+    context.insert("k3s_version", &kubernetes.version().to_string());
+
+    // TODO(ENG-1456): remove condition when migration is done
+    if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
+        if suffix == "+k3s1" && patch == &8 {
+            context.insert("is_old_k3s_version", &true);
+            context.insert("ec2_port", &9876.to_string());
+        }
+    }
+
+    if let Some(port) = options.ec2_exposed_port {
+        context.insert("ec2_port", &port.to_string());
+    }
+
     context.insert("cloudwatch_eks_log_group", &cloudwatch_eks_log_group);
     context.insert(
         "aws_cloudwatch_eks_logs_retention_days",
@@ -598,22 +615,25 @@ fn tera_context(
     );
 
     // EKS Addons
-    // CNI
-    context.insert(
-        "eks_addon_vpc_cni",
-        &(match &options.aws_addon_cni_version_override {
-            None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
-            Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
-        }),
-    );
-    // EBS CSI
-    context.insert(
-        "eks_addon_ebs_csi",
-        &(match &options.aws_addon_ebs_csi_version_override {
-            None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
-            Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
-        }),
-    );
+    if kubernetes.kind() != Kind::Ec2 {
+        // CNI
+        context.insert(
+            "eks_addon_vpc_cni",
+            &(match &options.aws_addon_cni_version_override {
+                None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
+
+                Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+            }),
+        );
+        // EBS CSI
+        context.insert(
+            "eks_addon_ebs_csi",
+            &(match &options.aws_addon_ebs_csi_version_override {
+                None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
+                Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
+            }),
+        );
+    }
 
     Ok(context)
 }
@@ -802,7 +822,7 @@ fn create(
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
-        EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
+        EventMessage::new_from_safe(format!("Preparing {} cluster deployment.", kubernetes.kind())),
     ));
 
     // old method with rusoto
@@ -940,7 +960,6 @@ fn create(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
     ));
-
     // terraform deployment dedicated to cloud resources
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
         // on EKS, clean possible nodegroup deployment failures because of quota issues
@@ -1543,11 +1562,6 @@ fn delete(
         }
     };
 
-    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
-    if kubernetes.kind() != Kind::Ec2 {
-        let _ = kubernetes.ensure_kubeconfig_is_not_in_object_storage();
-    };
-
     // generate terraform files and copy them into temp dir
     let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
     context.insert("is_deletion_step", &true);
@@ -1576,20 +1590,6 @@ fn delete(
         )));
     }
 
-    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-        Ok(x) => x,
-        Err(e) => {
-            let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
-            ));
-
-            skip_kubernetes_step = true;
-            "".to_string()
-        }
-    };
-
     // should apply before destroy to be sure destroy will compute on all resources
     // don't exit on failure, it can happen if we resume a destroy process
     let message = format!(
@@ -1616,6 +1616,148 @@ fn delete(
                 Some(e.to_string()),
             ),
         ));
+    };
+
+    // // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+    if kubernetes.kind() != Kind::Ec2 {
+        let _ = kubernetes.ensure_kubeconfig_is_not_in_object_storage();
+    };
+
+    let kubernetes_config_file_path = match kubernetes.kind() {
+        Kind::Eks => match kubernetes.get_kubeconfig_file_path() {
+            Ok(x) => x,
+            Err(e) => {
+                let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
+                kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                ));
+
+                skip_kubernetes_step = true;
+                "".to_string()
+            }
+        },
+        Kind::Ec2 => {
+            let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+
+            // read config generated after terraform infra bootstrap/update
+            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+
+            // send cluster info to vault if info mismatch
+            // create vault connection (Vault connectivity should not be on the critical deployment path,
+            // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+            let vault_conn = match QVaultClient::new(event_details.clone()) {
+                Ok(x) => Some(x),
+                Err(_) => None,
+            };
+            let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
+                ClusterSecretsIoAws::new(
+                    kubernetes.cloud_provider().access_key_id(),
+                    kubernetes.region().to_string(),
+                    kubernetes.cloud_provider().secret_access_key(),
+                    None,
+                    None,
+                    kubernetes.kind(),
+                    kubernetes.cluster_name(),
+                    kubernetes.long_id().to_string(),
+                    options.grafana_admin_user.clone(),
+                    options.grafana_admin_password.clone(),
+                    kubernetes.cloud_provider().organization_id().to_string(),
+                    kubernetes.context().is_test_cluster().to_string(),
+                ),
+                event_details.clone(),
+            )?;
+            if let Some(vault) = vault_conn {
+                cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+                // update info without taking care of the kubeconfig because we don't have it yet
+                let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
+            };
+
+            let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+                Ok(p) => p,
+                Err(e) => {
+                    return Err(Box::new(EngineError::new_terraform_error(
+                        event_details,
+                        TerraformError::ConfigFileInvalidContent {
+                            path: qovery_terraform_config_file,
+                            raw_message: e,
+                        },
+                    )))
+                }
+            };
+
+            // wait for k3s port to be open
+            // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
+            wait_until_port_is_open(
+                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                port,
+                600,
+                kubernetes.logger(),
+                event_details.clone(),
+            )
+            .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
+
+            // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
+            // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
+            let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
+                // force s3 kubeconfig retrieve
+                if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
+                    return OperationResult::Err(e);
+                };
+                let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
+                    Ok(x) => x,
+                    Err(e) => return OperationResult::Retry(e),
+                };
+
+                // ensure the kubeconfig content address match with the current instance dns
+                let mut buffer = String::new();
+                let _ = kubeconfig_file.read_to_string(&mut buffer);
+                match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
+                    true => {
+                        kubernetes.logger().log(EngineEvent::Info(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "kubeconfig stored on s3 do correspond with the actual host {}",
+                                &qovery_terraform_config.aws_ec2_public_hostname
+                            )),
+                        ));
+                        OperationResult::Ok(current_kubeconfig_path)
+                    }
+                    false => {
+                        kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                &qovery_terraform_config.aws_ec2_public_hostname
+                            )),
+                        ));
+                        OperationResult::Retry(Box::new(
+                            EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
+                        ))
+                    }
+                }
+            });
+
+            match result {
+                Ok(x) => x,
+                Err(Operation { error, .. }) => return Err(error),
+                Err(Error::Internal(_)) => {
+                    return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                        event_details,
+                    )))
+                }
+            }
+        }
+        _ => {
+            let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
+            kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new_from_safe(safe_message.to_string()),
+            ));
+            skip_kubernetes_step = true;
+            "".to_string()
+        }
     };
 
     if !skip_kubernetes_step {
@@ -1860,6 +2002,13 @@ fn delete(
         event_details.clone(),
         EventMessage::new_from_safe("Running Terraform destroy".to_string()),
     ));
+
+    if kubernetes.kind() == Kind::Ec2 {
+        match kubernetes.cloud_provider().aws_sdk_client() {
+            None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
+            Some(client) => block_on(client.detach_ec2_volumes(kubernetes.id(), &event_details))?,
+        };
+    }
 
     if let Err(err) = cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));

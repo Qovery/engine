@@ -210,7 +210,7 @@ impl Kubernetes for EKS {
     }
 
     fn version(&self) -> KubernetesVersion {
-        self.version
+        self.version.clone()
     }
 
     fn region(&self) -> &str {
