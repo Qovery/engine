@@ -33,6 +33,8 @@ pub struct GitLfs {
 impl GitLfs {
     pub fn new(login: String, password: String) -> Self {
         GitLfs {
+            // You need to set credentials helper to be able to pass credentials to git by env vars
+            // git config --global credential.helper '!f() { sleep 1; echo "username=${GIT_USER}"; echo "password=${GIT_PASSWORD}"; }; f'
             common_envs: vec![
                 ("GIT_USER".to_string(), login),
                 ("GIT_PASSWORD".to_string(), password),
@@ -57,16 +59,17 @@ impl GitLfs {
     where
         P: AsRef<Path>,
     {
-        // To restore the path on exit
-        let _guard = scopeguard::guard(std::env::current_dir()?, |old_dir| {
-            std::env::set_current_dir(old_dir).unwrap();
-        });
-        std::env::set_current_dir(repo_path)?;
-
         let mut output: Vec<String> = Vec::with_capacity(25);
         let mut stderr = String::new();
         git_lfs_exec(
-            &["ls-files", "-s", commit],
+            &[
+                "-C",
+                repo_path.as_ref().to_string_lossy().as_ref(),
+                "lfs",
+                "ls-files",
+                "-s",
+                commit,
+            ],
             &self.get_all_envs(&[]),
             &mut |line| output.push(line),
             &mut |line| stderr.push_str(&line),
@@ -108,14 +111,15 @@ impl GitLfs {
     where
         P: AsRef<Path>,
     {
-        // To restore the path on exit
-        let _guard = scopeguard::guard(std::env::current_dir()?, |old_dir| {
-            let _ = std::env::set_current_dir(old_dir);
-        });
-        std::env::set_current_dir(repo_path)?;
-
         git_lfs_exec(
-            &["fetch", "origin", commit],
+            &[
+                "-C",
+                repo_path.as_ref().to_string_lossy().as_ref(),
+                "lfs",
+                "fetch",
+                "origin",
+                commit,
+            ],
             &self.get_all_envs(&[]),
             &mut |line| info!("{line}"),
             &mut |line| warn!("{line}"),
@@ -123,7 +127,7 @@ impl GitLfs {
         )?;
 
         git_lfs_exec(
-            &["checkout"],
+            &["-C", repo_path.as_ref().to_string_lossy().as_ref(), "lfs", "checkout"],
             &self.get_all_envs(&[]),
             &mut |line| info!("{line}"),
             &mut |line| warn!("{line}"),
@@ -145,7 +149,7 @@ where
     F: FnMut(String),
     X: FnMut(String),
 {
-    let mut cmd = QoveryCommand::new("git-lfs", args, envs);
+    let mut cmd = QoveryCommand::new("git", args, envs);
     let ret = cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer);
 
     match ret {
@@ -220,7 +224,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_checkout_files_for_commit() {
         // Repo that does not support lfs, should not return an error
         {
