@@ -574,18 +574,50 @@ fn tera_context(
     context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);
     context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
     context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
+    context.insert(
+        "database_postgresql_deny_public_access",
+        &kubernetes.advanced_settings().database_postgresql_deny_public_access,
+    );
+    context.insert(
+        "database_postgresql_allowed_cidrs",
+        &format_ips(&kubernetes.advanced_settings().database_postgresql_allowed_cidrs),
+    );
+    context.insert(
+        "database_mysql_deny_public_access",
+        &kubernetes.advanced_settings().database_mysql_deny_public_access,
+    );
+    context.insert(
+        "database_mysql_allowed_cidrs",
+        &format_ips(&kubernetes.advanced_settings().database_mysql_allowed_cidrs),
+    );
 
     // AWS - DocumentDB
     context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
     context.insert("documentdb_zone_a_subnet_blocks", &documentdb_zone_a_subnet_blocks);
     context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
     context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
+    context.insert(
+        "database_mongodb_deny_public_access",
+        &kubernetes.advanced_settings().database_mongodb_deny_public_access,
+    );
+    context.insert(
+        "database_mongodb_allowed_cidrs",
+        &format_ips(&kubernetes.advanced_settings().database_mongodb_allowed_cidrs),
+    );
 
     // AWS - Elasticache
     context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
     context.insert("elasticache_zone_a_subnet_blocks", &elasticache_zone_a_subnet_blocks);
     context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
     context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
+    context.insert(
+        "database_redis_deny_public_access",
+        &kubernetes.advanced_settings().database_redis_deny_public_access,
+    );
+    context.insert(
+        "database_redis_allowed_cidrs",
+        &format_ips(&kubernetes.advanced_settings().database_redis_allowed_cidrs),
+    );
 
     // AWS - Elasticsearch
     context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);

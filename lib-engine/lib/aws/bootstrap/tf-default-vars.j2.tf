@@ -78,6 +78,32 @@ variable "aws_cloudwatch_eks_logs_retention_days" {
   type = number
 }
 
+# Databases
+
+variable "database_postgresql_allowed_cidrs" {
+  description = "PostgreSQL allowed CIDR Block"
+  default = {{ database_postgresql_allowed_cidrs }}
+  type = list(string)
+}
+
+variable "database_mysql_allowed_cidrs" {
+  description = "MySQL allowed CIDR Block"
+  default = {{ database_mysql_allowed_cidrs }}
+  type = list(string)
+}
+
+variable "database_redis_allowed_cidrs" {
+  description = "Redis allowed CIDR Block"
+  default = {{ database_redis_allowed_cidrs }}
+  type = list(string)
+}
+
+variable "database_mongodb_allowed_cidrs" {
+  description = "MongoDB allowed CIDR Block"
+  default = {{ database_mongodb_allowed_cidrs }}
+  type = list(string)
+}
+
 # S3 bucket name
 
 variable "s3_bucket_kubeconfig" {
