@@ -11,9 +11,14 @@ controller:
       maxUnavailable: 1
   autoscaling:
     enabled: true
+    minReplicas: 2
+    maxReplicas: 11
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
   publishService:
     enabled: true
   service:
+    enabled: true
     # https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
     annotations:
       service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
