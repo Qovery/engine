@@ -122,6 +122,10 @@ impl InstanceType for ScwInstancesType {
         )
     }
 
+    fn is_arm_instance(&self) -> bool {
+        false
+    }
+
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,
@@ -281,7 +285,7 @@ impl FromStr for ScwInstancesType {
             "x64-30gb" => Ok(ScwInstancesType::X64_30GB),
             "x64-60gb" => Ok(ScwInstancesType::X64_60GB),
             _ => Err(CommandError::new_from_safe_message(format!(
-                "`{s}` instance type is not supported",
+                "`{s}` instance type is not supported"
             ))),
         }
     }
