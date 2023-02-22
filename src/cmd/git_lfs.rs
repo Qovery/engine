@@ -223,6 +223,9 @@ mod tests {
         }
     }
 
+    // We don't pay for git lfs on github, so we have a quota of 1GB per 3 day, and with CI we reach it.
+    // Ignore the test to avoid having it failing the CI
+    #[ignore]
     #[test]
     fn test_checkout_files_for_commit() {
         // Repo that does not support lfs, should not return an error
