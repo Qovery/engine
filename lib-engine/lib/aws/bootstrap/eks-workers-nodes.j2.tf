@@ -10,7 +10,12 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   subnet_ids       = flatten([aws_subnet.eks_zone_a[*].id, aws_subnet.eks_zone_b[*].id, aws_subnet.eks_zone_c[*].id])
   {%- endif %}
   instance_types   = ["{{ eks_worker_node.instance_type }}"]
+  {% if eks_worker_node.instance_architecture == "ARM64" -%}
+  ami_type         = "AL2_ARM_64"
+  {%- else -%}
   ami_type         = "AL2_x86_64"
+  {%- endif %}
+
   disk_size = "{{ eks_worker_node.disk_size_in_gib }}"
 
   tags = merge(

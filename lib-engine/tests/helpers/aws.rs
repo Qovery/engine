@@ -6,7 +6,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMo
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
@@ -186,10 +186,15 @@ impl Cluster<AWS, Options> for AWS {
     }
 
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
-        vec![
-            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, "t3a.large".to_string(), 100)
-                .expect("Problem while setup EKS nodes"),
-        ]
+        vec![NodeGroups::new(
+            "groupeks0".to_string(),
+            min_nodes,
+            max_nodes,
+            "t3a.large".to_string(),
+            100,
+            CpuArchitecture::AMD64,
+        )
+        .expect("Problem while setup EKS nodes")]
     }
 
     fn kubernetes_cluster_options(
