@@ -263,6 +263,15 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
+        // we can't link a security group to an NLB, so we need this to deny public access
+        let cluster_denied_public_access = match T::db_type() {
+            service::DatabaseType::PostgreSQL => kubernetes.advanced_settings().database_postgresql_deny_public_access,
+            service::DatabaseType::MongoDB => kubernetes.advanced_settings().database_mongodb_deny_public_access,
+            service::DatabaseType::MySQL => kubernetes.advanced_settings().database_mysql_deny_public_access,
+            service::DatabaseType::Redis => kubernetes.advanced_settings().database_redis_deny_public_access,
+        };
+        let container_database_publicly_accessible = !cluster_denied_public_access && self.publicly_accessible;
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
@@ -293,7 +302,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("database_total_cpus_burst", &T::cpu_burst_value(self.total_cpus.clone()));
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("publicly_accessible", &self.publicly_accessible);
+        context.insert("publicly_accessible", &container_database_publicly_accessible);
 
         context.insert(
             "resource_expiration_in_seconds",
