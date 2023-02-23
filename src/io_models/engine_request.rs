@@ -62,7 +62,7 @@ impl<T> EngineRequest<T> {
         context: &Context,
         event_details: EventDetails,
         logger: Box<dyn Logger>,
-    ) -> Result<InfrastructureContext, Box<IoEngineError>> {
+    ) -> Result<InfrastructureContext, Box<EngineError>> {
         let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
             .cloud_provider
@@ -137,7 +137,7 @@ impl<T> EngineRequest<T> {
             Ok(x) => x,
             Err(e) => {
                 error!("{:?}", e);
-                panic!("Can't deploy infrastructure, please check json")
+                return Err(e);
             }
         };
 

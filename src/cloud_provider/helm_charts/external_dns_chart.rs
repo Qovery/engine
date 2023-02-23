@@ -126,6 +126,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
     }
 }
 
+#[derive(Clone)]
 struct ExternalDNSChartInstallationChecker {}
 
 impl ExternalDNSChartInstallationChecker {
@@ -144,6 +145,10 @@ impl ChartInstallationChecker for ExternalDNSChartInstallationChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1368): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

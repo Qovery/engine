@@ -98,6 +98,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
     }
 }
 
+#[derive(Clone)]
 pub struct QoveryCertManagerWebhookChartChecker {}
 
 impl QoveryCertManagerWebhookChartChecker {
@@ -116,6 +117,10 @@ impl ChartInstallationChecker for QoveryCertManagerWebhookChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1392): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

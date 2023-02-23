@@ -120,6 +120,7 @@ impl EC2 {
             1,
             self.instance.instance_type.clone(),
             self.instance.disk_size_in_gib,
+            self.instance.instance_architecture,
         )
         .expect("wrong instance type for EC2") // using expect here as it has already been validated during instantiation
     }
@@ -339,6 +340,24 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
         let client = aws_sdk_ec2::Client::new(self);
         client
             .describe_volumes()
+            .filters(
+                Filter::builder()
+                    .name("tag:ClusterId".to_string())
+                    .values(instance_id.to_string())
+                    .build(),
+            )
+            .send()
+            .await
+    }
+    /// instance isn't used ATM but will be useful when we'll need to implement ec2 pause.
+    async fn _get_instance_by_id(
+        &self,
+        instance_id: String,
+    ) -> Result<aws_sdk_ec2::output::DescribeInstancesOutput, SdkError<aws_sdk_ec2::error::DescribeInstancesError>>
+    {
+        let client = aws_sdk_ec2::Client::new(self);
+        client
+            .describe_instances()
             .filters(
                 Filter::builder()
                     .name("tag:ClusterId".to_string())

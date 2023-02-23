@@ -148,6 +148,7 @@ impl ToCommonHelmChart for CertManagerChart {
     }
 }
 
+#[derive(Clone)]
 pub struct CertManagerChartChecker {}
 
 impl CertManagerChartChecker {
@@ -166,6 +167,10 @@ impl ChartInstallationChecker for CertManagerChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1401): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

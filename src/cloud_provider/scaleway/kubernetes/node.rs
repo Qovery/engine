@@ -334,16 +334,16 @@ impl ScwNodeGroup {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::models::NodeGroups;
+    use crate::cloud_provider::models::{CpuArchitecture, NodeGroups};
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 id: None,
@@ -351,7 +351,8 @@ mod tests {
                 max_nodes: 2,
                 instance_type: "dev1-l".to_string(),
                 disk_size_in_gib: 20,
-                desired_nodes: None
+                desired_nodes: None,
+                instance_architecture: CpuArchitecture::AMD64,
             }
         );
     }

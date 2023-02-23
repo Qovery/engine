@@ -84,6 +84,13 @@ pub struct NodeGroups {
     pub desired_nodes: Option<i32>,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+    pub instance_architecture: CpuArchitecture,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+pub enum CpuArchitecture {
+    AMD64,
+    ARM64,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -96,6 +103,7 @@ pub struct NodeGroupsWithDesiredState {
     pub enable_desired_size: bool,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+    pub instance_architecture: CpuArchitecture,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -110,6 +118,7 @@ pub struct NodeGroupsFormat {
 pub struct InstanceEc2 {
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+    pub instance_architecture: CpuArchitecture,
 }
 
 #[derive(Debug, Copy, Clone)]

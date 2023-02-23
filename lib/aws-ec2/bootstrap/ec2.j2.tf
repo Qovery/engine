@@ -16,22 +16,6 @@ data "aws_ami" "debian" {
   owners = [var.ec2_image_info.owners]
 }
 
-{% if not is_old_k3s_version -%} # remove condition when migration is done
-resource "aws_ebs_volume" "ec2_volume" {
-  availability_zone = var.aws_availability_zones[0]
-  type = "gp2"
-  encrypted = true
-  size = var.ec2_instance.disk_size_in_gb
-
-  tags = merge(
-    local.tags_common,
-    {
-      "Service" = "EC2"
-    }
-  )
-}
-{%- endif %}
-
 {% if user_ssh_key != "" -%}
 resource "aws_key_pair" "user_ssh_key" {
   key_name   = "qovery-${var.kubernetes_cluster_id}"
@@ -44,21 +28,12 @@ resource "aws_instance" "ec2_instance" {
   instance_type = var.ec2_instance.instance_type
 
   # root disk
-{%- if is_old_k3s_version %}
   root_block_device {
     volume_size = var.ec2_instance.disk_size_in_gb
     volume_type = "gp2"
     encrypted = true
     delete_on_termination = true
   }
-{%- else %}
-  root_block_device {
-    volume_size = 8 # Minimum size allowed by AWS
-    volume_type = "gp2"
-    encrypted = true
-    delete_on_termination = true
-  }
-{%- endif %}
 
   # network
   associate_public_ip_address = true
@@ -77,7 +52,7 @@ resource "aws_instance" "ec2_instance" {
 
   # k3s install
   user_data = local.bootstrap
-  user_data_replace_on_change = true
+  user_data_replace_on_change = false
 
   tags = merge(
       local.tags_common,
@@ -231,50 +206,15 @@ cd /tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /t
 echo "export PATH=/usr/local/aws-cli/v2/current/bin:$PATH" >> /etc/profile
 
 
-print_title "Attach volume to instance"
-export AWS_ACCESS_KEY_ID="{{ aws_access_key }}"
-export AWS_SECRET_ACCESS_KEY="{{ aws_secret_key }}"
-export AWS_DEFAULT_REGION="{{ aws_region }}"
-instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-while [ "$(aws ec2 describe-volumes --filters Name=tag:ClusterId,Values="${var.kubernetes_cluster_id}" | jq .Volumes[0].VolumeId)" == null ] ; do
-  echo 'Waiting for volume creation'
-  sleep 5
-done
-volume_id=$(aws ec2 describe-volumes --filters Name=tag:ClusterId,Values="${var.kubernetes_cluster_id}" | jq -r .Volumes[0].VolumeId)
-aws ec2 attach-volume --device "${var.ec2_instance.volume_device_name}"  --instance-id "$instance_id" --volume-id "$volume_id"
-
-
-print_title "Mount volume"
-if [ ! -d /data ]; then
-  mkdir /data
-fi
-
-while ! lsblk | grep -q "${var.ec2_instance.disk_size_in_gb}G" ; do
-  echo 'Waiting for volume availability'
-  sleep 2
-done
-
-disk_name=$(lsblk | grep "${var.ec2_instance.disk_size_in_gb}G" | sed -e 's/\s.*$//')
-
-while [ ! -b "/dev/$disk_name" ]; do
-  echo 'Waiting for volume attachement'
-  sleep 2
-done
-
-if [ "$(file -s "/dev/$disk_name")" == "/dev/$disk_name: data" ]; then
-  echo 'Formatting fresh volume'
-  mkfs -t ext4 "/dev/$disk_name"
-fi
-
-mount /dev/"$disk_name" /data/
-
-
 print_title "Setup cron"
 echo "*/15 * * * * root curl -sL https://raw.githubusercontent.com/Qovery/ec2-system/main/cron.sh > /etc/qovery/cron.sh && chmod 755 /etc/qovery/cron.sh && /etc/qovery/cron.sh " > /etc/cron.d/qovery
 chmod 700 /etc/cron.d/qovery
 
 
 print_title "Install k3s"
+export AWS_ACCESS_KEY_ID="{{ aws_access_key }}"
+export AWS_SECRET_ACCESS_KEY="{{ aws_secret_key }}"
+export AWS_DEFAULT_REGION="{{ aws_region }}"
 # the cli returns the last deployed instance and wait for it to be running (code: 16)
 while [ "$(aws ec2 describe-instances --filters Name=tag:ClusterId,Values="${var.kubernetes_cluster_id}" --query 'sort_by(Reservations[].Instances[], &LaunchTime)[-1:]' | jq -r .[0].State.Code)" -ne 16 ]; do
   echo 'Waiting for ec2 instance to start'
@@ -298,28 +238,11 @@ sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hostname
 # enforce k3s stability by switching to iptables-legacy
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 
-if [ ! -d /data/k3s ]; then
-  mkdir /data/k3s
-fi
-
-if [ ! -d /data/k3s/bin ]; then
-  mkdir /data/k3s/bin
-fi
-
-if [ ! -d /data/k3s/data ]; then
-  mkdir /data/k3s/data
-fi
-
-if [ ! -d /data/k3s/local ]; then
-  mkdir /data/k3s/local
-fi
-
 chmod -R 700 /data/k3s
 
 export INSTALL_K3S_VERSION=${var.k3s_config.version}
 export INSTALL_K3S_CHANNEL=${var.k3s_config.channel}
-export INSTALL_K3S_EXEC="--https-listen-port=${var.k3s_config.exposed_port} --disable=traefik --disable=metrics-server --data-dir /data/k3s/data --default-local-storage-path /data/k3s/local --etcd-disable-snapshots"
-export INSTALL_K3S_BIN_DIR=/data/k3s/bin
+export INSTALL_K3S_EXEC="--https-listen-port=${var.k3s_config.exposed_port} --disable=traefik --disable=metrics-server"
 echo "k3s agrs: $INSTALL_K3S_EXEC"
 while ! curl -sfL https://get.k3s.io | sh -s - --tls-san "$public_ip" --node-ip "$local_ip" --advertise-address "$local_ip" --flannel-iface "$flannel_iface" --kubelet-arg="cloud-provider=external" --kubelet-arg="provider-id=aws:///$provider_id" --etcd-arg "--advertise-client-urls" ; do
   echo 'k3s did not install correctly'
@@ -328,7 +251,7 @@ done
 
 
 print_title "Wait for k3s to start"
-while [ $(/data/k3s/bin/kubectl get pods -A | grep -E -w  'coredns|local-path-provisioner' | grep -c 'Running' ) -lt 2 ]; do
+while [ $(kubectl get pods -A | grep -E -w  'coredns|local-path-provisioner' | grep -c 'Running' ) -lt 2 ]; do
   echo 'Waiting for k3s startup'
   sleep 5
 done

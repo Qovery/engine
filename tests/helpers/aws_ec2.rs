@@ -2,7 +2,7 @@ use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::InstanceEc2;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, InstanceEc2};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::InfrastructureContext;
@@ -15,7 +15,7 @@ pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
 
 pub fn ec2_kubernetes_instance() -> InstanceEc2 {
-    InstanceEc2::new("t3.large".to_string(), 20)
+    InstanceEc2::new("t3.large".to_string(), 20, CpuArchitecture::AMD64)
 }
 
 pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, region: &str) -> ECR {

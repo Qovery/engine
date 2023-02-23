@@ -80,6 +80,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
     }
 }
 
+#[derive(Clone)]
 pub struct AwsIamEksUserMapperChecker {}
 
 impl AwsIamEksUserMapperChecker {
@@ -140,6 +141,10 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
         }
 
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

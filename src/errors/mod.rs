@@ -876,6 +876,8 @@ pub enum Tag {
     AwsCloudwatchRetentionConfigurationError,
     /// AwsSdkListEC2Volumes: represents an error while trying to list AWS EC2 volumes
     AwsSdkListEC2Volumes,
+    /// AwsSdkListEC2Instances: represents an error while trying to list AWS EC2 volumes
+    AwsSdkListEC2Instances,
     /// AwsSdkDetachEC2Volumes: represents an error while trying to detach AWS EC2 volumes
     AwsSdkDetachEC2Volumes,
     /// Base64DecodeIssue: represents an error while trying to decode a base64 string
@@ -3575,6 +3577,31 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::AwsSdkListEC2Volumes,
+            message.clone(),
+            Some(CommandError::new(message, Some(error.to_string()), None)),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when something went wrong on AWS SDK EC2 Api.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_aws_sdk_cannot_list_ec2_instances(
+        event_details: EventDetails,
+        error: Ec2SdkError<aws_sdk_ec2::error::DescribeInstancesError>,
+        instance_id: Option<&str>,
+    ) -> EngineError {
+        let message = match instance_id {
+            None => "Can't list instance".to_string(),
+            Some(id) => format!("Can't get instance {id}"),
+        };
+
+        EngineError::new(
+            event_details,
+            Tag::AwsSdkListEC2Instances,
             message.clone(),
             Some(CommandError::new(message, Some(error.to_string()), None)),
             None,

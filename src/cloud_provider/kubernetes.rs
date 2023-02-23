@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
@@ -847,6 +847,7 @@ impl NodeGroupsWithDesiredState {
             enable_desired_size: enable_desired_nodes,
             instance_type: nodegroup.instance_type.clone(),
             disk_size_in_gib: nodegroup.disk_size_in_gib,
+            instance_architecture: nodegroup.instance_architecture,
         }
     }
 }
@@ -1278,6 +1279,7 @@ impl NodeGroups {
         max_nodes: i32,
         instance_type: String,
         disk_size_in_gib: i32,
+        instance_architecture: CpuArchitecture,
     ) -> Result<Self, CommandError> {
         if min_nodes > max_nodes {
             return Err(CommandError::new_from_safe_message(format!(
@@ -1294,6 +1296,7 @@ impl NodeGroups {
             instance_type,
             disk_size_in_gib,
             desired_nodes: None,
+            instance_architecture,
         })
     }
 
@@ -1301,6 +1304,7 @@ impl NodeGroups {
         InstanceEc2 {
             instance_type: self.instance_type.clone(),
             disk_size_in_gib: self.disk_size_in_gib,
+            instance_architecture: self.instance_architecture,
         }
     }
 
@@ -1318,10 +1322,11 @@ impl NodeGroups {
 }
 
 impl InstanceEc2 {
-    pub fn new(instance_type: String, disk_size_in_gib: i32) -> InstanceEc2 {
+    pub fn new(instance_type: String, disk_size_in_gib: i32, instance_architecture: CpuArchitecture) -> InstanceEc2 {
         InstanceEc2 {
             instance_type,
             disk_size_in_gib,
+            instance_architecture,
         }
     }
 }

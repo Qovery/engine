@@ -591,7 +591,9 @@ impl Kubernetes for EKS {
     }
 }
 
-#[allow(dead_code)] // used in tests
+#[cfg(test)]
+use crate::cloud_provider::models::CpuArchitecture;
+#[cfg(test)]
 impl NodeGroupsWithDesiredState {
     fn new(
         name: String,
@@ -612,6 +614,7 @@ impl NodeGroupsWithDesiredState {
             enable_desired_size,
             instance_type,
             disk_size_in_gib,
+            instance_architecture: CpuArchitecture::AMD64,
         }
     }
 }
@@ -902,7 +905,9 @@ mod tests {
     use crate::cloud_provider::aws::kubernetes::eks::{
         select_nodegroups_autoscaling_group_behavior, NodeGroupToRemoveFailure, EKS,
     };
-    use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
+    use crate::cloud_provider::models::{
+        CpuArchitecture, KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState,
+    };
     use crate::errors::Tag;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
@@ -1070,7 +1075,15 @@ mod tests {
                 20,
             )
         };
-        let nodegroup = NodeGroups::new("nodegroup".to_string(), 3, 10, "t1000.xlarge".to_string(), 20).unwrap();
+        let nodegroup = NodeGroups::new(
+            "nodegroup".to_string(),
+            3,
+            10,
+            "t1000.xlarge".to_string(),
+            20,
+            CpuArchitecture::AMD64,
+        )
+        .unwrap();
 
         // bootstrap
         assert_eq!(
@@ -1140,28 +1153,30 @@ mod tests {
             Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
         );
         assert!(EKS::validate_node_groups(
-            vec![NodeGroups::new("".to_string(), 3, 5, "t3.medium".to_string(), 20).unwrap()],
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3.medium".to_string(), 20, CpuArchitecture::AMD64).unwrap()],
             &event_details,
         )
         .is_ok());
         assert!(EKS::validate_node_groups(
-            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.medium".to_string(), 20).unwrap()],
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.medium".to_string(), 20, CpuArchitecture::AMD64).unwrap()],
             &event_details,
         )
         .is_ok());
         assert!(EKS::validate_node_groups(
-            vec![NodeGroups::new("".to_string(), 3, 5, "t3.large".to_string(), 20).unwrap()],
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3.large".to_string(), 20, CpuArchitecture::AMD64).unwrap()],
             &event_details,
         )
         .is_ok());
         assert!(EKS::validate_node_groups(
-            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.large".to_string(), 20).unwrap()],
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.large".to_string(), 20, CpuArchitecture::AMD64).unwrap()],
             &event_details,
         )
         .is_ok());
         assert_eq!(
             EKS::validate_node_groups(
-                vec![NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20).unwrap()],
+                vec![
+                    NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
+                ],
                 &event_details
             )
             .unwrap_err()
@@ -1170,7 +1185,9 @@ mod tests {
         );
         assert_eq!(
             EKS::validate_node_groups(
-                vec![NodeGroups::new("".to_string(), 3, 5, "t3a.small".to_string(), 20).unwrap()],
+                vec![
+                    NodeGroups::new("".to_string(), 3, 5, "t3a.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
+                ],
                 &event_details
             )
             .unwrap_err()
@@ -1179,7 +1196,10 @@ mod tests {
         );
         assert_eq!(
             EKS::validate_node_groups(
-                vec![NodeGroups::new("".to_string(), 3, 5, "t1000.terminator".to_string(), 20).unwrap()],
+                vec![
+                    NodeGroups::new("".to_string(), 3, 5, "t1000.terminator".to_string(), 20, CpuArchitecture::AMD64)
+                        .unwrap()
+                ],
                 &event_details
             )
             .unwrap_err()
