@@ -120,6 +120,7 @@ impl EC2 {
             1,
             self.instance.instance_type.clone(),
             self.instance.disk_size_in_gib,
+            self.instance.instance_architecture,
         )
         .expect("wrong instance type for EC2") // using expect here as it has already been validated during instantiation
     }

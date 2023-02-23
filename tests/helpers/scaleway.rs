@@ -8,7 +8,7 @@ use uuid::Uuid;
 use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -184,10 +184,15 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![
-            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, "dev1-l".to_string(), 0)
-                .expect("Problem while setup SCW nodes"),
-        ]
+        vec![NodeGroups::new(
+            "groupscw0".to_string(),
+            min_nodes,
+            max_nodes,
+            "dev1-l".to_string(),
+            0,
+            CpuArchitecture::AMD64,
+        )
+        .expect("Problem while setup SCW nodes")]
     }
 
     fn kubernetes_cluster_options(
