@@ -56,6 +56,7 @@ use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
+use tokio::time::Duration;
 
 use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
 
@@ -876,7 +877,7 @@ fn create(
             event_details.clone(),
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
-        )));
+            )));
         if let Err(e) = block_on(delete_eks_failed_nodegroups(
             aws_conn.clone(),
             kubernetes.cluster_name(),
@@ -1127,12 +1128,12 @@ fn create(
                     }
                     false => {
                         kubernetes.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new_from_safe(format!(
-                                    "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                    &qovery_terraform_config.aws_ec2_public_hostname
-                                )),
-                            ));
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                &qovery_terraform_config.aws_ec2_public_hostname
+                            )),
+                        ));
                         OperationResult::Retry(Box::new(
                             EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
                         ))
@@ -1325,14 +1326,49 @@ fn create(
         }
     };
 
-    deploy_charts_levels(
-        &kubernetes.kube_client()?,
-        kubeconfig_path,
-        &credentials_environment_variables,
-        helm_charts_to_deploy,
-        kubernetes.context().is_dry_run_deploy(),
-    )
-    .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
+    if kubernetes.kind() == Kind::Ec2 {
+        let kube_client = &kubernetes.kube_client()?;
+        let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
+            match deploy_charts_levels(
+                kube_client,
+                kubeconfig_path,
+                &credentials_environment_variables,
+                helm_charts_to_deploy.clone(),
+                kubernetes.context().is_dry_run_deploy(),
+            ) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            "Didn't manage to update Helm charts. Retrying...".to_string(),
+                            Some(e.to_string()),
+                        ),
+                    ));
+                    OperationResult::Retry(e)
+                }
+            }
+        });
+        match result {
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(retry::Error::Internal(e)) => Err(CommandError::new(
+                "Didn't manage to update Helm charts after 5 min.".to_string(),
+                Some(e),
+                None,
+            )),
+        }
+        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
+    } else {
+        return deploy_charts_levels(
+            &kubernetes.kube_client()?,
+            kubeconfig_path,
+            &credentials_environment_variables,
+            helm_charts_to_deploy,
+            kubernetes.context().is_dry_run_deploy(),
+        )
+        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)));
+    }
 }
 
 fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {

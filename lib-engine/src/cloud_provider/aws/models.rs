@@ -95,6 +95,10 @@ pub trait QoveryAwsSdkConfigEc2 {
         &self,
         volume_id: String,
     ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>>;
+    async fn _get_instance_by_id(
+        &self,
+        instance_id: String,
+    ) -> Result<aws_sdk_ec2::output::DescribeInstancesOutput, SdkError<aws_sdk_ec2::error::DescribeInstancesError>>;
     async fn detach_ec2_volumes(&self, instance_id: &str, event_details: &EventDetails)
         -> Result<(), Box<EngineError>>;
 }

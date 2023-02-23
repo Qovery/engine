@@ -348,6 +348,24 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
             .send()
             .await
     }
+    /// instance isn't used ATM but will be useful when we'll need to implement ec2 pause.
+    async fn _get_instance_by_id(
+        &self,
+        instance_id: String,
+    ) -> Result<aws_sdk_ec2::output::DescribeInstancesOutput, SdkError<aws_sdk_ec2::error::DescribeInstancesError>>
+    {
+        let client = aws_sdk_ec2::Client::new(self);
+        client
+            .describe_instances()
+            .filters(
+                Filter::builder()
+                    .name("tag:ClusterId".to_string())
+                    .values(instance_id.to_string())
+                    .build(),
+            )
+            .send()
+            .await
+    }
     async fn detach_instance_volume(
         &self,
         volume_id: String,

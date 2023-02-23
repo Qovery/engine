@@ -78,6 +78,7 @@ impl ToCommonHelmChart for MetricsServerChart {
     }
 }
 
+#[derive(Clone)]
 pub struct MetricsServerChartChecker {}
 
 impl MetricsServerChartChecker {
@@ -96,6 +97,10 @@ impl ChartInstallationChecker for MetricsServerChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1393): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

@@ -166,6 +166,8 @@ impl Default for ChartInfo {
 }
 
 pub trait HelmChart: Send {
+    fn clone_dyn(&self) -> Box<dyn HelmChart>;
+
     fn check_prerequisites(&self) -> Result<Option<ChartPayload>, CommandError> {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
@@ -367,6 +369,12 @@ pub trait HelmChart: Send {
     }
 }
 
+impl Clone for Box<dyn HelmChart> {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
+}
+
 fn deploy_parallel_charts(
     kube_client: &kube::Client,
     kubernetes_config: &Path,
@@ -462,9 +470,16 @@ pub fn deploy_charts_levels(
 
 pub trait ChartInstallationChecker: Send {
     fn verify_installation(&self, kube_client: &kube::Client) -> Result<(), CommandError>;
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker>;
 }
 
-#[derive(Default)]
+impl Clone for Box<dyn ChartInstallationChecker> {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
     pub chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
@@ -487,6 +502,10 @@ impl ChartPayload {
 }
 
 impl HelmChart for CommonChart {
+    fn clone_dyn(&self) -> Box<dyn HelmChart> {
+        Box::new(self.clone())
+    }
+
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
     }

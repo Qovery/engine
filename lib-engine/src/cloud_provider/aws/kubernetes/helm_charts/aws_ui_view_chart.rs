@@ -37,6 +37,7 @@ impl ToCommonHelmChart for AwsUiViewChart {
     }
 }
 
+#[derive(Clone)]
 pub struct AwsUiViewChartChecker {}
 
 impl AwsUiViewChartChecker {
@@ -55,6 +56,10 @@ impl ChartInstallationChecker for AwsUiViewChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1365): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

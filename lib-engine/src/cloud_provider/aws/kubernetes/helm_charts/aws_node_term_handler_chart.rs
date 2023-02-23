@@ -55,6 +55,7 @@ impl ToCommonHelmChart for AwsNodeTermHandlerChart {
     }
 }
 
+#[derive(Clone)]
 pub struct AwsNodeTermHandlerChecker {}
 
 impl AwsNodeTermHandlerChecker {
@@ -73,6 +74,10 @@ impl ChartInstallationChecker for AwsNodeTermHandlerChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1363): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 
