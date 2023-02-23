@@ -208,7 +208,6 @@ aws-ec2-infra:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
-  when: manual
 
 aws-managed-services:
   stage: tests
