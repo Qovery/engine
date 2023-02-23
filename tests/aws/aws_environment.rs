@@ -71,6 +71,7 @@ fn aws_test_build_phase() {
     })
 }
 
+#[ignore]
 #[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]

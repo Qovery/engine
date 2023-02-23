@@ -118,8 +118,9 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 
 # Todo: create a bastion to avoid this
 
+{% if not database_postgresql_deny_public_access -%}
 resource "aws_security_group_rule" "postgres_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = var.database_postgresql_allowed_cidrs
   description       = "Allow RDS PostgreSQL incoming access from anywhere"
   from_port         = 5432
   protocol          = "tcp"
@@ -127,9 +128,11 @@ resource "aws_security_group_rule" "postgres_remote_access" {
   to_port           = 5432
   type              = "ingress"
 }
+{% endif -%}
 
+{% if not database_mysql_deny_public_access -%}
 resource "aws_security_group_rule" "mysql_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = var.database_mysql_allowed_cidrs
   description       = "Allow RDS MySQL incoming access from anywhere"
   from_port         = 3306
   protocol          = "tcp"
@@ -137,5 +140,6 @@ resource "aws_security_group_rule" "mysql_remote_access" {
   to_port           = 3306
   type              = "ingress"
 }
+{% endif -%}
 
 {%- endif -%}

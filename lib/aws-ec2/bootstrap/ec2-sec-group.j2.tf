@@ -64,41 +64,48 @@ resource "aws_security_group" "ec2_instance" {
   }
 
   // MySQL
+{% if not database_mysql_deny_public_access -%}
   ingress {
     description = "MySQL access"
     from_port   = 3306
     protocol    = "tcp"
     to_port     = 3306
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.database_mysql_allowed_cidrs
   }
+{% endif -%}
 
   // PostgreSQL
+{% if not database_postgresql_deny_public_access -%}
   ingress {
     description = "PostgreSQL access"
     from_port   = 5432
     protocol    = "tcp"
     to_port     = 5432
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.database_postgresql_allowed_cidrs
   }
+{% endif -%}
 
   // MongoDB
+{% if not database_mongodb_deny_public_access -%}
   ingress {
     description = "MongoDB access"
     from_port   = 27017
     protocol    = "tcp"
     to_port     = 27017
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.database_mongodb_allowed_cidrs
   }
+{% endif -%}
 
   // Redis
+{% if not database_redis_deny_public_access -%}
   ingress {
     description = "Redis access"
     from_port   = 6379
     protocol    = "tcp"
     to_port     = 6379
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.database_redis_allowed_cidrs
   }
-
+{% endif -%}
 
   tags = local.tags_ec2
 }

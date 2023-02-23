@@ -194,6 +194,18 @@ variable "rds_cidr_subnet" {
   type        = number
 }
 
+variable "database_postgresql_allowed_cidrs" {
+  description = "PostgreSQL allowed CIDR Block"
+  default = {{ database_postgresql_allowed_cidrs }}
+  type = list(string)
+}
+
+variable "database_mysql_allowed_cidrs" {
+  description = "MySQL allowed CIDR Block"
+  default = {{ database_mysql_allowed_cidrs }}
+  type = list(string)
+}
+
 # DocumentDB
 
 variable "documentdb_subnets_zone_a" {
@@ -220,6 +232,12 @@ variable "documentdb_cidr_subnet" {
   type        = number
 }
 
+variable "database_mongodb_allowed_cidrs" {
+  description = "MongoDB allowed CIDR Block"
+  default = {{ database_mongodb_allowed_cidrs }}
+  type = list(string)
+}
+
 # Elasticache
 
 variable "elasticache_subnets_zone_a" {
@@ -244,6 +262,12 @@ variable "elasticache_cidr_subnet" {
   description = "Elasticache CIDR (x.x.x.x/CIDR)"
   default     = {{ elasticache_cidr_subnet }}
   type        = number
+}
+
+variable "database_redis_allowed_cidrs" {
+  description = "Redis allowed CIDR Block"
+  default = {{ database_redis_allowed_cidrs }}
+  type = list(string)
 }
 
 # Elasticsearch

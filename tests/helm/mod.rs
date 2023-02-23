@@ -105,6 +105,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 cloud_provider_container_registry_tags: HashMap::new(),
                 aws_vpc_flow_logs_retention_days: 1,
                 aws_cloudwatch_eks_logs_retention_days: 1,
+                ..Default::default()
             },
         )
         .unwrap(),

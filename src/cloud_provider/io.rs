@@ -44,10 +44,27 @@ pub struct ClusterAdvancedSettings {
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
+    #[serde(alias = "database.postgresql.deny_public_access")]
+    pub database_postgresql_deny_public_access: bool,
+    #[serde(alias = "database.postgresql.allowed_cidrs")]
+    pub database_postgresql_allowed_cidrs: Vec<String>,
+    #[serde(alias = "database.mysql.deny_public_access")]
+    pub database_mysql_deny_public_access: bool,
+    #[serde(alias = "database.mysql.allowed_cidrs")]
+    pub database_mysql_allowed_cidrs: Vec<String>,
+    #[serde(alias = "database.redis.deny_public_access")]
+    pub database_redis_deny_public_access: bool,
+    #[serde(alias = "database.redis.allowed_cidrs")]
+    pub database_redis_allowed_cidrs: Vec<String>,
+    #[serde(alias = "database.mongodb.deny_public_access")]
+    pub database_mongodb_deny_public_access: bool,
+    #[serde(alias = "database.mongodb.allowed_cidrs")]
+    pub database_mongodb_allowed_cidrs: Vec<String>,
 }
 
 impl Default for ClusterAdvancedSettings {
     fn default() -> Self {
+        let default_database_cirds = vec!["0.0.0.0/0".to_string()];
         ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time_sec: 31536000,
@@ -58,6 +75,14 @@ impl Default for ClusterAdvancedSettings {
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
             aws_cloudwatch_eks_logs_retention_days: 90,
+            database_postgresql_deny_public_access: false,
+            database_postgresql_allowed_cidrs: default_database_cirds.clone(),
+            database_mysql_deny_public_access: false,
+            database_mysql_allowed_cidrs: default_database_cirds.clone(),
+            database_redis_deny_public_access: false,
+            database_redis_allowed_cidrs: default_database_cirds.clone(),
+            database_mongodb_deny_public_access: false,
+            database_mongodb_allowed_cidrs: default_database_cirds,
         }
     }
 }
