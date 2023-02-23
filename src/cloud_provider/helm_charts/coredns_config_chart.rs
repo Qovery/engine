@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 // TODO(benjaminch): refactor this chart to have only one in common (issue with labels)
+#[derive(Clone)]
 pub struct CoreDNSConfigChart {
     pub chart_info: ChartInfo,
     _chart_path: HelmChartPath,
@@ -87,6 +88,10 @@ impl CoreDNSConfigChart {
 }
 
 impl HelmChart for CoreDNSConfigChart {
+    fn clone_dyn(&self) -> Box<dyn HelmChart> {
+        Box::new(self.clone())
+    }
+
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
     }
@@ -280,6 +285,7 @@ impl HelmChart for CoreDNSConfigChart {
     }
 }
 
+#[derive(Clone)]
 struct CoreDNSConfigChartChecker {}
 
 impl CoreDNSConfigChartChecker {
@@ -346,6 +352,10 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
                 Err(CommandError::new("Error trying to get CoreDNS pods".to_string(), Some(e), None))
             }
         }
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

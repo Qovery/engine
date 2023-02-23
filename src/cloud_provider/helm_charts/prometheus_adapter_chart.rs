@@ -62,6 +62,7 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
     }
 }
 
+#[derive(Clone)]
 pub struct PrometheusAdapterChartChecker {}
 
 impl PrometheusAdapterChartChecker {
@@ -80,6 +81,10 @@ impl ChartInstallationChecker for PrometheusAdapterChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1385): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

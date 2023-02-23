@@ -48,6 +48,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
     }
 }
 
+#[derive(Clone)]
 pub struct KubeStateMetricsChartChecker {}
 
 impl KubeStateMetricsChartChecker {
@@ -66,6 +67,10 @@ impl ChartInstallationChecker for KubeStateMetricsChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1394): Implement chart install verification
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 

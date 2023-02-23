@@ -76,6 +76,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
     }
 }
 
+#[derive(Clone)]
 pub struct QoveryStorageClassChartInstallationChecker {
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
 }
@@ -116,6 +117,10 @@ impl ChartInstallationChecker for QoveryStorageClassChartInstallationChecker {
         }
 
         Ok(())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
+        Box::new(self.clone())
     }
 }
 
