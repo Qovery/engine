@@ -43,8 +43,8 @@ charts:
     dest: aws-ec2-bootstrap
     version: 2.6.8
   - name: metrics-server
-    repo_name: bitnami
-    version: 6.0.4
+    repo_name: metrics-server
+    version: 3.8.3
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 4.23.0
@@ -121,6 +121,8 @@ repos:
     url: https://helm.datadoghq.com
   - name: kir4h
     url: https://kir4h.github.io/charts
+  - name: metrics-server
+    url: https://kubernetes-sigs.github.io/metrics-server/
 
 destinations:
   - name: default
