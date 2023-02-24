@@ -1,27 +1,38 @@
 annotations:
-  category: Analytics
+  artifacthub.io/changes: |
+    - kind: added
+      description: "Added support for topologySpreadConstraints."
+    - kind: added
+      description: "Set resource namespaces explicitly."
+    - kind: added
+      description: "Allow configuring TLS on the APIService."
+    - kind: added
+      description: "Enabled service monitor relabelling."
+    - kind: added
+      description: "Added ability to set the scheduler name."
+    - kind: added
+      description: "Added support for common labels."
+    - kind: changed
+      description: "Updated Metrics Server image to v0.6.2."
 apiVersion: v2
-appVersion: 0.6.1
-dependencies:
-- name: common
-  repository: https://charts.bitnami.com/bitnami
-  tags:
-  - bitnami-common
-  version: 1.x.x
-description: Metrics Server aggregates resource usage data, such as container CPU
-  and memory usage, in a Kubernetes cluster and makes it available via the Metrics
-  API.
-home: https://github.com/bitnami/charts/tree/master/bitnami/metrics-server
-icon: https://bitnami.com/assets/stacks/metrics-server/img/metrics-server-stack-220x234.png
+appVersion: 0.6.2
+description: Metrics Server is a scalable, efficient source of container resource
+  metrics for Kubernetes built-in autoscaling pipelines.
+home: https://github.com/kubernetes-sigs/metrics-server
+icon: https://avatars.githubusercontent.com/u/36015203?s=400&v=4
 keywords:
+- kubernetes
 - metrics-server
-- cluster
 - metrics
 maintainers:
-- email: containers@bitnami.com
-  name: Bitnami
+- name: stevehipwell
+  url: https://github.com/stevehipwell
+- name: krmichel
+  url: https://github.com/krmichel
+- name: endrec
+  url: https://github.com/endrec
 name: metrics-server
 sources:
-- https://github.com/bitnami/bitnami-docker-metrics-server
-- https://github.com/kubernetes-incubator/metrics-server
-version: 6.0.4
+- https://github.com/kubernetes-sigs/metrics-server
+type: application
+version: 3.8.3
