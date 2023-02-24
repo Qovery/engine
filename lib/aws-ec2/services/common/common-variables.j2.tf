@@ -44,7 +44,6 @@ variable "q_environment_id" {
 variable "database_tags" {
   description = "Qovery database tags"
   default     = {
-    "cluster_name"                                                                   = "{{ cluster_name }}"
     "cluster_id"                                                                     = "{{ kubernetes_cluster_id }}"
     "region"                                                                         = "{{ region }}"
     "q_client_id"                                                                    = "{{ owner_id }}"
