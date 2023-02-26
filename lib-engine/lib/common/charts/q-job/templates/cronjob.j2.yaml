@@ -52,18 +52,31 @@ spec:
           imagePullSecrets:
             - name: {{ registry.secret_name }}
           {%- endif %}
+          volumes:
+            {%- for mounted_file in mounted_files %}
+            - name: {{ mounted_file.id }}-{{ service.short_id }}
+              secret:
+                secretName: {{ mounted_file.id }}-{{ service.short_id }}
+            {%- endfor %}
           containers:
             - name: {{ service.name }}
               image: "{{ service.image_full }}"
-              {%- if service.entrypoint %}
+          {%- if service.entrypoint %}
               command:
                 - |-
                   {{ service.entrypoint }}
-              {%- endif %}
+          {%- endif %}
               args:
                 {%- for arg in service.command_args %}
                 - |-
                   {{ arg }}
+                {%- endfor %}
+              volumeMounts:
+                {%- for mounted_file in mounted_files %}
+                - mountPath: "{{ mounted_file.mount_path }}"
+                  subPath: content
+                  name: {{ mounted_file.id }}-{{ service.short_id }}
+                  readOnly: true
                 {%- endfor %}
               env:
                 {%- for ev in environment_variables %}
@@ -73,12 +86,12 @@ spec:
                       name: {{ service.name }}
                       key: {{ ev.key }}
                 {%- endfor %}
-              {%- if service.default_port %}
+          {%- if service.default_port %}
               ports:
                 - containerPort: {{ service.default_port }}
                   name: "p{{ service.default_port }}"
                   protocol: TCP
-              {%- if service.advanced_settings.readiness_probe_type != "NONE" %}
+          {%- if service.advanced_settings.readiness_probe_type != "NONE" %}
               readinessProbe:
                 {%- if service.advanced_settings.readiness_probe_type == "TCP" %}
                 tcpSocket:
@@ -94,8 +107,8 @@ spec:
                 timeoutSeconds: {{ service.advanced_settings.readiness_probe_timeout_seconds }}
                 successThreshold: {{ service.advanced_settings.readiness_probe_success_threshold }}
                 failureThreshold: {{ service.advanced_settings.readiness_probe_failure_threshold }}
-              {%- endif %}
-              {%- if service.advanced_settings.liveness_probe_type != "NONE" %}
+          {%- endif %}
+          {%- if service.advanced_settings.liveness_probe_type != "NONE" %}
               livenessProbe:
                 {%- if service.advanced_settings.liveness_probe_type == "TCP" %}
                 tcpSocket:
@@ -111,8 +124,8 @@ spec:
                 timeoutSeconds: {{ service.advanced_settings.liveness_probe_timeout_seconds }}
                 successThreshold: {{ service.advanced_settings.liveness_probe_success_threshold }}
                 failureThreshold: {{ service.advanced_settings.liveness_probe_failure_threshold }}
-              {%- endif %}
-              {%- endif %}
+          {%- endif %}
+          {%- endif %}
               resources:
                 limits:
                   cpu: {{ service.cpu_limit_in_milli }}
@@ -120,4 +133,4 @@ spec:
                 requests:
                   cpu: {{ service.cpu_request_in_milli }}
                   memory: {{ service.ram_request_in_mib }}
-{%- endif %}
+  {%- endif %}
