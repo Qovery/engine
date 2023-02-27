@@ -19,6 +19,10 @@ txtPrefix: set-by-engine-code
 
 replicas: 1
 
+# TODO: Remove after chart support a version we is built for ARM64
+image:
+  tag: 0.13.2-debian-11-r17
+
 resources:
   limits:
     cpu: 50m
