@@ -51,10 +51,11 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
             file_content_b64: base64::encode("I exist !"),
         };
 
-        let environment = helpers::environment::working_environment_with_application_crashing_if_file_doesnt_exist(
-            &context,
-            &mounted_file,
-        );
+        let environment =
+            helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
+                &context,
+                &mounted_file,
+            );
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;

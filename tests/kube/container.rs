@@ -8,15 +8,16 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
+use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::Action;
+use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::container::{get_container_with_invalid_storage_size, Container};
 use qovery_engine::models::types::AWS;
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::{span, Level};
 
 #[cfg(feature = "test-local-kube")]
@@ -155,6 +156,96 @@ fn should_increase_container_storage_size() {
         }
 
         // clean up
+        let mut env_to_delete = environment;
+        env_to_delete.action = Action::Delete;
+        let ead = env_to_delete.clone();
+        assert!(matches!(
+            env_to_delete.delete_environment(&ead, &infra_ctx),
+            TransactionResult::Ok
+        ));
+
+        test_name.to_string()
+    });
+}
+
+#[cfg(feature = "test-local-kube")]
+#[test]
+#[named]
+fn should_have_mounted_files_as_volume() {
+    let test_name = function_name!();
+
+    engine_run_test(|| {
+        init();
+
+        // setup:
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let (infra_ctx, environment) = kube_test_env(TestEnvOption::WithContainer);
+        let mut ea = environment.clone();
+        let mut container = environment
+            .containers
+            .first()
+            .expect("there is no container in env")
+            .clone();
+
+        // removing useless objects for this test
+        ea.applications = vec![];
+        ea.databases = vec![];
+        ea.jobs = vec![];
+        ea.routers = vec![];
+
+        // setup mounted file for this app
+        let mounted_file_id = QoveryIdentifier::new_random();
+        let mounted_file = MountedFile {
+            id: mounted_file_id.short().to_string(),
+            long_id: mounted_file_id.to_uuid(),
+            mount_path: "/tmp/app.config.json".to_string(),
+            file_content_b64: base64::encode(r#"{"name": "config"}"#),
+        };
+        let mount_file_env_var_key = "APP_CONFIG";
+        let mount_file_env_var_value = mounted_file.mount_path.to_string();
+
+        // Use an app crashing in case file doesn't exists
+        container.image = "debian".to_string();
+        container.tag = "bullseye".to_string();
+        container.command_args = vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
+        ];
+        //container.mounted_files = vec![mounted_file];
+        container.environment_vars = BTreeMap::from([
+            (mount_file_env_var_key.to_string(), base64::encode(mount_file_env_var_value)), // <- mounted file PATH
+        ]);
+        container.mounted_files = vec![mounted_file];
+
+        // Create a statefulset
+        let mut statefulset = container.clone();
+        let statefulset_id = QoveryIdentifier::new_random();
+        statefulset.name = statefulset_id.short().to_string();
+        statefulset.long_id = statefulset_id.to_uuid();
+        let storage_id = QoveryIdentifier::new_random();
+        statefulset.storages = vec![qovery_engine::io_models::application::Storage {
+            id: storage_id.short().to_string(),
+            long_id: storage_id.to_uuid(),
+            name: storage_id.short().to_string(),
+            storage_type: StorageType::Ssd,
+            size_in_gib: 10,
+            mount_point: format!("/tmp/{}", storage_id.short()),
+            snapshot_retention_in_days: 1,
+        }];
+
+        // attaching application & statefulset to env
+        ea.containers = vec![container, statefulset];
+
+        // execute & verify
+        let deployment_result = environment.deploy_environment(&ea, &infra_ctx);
+
+        // verify:
+        assert!(matches!(deployment_result, TransactionResult::Ok));
+
+        // clean up:
         let mut env_to_delete = environment;
         env_to_delete.action = Action::Delete;
         let ead = env_to_delete.clone();

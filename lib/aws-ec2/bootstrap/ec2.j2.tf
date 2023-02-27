@@ -33,6 +33,12 @@ resource "aws_instance" "ec2_instance" {
     volume_type = "gp2"
     encrypted = true
     delete_on_termination = true
+    tags = merge(
+      local.tags_common,
+      {
+        "Service" = "EC2"
+      }
+    )
   }
 
   # network

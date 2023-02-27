@@ -2,9 +2,7 @@ use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{
-    AdvancedSettingsProbeType, Application, ApplicationAdvancedSettings, Port, Protocol,
-};
+use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol, StorageType};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -102,27 +100,59 @@ pub fn working_minimal_environment_with_router(context: &Context, test_domain: &
     working_environment(context, test_domain, true, false)
 }
 
-pub fn working_environment_with_application_crashing_if_file_doesnt_exist(
+pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
     context: &Context,
     mounted_file: &MountedFile,
 ) -> EnvironmentRequest {
     let mut environment = working_environment(context, "", false, false);
 
-    environment.applications = environment
+    let mut application = environment
         .applications
-        .into_iter()
-        .map(|mut app| {
-            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
-            app.branch = "app-crashing-if-file-doesnt-exist".to_string();
-            app.commit_id = "268ddf16a8446dc19a61f5916da3e6e729b88669".to_string();
-            app.advanced_settings.liveness_probe_type = AdvancedSettingsProbeType::None;
-            app.advanced_settings.readiness_probe_type = AdvancedSettingsProbeType::None;
-            app.environment_vars =
-                btreemap!["APP_FILE_PATH_TO_BE_CHECKED".to_string() => base64::encode(&mounted_file.mount_path)];
-            app.mounted_files = vec![mounted_file.clone()];
-            app
-        })
-        .collect::<Vec<qovery_engine::io_models::application::Application>>();
+        .first()
+        .expect("there is no application in env")
+        .clone();
+
+    // removing useless objects for this test
+    environment.containers = vec![];
+    environment.databases = vec![];
+    environment.jobs = vec![];
+    environment.routers = vec![];
+
+    let mount_file_env_var_key = "APP_CONFIG";
+    let mount_file_env_var_value = mounted_file.mount_path.to_string();
+
+    // Use an app crashing in case file doesn't exists
+    application.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
+    application.branch = "app-crashing-if-file-doesnt-exist".to_string();
+    application.commit_id = "268ddf16a8446dc19a61f5916da3e6e729b88669".to_string();
+    application.ports = vec![];
+    application.mounted_files = vec![mounted_file.clone()];
+    application.environment_vars = BTreeMap::from([
+        (
+            "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
+            base64::encode(&mount_file_env_var_value),
+        ), // <- https://github.com/Qovery/engine-testing/blob/app-crashing-if-file-doesnt-exist/src/main.rs#L19
+        (mount_file_env_var_key.to_string(), base64::encode(&mount_file_env_var_value)), // <- mounted file PATH
+    ]);
+
+    // create a statefulset
+    let mut statefulset = application.clone();
+    let statefulset_id = QoveryIdentifier::new_random();
+    statefulset.name = statefulset_id.short().to_string();
+    statefulset.long_id = statefulset_id.to_uuid();
+    let storage_id = QoveryIdentifier::new_random();
+    statefulset.storage = vec![qovery_engine::io_models::application::Storage {
+        id: storage_id.short().to_string(),
+        long_id: storage_id.to_uuid(),
+        name: storage_id.short().to_string(),
+        storage_type: StorageType::Ssd,
+        size_in_gib: 10,
+        mount_point: format!("/tmp/{}", storage_id.short()),
+        snapshot_retention_in_days: 1,
+    }];
+
+    // attaching application & statefulset to env
+    environment.applications = vec![application, statefulset];
 
     environment
 }

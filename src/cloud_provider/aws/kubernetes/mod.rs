@@ -833,9 +833,17 @@ fn get_nodegroup_autoscaling_config_from_aws(
             }
         };
         // ignore if group of nodes is not managed by Qovery
-        if eks_node_group.tags.unwrap_or_default()["QoveryNodeGroupName"] == node_group.name {
-            scaling_config = eks_node_group.scaling_config;
-            break;
+        match eks_node_group.tags {
+            None => continue,
+            Some(tags) => match tags.get("QoveryNodeGroupName") {
+                None => continue,
+                Some(tag) => {
+                    if tag == &node_group.name {
+                        scaling_config = eks_node_group.scaling_config;
+                        break;
+                    }
+                }
+            },
         }
     }
 

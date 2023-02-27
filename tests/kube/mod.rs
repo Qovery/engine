@@ -9,6 +9,7 @@ use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
@@ -18,11 +19,15 @@ use uuid::Uuid;
 mod application;
 mod container;
 mod database;
+mod jobs;
+
+/// This mod holds kubernetes tests for features not specific to any cloud providers.
 
 pub enum TestEnvOption {
     WithDB,
     WithContainer,
     WithApp,
+    WithJob,
 }
 
 pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, EnvironmentRequest) {
@@ -205,6 +210,46 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 mounted_files: vec![],
             };
             environment.applications = vec![app];
+        }
+        TestEnvOption::WithJob => {
+            let job_id = QoveryIdentifier::new_random();
+            let job_name = job_id.short().to_string();
+            let job = Job {
+                long_id: job_id.to_uuid(),
+                name: job_name,
+                command_args: vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env; test -f $APP_CONFIG; timeout 15 nc -l 8080; exit 0;"
+                        .to_string(),
+                ],
+                entrypoint: None,
+                force_trigger: true,
+                cpu_request_in_milli: 250,
+                cpu_limit_in_milli: 250,
+                ram_request_in_mib: 250,
+                ram_limit_in_mib: 250,
+                action: Action::Create,
+                schedule: JobSchedule::Cron {
+                    schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
+                },
+                source: JobSource::Image {
+                    registry: Registry::DockerHub {
+                        url: Url::parse("https://docker.io").unwrap(),
+                        long_id: Uuid::new_v4(),
+                        credentials: None,
+                    },
+                    image: "debian".to_string(),
+                    tag: "bullseye".to_string(),
+                },
+                max_nb_restart: 1,
+                max_duration_in_sec: 120,
+                environment_vars: BTreeMap::default(),
+                advanced_settings: Default::default(),
+                mounted_files: vec![],
+                default_port: None,
+            };
+            environment.jobs = vec![job];
         }
     };
 

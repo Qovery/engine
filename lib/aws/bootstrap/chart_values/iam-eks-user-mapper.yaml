@@ -5,6 +5,13 @@ aws:
 
 syncIamGroup: set-by-engine-code
 
+# Repository for the image is there 
+# https://github.com/Qovery/iam-eks-user-mapper
+image:
+  repository: public.ecr.aws/r3m4q3r9/iam-eks-user-mapper
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
 resources:
   limits:
     cpu: 20m

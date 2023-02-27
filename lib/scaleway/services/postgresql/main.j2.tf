@@ -1,6 +1,5 @@
 locals {
   tags_postgresql = {
-    cluster_name = var.cluster_name
     cluster_id = var.kubernetes_cluster_id
     region = var.region
     q_client_id = var.q_customer_id
