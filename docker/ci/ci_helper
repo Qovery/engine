@@ -1,0 +1,143 @@
+#!/bin/bash
+
+
+function print_help() {
+  echo "Usage: $0 <option>"
+  grep '##' $0 | grep 'function' | grep -v grep | sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
+  exit 1
+}
+
+
+
+function await_docker_socket() { ## Await the docker socket
+  while true 
+  do 
+    echo "Waiting docker port 2375 to be open...";
+    nc -z localhost 2375 && break 
+    sleep 2 
+  done
+}
+
+function init_buildkit_builder() { ## Prepare buildkit to be usable
+  if [ -z "${1:-}" ]
+  then
+    echo 'Invalid call. Must pass builder name (i.e: $JOB_ID) as first parameter'
+    exit 1
+  fi
+
+  await_docker_socket
+  set_aws_ctx "CI_BUILDER"
+  trap restore_aws_ctx EXIT
+
+  docker buildx create --use --name=kube-ci-builder --append --bootstrap --driver=kubernetes \
+    --platform=linux/amd64 \
+    --driver-opt=namespace=gitlab,nodeselector="kubernetes.io/arch=amd64" \
+    --node=${1}-amd64
+
+  docker buildx create --name=kube-ci-builder --append --bootstrap --driver=kubernetes \
+    --platform=linux/arm64 \
+    --driver-opt=namespace=gitlab,nodeselector="kubernetes.io/arch=arm64" \
+    --node=${1}-arm64
+
+}
+
+function teardown_buildkit_builder() { ## Cleanup buildkit resources
+  if [ -z "${1:-}" ]
+  then
+    echo 'Invalid call. Must pass builder name (i.e: $JOB_ID) as first parameter'
+    exit 1
+  fi
+
+  set_aws_ctx "CI_BUILDER"
+  trap restore_aws_ctx EXIT
+
+  docker buildx rm kube-ci-builder
+}
+
+
+function set_aws_ctx() { ## Set credentials and kubeconfig for the specified context
+  if [ -z "${1:-}" ]
+  then
+    echo "Invalid empty selected context for aws"
+    exit 1
+  fi
+
+  if [ "$1" != "OLD" ]
+  then
+    export OLD_AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-empty}
+    export OLD_AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-empty}
+    export OLD_AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-empty}
+    export OLD_KUBECONFIG=${KUBECONFIG:-empty}
+  fi
+
+  local ACCESS_KEY_ID="${1}_AWS_ACCESS_KEY_ID"
+  local SECRET_ACCESS_KEY="${1}_AWS_SECRET_ACCESS_KEY"
+  local DEFAULT_REGION="${1}_AWS_DEFAULT_REGION"
+  local MY_KUBECONFIG="${1}_KUBECONFIG"
+
+  export AWS_ACCESS_KEY_ID=${!ACCESS_KEY_ID}
+  export AWS_SECRET_ACCESS_KEY=${!SECRET_ACCESS_KEY}
+  export AWS_DEFAULT_REGION=${!DEFAULT_REGION}
+  export KUBECONFIG=${!MY_KUBECONFIG}
+}
+
+function print_aws_ctx() {
+  set_aws_ctx $1
+
+  echo "export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+  echo "export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
+  echo "export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+  echo "export KUBECONFIG=${KUBECONFIG}"
+}
+
+
+function restore_aws_ctx() {
+  set_aws_ctx "OLD"
+}
+
+function docker_login_public_prod_ecr() {
+  set_aws_ctx "PROD_USEAST2"
+  trap restore_aws_ctx EXIT
+
+  aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
+  
+}
+
+
+function docker_login_private_prod_ecr() {
+  set_aws_ctx "PROD_USEAST2"
+  trap restore_aws_ctx EXIT
+
+  aws ecr get-login-password | docker login --username AWS --password-stdin 283389881690.dkr.ecr.eu-west-3.amazonaws.com
+}
+
+case "${1:-empty}" in
+await_docker_socket)
+  set -euo pipefail
+  await_docker_socket
+  ;;
+init_buildkit_builder)
+  set -euo pipefail
+  init_buildkit_builder "$2"
+  ;;
+teardown_buildkit_builder) 
+  set -euo pipefail
+  teardown_buildkit_builder "$2"
+  ;;
+print_aws_ctx)
+  set -euo pipefail
+  print_aws_ctx "$2"
+  ;;
+docker_login_public_prod_ecr) 
+  set -euo pipefail
+  docker_login_public_prod_ecr 
+  ;;
+docker_login_private_prod_ecr) 
+  set -euo pipefail
+  docker_login_private_prod_ecr
+  ;;
+*)
+  print_help
+  ;;
+esac

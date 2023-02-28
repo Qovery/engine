@@ -1,0 +1,39 @@
+FROM debian:bullseye
+
+RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim \
+    apt-transport-https ca-certificates curl gnupg lsb-release &&\
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
+    curl https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
+    curl -q 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor -o /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | tee /etc/apt/sources.list.d/prebuilt-mpr.list && \
+    apt-get update && apt-get install -y docker-ce=5:23.0.1-1~debian.11~bullseye docker-ce-cli=5:23.0.1-1~debian.11~bullseye containerd.io=1.6.18-1 kubectl=1.21.14-00 helm=3.11.1-1 just=1.13.0-1
+
+RUN curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG="v5.2.2" bash
+RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/').zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws
+
+# sscache
+RUN curl -sL https://github.com/mozilla/sccache/releases/download/v0.3.3/sccache-v0.3.3-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/')-unknown-linux-musl.tar.gz -o sccache.tar.gz && \
+    tar -xf sccache.tar.gz -C /mnt --no-anchored 'sccache' && \
+    mv /mnt/sccache*/sccache /usr/bin/sccache && \
+    chmod 755 /usr/bin/sccache && \
+    rm -rf sccache.tar.gz /mnt/sccache*
+
+
+# https://github.com/docker/docker/tree/master/hack/dind
+ENV DIND_COMMIT ed89041433a031cafc0a0f19cfe573c31688d377
+RUN set -eux; \
+    curl -so /usr/local/bin/dind "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind"; \
+    chmod +x /usr/local/bin/dind
+ADD ci_helper /usr/local/bin/ci_helper
+
+VOLUME /var/lib/docker
+EXPOSE 2375 2376
+
+CMD ["sh"]
