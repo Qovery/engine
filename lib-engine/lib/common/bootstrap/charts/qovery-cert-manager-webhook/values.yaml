@@ -5,7 +5,8 @@ certManager:
   serviceAccountName: default
 
 image:
-  repository: registry.gitlab.com/qovery/backend/cert-manager-webhook-qovery
+  repository: public.ecr.aws/r3m4q3r9/cert-manager-webhook-qovery
+  tag: "4e646d52"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
