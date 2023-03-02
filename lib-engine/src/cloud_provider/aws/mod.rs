@@ -1,7 +1,7 @@
+use aws_config::provider_config::ProviderConfig;
+use aws_types::SdkConfig;
 use std::any::Any;
 
-use aws_config::provider_config::ProviderConfig;
-use aws_config::SdkConfig;
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::never::NeverConnector;

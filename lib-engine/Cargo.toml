@@ -54,7 +54,7 @@ tracing-subscriber = { version = "0.3.11", features = ["json"] }
 # shiplift = "0.6.0"
 
 # Filesystem
-sysinfo = "0.23.11"
+sysinfo = "0.28.1"
 
 # Jinja2
 tera = "1.15.0"
@@ -78,16 +78,16 @@ rusoto_ecr = "0.48.0"
 rusoto_eks = "0.48.0"
 rusoto_s3 = "0.48.0"
 rusoto_iam = "0.48.0"
-aws-config = "0.51.0"
-aws-sdk-elasticloadbalancingv2 = "0.21.0"
-aws-sdk-eks = "0.21.0"
-aws-sdk-rds = "0.21.0"
-aws-sdk-elasticache = "0.21.0"
-aws-sdk-docdb = "0.21.0"
-aws-sdk-ec2 = "0.21.0"
-aws-types = "0.51.0"
-aws-smithy-client = { version="0.51.0", features=["rt-tokio"] }
-aws-smithy-async = { version="0.51.0", features=["rt-tokio"] }
+aws-config = "0.54.1"
+aws-sdk-elasticloadbalancingv2 = "0.24.0"
+aws-sdk-eks = "0.24.0"
+aws-sdk-rds = "0.24.0"
+aws-sdk-elasticache = "0.24.0"
+aws-sdk-docdb = "0.24.0"
+aws-sdk-ec2 = "0.24.0"
+aws-types = "0.54.1"
+aws-smithy-client = { version="0.54.4", features=["rt-tokio"] }
+aws-smithy-async = { version="0.54.4", features=["rt-tokio"] }
 
 # Scaleway Deps
 scaleway_api_rs = "=0.1.2"

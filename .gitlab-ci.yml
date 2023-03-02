@@ -178,7 +178,7 @@ aws-infra:
   script:
     - ./helper.sh aws_infra
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -207,7 +207,7 @@ aws-ec2-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   only:
     refs:
       - merge_requests
@@ -231,7 +231,7 @@ aws-managed-services:
   script:
     - ./helper.sh aws_managed_services
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -417,7 +417,7 @@ scw-managed-services:
   script:
     - ./helper.sh scw_managed_services
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   only:

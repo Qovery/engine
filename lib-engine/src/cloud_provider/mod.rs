@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use aws_config::SdkConfig;
+use aws_types::SdkConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
