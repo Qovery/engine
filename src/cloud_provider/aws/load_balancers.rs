@@ -4,10 +4,10 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
 use async_trait::async_trait;
-use aws_config::SdkConfig;
 use aws_sdk_elasticloadbalancingv2::error::{DeleteLoadBalancerError, DescribeTagsError};
 use aws_sdk_elasticloadbalancingv2::model::{LoadBalancer, TagDescription};
 use aws_smithy_client::SdkError;
+use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::Service;
 
 use super::models::QoveryAwsSdkConfigLoadBalancer;

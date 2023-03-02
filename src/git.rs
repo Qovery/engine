@@ -336,7 +336,7 @@ mod tests {
         };
         let repo = clone_at_commit(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
-            "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8",
+            "d22414a253db2bcf3acf91f85565d2dabe9211cc",
             clone_dir.path(),
             &get_credentials,
         );
