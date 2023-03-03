@@ -548,6 +548,13 @@ fn tera_context(
     context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
     context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
 
+    // AWS - EKS/EC2 Metadata
+    // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html
+    context.insert(
+        "ec2_metadata_imds_version",
+        &kubernetes.advanced_settings().aws_eks_ec2_metadata_imds,
+    );
+
     // AWS - RDS
     context.insert("rds_cidr_subnet", &rds_cidr_subnet);
     context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);

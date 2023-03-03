@@ -67,6 +67,12 @@ resource "aws_instance" "ec2_instance" {
       }
     )
 
+  # metadata
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = var.ec2_metadata_imds_version
+  }
+
   depends_on = [
     aws_s3_bucket.kubeconfigs_bucket,
   ]

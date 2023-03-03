@@ -115,6 +115,12 @@ variable "ec2_cidr_subnet" {
   type        = number
 }
 
+variable "ec2_metadata_imds_version" {
+  description = "Set the imds version"
+  default = "{{ ec2_metadata_imds_version }}"
+  type = string
+}
+
 variable "ec2_k8s_versions" {
   description = "Kubernetes version"
   default = {
