@@ -555,6 +555,7 @@ pub fn get_application_with_invalid_storage_size<T: CloudProvider>(
                                             storage.size_in_gib, size
                                         )
                                         .as_str(),
+                                        None,
                                     )));
                                 }
                             }
