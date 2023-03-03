@@ -315,7 +315,7 @@ impl Task for EnvironmentTask {
             Ok(env) => env,
             Err(err) => {
                 self.logger.log(EngineEvent::Error(
-                    EngineError::new_invalid_engine_payload(event_details, err.to_string().as_str()),
+                    EngineError::new_invalid_engine_payload(event_details, err.to_string().as_str(), None),
                     None,
                 ));
                 return;

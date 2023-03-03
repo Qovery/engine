@@ -455,6 +455,7 @@ pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode,
                             database.total_disk_size_in_gb, size
                         )
                         .as_str(),
+                        None,
                     )));
                 }
             }

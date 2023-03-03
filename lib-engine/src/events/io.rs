@@ -141,6 +141,7 @@ pub enum InfrastructureStep {
     Restart,
     Restarted,
     RestartedError,
+    CannotProcessRequest,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -168,6 +169,7 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Restart => InfrastructureStep::Restart,
             events::InfrastructureStep::Restarted => InfrastructureStep::Restarted,
             events::InfrastructureStep::RestartedError => InfrastructureStep::RestartedError,
+            events::InfrastructureStep::CannotProcessRequest => InfrastructureStep::CannotProcessRequest,
         }
     }
 }

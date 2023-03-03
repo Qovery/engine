@@ -36,8 +36,10 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::Task;
-use qovery_engine::errors::EngineError;
-use qovery_engine::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
+use qovery_engine::errors::{CommandError, EngineError};
+use qovery_engine::events::{
+    EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
+};
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
@@ -462,17 +464,22 @@ async fn fetch_and_exec_deployments(
                                     current_deployment.set_task(task);
                                 }
                                 Err(err) => {
-                                    error!("Error while creating task: {}", err);
+                                    let execution_id = deployment_info.execution_id.clone();
+                                    error!("Error while creating task for {}: {}", execution_id, err);
                                     let event_details = EventDetails::new(None,
                                         QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
                                         QoveryIdentifier::new(Uuid::parse_str(&deployment_info.cluster_id).unwrap_or_default()),
-                                        deployment_info.execution_id.clone(),
-                                        Stage::Environment(EnvironmentStep::Cancelled),
+                                        execution_id.to_string(),
+                                        if deployment_info.r#type == DeploymentType::Environment as i32 {
+                                           Stage::Environment(EnvironmentStep::Cancelled)
+                                        } else {
+                                           Stage::Infrastructure(InfrastructureStep::CannotProcessRequest)
+                                        },
                                         Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
                                     );
-                                    let msg = "Engine received an invalid deployment request";
+                                    let msg = format!("Engine received an invalid deployment request for execution_id = {execution_id}");
                                     let message = EventMessage::new_from_safe(msg.to_string());
-                                    let err = EngineEvent::Error(EngineError::new_invalid_engine_payload(event_details.clone(), msg), Some(message));
+                                    let err = EngineEvent::Error(EngineError::new_invalid_engine_payload(event_details.clone(), msg.as_str(), Some(CommandError::new(msg.clone(), Some(format!("{err}")), None))), Some(message));
                                     let _ = engine_tx.send(err);
 
                                     let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Terminated));
