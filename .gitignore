@@ -9,12 +9,11 @@ json
 .qovery-workspace
 app/.qovery-workspace
 .terraform/
-NOTES.txt
 docker/engine/providers/
 venv
 qovery-engine/results.xml
 cloned-engine
-cloned_engine
+NOTES.txt
 bin_versions
 .DS_Store
 /dist/
