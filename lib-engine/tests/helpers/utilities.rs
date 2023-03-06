@@ -672,6 +672,35 @@ pub fn generate_cluster_id(region: &str) -> Uuid {
     }
 }
 
+// avoid test collisions
+pub fn generate_organization_id(region: &str) -> Uuid {
+    let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
+
+    // if running on CI, generate an ID
+    if env::var_os(check_if_running_on_gitlab_env_var).is_some() {
+        let id = generate_id();
+        info!("Generated organization ID: {}", id);
+        return id;
+    };
+
+    match gethostname::gethostname().into_string() {
+        // shrink to 15 chars in order to avoid resources name issues
+        Ok(current_name) => {
+            let reversed_name = current_name.as_str().chars().rev().collect::<String>();
+            let mut bytes: [u8; 16] = [0; 16];
+            for byte in reversed_name.as_bytes() {
+                bytes[*byte as usize % 16] = bytes[*byte as usize % 16].wrapping_add(*byte);
+            }
+
+            for byte in region.bytes() {
+                bytes[byte as usize % 16] = bytes[byte as usize % 16].wrapping_add(byte);
+            }
+            Uuid::from_bytes(bytes)
+        }
+        _ => generate_id(),
+    }
+}
+
 pub fn get_pvc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
