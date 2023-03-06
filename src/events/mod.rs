@@ -281,6 +281,8 @@ pub enum InfrastructureStep {
     Restarted,
     /// RestartedError: error on restarting a cluster.
     RestartedError,
+    /// CannotProcessRequest: error returned if the payload sent is wrong
+    CannotProcessRequest,
 }
 
 impl Display for InfrastructureStep {
@@ -310,7 +312,8 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Terminated => "terminated",
                 InfrastructureStep::Restart => "restart",
                 InfrastructureStep::Restarted => "restarted",
-                InfrastructureStep::RestartedError => "restart_error",
+                InfrastructureStep::RestartedError => "restart-error",
+                InfrastructureStep::CannotProcessRequest => "cannot-process-request",
             },
         )
     }

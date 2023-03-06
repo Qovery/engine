@@ -1080,12 +1080,16 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `message`: Raw error message.
-    pub fn new_invalid_engine_payload(event_details: EventDetails, message: &str) -> EngineError {
+    pub fn new_invalid_engine_payload(
+        event_details: EventDetails,
+        message: &str,
+        underlying_error: Option<CommandError>,
+    ) -> EngineError {
         EngineError::new(
             event_details,
             Tag::InvalidEnginePayload,
             format!("Input is invalid and cannot be executed by the engine: {message}"),
-            None,
+            underlying_error,
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
         )
