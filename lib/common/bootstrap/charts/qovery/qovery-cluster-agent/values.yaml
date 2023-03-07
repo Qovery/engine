@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: qoveryrd/cluster-agent
+  repository: public.ecr.aws/r3m4q3r9/cluster-agent
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
