@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: qoveryrd/shell-agent
+  repository: public.ecr.aws/r3m4q3r9/shell-agent
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
