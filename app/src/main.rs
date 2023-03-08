@@ -118,7 +118,7 @@ pub fn main() -> io::Result<()> {
         Err(_) => true,
     };
 
-    let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
+    let docker = Docker::new(docker_host).expect("Can't init docker builder");
     match env::var("DEPLOY_FROM_FILE_KIND") {
         Ok(value) => match value.as_str() {
             "infra" => using_json_path_parameter(
@@ -128,7 +128,6 @@ pub fn main() -> io::Result<()> {
                 lib_root_dir,
                 test_cluster,
                 TaskSelector::Infrastructure(""),
-                docker_host,
                 docker,
             ),
             "env" => using_json_path_parameter(
@@ -138,7 +137,6 @@ pub fn main() -> io::Result<()> {
                 lib_root_dir,
                 test_cluster,
                 TaskSelector::Environment(""),
-                docker_host,
                 docker,
             ),
             _ => {
@@ -161,7 +159,6 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     test_cluster: bool,
     deployment_type: TaskSelector,
-    docker_host: Option<Url>,
     docker: Docker,
 ) -> Result<(), Error> {
     // check if file json config file exist
@@ -186,7 +183,6 @@ pub fn using_json_path_parameter(
                 req,
                 workspace_root_dir,
                 lib_root_dir,
-                docker_host,
                 docker,
                 logger,
                 Box::new(FakeQoveryApi {}),
@@ -204,7 +200,6 @@ pub fn using_json_path_parameter(
                 req,
                 workspace_root_dir,
                 lib_root_dir,
-                docker_host,
                 docker,
                 logger,
                 Box::new(StaticQoveryApi {

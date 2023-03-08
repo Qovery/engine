@@ -79,7 +79,6 @@ fn to_engine_task(
     msg: String,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    docker_tcp_socket: &Option<Url>,
     docker: Docker,
     task_selector: &TaskSelector,
     grpc_client: &GrpcEngineClient,
@@ -97,7 +96,6 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    docker_tcp_socket.clone(),
                     docker,
                     logger,
                     qovery_api,
@@ -113,7 +111,6 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    docker_tcp_socket.clone(),
                     docker,
                     logger,
                     qovery_api,
@@ -257,7 +254,7 @@ pub fn main() -> io::Result<()> {
         }
         None => info!("docker host is not set"),
     };
-    let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
+    let docker = Docker::new(docker_host).expect("Can't init docker builder");
     let task_selector = if deployment_type.map_or(true, |deployment_type| deployment_type == "ENVIRONMENT") {
         TaskSelector::Environment("environment")
     } else {
@@ -289,7 +286,6 @@ pub fn main() -> io::Result<()> {
                     payload,
                     &workspace_root_dir,
                     &lib_root_dir,
-                    &docker_host,
                     docker.clone(),
                     &task_selector,
                     grpc_client,

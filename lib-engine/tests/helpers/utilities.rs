@@ -85,7 +85,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
     let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
     let docker_host = env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
-    let docker = Docker::new_with_options(false, docker_host.clone()).expect("Can't init docker");
+    let docker = Docker::new_with_options(false, docker_host).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from(env::var_os("dry_run_deploy").is_some()),
@@ -114,7 +114,6 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
         home_dir,
         lib_root_dir,
         true,
-        docker_host,
         enabled_features,
         Option::from(metadata),
         docker,
