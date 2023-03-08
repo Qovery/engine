@@ -305,7 +305,6 @@ environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="4ceb7649-ed84-4c52-a27b-e7fca06afaa5",\
 environmentVariables.CLUSTER_JWT_TOKEN="$ENV_CLUSTER_JWT_TOKEN",\
-nodeSelector.'kubernetes.io/arch'="amd64",\
 buildContainer.enabled="true",\
 volumes.useNetworkDisks="false",\
 metrics.enabled="true",\
