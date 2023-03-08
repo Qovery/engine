@@ -94,7 +94,8 @@ buildResources:
   #   memory: 128Mi
   #   ephemeral-storage: 40Gi
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/arch: amd64
 
 tolerations: []
 
