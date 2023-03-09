@@ -1,6 +1,5 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use lazy_static::lazy_static;
-use serde_derive::Deserialize;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
@@ -31,51 +30,6 @@ lazy_static! {
     // We use a mutex that will force serialization of logins in order to avoid that
     // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Deserialize)]
-pub enum PlatformOs {
-    #[serde(alias = "linux")]
-    Linux,
-    #[serde(other)]
-    Unknown,
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Deserialize)]
-pub enum PlatformArch {
-    #[serde(alias = "amd64")]
-    AMD64,
-    #[serde(alias = "arm64")]
-    ARM64,
-    #[serde(other)]
-    Unknown,
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Deserialize)]
-pub struct Platform {
-    pub os: PlatformOs,
-    pub architecture: PlatformArch,
-}
-
-impl Platform {
-    fn is_known_platform(&self) -> bool {
-        self.os != PlatformOs::Unknown && self.architecture != PlatformArch::Unknown
-    }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Manifest {
-    pub digest: String,
-    pub media_type: String,
-    pub platform: Platform,
-    pub size: u64,
-}
-
-impl PartialEq for Manifest {
-    fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -191,6 +145,7 @@ Build summary:
 
 #[derive(Debug, Clone)]
 enum ImageId {
+    #[allow(dead_code)]
     Digest(String),
     Tags(Vec<String>),
 }
@@ -213,7 +168,7 @@ impl ContainerImage {
         }
     }
 
-    fn new_for_digest(registry: Url, name: String, digest: String) -> Self {
+    fn _new_for_digest(registry: Url, name: String, digest: String) -> Self {
         ContainerImage {
             registry,
             name,
@@ -649,38 +604,6 @@ impl Docker {
         docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
-    fn list_remote_manifests(&self, image: &ContainerImage) -> Result<Vec<Manifest>, DockerError> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct ManifestList {
-            manifests: Vec<Manifest>,
-        }
-
-        info!("Docker list manifests {:?}", image);
-        let mut output = String::with_capacity(2048);
-        docker_exec(
-            &["buildx", "imagetools", "inspect", "--raw", image.image_name().as_str()],
-            &self.get_all_envs(&[]),
-            &mut |line| output.push_str(line.as_str()),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::never(),
-        )?;
-
-        let manifests = match serde_json::from_str::<ManifestList>(&output) {
-            Ok(m) => m.manifests,
-            Err(err) => {
-                return Err(DockerError::InvalidConfig {
-                    raw_error_message: err.to_string(),
-                })
-            }
-        };
-
-        Ok(manifests
-            .into_iter()
-            .filter(|m| m.platform.is_known_platform())
-            .collect())
-    }
-
     pub fn mirror<Stdout, Stderr>(
         &self,
         source_image: &ContainerImage,
@@ -694,39 +617,35 @@ impl Docker {
         Stderr: FnMut(String),
     {
         info!("Docker mirror {:?} {:?}", source_image, dest_image);
-        let source_manifest = self.list_remote_manifests(source_image)?;
-        let dest_manifest = self.list_remote_manifests(dest_image);
-        let manifest_diff: usize = match dest_manifest {
-            Ok(m) => source_manifest.iter().filter(|manifest| !m.contains(manifest)).count(),
-            Err(_) => source_manifest.len(),
-        };
-
-        if manifest_diff == 0 {
-            return Ok(());
-        }
-
-        let mut source_img =
-            ContainerImage::new_for_digest(source_image.registry.clone(), source_image.name.clone(), "".to_string());
-        for manifest in &source_manifest {
-            source_img.id = ImageId::Digest(manifest.digest.clone());
-            self.pull(&source_img, stdout_output, stderr_output, should_abort)?;
-            self.tag(&source_img, dest_image, stdout_output, stderr_output, should_abort)?;
-            self.push(dest_image, stdout_output, stderr_output, should_abort)?;
-        }
-
-        let digests: Vec<&str> = source_manifest.iter().map(|m| m.digest.as_str()).collect();
-        self.create_manifest(dest_image, &digests)
+        self.create_manifest(
+            dest_image,
+            &[source_image.image_name().as_str()],
+            stdout_output,
+            stderr_output,
+            should_abort,
+        )
     }
 
-    fn create_manifest(&self, image: &ContainerImage, digests: &[&str]) -> Result<(), DockerError> {
+    fn create_manifest<Stdout, Stderr>(
+        &self,
+        image: &ContainerImage,
+        digests: &[&str],
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
+    ) -> Result<(), DockerError>
+    where
+        Stdout: FnMut(String),
+        Stderr: FnMut(String),
+    {
         let image_tag = image.image_name();
         info!("Docker create manifest {} with digests {:?}", image_tag, digests);
         docker_exec(
             &[&["buildx", "imagetools", "create", "-t", image_tag.as_str()], digests].concat(),
             &self.get_all_envs(&[]),
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::never(),
+            stdout_output,
+            stderr_output,
+            should_abort,
         )
     }
 
@@ -1005,19 +924,5 @@ mod tests {
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
-    }
-
-    #[test]
-    fn test_list_manifest() {
-        let docker = Docker::new_with_options(true, None).unwrap();
-        let image_source = ContainerImage::new(
-            Url::parse("https://docker.io").unwrap(),
-            "alpine".to_string(),
-            vec!["3.17".to_string()],
-        );
-
-        let ret = docker.list_remote_manifests(&image_source);
-        assert!(matches!(ret, Ok(_)));
-        assert_eq!(ret.unwrap().len(), 2);
     }
 }
