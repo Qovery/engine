@@ -373,12 +373,18 @@ impl Docker {
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
         info!("Docker check remotely image exist {:?}", image);
 
-        let ret = self.list_remote_manifests(image)?;
+        let ret = docker_exec(
+            &["buildx", "imagetools", "inspect", &image.image_name()],
+            &self.get_all_envs(&[]),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
+        );
 
-        if ret.is_empty() {
-            Ok(false)
-        } else {
-            Ok(true)
+        match ret {
+            Ok(_) => Ok(true),
+            Err(DockerError::ExitStatusError { .. }) => Ok(false),
+            Err(err) => Err(err),
         }
     }
 
@@ -925,7 +931,7 @@ mod tests {
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_options(true, None).unwrap();
         let image_to_build =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["v42.42".to_string()]);
         let image_cache =
             ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
 
