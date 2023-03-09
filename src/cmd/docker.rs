@@ -176,6 +176,7 @@ impl ContainerImage {
 #[derive(Debug, Clone)]
 pub struct Docker {
     use_buildkit: bool,
+    socket_location: Option<Url>,
     common_envs: Vec<(String, String)>,
 }
 
@@ -183,6 +184,7 @@ impl Docker {
     pub fn new_with_options(enable_buildkit: bool, socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
             use_buildkit: enable_buildkit,
+            socket_location,
             common_envs: vec![(
                 "DOCKER_BUILDKIT".to_string(),
                 if enable_buildkit {
@@ -194,7 +196,7 @@ impl Docker {
         };
 
         // Override DOCKER_HOST if we use a TCP socket
-        if let Some(socket_location) = socket_location {
+        if let Some(socket_location) = &docker.socket_location {
             docker
                 .common_envs
                 .push(("DOCKER_HOST".to_string(), socket_location.to_string()))
@@ -245,6 +247,10 @@ impl Docker {
 
     pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
         Self::new_with_options(true, socket_location)
+    }
+
+    pub fn socket_url(&self) -> &Option<Url> {
+        &self.socket_location
     }
 
     fn get_all_envs<'a>(&'a self, envs: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {

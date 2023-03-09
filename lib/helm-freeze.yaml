@@ -81,10 +81,6 @@ charts:
   - name: pleco
     version: 0.11.1
     repo_name: pleco
-  - name: do-k8s-token-rotate
-    version: 0.1.3
-    dest: do-bootstrap
-    repo_name: do-k8s-token-rotate
   - name: prometheus-adapter
     version: 3.3.1
     repo_name: prometheus-community

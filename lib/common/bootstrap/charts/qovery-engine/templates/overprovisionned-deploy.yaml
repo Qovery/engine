@@ -16,6 +16,10 @@ spec:
         app: qovery-engine-overprovisioning
     spec:
       priorityClassName: qovery-engine-overprovisioning
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache

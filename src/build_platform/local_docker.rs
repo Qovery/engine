@@ -53,7 +53,7 @@ impl LocalDocker {
     }
 
     fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {
-        if let Some(socket_path) = self.context.docker_tcp_socket() {
+        if let Some(socket_path) = self.context.docker.socket_url() {
             vec![("DOCKER_HOST", socket_path.as_str())]
         } else {
             vec![]

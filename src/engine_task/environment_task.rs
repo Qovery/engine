@@ -23,14 +23,12 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{env, fs};
-use url::Url;
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker_host: Option<Url>,
     docker: Docker,
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
@@ -44,7 +42,6 @@ impl EnvironmentTask {
         request: EnvironmentEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker_host: Option<Url>,
         docker: Docker,
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
@@ -59,7 +56,6 @@ impl EnvironmentTask {
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
-            docker_host,
             docker,
             request,
             logger,
@@ -77,7 +73,6 @@ impl EnvironmentTask {
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
             self.request.test_cluster,
-            self.docker_host.clone(),
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),

@@ -6,7 +6,6 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use url::Url;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -19,7 +18,6 @@ pub struct Context {
     workspace_root_dir: String,
     lib_root_dir: String,
     test_cluster: bool,
-    docker_host: Option<Url>,
     features: Vec<Features>,
     metadata: Option<Metadata>,
     pub docker: Docker,
@@ -35,7 +33,6 @@ impl Context {
         workspace_root_dir: String,
         lib_root_dir: String,
         test_cluster: bool,
-        docker_host: Option<Url>,
         features: Vec<Features>,
         metadata: Option<Metadata>,
         docker: Docker,
@@ -51,7 +48,6 @@ impl Context {
             workspace_root_dir,
             lib_root_dir,
             test_cluster,
-            docker_host,
             features,
             metadata,
             docker,
@@ -86,10 +82,6 @@ impl Context {
 
     pub fn lib_root_dir(&self) -> &str {
         self.lib_root_dir.as_str()
-    }
-
-    pub fn docker_tcp_socket(&self) -> &Option<Url> {
-        &self.docker_host
     }
 
     pub fn metadata(&self) -> Option<&Metadata> {

@@ -13,12 +13,10 @@ use crate::logger::Logger;
 use crate::transaction::{Transaction, TransactionResult};
 use std::sync::Arc;
 use std::{env, fs};
-use url::Url;
 
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker_host: Option<Url>,
     docker: Docker,
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
@@ -31,7 +29,6 @@ impl InfrastructureTask {
         request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker_host: Option<Url>,
         docker: Docker,
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
@@ -46,7 +43,6 @@ impl InfrastructureTask {
         InfrastructureTask {
             workspace_root_dir,
             lib_root_dir,
-            docker_host,
             docker,
             request,
             logger,
@@ -63,7 +59,6 @@ impl InfrastructureTask {
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
             self.request.test_cluster,
-            self.docker_host.clone(),
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
