@@ -301,26 +301,16 @@ impl Docker {
         Ok(matches!(ret, Ok(_)))
     }
 
-    // Warning: this command is slow > 10 sec
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
         info!("Docker check remotely image exist {:?}", image);
 
-        let mut stderr_output = "".to_string();
         let ret = docker_exec(
-            &["manifest", "inspect", &image.image_name()],
+            &["buildx", "imagetools", "inspect", &image.image_name()],
             &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
-            &mut |line| {
-                warn!("{}", line);
-                stderr_output.push_str(&line);
-            },
+            &mut |line| warn!("{}", line),
             &CommandKiller::never(),
         );
-
-        // FIXME: Do no use docker manifest inspect command as docker does not update it
-        if stderr_output.contains("unsupported manifest media type and no default available") {
-            return Ok(true);
-        }
 
         match ret {
             Ok(_) => Ok(true),
@@ -866,6 +856,9 @@ mod tests {
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
+
+        let ret = docker.does_image_exist_remotely(&image_to_build);
+        assert!(matches!(ret, Ok(true)));
 
         let ret = docker.pull(
             &image_to_build,
