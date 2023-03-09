@@ -1,5 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use lazy_static::lazy_static;
+use serde_derive::Deserialize;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
@@ -30,6 +31,51 @@ lazy_static! {
     // We use a mutex that will force serialization of logins in order to avoid that
     // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Deserialize)]
+pub enum PlatformOs {
+    #[serde(alias = "linux")]
+    Linux,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Deserialize)]
+pub enum PlatformArch {
+    #[serde(alias = "amd64")]
+    AMD64,
+    #[serde(alias = "arm64")]
+    ARM64,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Deserialize)]
+pub struct Platform {
+    pub os: PlatformOs,
+    pub architecture: PlatformArch,
+}
+
+impl Platform {
+    fn is_known_platform(&self) -> bool {
+        self.os != PlatformOs::Unknown && self.architecture != PlatformArch::Unknown
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Manifest {
+    pub digest: String,
+    pub media_type: String,
+    pub platform: Platform,
+    pub size: u64,
+}
+
+impl PartialEq for Manifest {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest == other.digest
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -144,15 +190,35 @@ Build summary:
 }
 
 #[derive(Debug, Clone)]
+enum ImageId {
+    Digest(String),
+    Tags(Vec<String>),
+}
+
+#[derive(Debug, Clone)]
 pub struct ContainerImage {
     pub registry: Url,
     pub name: String,
-    pub tags: Vec<String>,
+    id: ImageId,
 }
 
 impl ContainerImage {
     pub fn new(registry: Url, name: String, tags: Vec<String>) -> Self {
-        ContainerImage { registry, name, tags }
+        assert!(!tags.is_empty(), "cannot create a container image without tags");
+
+        ContainerImage {
+            registry,
+            name,
+            id: ImageId::Tags(tags),
+        }
+    }
+
+    fn new_for_digest(registry: Url, name: String, digest: String) -> Self {
+        ContainerImage {
+            registry,
+            name,
+            id: ImageId::Digest(digest),
+        }
     }
 
     pub fn image_names(&self) -> Vec<String> {
@@ -162,10 +228,13 @@ impl ContainerImage {
             self.registry.host_str().unwrap_or_default().to_string()
         };
 
-        self.tags
-            .iter()
-            .map(|tag| format!("{}/{}:{}", host, &self.name, tag))
-            .collect()
+        match &self.id {
+            ImageId::Digest(digest) => vec![format!("{}/{}@{}", host, &self.name, digest)],
+            ImageId::Tags(tags) => tags
+                .iter()
+                .map(|tag| format!("{}/{}:{}", host, &self.name, tag))
+                .collect(),
+        }
     }
 
     pub fn image_name(&self) -> String {
@@ -304,18 +373,12 @@ impl Docker {
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
         info!("Docker check remotely image exist {:?}", image);
 
-        let ret = docker_exec(
-            &["buildx", "imagetools", "inspect", &image.image_name()],
-            &self.get_all_envs(&[]),
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::never(),
-        );
+        let ret = self.list_remote_manifests(image)?;
 
-        match ret {
-            Ok(_) => Ok(true),
-            Err(DockerError::ExitStatusError { .. }) => Ok(false),
-            Err(err) => Err(err),
+        if ret.is_empty() {
+            Ok(false)
+        } else {
+            Ok(true)
         }
     }
 
@@ -357,14 +420,6 @@ impl Docker {
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
-        let mut build_result = BuildResult::new();
-
-        // if there is no tags, nothing to build
-        if image_to_build.tags.is_empty() {
-            build_result.built = false;
-            return Ok(build_result);
-        }
-
         // Do some checks
         if !dockerfile.is_file() {
             return Err(DockerError::InvalidConfig {
@@ -588,6 +643,38 @@ impl Docker {
         docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
+    fn list_remote_manifests(&self, image: &ContainerImage) -> Result<Vec<Manifest>, DockerError> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ManifestList {
+            manifests: Vec<Manifest>,
+        }
+
+        info!("Docker list manifests {:?}", image);
+        let mut output = String::with_capacity(2048);
+        docker_exec(
+            &["buildx", "imagetools", "inspect", "--raw", image.image_name().as_str()],
+            &self.get_all_envs(&[]),
+            &mut |line| output.push_str(line.as_str()),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
+        )?;
+
+        let manifests = match serde_json::from_str::<ManifestList>(&output) {
+            Ok(m) => m.manifests,
+            Err(err) => {
+                return Err(DockerError::InvalidConfig {
+                    raw_error_message: err.to_string(),
+                })
+            }
+        };
+
+        Ok(manifests
+            .into_iter()
+            .filter(|m| m.platform.is_known_platform())
+            .collect())
+    }
+
     pub fn mirror<Stdout, Stderr>(
         &self,
         source_image: &ContainerImage,
@@ -601,9 +688,40 @@ impl Docker {
         Stderr: FnMut(String),
     {
         info!("Docker mirror {:?} {:?}", source_image, dest_image);
-        self.pull(source_image, stdout_output, stderr_output, should_abort)?;
-        self.tag(source_image, dest_image, stdout_output, stderr_output, should_abort)?;
-        self.push(dest_image, stdout_output, stderr_output, should_abort)
+        let source_manifest = self.list_remote_manifests(source_image)?;
+        let dest_manifest = self.list_remote_manifests(dest_image);
+        let manifest_diff: usize = match dest_manifest {
+            Ok(m) => source_manifest.iter().filter(|manifest| !m.contains(manifest)).count(),
+            Err(_) => source_manifest.len(),
+        };
+
+        if manifest_diff == 0 {
+            return Ok(());
+        }
+
+        let mut source_img =
+            ContainerImage::new_for_digest(source_image.registry.clone(), source_image.name.clone(), "".to_string());
+        for manifest in &source_manifest {
+            source_img.id = ImageId::Digest(manifest.digest.clone());
+            self.pull(&source_img, stdout_output, stderr_output, should_abort)?;
+            self.tag(&source_img, dest_image, stdout_output, stderr_output, should_abort)?;
+            self.push(dest_image, stdout_output, stderr_output, should_abort)?;
+        }
+
+        let digests: Vec<&str> = source_manifest.iter().map(|m| m.digest.as_str()).collect();
+        self.create_manifest(dest_image, &digests)
+    }
+
+    fn create_manifest(&self, image: &ContainerImage, digests: &[&str]) -> Result<(), DockerError> {
+        let image_tag = image.image_name();
+        info!("Docker create manifest {} with digests {:?}", image_tag, digests);
+        docker_exec(
+            &[&["buildx", "imagetools", "create", "-t", image_tag.as_str()], digests].concat(),
+            &self.get_all_envs(&[]),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
+        )
     }
 
     pub fn prune_images(&self) -> Result<(), DockerError> {
@@ -683,11 +801,11 @@ mod tests {
         let docker = Docker::new(None).unwrap();
 
         // Invalid image should fails
-        let image = ContainerImage {
-            registry: Url::parse("https://docker.io").unwrap(),
-            name: "alpine".to_string(),
-            tags: vec!["666".to_string()],
-        };
+        let image = ContainerImage::new(
+            Url::parse("https://docker.io").unwrap(),
+            "alpine".to_string(),
+            vec!["666".to_string()],
+        );
         let ret = docker.pull(
             &image,
             &mut |msg| println!("{msg}"),
@@ -697,11 +815,11 @@ mod tests {
         assert!(matches!(ret, Err(_)));
 
         // Valid image should be ok
-        let image = ContainerImage {
-            registry: Url::parse("https://docker.io").unwrap(),
-            name: "alpine".to_string(),
-            tags: vec!["3.15".to_string()],
-        };
+        let image = ContainerImage::new(
+            Url::parse("https://docker.io").unwrap(),
+            "alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
 
         let ret = docker.pull(
             &image,
@@ -726,16 +844,10 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_options(false, None).unwrap();
-        let image_to_build = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["3.15".to_string()],
-        };
-        let image_cache = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["cache".to_string()],
-        };
+        let image_to_build =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
+        let image_cache =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
 
         let ret = docker.build_with_docker(
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
@@ -772,16 +884,10 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_options(true, None).unwrap();
-        let image_to_build = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["3.15".to_string()],
-        };
-        let image_cache = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["cache".to_string()],
-        };
+        let image_to_build =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
+        let image_cache =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
 
         // It should work
         let ret = docker.build_with_buildkit(
@@ -818,16 +924,10 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_options(true, None).unwrap();
-        let image_to_build = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["3.15".to_string()],
-        };
-        let image_cache = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["cache".to_string()],
-        };
+        let image_to_build =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
+        let image_cache =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
 
         // It should work
         let ret = docker.build_with_buildkit(
@@ -874,16 +974,13 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_options(true, None).unwrap();
-        let image_source = ContainerImage {
-            registry: Url::parse("https://docker.io").unwrap(),
-            name: "alpine".to_string(),
-            tags: vec!["3.15".to_string()],
-        };
-        let image_dest = ContainerImage {
-            registry: private_registry_url(),
-            name: "erebe/alpine".to_string(),
-            tags: vec!["mirror".to_string()],
-        };
+        let image_source = ContainerImage::new(
+            Url::parse("https://docker.io").unwrap(),
+            "alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+        let image_dest =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["mirror".to_string()]);
 
         // It should work
         let ret = docker.mirror(
@@ -902,5 +999,19 @@ mod tests {
             &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
+    }
+
+    #[test]
+    fn test_list_manifest() {
+        let docker = Docker::new_with_options(true, None).unwrap();
+        let image_source = ContainerImage::new(
+            Url::parse("https://docker.io").unwrap(),
+            "alpine".to_string(),
+            vec!["3.17".to_string()],
+        );
+
+        let ret = docker.list_remote_manifests(&image_source);
+        assert!(matches!(ret, Ok(_)));
+        assert_eq!(ret.unwrap().len(), 2);
     }
 }

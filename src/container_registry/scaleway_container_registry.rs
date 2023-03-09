@@ -340,11 +340,8 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let image = docker::ContainerImage {
-            registry: self.registry_info.endpoint.clone(),
-            name: image.name(),
-            tags: vec![image.tag.clone()],
-        };
+        let image =
+            docker::ContainerImage::new(self.registry_info.endpoint.clone(), image.name(), vec![image.tag.clone()]);
         match self.context.docker.does_image_exist_remotely(&image) {
             Ok(true) => true,
             Ok(false) => false,

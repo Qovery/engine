@@ -142,18 +142,15 @@ impl LocalDocker {
         let mut build_result = BuildResult::new();
 
         // Prepare image we want to build
-        let image_to_build = ContainerImage {
-            registry: build.image.registry_url.clone(),
-            name: build.image.name(),
-            tags: vec![build.image.tag.clone(), "latest".to_string()],
-        };
+        let image_to_build = ContainerImage::new(
+            build.image.registry_url.clone(),
+            build.image.name(),
+            vec![build.image.tag.clone(), "latest".to_string()],
+        );
         build_result.build_candidate_image(Some(image_to_build.clone()));
 
-        let image_cache = ContainerImage {
-            registry: build.image.registry_url.clone(),
-            name: build.image.name(),
-            tags: vec!["latest".to_string()],
-        };
+        let image_cache =
+            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["latest".to_string()]);
         build_result.source_cached_image(Some(image_cache.clone()));
 
         // Check if the image does not exist already remotely, if yes, we skip the build
