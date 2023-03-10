@@ -7,8 +7,9 @@ locals {
 locals {
   tags_common = {
     ClusterId = var.kubernetes_cluster_id
-    ClusterLongId = var.kubernetes_full_cluster_id
+    ClusterLongId = var.kubernetes_cluster_long_id
     OrganizationId = var.organization_id,
+    OrganizationLongId = var.organization_long_id,
     Region = var.region
     creationDate = time_static.on_cluster_create.rfc3339
     QoveryProduct = "EKS"

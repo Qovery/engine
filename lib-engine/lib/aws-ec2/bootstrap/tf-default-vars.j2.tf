@@ -18,6 +18,12 @@ variable "organization_id" {
   type        = string
 }
 
+variable "organization_long_id" {
+  description = "Qovery Organization long ID"
+  default     = "{{ organization_long_id }}"
+  type        = string
+}
+
 # AWS specific
 
 variable "aws_availability_zones" {
@@ -118,9 +124,9 @@ variable "ec2_k8s_versions" {
   type = map(string)
 }
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long id"
+  default     = "{{ kubernetes_cluster_long_id }}"
   type        = string
 }
 
