@@ -19,7 +19,7 @@ Qovery binary application
 * terraform
 * helm
 * kubectl
-* aws-iam-authenticator
+* aws cli
 
 ## Get Started
 
