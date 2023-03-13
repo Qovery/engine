@@ -1,5 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use lazy_static::lazy_static;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
 use std::sync::Mutex;
@@ -29,6 +30,20 @@ lazy_static! {
     // We use a mutex that will force serialization of logins in order to avoid that
     // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
+}
+
+pub enum Architecture {
+    AMD64,
+    ARM64,
+}
+
+impl Display for Architecture {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Architecture::AMD64 => f.write_str("amd64"),
+            Architecture::ARM64 => f.write_str("arm64"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -85,15 +100,31 @@ impl ContainerImage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Docker {
+    use_kube_builder: Option<String>, // contains the builder name if using kube builder
     socket_location: Option<Url>,
     common_envs: Vec<(String, String)>,
 }
 
+impl Drop for Docker {
+    fn drop(&mut self) {
+        if let Some(builder_name) = &self.use_kube_builder {
+            let _ = docker_exec(
+                &["buildx", "rm", builder_name],
+                &self.get_all_envs(&[]),
+                &mut |_| {},
+                &mut |_| {},
+                &CommandKiller::never(),
+            );
+        }
+    }
+}
+
 impl Docker {
-    pub fn new_with_options(socket_location: Option<Url>) -> Result<Self, DockerError> {
+    fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
+            use_kube_builder: None,
             socket_location,
             common_envs: vec![("DOCKER_BUILDKIT".to_string(), "1".to_string())],
         };
@@ -120,8 +151,15 @@ impl Docker {
             });
         }
 
+        Ok(docker)
+    }
+
+    pub fn new_with_local_builder(socket_location: Option<Url>) -> Result<Self, DockerError> {
+        let docker = Self::new(socket_location)?;
+
         // In order to be able to use --cache-from --cache-to for buildkit,
         // we need to create our specific builder, which is not the default one (aka: the docker one).
+        // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
         let args = vec![
             "buildx",
             "create",
@@ -143,8 +181,52 @@ impl Docker {
         Ok(docker)
     }
 
-    pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
-        Self::new_with_options(socket_location)
+    pub fn new_with_kube_builder(
+        socket_location: Option<Url>,
+        supported_architectures: &[Architecture],
+        namespace: &str,
+        builder_id: &str,
+        (cpu_request, cpu_limit): (u32, u32),
+        (memory_request_gib, memory_limit_gib): (u32, u32),
+        args: Vec<(String, String)>,
+    ) -> Result<Self, DockerError> {
+        let mut docker = Self::new(socket_location)?;
+
+        let builder_name = "engine-builder";
+        docker.use_kube_builder = Some(builder_name.to_string());
+        docker.common_envs.extend(args);
+
+        // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
+
+        for arch in supported_architectures {
+            let node_name = format!("builder-{builder_id}-{arch}");
+            let driver_opt = format!("--driver-opt=namespace={namespace},nodeselector=kubernetes.io/arch={arch},requests.cpu={cpu_request},limits.cpu={cpu_limit},requests.memory={memory_request_gib}G,limits.memory={memory_limit_gib}G");
+            let platform = format!("linux/{arch}");
+            let args = vec![
+                "buildx",
+                "create",
+                "--append",
+                "--name",
+                builder_name,
+                "--platform",
+                &platform,
+                "--node",
+                &node_name,
+                "--driver=kubernetes",
+                &driver_opt,
+                "--bootstrap",
+                "--use",
+            ];
+            docker_exec(
+                &args,
+                &docker.get_all_envs(&[]),
+                &mut |line| info!("{}", line),
+                &mut |line| info!("{}", line),
+                &CommandKiller::never(),
+            )?;
+        }
+
+        Ok(docker)
     }
 
     pub fn socket_url(&self) -> &Option<Url> {
@@ -303,7 +385,7 @@ impl Docker {
             "buildx".to_string(),
             "build".to_string(),
             "--progress=plain".to_string(),
-            "--network=host".to_string(),
+            "--platform=linux/amd64".to_string(),
             if push_after_build {
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
@@ -490,10 +572,11 @@ where
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::CommandKiller;
-    use crate::cmd::docker::{ContainerImage, Docker, DockerError};
+    use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
     use std::path::Path;
     use std::time::Duration;
     use url::Url;
+    use uuid::Uuid;
 
     fn private_registry_url() -> Url {
         Url::parse("http://localhost:5000").unwrap()
@@ -546,7 +629,7 @@ mod tests {
     fn test_buildkit_build() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(None).unwrap();
+        let docker = Docker::new_with_local_builder(None).unwrap();
         let image_to_build =
             ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
         let image_cache =
@@ -586,7 +669,7 @@ mod tests {
     fn test_push() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(None).unwrap();
+        let docker = Docker::new_with_local_builder(None).unwrap();
         let image_to_build =
             ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["v42.42".to_string()]);
         let image_cache =
@@ -636,7 +719,7 @@ mod tests {
     fn test_mirror() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(None).unwrap();
+        let docker = Docker::new_with_local_builder(None).unwrap();
         let image_source = ContainerImage::new(
             Url::parse("https://docker.io").unwrap(),
             "alpine".to_string(),
@@ -661,6 +744,53 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
+        assert!(matches!(ret, Ok(_)));
+    }
+
+    #[ignore]
+    #[test]
+    fn test_with_kube_builder() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let args = vec![
+            ("AWS_DEFAULT_REGION", "eu-west-3"),
+            ("AWS_SECRET_ACCESS_KEY", "xxxxx"),
+            ("AWS_ACCESS_KEY_ID", "xxxx"),
+            ("KUBECONFIG", "xxx"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+        let docker = Docker::new_with_kube_builder(
+            None,
+            &[Architecture::ARM64, Architecture::AMD64],
+            "qovery",
+            Uuid::new_v4().to_string().as_str(),
+            (1, 1),
+            (1, 1),
+            args,
+        )
+        .unwrap();
+
+        let image_to_build =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
+        let image_cache =
+            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
+
+        // It should work
+        let ret = docker.build_with_buildkit(
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &image_cache,
+            false,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+        );
+
         assert!(matches!(ret, Ok(_)));
     }
 }

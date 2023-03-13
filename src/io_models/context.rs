@@ -20,7 +20,7 @@ pub struct Context {
     test_cluster: bool,
     features: Vec<Features>,
     metadata: Option<Metadata>,
-    pub docker: Docker,
+    pub docker: Arc<Docker>,
     pub qovery_api: Arc<Box<dyn QoveryApi>>,
     event_details: EventDetails,
 }
@@ -35,7 +35,7 @@ impl Context {
         test_cluster: bool,
         features: Vec<Features>,
         metadata: Option<Metadata>,
-        docker: Docker,
+        docker: Arc<Docker>,
         qovery_api: Arc<Box<dyn QoveryApi>>,
         event_details: EventDetails,
     ) -> Self {

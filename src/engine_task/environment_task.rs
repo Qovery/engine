@@ -29,7 +29,7 @@ use uuid::Uuid;
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker: Docker,
+    docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
@@ -42,7 +42,7 @@ impl EnvironmentTask {
         request: EnvironmentEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker: Docker,
+        docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
