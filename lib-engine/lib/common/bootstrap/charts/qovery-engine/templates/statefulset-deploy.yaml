@@ -30,7 +30,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{ if and .Values.buildContainer.enabled .Values.volumes.useNetworkDisks }}
+      {{ if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       {{ end }}
       securityContext:
