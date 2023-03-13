@@ -296,7 +296,7 @@ function deploy_engines_envs() { ## Release GA to prod
   --set-string \
 environmentVariables.BUILDER_KUBE_ENABLED="true",\
 environmentVariables.BUILDER_CPU_REQUEST="3",\
-environmentVariables.BUILDER_CPU_LIMIT="4"\
+environmentVariables.BUILDER_CPU_LIMIT="4",\
 environmentVariables.BUILDER_MEMORY_REQUEST_GIB="10",\
 environmentVariables.BUILDER_MEMORY_LIMIT_GIB="10"\
   --set image.tag="$tag",\
