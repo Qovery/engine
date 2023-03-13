@@ -154,11 +154,11 @@ pub fn main() -> io::Result<()> {
         .expect("BUILDER_KUBE_ENABLED is not a valid bool");
     let builder_namespace = env::var("BUILDER_NAMESPACE").unwrap_or_else(|_| "qovery".to_string());
     let builder_cpu_limit: u32 = env::var("BUILDER_CPU_LIMIT")
-        .unwrap_or_else(|_| "1".to_string())
+        .unwrap_or_else(|_| "4".to_string())
         .parse()
         .expect("BUILDER_CPU_LIMIT is not a valid u32");
     let builder_cpu_request: u32 = env::var("BUILDER_CPU_REQUEST")
-        .unwrap_or_else(|_| "1".to_string())
+        .unwrap_or_else(|_| "3".to_string())
         .parse()
         .expect("BUILDER_CPU_REQUEST is not a valid u32");
     let builder_memory_limit: u32 = env::var("BUILDER_MEMORY_LIMIT_GIB")
