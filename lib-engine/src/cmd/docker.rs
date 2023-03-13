@@ -1,6 +1,5 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use lazy_static::lazy_static;
-use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
 use std::sync::Mutex;
@@ -30,117 +29,6 @@ lazy_static! {
     // We use a mutex that will force serialization of logins in order to avoid that
     // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
-}
-
-#[derive(Clone, Debug)]
-pub struct BuildResult {
-    source_cached_image: Option<ContainerImage>,
-    build_candidate_image: Option<ContainerImage>,
-    cached_image_pulled: bool,
-    image_exists_remotely: bool,
-    built: bool,
-    pushed: bool,
-}
-
-impl BuildResult {
-    pub fn new() -> Self {
-        Self {
-            source_cached_image: None,
-            build_candidate_image: None,
-            cached_image_pulled: false,
-            image_exists_remotely: false,
-            built: false,
-            pushed: false,
-        }
-    }
-
-    pub fn source_cached_image(&mut self, source_cached_image: Option<ContainerImage>) -> &mut Self {
-        self.source_cached_image = source_cached_image;
-        self
-    }
-
-    pub fn build_candidate_image(&mut self, build_candidate_image: Option<ContainerImage>) -> &mut Self {
-        self.build_candidate_image = build_candidate_image;
-        self
-    }
-
-    pub fn cached_image_pulled(&mut self, cached_image_pulled: bool) -> &mut Self {
-        self.cached_image_pulled = cached_image_pulled;
-        self
-    }
-
-    pub fn image_exists_remotely(&mut self, image_exists_remotely: bool) -> &mut Self {
-        self.image_exists_remotely = image_exists_remotely;
-        self
-    }
-
-    pub fn built(&mut self, built: bool) -> &mut Self {
-        self.built = built;
-        self
-    }
-
-    pub fn pushed(&mut self, pushed: bool) -> &mut Self {
-        self.pushed = pushed;
-        self
-    }
-}
-
-impl Default for BuildResult {
-    fn default() -> Self {
-        BuildResult::new()
-    }
-}
-
-impl Display for BuildResult {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.build_candidate_image.is_none() {
-            return f.write_str(
-                r#"
-Build summary:
-    ⁉️ no image to be built provided
-"#,
-            );
-        }
-
-        let image_to_be_built = self
-            .build_candidate_image
-            .as_ref()
-            .expect("cannot get image to be built");
-        let output = format!(
-            r#"
-Build summary:
-    🐳️ image to be built: `{}`
-    {}
-    {}
-    {}
-    {}
-    {}"#,
-            image_to_be_built.image_name(),
-            match &self.image_exists_remotely {
-                true => "♻️ image exists remotely",
-                false => "🕳 image doesn't exist remotely",
-            },
-            // TODO(benjaminch): check whether cached image exists locally before pulling in order to get more details here
-            match &self.source_cached_image {
-                Some(cache) => format!("🍀 cached image provided: `{}`", cache.image_name()),
-                None => "🕳 no cached image provided".to_string(),
-            },
-            match self.cached_image_pulled {
-                true => "✔️ cached image pulled",
-                false => "⁉️ cached image not pulled (most likely doesn't exists remotely)",
-            },
-            match self.built {
-                true => "🎉 image built",
-                false => "‼️ image not built",
-            },
-            match self.pushed {
-                true => "🚀 image pushed",
-                false => "‼️ image not pushed",
-            }
-        );
-
-        f.write_str(output.as_str())
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -199,24 +87,15 @@ impl ContainerImage {
 
 #[derive(Debug, Clone)]
 pub struct Docker {
-    use_buildkit: bool,
     socket_location: Option<Url>,
     common_envs: Vec<(String, String)>,
 }
 
 impl Docker {
-    pub fn new_with_options(enable_buildkit: bool, socket_location: Option<Url>) -> Result<Self, DockerError> {
+    pub fn new_with_options(socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
-            use_buildkit: enable_buildkit,
             socket_location,
-            common_envs: vec![(
-                "DOCKER_BUILDKIT".to_string(),
-                if enable_buildkit {
-                    "1".to_string()
-                } else {
-                    "0".to_string()
-                },
-            )],
+            common_envs: vec![("DOCKER_BUILDKIT".to_string(), "1".to_string())],
         };
 
         // Override DOCKER_HOST if we use a TCP socket
@@ -224,11 +103,6 @@ impl Docker {
             docker
                 .common_envs
                 .push(("DOCKER_HOST".to_string(), socket_location.to_string()))
-        }
-
-        // If we don't use buildkit nothing more to do
-        if !docker.use_buildkit {
-            return Ok(docker);
         }
 
         // First check that the buildx plugin is correctly installed
@@ -270,7 +144,7 @@ impl Docker {
     }
 
     pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
-        Self::new_with_options(true, socket_location)
+        Self::new_with_options(socket_location)
     }
 
     pub fn socket_url(&self) -> &Option<Url> {
@@ -376,7 +250,7 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
-    ) -> Result<BuildResult, DockerError>
+    ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
@@ -394,101 +268,17 @@ impl Docker {
             });
         }
 
-        if self.use_buildkit {
-            self.build_with_buildkit(
-                dockerfile,
-                context,
-                image_to_build,
-                build_args,
-                cache,
-                push_after_build,
-                stdout_output,
-                stderr_output,
-                should_abort,
-            )
-        } else {
-            self.build_with_docker(
-                dockerfile,
-                context,
-                image_to_build,
-                build_args,
-                cache,
-                push_after_build,
-                stdout_output,
-                stderr_output,
-                should_abort,
-            )
-        }
-    }
-
-    fn build_with_docker<Stdout, Stderr>(
-        &self,
-        dockerfile: &Path,
-        context: &Path,
-        image_to_build: &ContainerImage,
-        build_args: &[(&str, &str)],
-        cache: &ContainerImage,
-        push_after_build: bool,
-        stdout_output: &mut Stdout,
-        stderr_output: &mut Stderr,
-        should_abort: &CommandKiller,
-    ) -> Result<BuildResult, DockerError>
-    where
-        Stdout: FnMut(String),
-        Stderr: FnMut(String),
-    {
-        info!("Docker build {:?}", image_to_build.image_name());
-
-        let mut build_result = BuildResult::new();
-        build_result.build_candidate_image(Some(image_to_build.clone()));
-        build_result.source_cached_image(Some(cache.clone()));
-
-        // Best effort to pull the cache, if it does not exist that's ok too
-        match self.pull(cache, stdout_output, stderr_output, should_abort) {
-            Ok(_) => build_result.cached_image_pulled(true),
-            Err(_) => build_result.cached_image_pulled(false),
-        };
-
-        let mut args_string: Vec<String> = vec![
-            "build".to_string(),
-            "--network".to_string(),
-            "host".to_string(),
-            "-f".to_string(),
-            dockerfile.to_str().unwrap_or_default().to_string(),
-        ];
-
-        for image_name in image_to_build.image_names() {
-            args_string.push("--tag".to_string());
-            args_string.push(image_name)
-        }
-
-        for img_cache_name in cache.image_names() {
-            args_string.push("--tag".to_string());
-            args_string.push(img_cache_name.to_string());
-        }
-
-        for (k, v) in build_args {
-            args_string.push("--build-arg".to_string());
-            args_string.push(format!("{k}={v}"));
-        }
-
-        args_string.push(context.to_str().unwrap_or_default().to_string());
-
-        docker_exec(
-            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&[]),
+        self.build_with_buildkit(
+            dockerfile,
+            context,
+            image_to_build,
+            build_args,
+            cache,
+            push_after_build,
             stdout_output,
             stderr_output,
             should_abort,
-        )?;
-        build_result.built(true);
-
-        if push_after_build {
-            self.push(image_to_build, stdout_output, stderr_output, should_abort)?;
-            build_result.pushed(true);
-        }
-
-        Ok(build_result)
+        )
     }
 
     fn build_with_buildkit<Stdout, Stderr>(
@@ -502,16 +292,12 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
-    ) -> Result<BuildResult, DockerError>
+    ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
         info!("Docker buildkit build {:?}", image_to_build.image_name());
-
-        let mut build_result = BuildResult::new();
-        build_result.build_candidate_image(Some(image_to_build.clone()));
-        build_result.source_cached_image(Some(cache.clone()));
 
         let mut args_string: Vec<String> = vec![
             "buildx".to_string(),
@@ -519,7 +305,6 @@ impl Docker {
             "--progress=plain".to_string(),
             "--network=host".to_string(),
             if push_after_build {
-                build_result.pushed(true);
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
@@ -546,20 +331,13 @@ impl Docker {
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        match docker_exec(
+        docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
-        ) {
-            Ok(_) => {
-                build_result.cached_image_pulled(true); // --cache-from
-                build_result.built(true);
-                Ok(build_result)
-            }
-            Err(e) => Err(e),
-        }
+        )
     }
 
     pub fn push<Stdout, Stderr>(
@@ -765,50 +543,10 @@ mod tests {
     }
 
     #[test]
-    fn test_docker_build() {
-        // start a local registry to run this test
-        // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(false, None).unwrap();
-        let image_to_build =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
-        let image_cache =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
-
-        let ret = docker.build_with_docker(
-            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
-            Path::new("tests/docker/multi_stage_simple/"),
-            &image_to_build,
-            &[],
-            &image_cache,
-            false,
-            &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
-            &CommandKiller::never(),
-        );
-
-        assert!(matches!(ret, Ok(_)));
-
-        // It should fails with buildkit dockerfile
-        let ret = docker.build_with_docker(
-            Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
-            Path::new("tests/docker/multi_stage_simple/"),
-            &image_to_build,
-            &[],
-            &image_cache,
-            false,
-            &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
-            &CommandKiller::never(),
-        );
-
-        assert!(matches!(ret, Err(_)));
-    }
-
-    #[test]
     fn test_buildkit_build() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(true, None).unwrap();
+        let docker = Docker::new_with_options(None).unwrap();
         let image_to_build =
             ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
         let image_cache =
@@ -848,7 +586,7 @@ mod tests {
     fn test_push() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(true, None).unwrap();
+        let docker = Docker::new_with_options(None).unwrap();
         let image_to_build =
             ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["v42.42".to_string()]);
         let image_cache =
@@ -898,7 +636,7 @@ mod tests {
     fn test_mirror() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
-        let docker = Docker::new_with_options(true, None).unwrap();
+        let docker = Docker::new_with_options(None).unwrap();
         let image_source = ContainerImage::new(
             Url::parse("https://docker.io").unwrap(),
             "alpine".to_string(),
