@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::command::CommandError;
-use crate::cmd::docker::{BuildResult, DockerError};
+use crate::cmd::docker::DockerError;
 use crate::deployment_report::logger::EnvLogger;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -73,7 +73,7 @@ pub trait BuildPlatform {
         build: &mut Build,
         logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, BuildError>;
+    ) -> Result<(), BuildError>;
 }
 
 pub struct Build {
