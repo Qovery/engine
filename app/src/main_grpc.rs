@@ -22,6 +22,7 @@ use dirs::home_dir;
 use dotenv::dotenv;
 use futures_util::future::select;
 use futures_util::{pin_mut, stream, StreamExt};
+use qovery_engine::cmd::docker;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
@@ -79,7 +80,7 @@ fn to_engine_task(
     msg: String,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    docker: Docker,
+    docker: Arc<Docker>,
     task_selector: &TaskSelector,
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
@@ -145,6 +146,29 @@ pub fn main() -> io::Result<()> {
         .with_ansi(false)
         .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
         .init();
+
+    let engine_name = env::var("ENGINE_NAME").unwrap_or_else(|_| "qovery-engine".to_string());
+    let builder_kube_enabled: bool = env::var("BUILDER_KUBE_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse()
+        .expect("BUILDER_KUBE_ENABLED is not a valid bool");
+    let builder_namespace = env::var("BUILDER_NAMESPACE").unwrap_or_else(|_| "qovery".to_string());
+    let builder_cpu_limit: u32 = env::var("BUILDER_CPU_LIMIT")
+        .unwrap_or_else(|_| "1".to_string())
+        .parse()
+        .expect("BUILDER_CPU_LIMIT is not a valid u32");
+    let builder_cpu_request: u32 = env::var("BUILDER_CPU_REQUEST")
+        .unwrap_or_else(|_| "1".to_string())
+        .parse()
+        .expect("BUILDER_CPU_REQUEST is not a valid u32");
+    let builder_memory_limit: u32 = env::var("BUILDER_MEMORY_LIMIT_GIB")
+        .unwrap_or_else(|_| "4".to_string())
+        .parse()
+        .expect("BUILDER_MEMORY_LIMIT_GIB is not a valid u32");
+    let builder_memory_request: u32 = env::var("BUILDER_MEMORY_REQUEST_GIB")
+        .unwrap_or_else(|_| "4".to_string())
+        .parse()
+        .expect("BUILDER_MEMORY_REQUEST_GIB is not a valid u32");
 
     let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let deployment_type = env::var("DEPLOYMENT_TYPE");
@@ -254,7 +278,23 @@ pub fn main() -> io::Result<()> {
         }
         None => info!("docker host is not set"),
     };
-    let docker = Docker::new(docker_host).expect("Can't init docker builder");
+
+    let docker = if builder_kube_enabled {
+        Docker::new_with_kube_builder(
+            docker_host,
+            &[docker::Architecture::AMD64],
+            &builder_namespace,
+            &engine_name,
+            (builder_cpu_request, builder_cpu_limit),
+            (builder_memory_request, builder_memory_limit),
+            vec![],
+        )
+        .expect("Can't init docker builder")
+    } else {
+        Docker::new_with_local_builder(docker_host).expect("Can't init docker builder")
+    };
+    let docker = Arc::new(docker);
+
     let task_selector = if deployment_type.map_or(true, |deployment_type| deployment_type == "ENVIRONMENT") {
         TaskSelector::Environment("environment")
     } else {

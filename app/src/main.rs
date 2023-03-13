@@ -10,6 +10,7 @@ use std::path::Path;
 
 use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
 use std::{io, process};
 
 use dirs::home_dir;
@@ -118,7 +119,7 @@ pub fn main() -> io::Result<()> {
         Err(_) => true,
     };
 
-    let docker = Docker::new(docker_host).expect("Can't init docker builder");
+    let docker = Arc::new(Docker::new_with_local_builder(docker_host).expect("Can't init docker builder"));
     match env::var("DEPLOY_FROM_FILE_KIND") {
         Ok(value) => match value.as_str() {
             "infra" => using_json_path_parameter(
@@ -159,7 +160,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     test_cluster: bool,
     deployment_type: TaskSelector,
-    docker: Docker,
+    docker: Arc<Docker>,
 ) -> Result<(), Error> {
     // check if file json config file exist
     if !Path::new(&deploy_from_file).exists() {

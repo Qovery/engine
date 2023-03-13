@@ -17,7 +17,7 @@ use std::{env, fs};
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker: Docker,
+    docker: Arc<Docker>,
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
@@ -29,7 +29,7 @@ impl InfrastructureTask {
         request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker: Docker,
+        docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
