@@ -1,5 +1,6 @@
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
+use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
@@ -173,7 +174,12 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn to_build(&self, registry_url: &ContainerRegistryInfo, qovery_api: Arc<Box<dyn QoveryApi>>) -> Option<Build> {
+    pub fn to_build(
+        &self,
+        registry_url: &ContainerRegistryInfo,
+        qovery_api: Arc<Box<dyn QoveryApi>>,
+        architectures: Vec<CpuArchitecture>,
+    ) -> Option<Build> {
         let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
             JobSource::Docker {
                 git_url,
@@ -231,6 +237,7 @@ impl Job {
                 .collect::<BTreeMap<_, _>>(),
             disable_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+            architectures,
         };
 
         build.compute_image_tag();
@@ -257,11 +264,15 @@ impl Job {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
+        cluster: &dyn Kubernetes,
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
-                let build = match self.to_build(default_container_registry.registry_info(), context.qovery_api.clone())
-                {
+                let build = match self.to_build(
+                    default_container_registry.registry_info(),
+                    context.qovery_api.clone(),
+                    cluster.cpu_architectures(),
+                ) {
                     Some(build) => Ok(build),
                     None => Err(JobError::InvalidConfig(
                         "Cannot convert docker JobSoure to Build source".to_string(),

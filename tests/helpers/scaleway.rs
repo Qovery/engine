@@ -257,7 +257,13 @@ pub fn clean_environments(
         for build in env
             .applications
             .iter()
-            .map(|a| a.to_build(registry_url, Arc::new(Box::new(FakeQoveryApi {}))))
+            .map(|a| {
+                a.to_build(
+                    registry_url,
+                    Arc::new(Box::new(FakeQoveryApi {})),
+                    vec![CpuArchitecture::AMD64, CpuArchitecture::ARM64],
+                )
+            })
             .collect::<Vec<Build>>()
         {
             let _ = container_registry_client.delete_image(&build.image);

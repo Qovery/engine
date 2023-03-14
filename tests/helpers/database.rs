@@ -47,7 +47,12 @@ impl Infrastructure for EnvironmentRequest {
         infra_ctx: &InfrastructureContext,
     ) -> (Environment, TransactionResult) {
         let mut env = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         let deployment_option = DeploymentOption {
@@ -80,7 +85,12 @@ impl Infrastructure for EnvironmentRequest {
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
@@ -97,7 +107,12 @@ impl Infrastructure for EnvironmentRequest {
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
@@ -114,7 +129,12 @@ impl Infrastructure for EnvironmentRequest {
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
@@ -131,7 +151,12 @@ impl Infrastructure for EnvironmentRequest {
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;

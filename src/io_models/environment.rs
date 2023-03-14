@@ -1,3 +1,4 @@
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::Application;
@@ -52,12 +53,17 @@ impl EnvironmentRequest {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         container_registry: &dyn ContainerRegistry,
+        cluster: &dyn Kubernetes,
     ) -> Result<Environment, DomainError> {
         let mut applications = Vec::with_capacity(self.applications.len());
         for app in &self.applications {
             match app.clone().to_application_domain(
                 context,
-                app.to_build(container_registry.registry_info(), context.qovery_api.clone()),
+                app.to_build(
+                    container_registry.registry_info(),
+                    context.qovery_api.clone(),
+                    cluster.cpu_architectures(),
+                ),
                 cloud_provider,
             ) {
                 Ok(app) => applications.push(app),
@@ -190,7 +196,10 @@ impl EnvironmentRequest {
 
         let mut jobs = Vec::with_capacity(self.jobs.len());
         for job in &self.jobs {
-            match job.clone().to_job_domain(context, cloud_provider, container_registry) {
+            match job
+                .clone()
+                .to_job_domain(context, cloud_provider, container_registry, cluster)
+            {
                 Ok(job) => jobs.push(job),
                 Err(err) => return Err(DomainError::JobError(err)),
             }

@@ -990,7 +990,12 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
             )
             .unwrap();
         let environment_domain = environment
-            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
 
         // let some time for ingress to get its IP or hostname
