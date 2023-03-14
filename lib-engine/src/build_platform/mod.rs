@@ -8,6 +8,7 @@ use crate::deployment_report::logger::EnvLogger;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
 
+use crate::cloud_provider::models::CpuArchitecture;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
@@ -82,6 +83,7 @@ pub struct Build {
     pub environment_variables: BTreeMap<String, String>,
     pub disable_cache: bool,
     pub timeout: Duration,
+    pub architectures: Vec<CpuArchitecture>,
 }
 
 impl Build {

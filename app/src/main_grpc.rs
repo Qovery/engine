@@ -152,6 +152,11 @@ pub fn main() -> io::Result<()> {
         .unwrap_or_else(|_| "false".to_string())
         .parse()
         .expect("BUILDER_KUBE_ENABLED is not a valid bool");
+    let builder_cpu_architectures: Vec<docker::Architecture> = env::var("BUILDER_CPU_ARCHITECTURES")
+        .unwrap_or_else(|_| "AMD64".to_string())
+        .split(',')
+        .map(|x| x.parse().unwrap())
+        .collect();
     let builder_namespace = env::var("BUILDER_NAMESPACE").unwrap_or_else(|_| "qovery".to_string());
     let builder_cpu_limit: u32 = env::var("BUILDER_CPU_LIMIT")
         .unwrap_or_else(|_| "4".to_string())
@@ -173,14 +178,14 @@ pub fn main() -> io::Result<()> {
     let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let deployment_type = env::var("DEPLOYMENT_TYPE");
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
-    let cluster_id = Uuid::parse_str(&std::env::var("CLUSTER_ID").expect("Missing Env Var for CLUSTER_ID"))
+    let cluster_id = Uuid::parse_str(&env::var("CLUSTER_ID").expect("Missing Env Var for CLUSTER_ID"))
         .expect("CLUSTER_ID is an invalid uuidV4");
-    let cluster_jwt_token = std::env::var("CLUSTER_JWT_TOKEN").expect("Missing Env Var for CLUSTER_JWT_TOKEN");
+    let cluster_jwt_token = env::var("CLUSTER_JWT_TOKEN").expect("Missing Env Var for CLUSTER_JWT_TOKEN");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
-    let grpc_server = std::env::var("GRPC_SERVER").expect("Missing Env Var for GRPC_SERVER");
+    let grpc_server = env::var("GRPC_SERVER").expect("Missing Env Var for GRPC_SERVER");
     let grpc_server = if !grpc_server.starts_with("http") {
         format!("https://{grpc_server}")
     } else {
@@ -282,7 +287,7 @@ pub fn main() -> io::Result<()> {
     let docker = if builder_kube_enabled {
         Docker::new_with_kube_builder(
             docker_host,
-            &[docker::Architecture::AMD64],
+            &builder_cpu_architectures,
             &builder_namespace,
             &engine_name,
             (builder_cpu_request, builder_cpu_limit),

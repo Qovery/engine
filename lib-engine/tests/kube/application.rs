@@ -43,7 +43,12 @@ fn should_increase_app_storage_size() {
 
         let resized_context = infra_ctx.context().clone_not_same_execution_id();
         let test_env = resized_env
-            .to_environment_domain(&resized_context, infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                &resized_context,
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
         let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
         let test_app = &test_env.applications[0];
@@ -76,6 +81,7 @@ fn should_increase_app_storage_size() {
             resized_app.to_build(
                 infra_ctx.container_registry().registry_info(),
                 infra_ctx.context().qovery_api.clone(),
+                infra_ctx.kubernetes().cpu_architectures(),
             ),
             resized_app.command_args.clone(),
             resized_app.entrypoint.clone(),

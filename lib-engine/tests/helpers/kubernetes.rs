@@ -214,7 +214,12 @@ pub fn cluster_test(
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
         let mut env = env
-            .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry())
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry(),
+                engine.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
@@ -339,7 +344,12 @@ pub fn cluster_test(
     // Destroy env if any
     if let Some(env) = environment_to_deploy {
         let mut env = env
-            .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry())
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry(),
+                engine.kubernetes(),
+            )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;

@@ -8,7 +8,7 @@ use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
     KubernetesVersion,
 };
-use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
+use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
@@ -189,6 +189,10 @@ impl Kubernetes for EC2 {
 
     fn is_network_managed_by_user(&self) -> bool {
         false
+    }
+
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+        vec![self.instance.instance_architecture]
     }
 
     #[named]

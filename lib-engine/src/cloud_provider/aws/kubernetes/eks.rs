@@ -8,6 +8,7 @@ use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
     KubernetesUpgradeStatus, KubernetesVersion,
 };
+use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
@@ -247,6 +248,10 @@ impl Kubernetes for EKS {
 
     fn is_network_managed_by_user(&self) -> bool {
         self.options.user_network_config.is_some()
+    }
+
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+        self.nodes_groups.iter().map(|x| x.instance_architecture).collect()
     }
 
     #[named]
@@ -591,8 +596,6 @@ impl Kubernetes for EKS {
     }
 }
 
-#[cfg(test)]
-use crate::cloud_provider::models::CpuArchitecture;
 #[cfg(test)]
 impl NodeGroupsWithDesiredState {
     fn new(
