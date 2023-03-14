@@ -297,8 +297,9 @@ function deploy_engines_envs() { ## Release GA to prod
 environmentVariables.BUILDER_KUBE_ENABLED="true",\
 environmentVariables.BUILDER_CPU_REQUEST="3",\
 environmentVariables.BUILDER_CPU_LIMIT="4",\
-environmentVariables.BUILDER_MEMORY_REQUEST_GIB="10",\
-environmentVariables.BUILDER_MEMORY_LIMIT_GIB="10"\
+environmentVariables.BUILDER_MEMORY_REQUEST_GIB="6",\
+environmentVariables.BUILDER_MEMORY_LIMIT_GIB="7"\
+environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64,ARM64"\
   --set image.tag="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
