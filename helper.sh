@@ -294,12 +294,12 @@ function deploy_engines_envs() { ## Release GA to prod
   helm upgrade --kubeconfig="$CI_KUBECONFIG_ENGINES_AWS" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
-environmentVariables.BUILDER_KUBE_ENABLED="true",\
-environmentVariables.BUILDER_CPU_REQUEST="3",\
-environmentVariables.BUILDER_CPU_LIMIT="4",\
-environmentVariables.BUILDER_MEMORY_REQUEST_GIB="6",\
-environmentVariables.BUILDER_MEMORY_LIMIT_GIB="7",\
-environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64,ARM64"\
+environmentVariables.BUILDER_KUBE_ENABLED='true',\
+environmentVariables.BUILDER_CPU_REQUEST='3',\
+environmentVariables.BUILDER_CPU_LIMIT='4',\
+environmentVariables.BUILDER_MEMORY_REQUEST_GIB='6',\
+environmentVariables.BUILDER_MEMORY_LIMIT_GIB='7',\
+environmentVariables.BUILDER_CPU_ARCHITECTURES='AMD64\,ARM64'\
   --set image.tag="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
