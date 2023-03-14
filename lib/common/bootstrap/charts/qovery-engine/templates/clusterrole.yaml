@@ -1,0 +1,25 @@
+{{- if and .Values.rbac.create .Values.rbac.clusterRole }}
+apiVersion: rbac.authorization.k8s.io/{{ .Values.rbac.apiVersion }}
+kind: ClusterRole
+metadata:
+  name: {{ include "qovery-engine.fullname" . }}
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+      - apps
+    resources:
+      - pods
+      - pods/log
+      - pods/exec
+      - deployments
+    verbs:
+      - create
+      - delete
+      - update
+      - patch
+      - get
+      - list
+      - watch
+{{- end }}

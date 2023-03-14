@@ -24,13 +24,13 @@ spec:
       labels:
         {{- include "qovery-engine.selectorLabels" . | nindent 8 }}
     spec:
-      automountServiceAccountToken: false
+      automountServiceAccountToken: true
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{ if and .Values.buildContainer.enabled .Values.volumes.useNetworkDisks }}
+      {{ if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       {{ end }}
       securityContext:
@@ -55,6 +55,14 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
           env:
+            - name: ENGINE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: BUILDER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: IGNORE_DOCKER_HOST_CHECK
               value: "{{ if .Values.buildContainer.enabled }}false{{ else }}true{{ end }}"
             {{ range $key, $value := .Values.environmentVariables -}}

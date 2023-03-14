@@ -14,7 +14,7 @@ use crate::build_platform::{Build, BuildError, BuildPlatform, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
+use crate::cmd::docker::{ContainerImage, DockerError};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::deployment_report::logger::EnvLogger;
 
@@ -116,7 +116,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, BuildError> {
+    ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
@@ -139,19 +139,15 @@ impl LocalDocker {
         build.environment_variables.retain(|k, _| dockerfile_args.contains(k));
         build.compute_image_tag();
 
-        let mut build_result = BuildResult::new();
-
         // Prepare image we want to build
         let image_to_build = ContainerImage::new(
             build.image.registry_url.clone(),
             build.image.name(),
             vec![build.image.tag.clone(), "latest".to_string()],
         );
-        build_result.build_candidate_image(Some(image_to_build.clone()));
 
         let image_cache =
             ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["latest".to_string()]);
-        build_result.source_cached_image(Some(image_cache.clone()));
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
@@ -160,8 +156,7 @@ impl LocalDocker {
             logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {image_name}"));
 
             // skip build
-            build_result.image_exists_remotely(true);
-            return Ok(build_result);
+            return Ok(());
         }
 
         logger.send_progress(format!("⛏️ Building image. It does not exist remotely {image_name}"));
@@ -186,7 +181,7 @@ impl LocalDocker {
         );
 
         match exit_status {
-            Ok(build_result) => Ok(build_result),
+            Ok(()) => Ok(()),
             Err(DockerError::Aborted { .. }) => Err(BuildError::Aborted {
                 application: build.image.application_id.clone(),
             }),
@@ -204,25 +199,21 @@ impl LocalDocker {
         use_build_cache: bool,
         logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, BuildError> {
+    ) -> Result<(), BuildError> {
         const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
-        let container_image = ContainerImage::new(
+        let _container_image = ContainerImage::new(
             build.image.registry_url.clone(),
             build.image.name.to_string(),
             vec![build.image.tag.to_string()],
         );
-        let container_image_cache = ContainerImage::new(
+        let _container_image_cache = ContainerImage::new(
             build.image.registry_url.clone(),
             build.image.name.to_string(),
             vec![LATEST_TAG.to_string()],
         );
 
         let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
-        let mut build_result = BuildResult::new();
-        build_result.build_candidate_image(Some(container_image));
-        build_result.source_cached_image(Some(container_image_cache));
-
         let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
         ));
@@ -301,10 +292,7 @@ impl LocalDocker {
         }
 
         match exit_status {
-            Ok(_) => {
-                build_result.built(true);
-                Ok(build_result)
-            }
+            Ok(_) => Ok(()),
             Err(Killed(_)) => Err(BuildError::Aborted {
                 application: build.image.application_id.clone(),
             }),
@@ -351,7 +339,7 @@ impl BuildPlatform for LocalDocker {
         build: &mut Build,
         logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, BuildError> {
+    ) -> Result<(), BuildError> {
         // check if we should already abort the task
         if is_task_canceled() {
             return Err(BuildError::Aborted {
