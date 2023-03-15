@@ -11,6 +11,7 @@ extern crate core;
 use std::net::TcpStream;
 use std::path::Path;
 
+use clap::Parser;
 use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -130,11 +131,90 @@ fn to_engine_task(
     }
 }
 
-pub fn main() -> io::Result<()> {
-    println!("{ASCII_BANNER}");
+/// Engine made by Qovery. Use grpc to connect to engine gateway and receive tasks to execute.
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Name of this engine. Used to identify resources created by this engine (i.e: remote builder)
+    #[arg(long, default_value = "qovery-engine", env = "ENGINE_NAME")]
+    engine_name: String,
 
+    /// If the engine should build docker images locally, or spawn builder in kube
+    #[arg(long, default_value_t = false, env = "BUILDER_KUBE_ENABLED")]
+    builder_kube_enabled: bool,
+
+    /// Supported architectures for the image builder.
+    #[arg(long, default_value = "AMD64", num_args = 1.., value_delimiter = ',', env = "BUILDER_CPU_ARCHITECTURES")]
+    builder_cpu_architectures: Vec<docker::Architecture>,
+
+    /// If kube builder enabled, in which namespace to create the builder
+    #[arg(long, default_value = "qovery", env = "BUILDER_NAMESPACE")]
+    builder_namespace: String,
+
+    /// If kube builder enabled, cpu request of the pod's remote builder
+    #[arg(long, default_value_t = 3, env = "BUILDER_CPU_REQUEST")]
+    builder_cpu_request: u32,
+
+    /// If kube builder enabled, cpu limit of the pod's remote builder
+    #[arg(long, default_value_t = 4, env = "BUILDER_CPU_LIMIT")]
+    builder_cpu_limit: u32,
+
+    /// If kube builder enabled, memory request in Gib of the pod's remote builder
+    #[arg(long, default_value_t = 4, env = "BUILDER_MEMORY_REQUEST_GIB")]
+    builder_memory_request_gib: u32,
+
+    /// If kube builder enabled, memory limit in Gib of the pod's remote builder
+    #[arg(long, default_value_t = 4, env = "BUILDER_MEMORY_LIMIT_GIB")]
+    builder_memory_limit_gib: u32,
+
+    /// Listening address:port of the http server (used for healthcheck, metrics)
+    #[arg(long, default_value = "[::]:8080", env = "HTTP_LISTEN_ON")]
+    http_listen_on: String,
+
+    /// Deployment type engine is going to execute. Can be "ENVIRONMENT" or "INFRASTRUCTURE"
+    #[arg(long, default_value = "ENVIRONMENT", env = "DEPLOYMENT_TYPE")]
+    deployment_type: String,
+
+    /// Location of the binaries version file
+    #[arg(long, env = "BIN_VERSION_FILE")]
+    version_file: String,
+
+    /// Path where to find the lib directory
+    #[arg(long, default_value = "lib", env = "LIB_ROOT_DIR")]
+    lib_root_dir: String,
+
+    /// Cluster id (uuid) of the cluster where the engine is running
+    #[arg(long, env = "CLUSTER_ID")]
+    cluster_id: Uuid,
+
+    /// Jwt token of the cluster, in order to authenticate engine to the engine gateway
+    #[arg(long, env = "CLUSTER_JWT_TOKEN")]
+    cluster_jwt_token: String,
+
+    /// Url location of the engine grpc gateway
+    #[arg(long, env = "GRPC_SERVER")]
+    grpc_server: String,
+
+    /// Url of the docker socket location
+    #[arg(long, default_value = None, env = "DOCKER_HOST")]
+    docker_host: Option<Url>,
+
+    /// Workspace root directory path
+    #[arg(long, default_value_t = home_dir().unwrap().to_string_lossy().into_owned(), env = "DOCKER_HOST")]
+    workspace_root_dir: String,
+}
+
+pub fn main() -> io::Result<()> {
     // Load env variable from .env file
     dotenv().ok();
+    let mut cli: Cli = Cli::parse();
+    cli.grpc_server = if !cli.grpc_server.starts_with("http") {
+        format!("https://{}", cli.grpc_server)
+    } else {
+        cli.grpc_server
+    };
+
+    println!("{ASCII_BANNER}");
 
     // Init tracing subscriber
     tracing_subscriber::fmt()
@@ -147,61 +227,17 @@ pub fn main() -> io::Result<()> {
         .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
         .init();
 
-    let engine_name = env::var("ENGINE_NAME").unwrap_or_else(|_| "qovery-engine".to_string());
-    let builder_kube_enabled: bool = env::var("BUILDER_KUBE_ENABLED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse()
-        .expect("BUILDER_KUBE_ENABLED is not a valid bool");
-    let builder_cpu_architectures: Vec<docker::Architecture> = env::var("BUILDER_CPU_ARCHITECTURES")
-        .unwrap_or_else(|_| "AMD64".to_string())
-        .split(',')
-        .map(|x| x.parse().unwrap())
-        .collect();
-    let builder_namespace = env::var("BUILDER_NAMESPACE").unwrap_or_else(|_| "qovery".to_string());
-    let builder_cpu_limit: u32 = env::var("BUILDER_CPU_LIMIT")
-        .unwrap_or_else(|_| "4".to_string())
-        .parse()
-        .expect("BUILDER_CPU_LIMIT is not a valid u32");
-    let builder_cpu_request: u32 = env::var("BUILDER_CPU_REQUEST")
-        .unwrap_or_else(|_| "3".to_string())
-        .parse()
-        .expect("BUILDER_CPU_REQUEST is not a valid u32");
-    let builder_memory_limit: u32 = env::var("BUILDER_MEMORY_LIMIT_GIB")
-        .unwrap_or_else(|_| "4".to_string())
-        .parse()
-        .expect("BUILDER_MEMORY_LIMIT_GIB is not a valid u32");
-    let builder_memory_request: u32 = env::var("BUILDER_MEMORY_REQUEST_GIB")
-        .unwrap_or_else(|_| "4".to_string())
-        .parse()
-        .expect("BUILDER_MEMORY_REQUEST_GIB is not a valid u32");
-
-    let http_listen_on = env::var("HTTP_LISTEN_ON").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
-    let deployment_type = env::var("DEPLOYMENT_TYPE");
-    let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
-    let cluster_id = Uuid::parse_str(&env::var("CLUSTER_ID").expect("Missing Env Var for CLUSTER_ID"))
-        .expect("CLUSTER_ID is an invalid uuidV4");
-    let cluster_jwt_token = env::var("CLUSTER_JWT_TOKEN").expect("Missing Env Var for CLUSTER_JWT_TOKEN");
-    let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
-    let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
-    let workspace_root_dir =
-        env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
-    let grpc_server = env::var("GRPC_SERVER").expect("Missing Env Var for GRPC_SERVER");
-    let grpc_server = if !grpc_server.starts_with("http") {
-        format!("https://{grpc_server}")
-    } else {
-        grpc_server
-    };
-    let grpc_server = Uri::try_from(&grpc_server).expect("Invalid URI for GRPC_SERVER");
+    let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
     let logger = Box::new(StdIoLogger::new());
 
     info!(
         "running from current directory: {}",
         env::current_dir().unwrap().to_str().unwrap()
     );
-    info!("lib root dir: {}/", lib_root_dir.as_str());
-    info!("workspace root dir: {}", workspace_root_dir.as_str());
+    info!("lib root dir: {}/", cli.lib_root_dir.as_str());
+    info!("workspace root dir: {}", cli.workspace_root_dir.as_str());
 
-    match check_libs_directory(lib_root_dir.clone()) {
+    match check_libs_directory(cli.lib_root_dir.clone()) {
         Ok(_) => info!("Libs directory is not empty"),
         Err(e) => {
             error!("Error while initializing the Engine {}", e);
@@ -210,7 +246,7 @@ pub fn main() -> io::Result<()> {
     }
 
     //checking if version file exist
-    match Path::new(&version_file).exists() {
+    match Path::new(&cli.version_file).exists() {
         true => info!("Version file is accessible"),
         _ => {
             error!("Error while initializing the Engine, version file is not accessible");
@@ -219,7 +255,7 @@ pub fn main() -> io::Result<()> {
     }
 
     // check all binaries version from version file
-    match check_versions_from(&version_file) {
+    match check_versions_from(&cli.version_file) {
         Ok(()) => info!("Binaries versions are checked"),
         Err(e) => {
             error!("Error while initializing the Engine {}", e);
@@ -228,13 +264,13 @@ pub fn main() -> io::Result<()> {
         }
     }
 
-    tokio_utils::launch(http_listen_on.as_str());
+    tokio_utils::launch(&cli.http_listen_on);
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
     // docker daemon is slower to start than the engine
     let disable_check_env_var = "IGNORE_DOCKER_HOST_CHECK";
-    match docker_host {
-        Some(ref docker_host) => {
+    match &cli.docker_host {
+        Some(docker_host) => {
             info!("docker host: {}", docker_host);
             let ignore_docker_host_check = match env::var(disable_check_env_var) {
                 Ok(x) if x == *"true" => {
@@ -284,23 +320,23 @@ pub fn main() -> io::Result<()> {
         None => info!("docker host is not set"),
     };
 
-    let docker = if builder_kube_enabled {
+    let docker = if cli.builder_kube_enabled {
         Docker::new_with_kube_builder(
-            docker_host,
-            &builder_cpu_architectures,
-            &builder_namespace,
-            &engine_name,
-            (builder_cpu_request, builder_cpu_limit),
-            (builder_memory_request, builder_memory_limit),
+            cli.docker_host,
+            &cli.builder_cpu_architectures,
+            &cli.builder_namespace,
+            &cli.engine_name,
+            (cli.builder_cpu_request, cli.builder_cpu_limit),
+            (cli.builder_memory_request_gib, cli.builder_memory_limit_gib),
             vec![],
         )
         .expect("Can't init docker builder")
     } else {
-        Docker::new_with_local_builder(docker_host).expect("Can't init docker builder")
+        Docker::new_with_local_builder(cli.docker_host).expect("Can't init docker builder")
     };
     let docker = Arc::new(docker);
 
-    let task_selector = if deployment_type.map_or(true, |deployment_type| deployment_type == "ENVIRONMENT") {
+    let task_selector = if cli.deployment_type == "ENVIRONMENT" {
         TaskSelector::Environment("environment")
     } else {
         TaskSelector::Infrastructure("infrastructure")
@@ -314,7 +350,7 @@ pub fn main() -> io::Result<()> {
             // Connect and check we are allowed to do request
             // If we are not allowed, we let the task die in order to be restarted
             info!("Connecting to GRPC server: {:?}", grpc_server);
-            let mut engine_client = grpc::new_engine_client(grpc_server, &cluster_id, &cluster_jwt_token)
+            let mut engine_client = grpc::new_engine_client(grpc_server, &cli.cluster_id, &cli.cluster_jwt_token)
                 .await
                 .expect("Can't connect to engine gateway");
             engine_client
@@ -329,8 +365,8 @@ pub fn main() -> io::Result<()> {
              -> Result<Box<dyn Task>, serde_json::Error> {
                 to_engine_task(
                     payload,
-                    &workspace_root_dir,
-                    &lib_root_dir,
+                    &cli.workspace_root_dir,
+                    &cli.lib_root_dir,
                     docker.clone(),
                     &task_selector,
                     grpc_client,
