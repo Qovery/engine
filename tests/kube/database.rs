@@ -41,7 +41,12 @@ fn should_increase_db_storage_size() {
 
         let resized_context = infra_ctx.context().clone_not_same_execution_id();
         let test_env = resized_env
-            .to_environment_domain(&resized_context, infra_ctx.cloud_provider(), infra_ctx.container_registry())
+            .to_environment_domain(
+                &resized_context,
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
             .unwrap();
         let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
         let test_db = &test_env.databases[0];

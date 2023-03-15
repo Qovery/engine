@@ -248,6 +248,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             environment_variables: BTreeMap::new(),
             disable_cache: false,
             timeout: Duration::from_secs(42),
+            architectures: test_kube.cpu_architectures(),
         },
         vec![],
         None,

@@ -306,6 +306,7 @@ impl Task for EnvironmentTask {
             infra_context.context(),
             infra_context.cloud_provider(),
             infra_context.container_registry(),
+            infra_context.kubernetes(),
         ) {
             Ok(env) => env,
             Err(err) => {

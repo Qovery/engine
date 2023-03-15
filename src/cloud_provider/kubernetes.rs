@@ -276,7 +276,7 @@ pub trait Kubernetes {
             ))
         })
     }
-
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
         EventDetails::new(

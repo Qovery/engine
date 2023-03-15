@@ -1,6 +1,6 @@
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::EnvironmentVariable;
+use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
@@ -342,7 +342,12 @@ impl Application {
         }
     }
 
-    pub fn to_build(&self, registry_url: &ContainerRegistryInfo, qovery_api: Arc<Box<dyn QoveryApi>>) -> Build {
+    pub fn to_build(
+        &self,
+        registry_url: &ContainerRegistryInfo,
+        qovery_api: Arc<Box<dyn QoveryApi>>,
+        architectures: Vec<CpuArchitecture>,
+    ) -> Build {
         // Get passphrase and public key if provided by the user
         let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars);
 
@@ -385,6 +390,7 @@ impl Application {
                 .collect::<BTreeMap<_, _>>(),
             disable_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+            architectures,
         };
 
         build.compute_image_tag();

@@ -1,8 +1,11 @@
+use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
 use url::Url;
@@ -35,6 +38,36 @@ lazy_static! {
 pub enum Architecture {
     AMD64,
     ARM64,
+}
+
+impl Architecture {
+    fn to_platform(&self) -> &str {
+        match self {
+            Architecture::AMD64 => "linux/amd64",
+            Architecture::ARM64 => "linux/arm64",
+        }
+    }
+}
+
+impl FromStr for Architecture {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "amd64" | "AMD64" => Ok(Architecture::AMD64),
+            "arm64" | "ARM64" => Ok(Architecture::ARM64),
+            _ => Err(format!("unknown architecture: {s}")),
+        }
+    }
+}
+
+impl From<&CpuArchitecture> for Architecture {
+    fn from(value: &CpuArchitecture) -> Self {
+        match value {
+            CpuArchitecture::AMD64 => Architecture::AMD64,
+            CpuArchitecture::ARM64 => Architecture::ARM64,
+        }
+    }
 }
 
 impl Display for Architecture {
@@ -299,7 +332,8 @@ impl Docker {
         }
     }
 
-    pub fn pull<Stdout, Stderr>(
+    #[cfg(test)]
+    fn pull<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,
@@ -329,6 +363,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
+        architectures: &[Architecture],
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
@@ -357,6 +392,7 @@ impl Docker {
             build_args,
             cache,
             push_after_build,
+            architectures,
             stdout_output,
             stderr_output,
             should_abort,
@@ -371,6 +407,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
+        architectures: &[Architecture],
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
@@ -385,7 +422,6 @@ impl Docker {
             "buildx".to_string(),
             "build".to_string(),
             "--progress=plain".to_string(),
-            "--platform=linux/amd64".to_string(),
             if push_after_build {
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
@@ -400,6 +436,14 @@ impl Docker {
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        // Build for all requested architectures, if empty build for the current architecture the engine is running on
+        if !architectures.is_empty() {
+            args_string.push(format!(
+                "--platform={}",
+                architectures.iter().map(|arch| arch.to_platform()).join(",")
+            ));
+        };
 
         for image_name in image_to_build.image_names() {
             args_string.push("--tag".to_string());
@@ -643,6 +687,7 @@ mod tests {
             &[],
             &image_cache,
             false,
+            &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -657,6 +702,7 @@ mod tests {
             &[],
             &image_cache,
             false,
+            &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -683,6 +729,7 @@ mod tests {
             &[],
             &image_cache,
             false,
+            &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -786,6 +833,7 @@ mod tests {
             &[],
             &image_cache,
             false,
+            &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),

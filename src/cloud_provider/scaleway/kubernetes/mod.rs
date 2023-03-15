@@ -8,7 +8,7 @@ use crate::cloud_provider::kubernetes::{
     self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
     Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
-use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
+use crate::cloud_provider::models::{CpuArchitecture, NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
@@ -1510,6 +1510,13 @@ impl Kubernetes for Kapsule {
 
     fn is_network_managed_by_user(&self) -> bool {
         false
+    }
+
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+        self.nodes_groups
+            .iter()
+            .map(|node| node.instance_architecture)
+            .collect()
     }
 
     #[named]

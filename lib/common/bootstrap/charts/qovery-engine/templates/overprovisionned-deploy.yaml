@@ -27,4 +27,31 @@ spec:
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
         {{- toYaml .Values.engineResources | nindent 10 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-engine-overprovisionning-arm
+  labels:
+    app: qovery-engine-overprovisioning-arm
+spec:
+  replicas: {{ .Values.overprovisionning.replicas }}
+  selector:
+    matchLabels:
+      app: qovery-engine-overprovisioning-arm
+  template:
+    metadata:
+      labels:
+        app: qovery-engine-overprovisioning-arm
+    spec:
+      priorityClassName: qovery-engine-overprovisioning
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: qovery-engine-overprovisionning
+        # use engine image to warm up the cache
+        image: "moby/buildkit:buildx-stable-1"
+        command: ["/bin/sh", "-c", "tail -f /dev/null"]
+        resources:
+        {{- toYaml .Values.engineResources | nindent 10 }}
 {{- end }}

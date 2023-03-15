@@ -11,11 +11,11 @@ use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Kind};
-use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::docker::{ContainerImage, DockerError};
+use crate::cmd::docker::{Architecture, ContainerImage, DockerError};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
+use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
 
 use crate::fs::workspace_directory;
@@ -168,6 +168,11 @@ impl LocalDocker {
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
 
+        let arch: Vec<Architecture> = build
+            .architectures
+            .iter()
+            .map(|arch| docker::Architecture::from(arch))
+            .collect();
         let exit_status = self.context.docker.build(
             Path::new(dockerfile_complete_path),
             Path::new(into_dir_docker_style),
@@ -175,6 +180,7 @@ impl LocalDocker {
             &env_vars,
             &image_cache,
             true,
+            &arch,
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, is_task_canceled),
@@ -202,17 +208,6 @@ impl LocalDocker {
     ) -> Result<(), BuildError> {
         const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
-        let _container_image = ContainerImage::new(
-            build.image.registry_url.clone(),
-            build.image.name.to_string(),
-            vec![build.image.tag.to_string()],
-        );
-        let _container_image_cache = ContainerImage::new(
-            build.image.registry_url.clone(),
-            build.image.name.to_string(),
-            vec![LATEST_TAG.to_string()],
-        );
-
         let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
         let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
