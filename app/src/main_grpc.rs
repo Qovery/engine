@@ -200,7 +200,7 @@ struct Cli {
     docker_host: Option<Url>,
 
     /// Workspace root directory path
-    #[arg(long, default_value_t = home_dir().unwrap().to_string_lossy().into_owned(), env = "DOCKER_HOST")]
+    #[arg(long, default_value_t = home_dir().unwrap().to_string_lossy().into_owned(), env = "WORKSPACE_ROOT_DIR")]
     workspace_root_dir: String,
 }
 
