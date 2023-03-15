@@ -10,6 +10,13 @@ use strum_macros::EnumIter;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
 #[allow(non_camel_case_types)]
 pub enum ScwInstancesType {
+    AMP2_C12,
+    AMP2_C2,
+    AMP2_C24,
+    AMP2_C4,
+    AMP2_C48,
+    AMP2_C60,
+    AMP2_C8,
     DEV1_L,
     DEV1_M,
     DEV1_S,
@@ -49,6 +56,13 @@ pub enum ScwInstancesType {
 impl InstanceType for ScwInstancesType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
+            ScwInstancesType::AMP2_C12 => "amp2-c12",
+            ScwInstancesType::AMP2_C2 => "amp2-c2",
+            ScwInstancesType::AMP2_C24 => "amp2-c24",
+            ScwInstancesType::AMP2_C4 => "amp2-c4",
+            ScwInstancesType::AMP2_C48 => "amp2-c48",
+            ScwInstancesType::AMP2_C60 => "amp2-c60",
+            ScwInstancesType::AMP2_C8 => "amp2-c8",
             ScwInstancesType::DEV1_L => "dev1-l",
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
@@ -90,7 +104,14 @@ impl InstanceType for ScwInstancesType {
     fn is_instance_allowed(&self) -> bool {
         matches!(
             self,
-            ScwInstancesType::DEV1_L
+            ScwInstancesType::AMP2_C12
+                | ScwInstancesType::AMP2_C2
+                | ScwInstancesType::AMP2_C24
+                | ScwInstancesType::AMP2_C4
+                | ScwInstancesType::AMP2_C48
+                | ScwInstancesType::AMP2_C60
+                | ScwInstancesType::AMP2_C8
+                | ScwInstancesType::DEV1_L
                 | ScwInstancesType::DEV1_M
                 | ScwInstancesType::DEV1_S
                 | ScwInstancesType::DEV1_XL
@@ -133,7 +154,13 @@ impl InstanceType for ScwInstancesType {
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,
-            ScwInstancesType::DEV1_L
+            ScwInstancesType::AMP2_C12
+                | ScwInstancesType::AMP2_C24
+                | ScwInstancesType::AMP2_C4
+                | ScwInstancesType::AMP2_C48
+                | ScwInstancesType::AMP2_C60
+                | ScwInstancesType::AMP2_C8
+                | ScwInstancesType::DEV1_L
                 | ScwInstancesType::DEV1_M
                 | ScwInstancesType::DEV1_XL
                 | ScwInstancesType::ENT1_L
@@ -170,6 +197,13 @@ impl InstanceType for ScwInstancesType {
 impl ScwInstancesType {
     pub fn as_str(&self) -> &str {
         match self {
+            ScwInstancesType::AMP2_C12 => "amp2-c12",
+            ScwInstancesType::AMP2_C2 => "amp2-c2",
+            ScwInstancesType::AMP2_C24 => "amp2-c24",
+            ScwInstancesType::AMP2_C4 => "amp2-c4",
+            ScwInstancesType::AMP2_C48 => "amp2-c48",
+            ScwInstancesType::AMP2_C60 => "amp2-c60",
+            ScwInstancesType::AMP2_C8 => "amp2-c8",
             ScwInstancesType::DEV1_L => "dev1-l",
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
@@ -211,6 +245,13 @@ impl ScwInstancesType {
 impl fmt::Display for ScwInstancesType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ScwInstancesType::AMP2_C12 => write!(f, "amp2-c12"),
+            ScwInstancesType::AMP2_C2 => write!(f, "amp2-c2"),
+            ScwInstancesType::AMP2_C24 => write!(f, "amp2-c24"),
+            ScwInstancesType::AMP2_C4 => write!(f, "amp2-c4"),
+            ScwInstancesType::AMP2_C48 => write!(f, "amp2-c48"),
+            ScwInstancesType::AMP2_C60 => write!(f, "amp2-c60"),
+            ScwInstancesType::AMP2_C8 => write!(f, "amp2-c8"),
             ScwInstancesType::DEV1_L => write!(f, "dev1-l"),
             ScwInstancesType::DEV1_M => write!(f, "dev1-m"),
             ScwInstancesType::DEV1_S => write!(f, "dev1-s"),
@@ -254,6 +295,13 @@ impl FromStr for ScwInstancesType {
 
     fn from_str(s: &str) -> Result<ScwInstancesType, CommandError> {
         match s {
+            "amp2-c12" => Ok(ScwInstancesType::AMP2_C12),
+            "amp2-c2" => Ok(ScwInstancesType::AMP2_C2),
+            "amp2-c24" => Ok(ScwInstancesType::AMP2_C24),
+            "amp2-c4" => Ok(ScwInstancesType::AMP2_C4),
+            "amp2-c48" => Ok(ScwInstancesType::AMP2_C48),
+            "amp2-c60" => Ok(ScwInstancesType::AMP2_C60),
+            "amp2-c8" => Ok(ScwInstancesType::AMP2_C8),
             "dev1-l" => Ok(ScwInstancesType::DEV1_L),
             "dev1-m" => Ok(ScwInstancesType::DEV1_M),
             "dev1-s" => Ok(ScwInstancesType::DEV1_S),
@@ -352,6 +400,13 @@ mod tests {
             let result_to_string = instance_type.to_cloud_provider_format();
             assert_eq!(
                 match instance_type {
+                    ScwInstancesType::AMP2_C12 => "amp2-c12",
+                    ScwInstancesType::AMP2_C2 => "amp2-c2",
+                    ScwInstancesType::AMP2_C24 => "amp2-c24",
+                    ScwInstancesType::AMP2_C4 => "amp2-c4",
+                    ScwInstancesType::AMP2_C48 => "amp2-c48",
+                    ScwInstancesType::AMP2_C60 => "amp2-c60",
+                    ScwInstancesType::AMP2_C8 => "amp2-c8",
                     ScwInstancesType::DEV1_L => "dev1-l",
                     ScwInstancesType::DEV1_M => "dev1-m",
                     ScwInstancesType::DEV1_S => "dev1-s",
