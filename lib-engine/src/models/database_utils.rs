@@ -36,11 +36,11 @@ pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
     // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(41), None);
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(39), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(32), None);
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(30), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
