@@ -9,23 +9,23 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
     // v10
-    let v10 = generate_supported_version(10, 1, 21, Some(0), Some(0), None);
+    let v10 = generate_supported_version(10, 1, 23, Some(0), Some(0), None);
     supported_postgres_versions.extend(v10);
 
     // v11
-    let v11 = generate_supported_version(11, 1, 16, Some(0), Some(0), None);
+    let v11 = generate_supported_version(11, 1, 19, Some(0), Some(0), None);
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 11, Some(0), Some(0), None);
+    let v12 = generate_supported_version(12, 2, 14, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
     // v13
-    let v13 = generate_supported_version(13, 1, 7, Some(0), Some(0), None);
+    let v13 = generate_supported_version(13, 1, 10, Some(0), Some(0), None);
     supported_postgres_versions.extend(v13);
 
     // v14
-    let v14 = generate_supported_version(14, 4, 4, Some(0), Some(0), None);
+    let v14 = generate_supported_version(14, 4, 7, Some(0), Some(0), None);
     supported_postgres_versions.extend(v14);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
