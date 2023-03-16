@@ -35,13 +35,14 @@ lazy_static! {
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Architecture {
     AMD64,
     ARM64,
 }
 
 impl Architecture {
-    fn to_platform(&self) -> &str {
+    fn to_platform(self) -> &'static str {
         match self {
             Architecture::AMD64 => "linux/amd64",
             Architecture::ARM64 => "linux/arm64",
