@@ -147,6 +147,12 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    ClusterVersionUnsupportedUpdate {
+        cluster_actual_version: String,
+        cluster_target_version: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -500,6 +506,24 @@ impl TerraformError {
             }
         }
 
+        // Cluster version update is not supported (most likely Qovery is trying to deploy an earlier version)
+        if let Ok(unsupported_k8s_version_update_re) = Regex::new(
+            r"Unsupported Kubernetes minor version update from (?P<cluster_actual_version>[0-9.]+) to (?P<cluster_target_version>[0-9.]+)",
+        ) {
+            if let Some(cap) = unsupported_k8s_version_update_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(cluster_actual_version), Some(cluster_target_version)) = (
+                    cap.name("cluster_actual_version").map(|e| e.as_str()),
+                    cap.name("cluster_target_version").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ClusterVersionUnsupportedUpdate {
+                        cluster_actual_version: cluster_actual_version.to_string(),
+                        cluster_target_version: cluster_target_version.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
@@ -603,10 +627,13 @@ impl TerraformError {
             },
             TerraformError::InvalidCIDRBlock {cidr,..} => {
                 format!("Error, the CIDR block `{cidr}` can't be used.")
-            }
+            },
             TerraformError::StateLocked { lock_id, .. } => {
                 format!("Error, terraform state is locked (lock_id: {lock_id})")
-            }
+            },
+            TerraformError::ClusterVersionUnsupportedUpdate { cluster_actual_version, cluster_target_version, .. } => {
+                format!("Error, cluster version cannot be updated from `{cluster_actual_version}` to `{cluster_target_version}`")
+            },
         }
     }
 }
@@ -672,6 +699,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::StateLocked { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ClusterVersionUnsupportedUpdate { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1723,6 +1753,40 @@ flag, but this is not recommended."#;
         assert_eq!(
             TerraformError::StateLocked {
                 lock_id: "ecd9f287-8d29-4331-1683-48028be7aaba".to_string(),
+                raw_message: raw_terraform_error_str.to_string(),
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_cluster_version_unsupported_update() {
+        // setup:
+        let raw_terraform_error_str = r#"CreateError - Unknown error while performing Terraform command (`terraform apply -no-color -auto-approve tf_plan`), here is the error:
+
+Error: updating EKS Cluster (qovery-z09a5408e) version: InvalidParameterException: Unsupported Kubernetes minor version update from 1.24 to 1.23
+{
+  RespMetadata: {
+    StatusCode: 400,
+    RequestID: "e8410277-627f-48e9-80b2-d2236f04ba04"
+  },
+  ClusterName: "qovery-z09a5408e",
+  Message_: "Unsupported Kubernetes minor version update from 1.24 to 1.23"
+}
+
+  with aws_eks_cluster.eks_cluster,
+  on eks-master-cluster.tf line 35, in resource "aws_eks_cluster" "eks_cluster":
+  35: resource "aws_eks_cluster" "eks_cluster" {"#;
+
+        // execute:
+        let result =
+            TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_terraform_error_str.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::ClusterVersionUnsupportedUpdate {
+                cluster_target_version: "1.23".to_string(),
+                cluster_actual_version: "1.24".to_string(),
                 raw_message: raw_terraform_error_str.to_string(),
             },
             result
