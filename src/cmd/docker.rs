@@ -633,9 +633,9 @@ mod tests {
 
         // Invalid image should fails
         let image = ContainerImage::new(
-            Url::parse("https://docker.io").unwrap(),
-            "alpine".to_string(),
-            vec!["666".to_string()],
+            Url::parse("https://public.ecr.aws").unwrap(),
+            "r3m4q3r9/pub-mirror-debian".to_string(),
+            vec!["1.0".to_string()],
         );
         let ret = docker.pull(
             &image,
@@ -647,9 +647,9 @@ mod tests {
 
         // Valid image should be ok
         let image = ContainerImage::new(
-            Url::parse("https://docker.io").unwrap(),
-            "alpine".to_string(),
-            vec!["3.15".to_string()],
+            Url::parse("https://public.ecr.aws").unwrap(),
+            "r3m4q3r9/pub-mirror-debian".to_string(),
+            vec!["11.6".to_string()],
         );
 
         let ret = docker.pull(
@@ -675,10 +675,16 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_local_builder(None).unwrap();
-        let image_to_build =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
-        let image_cache =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+        let image_cache = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["cache".to_string()],
+        );
 
         // It should work
         let ret = docker.build_with_buildkit(
@@ -717,10 +723,16 @@ mod tests {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_local_builder(None).unwrap();
-        let image_to_build =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["v42.42".to_string()]);
-        let image_cache =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["v42.42".to_string()],
+        );
+        let image_cache = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["cache".to_string()],
+        );
 
         // It should work
         let ret = docker.build_with_buildkit(
@@ -769,12 +781,15 @@ mod tests {
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let docker = Docker::new_with_local_builder(None).unwrap();
         let image_source = ContainerImage::new(
-            Url::parse("https://docker.io").unwrap(),
-            "alpine".to_string(),
-            vec!["3.15".to_string()],
+            Url::parse("https://public.ecr.aws").unwrap(),
+            "r3m4q3r9/pub-mirror-debian".to_string(),
+            vec!["11.6".to_string()],
         );
-        let image_dest =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["mirror".to_string()]);
+        let image_dest = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["mirror".to_string()],
+        );
 
         // It should work
         let ret = docker.mirror(
@@ -821,10 +836,16 @@ mod tests {
         )
         .unwrap();
 
-        let image_to_build =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["3.15".to_string()]);
-        let image_cache =
-            ContainerImage::new(private_registry_url(), "erebe/alpine".to_string(), vec!["cache".to_string()]);
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+        let image_cache = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["cache".to_string()],
+        );
 
         // It should work
         let ret = docker.build_with_buildkit(

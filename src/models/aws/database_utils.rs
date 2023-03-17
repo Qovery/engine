@@ -107,7 +107,7 @@ mod tests {
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_self_hosted_postgres_version("14".to_string()).unwrap(), "14.4.0");
+        assert_eq!(get_self_hosted_postgres_version("14".to_string()).unwrap(), "14.7.0");
         assert_eq!(get_self_hosted_postgres_version("14.4".to_string()).unwrap(), "14.4.0");
         assert_eq!(get_self_hosted_postgres_version("14.4.0".to_string()).unwrap(), "14.4.0");
         assert_eq!(
@@ -134,9 +134,9 @@ mod tests {
         );
 
         // self-hosted version
-        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.5");
-        assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.7");
-        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.0.16");
+        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.9");
+        assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.11");
+        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.2.11");
         assert_eq!(
             get_self_hosted_redis_version("1.0".to_string())
                 .unwrap_err()
@@ -160,8 +160,8 @@ mod tests {
             "RDS MySQL 8.0.31 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_self_hosted_mysql_version("5".to_string()).unwrap(), "5.7.39");
-        assert_eq!(get_self_hosted_mysql_version("5.7".to_string()).unwrap(), "5.7.39");
+        assert_eq!(get_self_hosted_mysql_version("5".to_string()).unwrap(), "5.7.41");
+        assert_eq!(get_self_hosted_mysql_version("5.7".to_string()).unwrap(), "5.7.41");
         assert_eq!(get_self_hosted_mysql_version("5.7.31".to_string()).unwrap(), "5.7.31");
         assert_eq!(
             get_self_hosted_mysql_version("1.0".to_string())

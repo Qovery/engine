@@ -97,13 +97,12 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 long_id: container_id.to_uuid(),
                 name: container_name,
                 action: Action::Create,
-                registry: Registry::DockerHub {
-                    url: Url::parse("https://docker.io").unwrap(),
+                registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
-                    credentials: None,
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
-                image: "debian".to_string(),
-                tag: "bullseye".to_string(),
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6".to_string(),
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
@@ -234,13 +233,12 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
                 },
                 source: JobSource::Image {
-                    registry: Registry::DockerHub {
-                        url: Url::parse("https://docker.io").unwrap(),
+                registry: Registry::PublicEcr {
                         long_id: Uuid::new_v4(),
-                        credentials: None,
+                        url: Url::parse("https://public.ecr.aws").unwrap(),
                     },
-                    image: "debian".to_string(),
-                    tag: "bullseye".to_string(),
+                    image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                    tag: "11.6".to_string(),
                 },
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,
