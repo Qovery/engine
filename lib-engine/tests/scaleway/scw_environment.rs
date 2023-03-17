@@ -10,7 +10,7 @@ use bstr::ByteSlice;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
-use qovery_engine::io_models::container::Registry::DockerHub;
+
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
@@ -1096,13 +1096,12 @@ fn deploy_container_with_no_router_on_scw() {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
-            registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
+            registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                credentials: None,
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
-            image: "debian".to_string(),
-            tag: "bullseye".to_string(),
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
@@ -1193,13 +1192,12 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
-            registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
+            registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                credentials: None,
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
-            image: "debian".to_string(),
-            tag: "bullseye".to_string(),
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
@@ -1312,12 +1310,12 @@ fn deploy_container_with_router_on_scw() {
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
             registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
                 long_id: Uuid::new_v4(),
                 credentials: None,
             },
-            image: "httpd".to_string(),
-            tag: "alpine3.16".to_string(),
+            image: "r3m4q3r9/pub-mirror-httpd".to_string(),
+            tag: "2.4.56-alpine3.17".to_string(),
             command_args: vec![],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1412,13 +1410,12 @@ fn deploy_job_on_scw_kapsule() {
             action: Action::Create,
             schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
-                registry: DockerHub {
+                registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
-                    url: Url::parse("https://docker.io").unwrap(),
-                    credentials: None,
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
-                image: "library/debian".to_string(),
-                tag: "bullseye".to_string(),
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6".to_string(),
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -1486,13 +1483,12 @@ fn deploy_cronjob_on_scw_kapsule() {
                 schedule: "* * * * *".to_string(),
             },
             source: JobSource::Image {
-                registry: DockerHub {
+                registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
-                    url: Url::parse("https://docker.io").unwrap(),
-                    credentials: None,
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
-                image: "library/debian".to_string(),
-                tag: "bullseye".to_string(),
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6".to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,
@@ -1559,13 +1555,12 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                 schedule: "*/10 * * * *".to_string(),
             },
             source: JobSource::Image {
-                registry: DockerHub {
+                registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
-                    url: Url::parse("https://docker.io").unwrap(),
-                    credentials: None,
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
-                image: "library/debian".to_string(),
-                tag: "bullseye".to_string(),
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6".to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,

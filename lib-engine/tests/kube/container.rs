@@ -212,8 +212,8 @@ fn should_have_mounted_files_as_volume() {
         let mount_file_env_var_value = mounted_file.mount_path.to_string();
 
         // Use an app crashing in case file doesn't exists
-        container.image = "debian".to_string();
-        container.tag = "bullseye".to_string();
+        container.image = "r3m4q3r9/pub-mirror-debian".to_string();
+        container.tag = "11.6".to_string();
         container.command_args = vec![
             "/bin/sh".to_string(),
             "-c".to_string(),

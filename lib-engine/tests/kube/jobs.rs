@@ -57,13 +57,12 @@ fn should_have_mounted_files_as_volume() {
             schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
         };
         cron_job.source = JobSource::Image {
-            registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
+            registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                credentials: None,
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
-            image: "debian".to_string(),
-            tag: "bullseye".to_string(),
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6".to_string(),
         };
         cron_job.max_nb_restart = 1;
         cron_job.max_duration_in_sec = 120;

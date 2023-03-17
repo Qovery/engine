@@ -1,9 +1,7 @@
-FROM golang:1.16 AS build
+FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 AS build
 
-COPY hello.go /go/src/project/hello.go
-WORKDIR /go/src/project
-RUN go build hello.go
+COPY hello.sh /hello.sh
 
-FROM scratch
-COPY --from=build /go/src/project/hello /bin/hello
-ENTRYPOINT ["/bin/hello"]
+FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6
+COPY --from=build /hello.sh /bin/hello.sh
+ENTRYPOINT ["/bin/hello.sh"]

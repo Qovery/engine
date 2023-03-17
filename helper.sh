@@ -400,12 +400,13 @@ function test_local_stack() {
     prepare_tests
     use_sccache
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-    docker run -d --rm -p 5000:5000 --name engine-registry registry:2
+    docker run -d --rm -p 5000:5000 --name engine-registry public.ecr.aws/r3m4q3r9/pub-mirror-registry:2.8.1
 
     kube_cluster_name="kube-test-cluster-$(date +%S%N)"
 
+    # We can't use our ECR public repo yet :/
     k3d cluster create -a 0 \
-        --image rancher/k3s:v1.21.10-k3s1 \
+        --image rancher/k3s:v1.23.17-k3s1 \
         --no-lb \
         --k3s-arg "--disable=traefik" \
         --wait $kube_cluster_name || k3d cluster start --wait $kube_cluster_name

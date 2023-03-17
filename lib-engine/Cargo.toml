@@ -114,39 +114,33 @@ test-all = ["test-all-minimal", "test-all-self-hosted", "test-all-infra", "test-
 # Minimal depencies test (i.e: build, deploy nothing managed)
 test-aws-minimal = ["env-logger-check"]
 test-aws-ec2-minimal = ["env-logger-check"]
-test-do-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
-test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-do-minimal", "test-scw-minimal"]
+test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-scw-minimal"]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check"]
 test-aws-ec2-self-hosted = ["env-logger-check"]
-test-do-self-hosted = ["env-logger-check"]
 test-scw-self-hosted = ["env-logger-check"]
-test-all-self-hosted = ["test-aws-self-hosted", "test-aws-ec2-self-hosted", "test-do-self-hosted", "test-scw-self-hosted"]
+test-all-self-hosted = ["test-aws-self-hosted", "test-aws-ec2-self-hosted", "test-scw-self-hosted"]
 
 test-aws-managed-services = ["env-logger-check"]
 test-aws-ec2-managed-services = ["env-logger-check"]
-test-do-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
-test-all-managed-services = ["test-aws-managed-services", "test-aws-ec2-managed-services", "test-do-managed-services", "test-scw-managed-services"]
+test-all-managed-services = ["test-aws-managed-services", "test-aws-ec2-managed-services", "test-scw-managed-services"]
 
 test-aws-infra = []
 test-aws-ec2-infra = []
-test-do-infra = []
 test-scw-infra = []
-test-all-infra = ["test-aws-infra", "test-aws-ec2-infra", "test-do-infra", "test-scw-infra"]
+test-all-infra = ["test-aws-infra", "test-aws-ec2-infra", "test-scw-infra"]
 
 test-aws-whole-enchilada = []
 test-aws-ec2-whole-enchilada = []
-test-do-whole-enchilada = []
 test-scw-whole-enchilada = []
-test-all-whole-enchilada = ["test-aws-whole-enchilada", "test-aws-ec2-whole-enchilada", "test-do-whole-enchilada", "test-scw-whole-enchilada"]
+test-all-whole-enchilada = ["test-aws-whole-enchilada", "test-aws-ec2-whole-enchilada", "test-scw-whole-enchilada"]
 
 # functionnal tests by provider
 test-aws-all = ["test-aws-infra", "test-aws-managed-services", "test-aws-self-hosted", "test-aws-whole-enchilada"]
 test-aws-ec2-all = ["test-aws-ec2-infra", "test-aws-ec2-managed-services", "test-aws-ec2-self-hosted", "test-aws-ec2-whole-enchilada"]
-test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted", "test-do-whole-enchilada"]
 test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted", "test-scw-whole-enchilada"]
 
 # functionnal test with only a k8s cluster as a dependency

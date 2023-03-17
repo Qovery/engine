@@ -18,7 +18,7 @@ use qovery_engine::transaction::TransactionResult;
 use std::str::FromStr;
 use tracing::{span, Level};
 
-#[cfg(feature = "test-local-kube")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 #[named]
 fn should_increase_db_storage_size() {
