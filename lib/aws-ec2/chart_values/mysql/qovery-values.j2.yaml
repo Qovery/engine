@@ -21,7 +21,7 @@ root:
   injectSecretsAsVolume: true
 
 db:
-  user: '{{ database_login }}'
+  user: 'qovery'
   password: '{{ database_password }}'
   name: "{{ sanitized_name }}"
   forcePassword: true
