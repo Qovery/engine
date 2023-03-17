@@ -124,7 +124,7 @@ all-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - bm-2cpu-6gmem-0g
+    - vm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
