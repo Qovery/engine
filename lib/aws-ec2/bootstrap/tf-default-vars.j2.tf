@@ -43,7 +43,11 @@ variable "vpc_cidr_block" {
 variable "ec2_image_info" {
   description = "EC2 image information"
   default = {
+    {% if eks_worker_nodes[0].instance_architecture == "ARM64" -%}
+    "name" = "debian-10-arm64*"
+    {%- else -%}
     "name" = "debian-10-amd64*"
+    {%- endif %}
     "owners" = "136693071363"
   }
   type = map(string)
