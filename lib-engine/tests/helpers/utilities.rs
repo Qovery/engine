@@ -786,7 +786,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "e824fd7062e112d513baecb537114563b77dbaf4".to_string(),
+                app_commit: "c5da00d2463061787e5fc2e31e7cd67877fd9881".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn),
@@ -804,7 +804,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "ba3dde5e67d8bdd85b25709c90875348071591a3".to_string(),
+                app_commit: "0c73aac9bbab7f494da1d89a535ed40e668a8ab4".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() => base64::encode(db_fqdn),
                     "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
@@ -824,7 +824,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "750d5e6d616493ae50b6c6099e196b0643ae459f".to_string(),
+                app_commit: "71990e977a60c87034530614607494a96dee2254".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name),
                      "PG_HOST".to_string() => base64::encode(db_fqdn),
@@ -840,7 +840,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "81256d5cc4bedfccfe18e2aa7783ee7fb9438a25".to_string(),
+                app_commit: "d41af121c648cd119a1d7aebecadddc7e8a6e548".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED && database_username == "default").to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),
