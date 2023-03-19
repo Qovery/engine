@@ -60,6 +60,10 @@ impl ToCommonHelmChart for GrafanaChart {
                 }],
                 values: vec![
                     ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: "public.ecr.aws/r3m4q3r9/pub-mirror-grafana".to_string(),
+                    },
+                    ChartSetValue {
                         key: "persistence.storageClassName".to_string(),
                         value: self.persistence_storage_class.to_string(),
                     },

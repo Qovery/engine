@@ -1,4 +1,6 @@
 image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
   tag: "{{ version }}"
 
 nameOverride: "{{ sanitized_name }}"
@@ -91,6 +93,13 @@ master:
 
 volumePermissions:
   enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}
+
+sysctlImage:
+  registry: {{ registry_name }}
+  repository: {{ repository_name_minideb }}
 
 resources:
   requests:

@@ -1,4 +1,6 @@
 image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
   tag: "{{ version }}"
 
 nameOverride: "{{ sanitized_name }}"
@@ -45,6 +47,11 @@ master:
     accessModes:
       - ReadWriteOnce
     size: "{{ database_disk_size_in_gib }}Gi"
+
+volumePermissions:
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}
 
 service:
   name: {{ service_name }}

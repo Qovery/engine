@@ -65,6 +65,11 @@ persistence:
     databaseId: "{{ id }}"
     databaseName: "{{ sanitized_name }}"
 
+volumePermissions:
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}
+
 resources:
   requests:
     memory: "{{ database_ram_size_in_mib }}Mi"

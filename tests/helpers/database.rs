@@ -536,6 +536,10 @@ pub fn test_db(
             },
             CONTAINER => "".to_string(),
         },
+        DatabaseKind::Mysql => match database_mode {
+            CONTAINER => "qovery".to_string(),
+            _ => "superuser".to_string(),
+        },
         _ => "superuser".to_string(),
     };
     let database_password = generate_password(database_mode.clone());
