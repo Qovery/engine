@@ -122,9 +122,10 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let mount_file_env_var_value = mounted_file.mount_path.to_string();
 
     // Use an app crashing in case file doesn't exists
+    // todo: move this to pure shell to speed up CI
     application.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
     application.branch = "app-crashing-if-file-doesnt-exist".to_string();
-    application.commit_id = "268ddf16a8446dc19a61f5916da3e6e729b88669".to_string();
+    application.commit_id = "44b889f36c81cce7dee678993bb7986c86899e5d".to_string();
     application.ports = vec![];
     application.mounted_files = vec![mounted_file.clone()];
     application.environment_vars = BTreeMap::from([
