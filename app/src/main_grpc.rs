@@ -264,6 +264,24 @@ pub fn main() -> io::Result<()> {
         }
     }
 
+    let should_shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_callback = {
+        let should_shutdown = should_shutdown.clone();
+
+        async move {
+            info!("WAITING for program to receive ctrl+c or sigterm");
+            let ctrl_c = tokio::signal::ctrl_c();
+            let mut sigterm_s = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+            let sigterm = sigterm_s.recv();
+
+            pin_mut!(ctrl_c);
+            pin_mut!(sigterm);
+            let _ = select(ctrl_c, sigterm).await;
+            info!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
+            should_shutdown.store(true, Ordering::Relaxed);
+        }
+    };
+    tokio_utils::launch_task(shutdown_callback);
     tokio_utils::launch(&cli.http_listen_on);
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
@@ -342,71 +360,52 @@ pub fn main() -> io::Result<()> {
         TaskSelector::Infrastructure("infrastructure")
     };
 
-    let should_shutdown = Arc::new(AtomicBool::new(false));
-    let task_executor = {
-        let should_shutdown = should_shutdown.clone();
+    let task_executor = async move {
+        // Connect and check we are allowed to do request
+        // If we are not allowed, we let the task die in order to be restarted
+        info!("Connecting to GRPC server: {:?}", grpc_server);
+        let mut engine_client = grpc::new_engine_client(grpc_server, &cli.cluster_id, &cli.cluster_jwt_token)
+            .await
+            .expect("Can't connect to engine gateway");
+        engine_client
+            .is_authorized(())
+            .await
+            .expect("Engine can't connect to gateway");
 
-        async move {
-            // Connect and check we are allowed to do request
-            // If we are not allowed, we let the task die in order to be restarted
-            info!("Connecting to GRPC server: {:?}", grpc_server);
-            let mut engine_client = grpc::new_engine_client(grpc_server, &cli.cluster_id, &cli.cluster_jwt_token)
-                .await
-                .expect("Can't connect to engine gateway");
-            engine_client
-                .is_authorized(())
-                .await
-                .expect("Engine can't connect to gateway");
+        let mut current_deployment = DeploymentManager::new();
+        let payload_to_engine_task = |payload: String,
+                                      grpc_client: &GrpcEngineClient,
+                                      logger: Box<dyn Logger>|
+         -> Result<Box<dyn Task>, serde_json::Error> {
+            to_engine_task(
+                payload,
+                &cli.workspace_root_dir,
+                &cli.lib_root_dir,
+                docker.clone(),
+                &task_selector,
+                grpc_client,
+                logger,
+            )
+        };
 
-            let mut current_deployment = DeploymentManager::new();
-            let payload_to_engine_task = |payload: String,
-                                          grpc_client: &GrpcEngineClient,
-                                          logger: Box<dyn Logger>|
-             -> Result<Box<dyn Task>, serde_json::Error> {
-                to_engine_task(
-                    payload,
-                    &cli.workspace_root_dir,
-                    &cli.lib_root_dir,
-                    docker.clone(),
-                    &task_selector,
-                    grpc_client,
-                    logger,
-                )
-            };
+        // Execute deployment until we are asked to be shutdown and no deployment is on-going
+        while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
+            let ret = fetch_and_exec_deployments(
+                &mut engine_client,
+                &mut current_deployment,
+                payload_to_engine_task,
+                logger.clone(),
+                task_selector,
+            )
+            .await;
 
-            // Execute deployment until we are asked to be shutdown and no deployment is on-going
-            while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
-                let ret = fetch_and_exec_deployments(
-                    &mut engine_client,
-                    &mut current_deployment,
-                    payload_to_engine_task,
-                    logger.clone(),
-                    task_selector,
-                )
-                .await;
-
-                if let Err(e) = ret {
-                    error!("{}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
+            if let Err(e) = ret {
+                error!("{}", e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     };
 
-    let shutdown_callback = async move {
-        info!("WAITING for program to receive ctrl+c or sigterm");
-        let ctrl_c = tokio::signal::ctrl_c();
-        let mut sigterm_s = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
-        let sigterm = sigterm_s.recv();
-
-        pin_mut!(ctrl_c);
-        pin_mut!(sigterm);
-        let _ = select(ctrl_c, sigterm).await;
-        info!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
-        should_shutdown.store(true, Ordering::Relaxed);
-    };
-
-    tokio_utils::launch_task(shutdown_callback);
     let task_executor_h = tokio_utils::launch_task(task_executor);
     while !task_executor_h.is_finished() {
         thread::sleep(Duration::from_secs(1));
