@@ -18,6 +18,12 @@ variable "organization_id" {
   type        = string
 }
 
+variable "organization_long_id" {
+  description = "Qovery Organization long ID"
+  default     = "{{ organization_long_id }}"
+  type        = string
+}
+
 # AWS specific
 
 variable "aws_availability_zones" {
@@ -37,7 +43,11 @@ variable "vpc_cidr_block" {
 variable "ec2_image_info" {
   description = "EC2 image information"
   default = {
+    {% if eks_worker_nodes[0].instance_architecture == "ARM64" -%}
+    "name" = "debian-10-arm64*"
+    {%- else -%}
     "name" = "debian-10-amd64*"
+    {%- endif %}
     "owners" = "136693071363"
   }
   type = map(string)
@@ -109,6 +119,12 @@ variable "ec2_cidr_subnet" {
   type        = number
 }
 
+variable "ec2_metadata_imds_version" {
+  description = "Set the imds version"
+  default = "{{ ec2_metadata_imds_version }}"
+  type = string
+}
+
 variable "ec2_k8s_versions" {
   description = "Kubernetes version"
   default = {
@@ -118,9 +134,9 @@ variable "ec2_k8s_versions" {
   type = map(string)
 }
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long id"
+  default     = "{{ kubernetes_cluster_long_id }}"
   type        = string
 }
 

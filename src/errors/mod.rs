@@ -711,6 +711,8 @@ pub enum Tag {
     /// TerraformInvalidCIDRBlock: represents an error due to an unusable CIDR block already used in the target VPC.
     TerraformInvalidCIDRBlock,
     /// TerraformStateLocked: represents an error due to Terraform state lock.
+    TerraformClusterUnsupportedVersionUpdate,
+    /// TerraformClusterUnsupportedVersionUpdate: represents an error due to cluster version update cannot be done.
     TerraformStateLocked,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
@@ -2667,6 +2669,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("Your deployment failed because Terraform faced a state lock. Please contact Qovery team to get unlocked.".to_string()),
+            ),
+            TerraformError::ClusterVersionUnsupportedUpdate { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformClusterUnsupportedVersionUpdate,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                Some(Url::parse("https://hub.qovery.com/docs/useful-resources/faq/#how-do-you-support-new-kubernetes-version").expect("Error while trying to parse error link helper for `TerraformError::ClusterVersionUnsupportedUpdate`, URL is not valid.")),
+                Some("Deployment failed because cluster version cannot be updated. Did you updated manually your cluster provider's side? You can consult our FAQ to know more. Please reach our team to get some help.".to_string()),
             ),
         }
     }

@@ -188,6 +188,7 @@ pub enum Tag {
     TerraformInstanceVolumeCannotBeReduced,
     TerraformInvalidCIDRBlock,
     TerraformStateLocked,
+    TerraformClusterUnsupportedVersionUpdate,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -261,6 +262,7 @@ impl From<errors::Tag> for Tag {
                 Tag::TerraformErrorWhileExecutingDestroyPipeline
             }
             errors::Tag::TerraformResourceDependencyViolation => Tag::TerraformResourceDependencyViolation,
+            errors::Tag::TerraformClusterUnsupportedVersionUpdate => Tag::TerraformClusterUnsupportedVersionUpdate,
             errors::Tag::HelmChartsSetupError => Tag::HelmChartsSetupError,
             errors::Tag::HelmChartsDeployError => Tag::HelmChartsDeployError,
             errors::Tag::HelmChartsUpgradeError => Tag::HelmChartsUpgradeError,

@@ -167,6 +167,11 @@ pub fn ec2_aws_helm_charts(
             name: "registry-creds".to_string(),
             path: chart_path("charts/registry-creds"),
             values: vec![
+                // fork to support ARM64 https://github.com/Qovery/registry-creds
+                ChartSetValue {
+                    key: "image.name".to_string(),
+                    value: "public.ecr.aws/r3m4q3r9/registry-creds".to_string(),
+                },
                 ChartSetValue {
                     key: "ecr.enabled".to_string(),
                     value: "true".to_string(),

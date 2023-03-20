@@ -406,6 +406,7 @@ pub fn get_environment_test_kubernetes(
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
                         aws_vpc_enable_flow_logs: true,
+                        aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
                         ..Default::default()
                     },
                 )

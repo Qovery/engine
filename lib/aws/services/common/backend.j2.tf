@@ -5,11 +5,12 @@ terraform {
     config_path      = "{{ kubeconfig_path }}"
     namespace        = "{{ namespace }}"
     exec {
-      api_version = "client.authentication.k8s.io/v1alpha1"
-      command     = "aws-iam-authenticator"
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
       args = [
-        "token",
-        "-i",
+        "eks",
+        "get-token",
+        "--cluster-name",
         "qovery-{{kubernetes_cluster_id}}"]
       env = {
         AWS_ACCESS_KEY_ID     = "{{ aws_access_key }}"

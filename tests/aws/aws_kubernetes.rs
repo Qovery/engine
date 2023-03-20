@@ -1,7 +1,9 @@
 use std::str::FromStr;
 
 use crate::helpers::common::ClusterDomain;
-use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
+use crate::helpers::utilities::{
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger,
+};
 use ::function_name::named;
 
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
@@ -22,12 +24,13 @@ fn create_and_destroy_eks_cluster(
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let cluster_id = generate_cluster_id(region.to_string().as_str());
+        let organization_id = generate_organization_id(region.to_string().as_str());
         let zones = region.get_zones();
         cluster_test(
             test_name,
             Kind::Aws,
             KKind::Eks,
-            context_for_cluster(generate_id(), cluster_id),
+            context_for_cluster(organization_id, cluster_id),
             logger(),
             region.to_aws_format(),
             Some(zones),

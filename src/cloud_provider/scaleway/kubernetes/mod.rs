@@ -478,13 +478,14 @@ impl Kapsule {
 
         // Kubernetes
         context.insert("test_cluster", &self.context.is_test_cluster());
-        context.insert("kubernetes_full_cluster_id", &self.long_id);
+        context.insert("kubernetes_cluster_long_id", &self.long_id);
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.cluster_name().as_str());
         context.insert("kubernetes_cluster_version", &self.version.to_string());
 
         // Qovery
         context.insert("organization_id", self.cloud_provider.organization_id());
+        context.insert("organization_long_id", &self.cloud_provider.organization_long_id().to_string());
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 

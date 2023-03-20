@@ -1,4 +1,24 @@
 {% for eks_worker_node in eks_worker_nodes %}
+
+resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens = var.ec2_metadata_imds_version
+    # https://github.com/kubernetes/autoscaler/issues/3592
+    # http_put_response_hop_limit = 2
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size = {{ eks_worker_node.disk_size_in_gib }}
+    }
+  }
+
+  tags = local.tags_eks
+}
+
 resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   version                = var.eks_k8s_versions.workers
@@ -16,8 +36,6 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   ami_type         = "AL2_x86_64"
   {%- endif %}
 
-  disk_size = "{{ eks_worker_node.disk_size_in_gib }}"
-
   tags = merge(
   local.tags_eks,
   {
@@ -25,6 +43,11 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
     "QoveryNodeGroupName" = "{{ eks_worker_node.name }}"
   }
   )
+
+  launch_template {
+    id      = aws_launch_template.eks_workers_nodes_{{ loop.index }}.id
+    version = "$Latest"
+  }
 
   scaling_config {
     desired_size = "{{ eks_worker_node.desired_size }}"

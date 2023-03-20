@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
 
-use std::{env, fs};
+use std::fs;
 
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -355,7 +355,7 @@ fn tera_context(
         VpcQoveryNetworkMode::WithNatGateways => {
             let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &ec2_zone_a_subnet_blocks_private)?;
             let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &ec2_zone_b_subnet_blocks_private)?;
-            let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &ec2_zone_c_subnet_blocks_private)?;
+            let max_subnet_zone_c = check_odd_subnets(event_details, "c", &ec2_zone_c_subnet_blocks_private)?;
 
             let ec2_zone_a_subnet_blocks_public: Vec<String> =
                 ec2_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
@@ -406,6 +406,10 @@ fn tera_context(
 
     // Qovery
     context.insert("organization_id", kubernetes.cloud_provider().organization_id());
+    context.insert(
+        "organization_long_id",
+        &kubernetes.cloud_provider().organization_long_id().to_string(),
+    );
     context.insert("qovery_api_url", &qovery_api_url);
 
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
@@ -461,32 +465,6 @@ fn tera_context(
         LetsEncryptConfig::acme_url_for_given_usage(kubernetes.context().is_test_cluster()).as_str(),
     );
 
-    // Vault
-    context.insert("vault_auth_method", "none");
-
-    if env::var_os("VAULT_ADDR").is_some() {
-        // select the correct used method
-        match env::var_os("VAULT_ROLE_ID") {
-            Some(role_id) => {
-                context.insert("vault_auth_method", "app_role");
-                context.insert("vault_role_id", role_id.to_str().unwrap());
-
-                match env::var_os("VAULT_SECRET_ID") {
-                    Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                    None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
-                        None,
-                    )),
-                }
-            }
-            None => {
-                if env::var_os("VAULT_TOKEN").is_some() {
-                    context.insert("vault_auth_method", "token")
-                }
-            }
-        }
-    };
-
     // Other Kubernetes
     context.insert("kubernetes_cluster_name", &kubernetes.cluster_name());
     context.insert("enable_cluster_autoscaler", &true);
@@ -535,7 +513,7 @@ fn tera_context(
     context.insert("ec2_cidr_subnet", &ec2_cidr_subnet);
     context.insert("kubernetes_cluster_name", kubernetes.name());
     context.insert("kubernetes_cluster_id", kubernetes.id());
-    context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_short_id());
+    context.insert("kubernetes_cluster_long_id", kubernetes.context().cluster_long_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
@@ -569,6 +547,13 @@ fn tera_context(
     );
     context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
     context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
+
+    // AWS - EKS/EC2 Metadata
+    // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html
+    context.insert(
+        "ec2_metadata_imds_version",
+        &kubernetes.advanced_settings().aws_eks_ec2_metadata_imds,
+    );
 
     // AWS - RDS
     context.insert("rds_cidr_subnet", &rds_cidr_subnet);
@@ -1052,7 +1037,7 @@ fn create(
             kubernetes_long_id.to_string(),
             options.grafana_admin_user.clone(),
             options.grafana_admin_password.clone(),
-            kubernetes.cloud_provider().organization_id().to_string(),
+            kubernetes.cloud_provider().organization_long_id().to_string(),
             kubernetes.context().is_test_cluster().to_string(),
         ),
         event_details.clone(),

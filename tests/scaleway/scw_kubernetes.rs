@@ -1,4 +1,6 @@
-use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
+use crate::helpers::utilities::{
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger,
+};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
@@ -18,11 +20,12 @@ fn create_and_destroy_kapsule_cluster(
 ) {
     engine_run_test(|| {
         let cluster_id = generate_cluster_id(zone.as_str());
+        let organization_id = generate_organization_id(zone.as_str());
         cluster_test(
             test_name,
             Kind::Scw,
             KKind::ScwKapsule,
-            context_for_cluster(generate_id(), cluster_id),
+            context_for_cluster(organization_id, cluster_id),
             logger(),
             zone.as_str(),
             None,

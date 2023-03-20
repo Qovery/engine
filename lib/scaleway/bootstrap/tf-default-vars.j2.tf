@@ -31,6 +31,12 @@ variable "organization_id" {
   type        = string
 }
 
+variable "organization_long_id" {
+  description = "Qovery Organization long ID"
+  default     = "{{ organization_long_id }}"
+  type        = string
+}
+
 variable "scaleway_project_id" {
   description = "Scaleway project ID (namespace)"
   default     = "{{ scaleway_project_id }}"
@@ -51,9 +57,9 @@ variable "scaleway_secret_key" {
 
 # Kubernetes
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long id"
+  default     = "{{ kubernetes_cluster_long_id}}"
   type        = string
 }
 

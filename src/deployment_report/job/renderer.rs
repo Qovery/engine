@@ -79,7 +79,7 @@ mod test {
         let render_ctx = JobDeploymentRenderContext {
             name: to_short_id(&app_id),
             job_type: JobType::Job(Action::Create).to_string(),
-            tag: "docker.io/debian:bullseye".to_string(),
+            tag: "public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6".to_string(),
             nb_pods: 1,
             job: None,
             pods_failing: vec![PodRenderContext {
@@ -103,7 +103,7 @@ mod test {
 
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-┃ Job at tag docker.io/debian:bullseye execution is in progress ⏳, below the current status:
+┃ Job at tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 execution is in progress ⏳, below the current status:
 ┃
 ┃ 🛰 Job has 1 pods. 0 starting, 0 terminating and 1 in error
 ┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources

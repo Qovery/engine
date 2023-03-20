@@ -272,6 +272,16 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         };
         let container_database_publicly_accessible = !cluster_denied_public_access && self.publicly_accessible;
 
+        // repository and image location
+        let registry_name = "public.ecr.aws";
+        let repository_name = format!("r3m4q3r9/pub-mirror-{}", T::db_type().to_string().to_lowercase());
+        context.insert("registry_name", registry_name);
+        context.insert("repository_name", repository_name.as_str());
+        context.insert(
+            "repository_with_registry",
+            format!("{registry_name}/{repository_name}").as_str(),
+        );
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);

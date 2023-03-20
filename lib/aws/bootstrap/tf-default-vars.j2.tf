@@ -18,6 +18,12 @@ variable "organization_id" {
   type        = string
 }
 
+variable "organization_long_id" {
+  description = "Qovery Organization long ID"
+  default     = "{{ organization_long_id }}"
+  type        = string
+}
+
 # AWS specific
 
 variable "aws_availability_zones" {
@@ -42,9 +48,9 @@ variable "eks_k8s_versions" {
   type = map(string)
 }
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long id"
+  default     = "{{ kubernetes_cluster_long_id }}"
   type        = string
 }
 
@@ -76,6 +82,12 @@ variable "aws_cloudwatch_eks_logs_retention_days" {
   description = "AWS cloudwatch log group retention in days"
   default = {{ aws_cloudwatch_eks_logs_retention_days }}
   type = number
+}
+
+variable "ec2_metadata_imds_version" {
+  description = "Set the imds version"
+  default = "{{ ec2_metadata_imds_version }}"
+  type = string
 }
 
 # Databases

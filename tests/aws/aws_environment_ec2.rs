@@ -141,13 +141,12 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
-            registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
+            registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                credentials: None,
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
-            image: "debian".to_string(),
-            tag: "bullseye".to_string(),
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),

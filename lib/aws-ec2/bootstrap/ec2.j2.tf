@@ -67,6 +67,12 @@ resource "aws_instance" "ec2_instance" {
       }
     )
 
+  # metadata
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = var.ec2_metadata_imds_version
+  }
+
   depends_on = [
     aws_s3_bucket.kubeconfigs_bucket,
   ]
@@ -173,6 +179,11 @@ done
 
 print_title "K3s failed to start, restarting the EC2 instance"
 reboot
+
+
+
+
+
 {%- else -%}
 #!/bin/bash
 
@@ -208,7 +219,11 @@ systemctl restart ssh.service
 
 
 print_title "Install latest aws cli version"
+{% if eks_worker_nodes[0].instance_architecture == "ARM64" -%}
+cd /tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o /tmp/awscliv2.zip && unzip awscliv2.zip && ./aws/install && rm -rf aws awscliv2.zip && cd -
+{%- else -%}
 cd /tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip && unzip awscliv2.zip && ./aws/install && rm -rf aws awscliv2.zip && cd -
+{%- endif %}
 echo "export PATH=/usr/local/aws-cli/v2/current/bin:$PATH" >> /etc/profile
 
 
@@ -227,6 +242,8 @@ while [ "$(aws ec2 describe-instances --filters Name=tag:ClusterId,Values="${var
   sleep 5
 done
 
+# 169.254.169.254 is an internal static ip used by aws to retrieve nodes info without using the cli
+# https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html
 instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 local_ip=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 public_ip=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)

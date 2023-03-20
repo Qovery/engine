@@ -40,7 +40,7 @@ pub fn working_environment(
             long_id: application_id.to_uuid(),
             name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+            commit_id: "4bc6a902e83129a118185660b3c9e13dfd0ffc27".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
@@ -122,9 +122,10 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let mount_file_env_var_value = mounted_file.mount_path.to_string();
 
     // Use an app crashing in case file doesn't exists
+    // todo: move this to pure shell to speed up CI
     application.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
     application.branch = "app-crashing-if-file-doesnt-exist".to_string();
-    application.commit_id = "268ddf16a8446dc19a61f5916da3e6e729b88669".to_string();
+    application.commit_id = "44b889f36c81cce7dee678993bb7986c86899e5d".to_string();
     application.ports = vec![];
     application.mounted_files = vec![mounted_file.clone()];
     application.environment_vars = BTreeMap::from([
@@ -210,8 +211,9 @@ pub fn environment_2_app_2_routers_1_psql(
                 long_id: application_id1,
                 name: sanitize_name("pg", &format!("{}-{}", "pg-app1", &suffix)),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-                commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: Some("Dockerfile".to_string()),
+                branch: "postgres-app".to_string(),
+                commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
+                dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 buildpack_language: None,
@@ -227,7 +229,6 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
                 mounted_files: vec![],
-                branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
@@ -235,7 +236,7 @@ pub fn environment_2_app_2_routers_1_psql(
                     is_default: true,
                     name: None,
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: Protocol::TCP,
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
@@ -248,8 +249,9 @@ pub fn environment_2_app_2_routers_1_psql(
                 long_id: application_id2,
                 name: sanitize_name("pg", &format!("{}-{}", "pg-app2", &suffix)),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-                commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: Some("Dockerfile".to_string()),
+                branch: "postgres-app".to_string(),
+                commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
+                dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 buildpack_language: None,
@@ -265,7 +267,6 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_PASSWORD".to_string() => base64::encode(database_password),
                 },
                 mounted_files: vec![],
-                branch: "master".to_string(),
                 ports: vec![Port {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
@@ -273,7 +274,7 @@ pub fn environment_2_app_2_routers_1_psql(
                     is_default: true,
                     name: None,
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: Protocol::TCP,
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
@@ -322,7 +323,7 @@ pub fn non_working_environment(context: &Context) -> EnvironmentRequest {
         .map(|mut app| {
             app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
             app.branch = "bugged-image".to_string();
-            app.commit_id = "c2b2d7b5d96832732df25fe992721f53842b5eac".to_string();
+            app.commit_id = "8feceb20eddb57872b086c4644ae404e822501e2".to_string();
             app
         })
         .collect::<Vec<_>>();
@@ -423,7 +424,7 @@ pub fn environment_only_http_server(
             name: application_name,
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
+            commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
@@ -434,11 +435,11 @@ pub fn environment_only_http_server(
             storage: vec![],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
-            branch: "mini-http".to_string(),
+            branch: "main".to_string(),
             ports: vec![Port {
                 id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
-                port: 3000,
+                port: 80,
                 is_default: true,
                 name: None,
                 publicly_accessible: true,
