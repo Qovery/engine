@@ -1,6 +1,6 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
-FROM rust:1.67.0-slim-bullseye as build
+FROM public.ecr.aws/r3m4q3r9/pub-mirror-rust:1.67.1 as build
 
 ARG BIN_DEST_FOLDER
 ARG SCCACHE_REDIS
@@ -29,7 +29,7 @@ RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache
 RUN sccache --version && sccache --show-stats && cargo build --release && sccache --show-stats
 
 # Final image
-FROM debian:bullseye-slim as run
+FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 as run
 
 ARG BIN_DEST_FOLDER
 
@@ -43,11 +43,15 @@ RUN apt-get update && apt-get -y dist-upgrade && apt-get -y install curl gnupg l
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
     echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
     apt-get update &&\
-    apt-get -y install docker-ce docker-ce-cli containerd.io awscli procps netcat-openbsd iproute2 dumb-init git-lfs && \
+    apt-get -y install docker-ce docker-ce-cli containerd.io procps netcat-openbsd iproute2 dumb-init git-lfs unzip &&\
+    cd tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" &&\
+    unzip awscliv2.zip &&\
+    ./aws/install &&\
+    cd - &&\
     apt-get clean &&\
-    groupadd -g 1000 qovery && \
-    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
-    mkdir -p $TF_PLUGIN_CACHE_DIR && \
+    groupadd -g 1000 qovery &&\
+    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery &&\
+    mkdir -p $TF_PLUGIN_CACHE_DIR &&\
     chown -Rf 1000:1000 $HOME_DIR/.terraform.d
 
 WORKDIR $HOME_DIR
