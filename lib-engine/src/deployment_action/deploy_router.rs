@@ -7,7 +7,7 @@ use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::Router;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -102,12 +102,9 @@ where
     }
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let command_error = CommandError::new_from_safe_message("Cannot restart Router".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
-            self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
-            target.environment.namespace(),
-            "",
-            command_error,
-        )));
+        execute_long_deployment(
+            RouterDeploymentReporter::new(self, target, Action::Restart),
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) },
+        )
     }
 }
