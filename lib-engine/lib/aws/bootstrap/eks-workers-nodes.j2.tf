@@ -36,7 +36,13 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   ami_type         = "AL2_x86_64"
   {%- endif %}
 
-  tags = local.tags_eks
+  tags = merge(
+  local.tags_eks,
+  {
+    "QoveryNodeGroupId" = "${var.kubernetes_cluster_id}-{{ loop.index }}"
+    "QoveryNodeGroupName" = "{{ eks_worker_node.name }}"
+  }
+  )
 
   launch_template {
     id      = aws_launch_template.eks_workers_nodes_{{ loop.index }}.id
