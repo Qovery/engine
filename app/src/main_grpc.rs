@@ -418,7 +418,7 @@ async fn fetch_new_deployment(
     engine_client: &mut GrpcEngineClient,
     deployment_request: DeploymentRequest,
 ) -> Result<DeploymentInfo, anyhow::Error> {
-    return match engine_client.get_new_deployment(deployment_request.clone()).await {
+    match engine_client.get_new_deployment(deployment_request.clone()).await {
         Ok(deployment_info) => {
             let deployment_info = deployment_info.into_inner();
             Ok(deployment_info)
@@ -430,7 +430,7 @@ async fn fetch_new_deployment(
                 Err(anyhow::anyhow!("Error while getting new deployment: {}", err))
             }
         }
-    };
+    }
 }
 
 async fn fetch_and_exec_deployments(
