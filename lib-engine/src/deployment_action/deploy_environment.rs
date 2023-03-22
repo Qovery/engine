@@ -9,7 +9,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::api::{DeleteParams, ListParams};
+use kube::api::ListParams;
 use kube::Api;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -165,14 +165,11 @@ impl<'a> EnvironmentDeployment<'a> {
             )
         })?;
 
-        if envs
+        if !envs
             .items
             .iter()
             .any(|ns| ns.metadata.name.as_deref().unwrap_or("") == environment.namespace())
         {
-            // Delete the namespace
-            let _ = block_on(api.delete(target.environment.namespace(), &DeleteParams::foreground()));
-        } else {
             info!("no need to delete environment {}, already absent", environment.namespace());
             Self::services_iter(target.environment).for_each(|(id, _, _)| {
                 self.deployed_services.insert(id);
