@@ -57,6 +57,16 @@ pub struct CommandError {
     env_vars: Option<Vec<(String, String)>>,
 }
 
+impl From<kube::Error> for CommandError {
+    fn from(err: kube::Error) -> Self {
+        CommandError::new(
+            format!("error while executing kube operation: {err}"),
+            Some(format!("{err:?}")),
+            None,
+        )
+    }
+}
+
 impl From<command::CommandError> for CommandError {
     fn from(err: command::CommandError) -> Self {
         CommandError::new(err.to_string(), None, None)
