@@ -78,6 +78,13 @@ release-engine-image:
     - vm-1cpu-1gmem-0g
   when: manual
   interruptible: true
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    when: manual
+    allow_failure: true
+  - if: $CI_COMMIT_BRANCH == "main"
+    when: always
+    allow_failure: false
   only:
     - main
     - merge_requests
