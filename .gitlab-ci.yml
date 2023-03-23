@@ -85,9 +85,6 @@ release-engine-image:
   - if: $CI_COMMIT_BRANCH == "main"
     when: always
     allow_failure: false
-  only:
-    - main
-    - merge_requests
 
 gitguardian:
   stage: build-and-lint
