@@ -467,7 +467,8 @@ impl Docker {
         )
     }
 
-    pub fn push<Stdout, Stderr>(
+    #[cfg(test)]
+    fn push<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,

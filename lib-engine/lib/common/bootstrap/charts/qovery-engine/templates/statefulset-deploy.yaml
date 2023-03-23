@@ -82,9 +82,6 @@ spec:
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
-              # Required for image cleaning
-            - name: docker-graph-storage
-              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
           lifecycle:
             preStop:
               exec:
@@ -111,44 +108,17 @@ spec:
               command: [ "docker", "info" ]
             initialDelaySeconds: 15
             periodSeconds: 30
-          resources:
-          {{- toYaml .Values.buildResources | nindent 12 }}
-          volumeMounts:
-            - name: docker-graph-storage
-              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
           lifecycle:
             preStop:
               exec:
                 # Check if prometheus is shutdown before shutting down docker builder. DO NOT REMOVE.
                 # If we don't check it, processes like docker are hard kill and it generates issues.
                 command: ["/bin/sh", "-c", "echo 'Stopping docker container...' > /proc/1/fd/1 ; while nc -z localhost 8080; do sleep 1; done; echo 'Stopping docker container now...' > /proc/1/fd/1"]
-      initContainers:
-        - name: clean-data
-          image: busybox:latest
-          command:
-            - /bin/sh
-            - -c
-            - |
-              rm -Rf {{ .Values.volumes.qoveryWorkspace.path }}/* {{ .Values.volumes.dockerGraphStorage.path }}/*
-              chmod 777 {{ .Values.volumes.qoveryWorkspace.path }} {{ .Values.volumes.dockerGraphStorage.path }}
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
-            - name: docker-graph-storage
-              mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
   {{ if .Values.volumes.useNetworkDisks }}
   volumeClaimTemplates:
-  - metadata:
-      name: docker-graph-storage
-      labels:
-        {{- include "qovery-engine.labels" . | nindent 8 }}
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: {{ .Values.volumes.storageClassName }}
-      resources:
-        requests:
-          storage: {{ .Values.volumes.dockerGraphStorage.size }}
   - metadata:
       name: qovery-workspace
       labels:
@@ -162,8 +132,6 @@ spec:
           storage: {{ .Values.volumes.qoveryWorkspace.size }}
   {{ else }}
       volumes:
-        - name: docker-graph-storage
-          emptyDir: {}
         - name: qovery-workspace
           emptyDir: {}
   {{ end }}

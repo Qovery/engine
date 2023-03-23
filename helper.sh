@@ -177,11 +177,15 @@ function deploy_engines_envs() { ## Release GA to prod
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
 environmentVariables.BUILDER_KUBE_ENABLED='true',\
+environmentVariables.BUILDER_CPU_ARCHITECTURES='AMD64\,ARM64',\
 environmentVariables.BUILDER_CPU_REQUEST='3',\
 environmentVariables.BUILDER_CPU_LIMIT='4',\
 environmentVariables.BUILDER_MEMORY_REQUEST_GIB='6',\
 environmentVariables.BUILDER_MEMORY_LIMIT_GIB='7',\
-environmentVariables.BUILDER_CPU_ARCHITECTURES='AMD64\,ARM64'\
+buildResources.requests.cpu="3",\
+buildResources.limits.cpu="4",\
+buildResources.requests.memory="6",\
+buildResources.limits.memory="7"\
   --set image.tag="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
@@ -208,9 +212,7 @@ engineResources.limits.memory="3.9Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="3.9Gi",\
-engineResources.requests.ephemeral-storage="20Gi",\
-buildResources.requests.ephemeral-storage="30Gi",\
-buildResources.limits.ephemeral-storage="30Gi"
+engineResources.requests.ephemeral-storage="20Gi"
 }
 
 ## Tests
