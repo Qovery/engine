@@ -5,6 +5,8 @@ ARG TERRAFORM_VERSION="1.3.3"
 ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.6.0"
 ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
+# If you update docker version, please also update the docker in docker version
+# within the engine chart
 ARG DOCKER_VERSION="5:23.0.1-1~debian.11~bullseye"
 ARG CONTAINERD_VERSION="1.6.18-1"
 
@@ -136,9 +138,7 @@ RUN apt-get update && apt-get install -y \
     apt-get update && \
     apt-get dist-upgrade -y && \
     apt-get install -y \
-    docker-ce=$DOCKER_VERSION \
     docker-ce-cli=$DOCKER_VERSION \
-    containerd.io=$CONTAINERD_VERSION \
     helm=$HELM_VERSION \
     kubectl=$KUBECTL_VERSION \
     vault=$VAULT_VERSION \
