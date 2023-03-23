@@ -2,12 +2,15 @@ use crate::cloud_provider::aws::load_balancers::clean_up_deleted_k8s_nlb;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::kubectl::kubectl_exec_is_namespace_present;
 use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::engine::InfrastructureContext;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails};
+use crate::runtime::block_on;
+use k8s_openapi::api::core::v1::Namespace;
+use kube::api::ListParams;
+use kube::Api;
 use std::collections::HashSet;
 use std::time::Duration;
 use uuid::Uuid;
@@ -152,17 +155,27 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // check if environment is not already deleted
         // speed up delete env because of terraform requiring apply + destroy
-        if !kubectl_exec_is_namespace_present(
-            target.kubernetes.get_kubeconfig_file_path()?,
-            environment.namespace(),
-            target.kubernetes.cloud_provider().credentials_environment_variables(),
-        ) {
+        let api: Api<Namespace> = Api::all(target.kube.clone());
+        let envs = block_on(api.list(&ListParams::default())).map_err(|e| {
+            EngineError::new_k8s_describe(
+                event_details.clone(),
+                "list namespace".to_string(),
+                environment.namespace().to_string(),
+                CommandError::from(e),
+            )
+        })?;
+
+        if !envs
+            .items
+            .iter()
+            .any(|ns| ns.metadata.name.as_deref().unwrap_or("") == environment.namespace())
+        {
             info!("no need to delete environment {}, already absent", environment.namespace());
             Self::services_iter(target.environment).for_each(|(id, _, _)| {
                 self.deployed_services.insert(id);
             });
             return Ok(());
-        };
+        }
 
         // reverse order of the deployment
         let should_abort = Self::should_abort_wrapper(target, &event_details);

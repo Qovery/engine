@@ -1545,7 +1545,7 @@ fn deploy_cronjob_on_aws_eks() {
 
         environment.applications = vec![];
         environment.jobs = vec![Job {
-            long_id: Uuid::default(),
+            long_id: Uuid::new_v4(),
             name: "job test #####||||*_-(".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {

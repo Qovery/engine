@@ -246,24 +246,6 @@ where
     Ok(Some(false))
 }
 
-pub fn kubectl_exec_is_namespace_present<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> bool
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
-
-    let result = kubectl_exec_with_output(
-        vec!["get", "namespace", namespace],
-        _envs,
-        &mut |out| info!("{:?}", out),
-        &mut |out| warn!("{:?}", out),
-    );
-
-    result.is_ok()
-}
-
 // used for testing the does_contain_terraform_tfstate
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
