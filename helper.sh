@@ -124,123 +124,6 @@ function build() { ## Build engine app with engine lib
   sccache -s
 }
 
-function build_image() { ## Build Engine image locally. Args: <tag_version>
-  tag=$(generate_image_tag)
-
-  cp docker/load.sh docker/engine/load.sh
-  cp docker/bin_versions bin_versions
-  # copy providers files to download required binaries
-  rm -Rf docker/engine/providers/*
-  set -e
-  for i in $(find lib-engine/lib -name "tf-providers*") ; do
-    provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
-    mkdir -p docker/engine/providers/$provider
-    cp $i docker/engine/providers/$provider/
-    $sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
-  done
-
-  set +e
-  await_docker
-  set -e
-
-  export SCCACHE_ARGS=""
-  if [ ! -z $CI_SCCACHE_REDIS ] ; then
-    SCCACHE_ARGS="--build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS"
-  else
-    echo "-> SCCACHE will not use Redis because CI_SCCACHE_REDIS isn't set!!!"
-  fi
-
-  # disable sccache?
-  RUSTC="/usr/bin/sccache"
-  if [ ! -z $DISABLE_SCCACHE ] && [ $DISABLE_SCCACHE -eq 1 ]; then
-    RUSTC="/usr/bin/rustc"
-  fi
-  RUSTC_WRAPPER="--build-arg RUSTC_WRAPPER=$RUSTC"
-  docker buildx build --network "host" $RUSTC_WRAPPER $SCCACHE_ARGS -t ${DEFAULT_ENGINE_IMAGE_NAME}:${tag} .
-
-  rm -f docker/engine/load.sh
-  rm -f bin_versions
-  rm -Rf docker/engine/providers/*
-}
-
-function build_ci_image() { ## Build CI image locally. Args: <tag_version>
-  tag=$(generate_image_tag)
-
-  cp docker/load.sh docker/ci/load.sh
-  cp docker/bin_versions docker/ci/bin_versions
-
-  cd docker/ci
-  export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS --no-cache -t public.ecr.aws/r3m4q3r9/qovery-ci:${tag} .
-  cd -
-
-  rm -f docker/ci/load.sh
-  rm -f docker/ci/bin_versions
-}
-
-function push_image() { ## Push Engine local image with current commit ID as tag
-  tag=$(generate_image_tag)
-  set -e
-
-  docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
-  docker push ${DEFAULT_ENGINE_IMAGE_NAME}:${tag}
-}
-
-function push_ci_image() { ## Push CI local image with current commit ID as tag
-  tag=$(generate_image_tag)
-  set -e
-
-  aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-  docker push public.ecr.aws/r3m4q3r9/qovery-ci:${tag}
-}
-
-## Releases
-
-function new_release() { ## Release a new engine version with commit ID as tag prepare_engine
-  tag=$(generate_image_tag)
-
-  check_untracked_files
-  build_image
-  push_image
-
-  echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${tag}\e[0m"
-}
-
-function prod_release() { ## Release a new engine version with commit ID as tag prepare_engine
-  set -e
-  git_tag=$(generate_image_tag)
-  archive_dir="./engine_$git_tag"
-  dest_folder="dist/engine_linux_amd64"
-
-  check_untracked_files
-  build_image
-
-  # create an archive from the required files
-  # 1. get content from docker image
-  container_id=$(docker create ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag})
-  test -d $archive_dir && rm -Rf $archive_dir
-  docker cp -a $container_id:/home/qovery $archive_dir
-  docker rm "$container_id"
-  # 2. clean cache and uneeded data
-  rm -Rf $archive_dir/.* || echo "clean done"
-  # 3. generate archive name
-  mkdir -p $dest_folder
-  tar -czf $dest_folder/engine.tgz $archive_dir
-  git tag v1.0-$git_tag
-  # 4. get goreleaser if not exists
-  set -x
-  if [ ! -f /usr/bin/goreleaser ] ; then
-    curl -Lo /tmp/goreleaser.tgz https://github.com/goreleaser/goreleaser/releases/download/v1.9.2/goreleaser_Linux_x86_64.tar.gz
-    tar -C /usr/bin/ -xzvf /tmp/goreleaser.tgz goreleaser
-  fi
- 
-  #goreleaser release --rm-dist
-  git tag -d v1.0-$git_tag
-  push_image
-
-  echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag}\e[0m"
-}
-
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(generate_image_tag)
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
@@ -328,21 +211,6 @@ engineResources.requests.memory="3.9Gi",\
 engineResources.requests.ephemeral-storage="20Gi",\
 buildResources.requests.ephemeral-storage="30Gi",\
 buildResources.limits.ephemeral-storage="30Gi"
-}
-
-function upgrade_on_dev() {
-  tag=$(generate_image_tag)
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'${DEFAULT_ENGINE_IMAGE_NAME}:${tag}'}}}}}"
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
-}
-
-function downgrade_on_dev() {
-  if [ "$1" == "" ] ; then
-    return
-  fi
-
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'${DEFAULT_ENGINE_IMAGE_NAME}:$1'}}}}}"
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
 }
 
 ## Tests
@@ -545,24 +413,6 @@ await_docker)
 build)
   build
   ;;
-build_image)
-  build_image
-  ;;
-build_ci_image)
-  build_ci_image
-  ;;
-new_release)
-  new_release
-  ;;
-prod_release)
-  prod_release
-  ;;
-push_image)
-  push_image
-  ;;
-push_ci_image)
-  push_ci_image
-  ;;
 set_release_ga)
   set_release_ga
   ;;
@@ -658,12 +508,6 @@ install_hook)
   ;;
 test_local_stack)
   test_local_stack "$2"
-;;
-upgrade_on_dev)
-  upgrade_on_dev
-  ;;
-downgrade_on_dev)
-  downgrade_on_dev "$2"
   ;;
 deploy_all_clusters)
   deploy_all_clusters
