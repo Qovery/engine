@@ -133,7 +133,7 @@ all-minimal-tests:
   retry: 1
   timeout: 3 hours
   before_script:
-    - ci_helper await_docker
+    - ci_helper await_docker_socket
   script:
     - ./helper.sh all_minimal_tests
   only:
@@ -156,7 +156,7 @@ all-minimal-tests:
 infra-without-cloud-providers:
   stage: minimal-tests
   before_script:
-    - ci_helper await_docker
+    - ci_helper await_docker_socket
   script:
     - ./helper.sh test_local_stack $DOCKER_HOST
   only:
