@@ -143,7 +143,6 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   await_docker
   set -e
 
-  export DOCKER_BUILDKIT=1
   export SCCACHE_ARGS=""
   if [ ! -z $CI_SCCACHE_REDIS ] ; then
     SCCACHE_ARGS="--build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS"
@@ -157,7 +156,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
     RUSTC="/usr/bin/rustc"
   fi
   RUSTC_WRAPPER="--build-arg RUSTC_WRAPPER=$RUSTC"
-  docker build --network "host" $RUSTC_WRAPPER $SCCACHE_ARGS -t ${DEFAULT_ENGINE_IMAGE_NAME}:${tag} .
+  docker buildx build --network "host" $RUSTC_WRAPPER $SCCACHE_ARGS -t ${DEFAULT_ENGINE_IMAGE_NAME}:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions

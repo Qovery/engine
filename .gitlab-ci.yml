@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image: public.ecr.aws/r3m4q3r9/qovery-ci:5f2cec2
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-3fcbbc6aafc93af82c6c298c7979c88ab8734b46
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -9,9 +9,7 @@ variables:
   DOCKER_BUILDKIT: 1
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
-  CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
   GIT_DEPTH: 10
-  ROLLBACK_IMAGE: ""
 
 services:
   - docker:dind
@@ -41,13 +39,43 @@ build-and-lint-code:
     - merge_requests
   interruptible: true
 
-release-image:
+build-engine-ci-image:
   stage: build-and-lint
   retry: 0
+  before_script:
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper docker_login_public_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
-    - ./helper.sh new_release
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx build --platform=linux/amd64,linux/arm64
+      --target=engine_ci
+      -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-${CI_COMMIT_SHA}
+      --push .
   tags:
-    - bm-7cpu-12gmem-0g
+    - vm-1cpu-1gmem-0g
+  when: manual
+  interruptible: true
+  only:
+    - merge_requests
+
+release-engine-image:
+  stage: build-and-lint
+  retry: 0
+  before_script:
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper docker_login_public_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
+  script:
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx build --platform=linux/amd64,linux/arm64
+      --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
+      --push .
+  tags:
+    - vm-1cpu-1gmem-0g
   when: manual
   interruptible: true
   only:
@@ -55,16 +83,21 @@ release-image:
 
 release-image-and-binary:
   stage: build-and-lint
-  retry: 1
+  retry: 0
+  before_script:
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper docker_login_public_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
-    - ./helper.sh prod_release
-  variables:
-    # Disable shallow cloning so that goreleaser can diff between tags to
-    # generate a changelog.
-    GIT_DEPTH: 0
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx build --platform=linux/amd64,linux/arm64
+      --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
+      --push .
   tags:
-    - bm-7cpu-12gmem-0g
-  when: always
+    - vm-1cpu-1gmem-0g
+  when: manual
   interruptible: true
   only:
     refs:
@@ -124,7 +157,7 @@ all-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-2cpu-6gmem-0g
+    - bm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -428,7 +461,7 @@ scw-self-hosted:
   script:
     - ./helper.sh scw_self_hosted
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -456,7 +489,7 @@ scw-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-12gmem-0g
   only:
     refs:
       - merge_requests

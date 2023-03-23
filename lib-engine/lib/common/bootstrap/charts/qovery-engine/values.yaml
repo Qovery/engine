@@ -1,5 +1,5 @@
 image:
-  repository: qoveryrd/engine
+  repository: public.ecr.aws/r3m4q3r9/engine
   pullPolicy: IfNotPresent
   tag: ""
 

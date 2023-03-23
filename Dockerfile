@@ -1,34 +1,109 @@
+# To find the version do an `apt list -a xxxx` helm inside the CI image
+ARG HELM_VERSION="3.7.2-1"
+ARG KUBECTL_VERSION="1.22.17-00"
+ARG TERRAFORM_VERSION="1.3.3"
+ARG VAULT_VERSION="1.13.0-1"
+ARG HELM_DIFF_VERSION="v3.6.0"
+ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
+ARG DOCKER_VERSION="5:23.0.1-1~debian.11~bullseye"
+ARG CONTAINERD_VERSION="1.6.18-1"
+
 ARG BIN_DEST_FOLDER="/binaries"
 
-FROM public.ecr.aws/r3m4q3r9/pub-mirror-rust:1.67.1 as build
+
+###########################################
+#
+#  ENGINE CI IMAGE 
+#
+###########################################
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.68-b1dcd3a097c30db64bbb40fe0da9304f4057f0d4 as engine_ci
 
 ARG BIN_DEST_FOLDER
-ARG SCCACHE_REDIS
-ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
-ENV BIN_DIR=/root/binaries
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
-ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
-WORKDIR /root
+ARG HELM_VERSION
+ARG KUBECTL_VERSION
+ARG TERRAFORM_VERSION
+ARG VAULT_VERSION
+ARG HELM_DIFF_VERSION
+ARG AWS_IAM_AUTHENTICATOR_VERSION
+ARG DOCKER_VERSION
+ARG CONTAINERD_VERSION
+
 RUN apt-get update && \
-    apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs
+    apt-get -y --allow-downgrades install \
+    make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs \
+    docker-ce=$DOCKER_VERSION \
+    docker-ce-cli=$DOCKER_VERSION \
+    containerd.io=$CONTAINERD_VERSION \
+    helm=$HELM_VERSION \
+    kubectl=$KUBECTL_VERSION \
+    vault=$VAULT_VERSION && \
+    curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
+    helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
+    mkdir /build ${BIN_DEST_FOLDER} && \
+    mkdir -p $TF_PLUGIN_CACHE_DIR
+
+# TODO: Remove after migration to aws cli
+# Aws iam authenticator
+RUN curl -sLo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_linux_$(dpkg --print-architecture) && \
+    chmod +x aws-iam-authenticator && \
+    mv aws-iam-authenticator $BIN_DEST_FOLDER/aws-iam-authenticator
+
+# Hashicorp apt repository does not package terraform for arm64 ...
+RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
+    unzip terraform.zip && \
+    mv terraform /usr/bin/ && \
+    rm -rf terraform.zip 
+
+WORKDIR /build
+
+
+CMD ["/bin/sh"]
+
+
+###########################################
+#
+#  ENGINE BUILDER IMAGE 
+#
+###########################################
+FROM engine_ci as build
+
+
 ADD . .
 
-# run release build
-RUN rm -rf $TF_PLUGIN_CACHE_DIR; mkdir -p $TF_PLUGIN_CACHE_DIR
-RUN ./docker/load.sh download $BIN_DEST_FOLDER
-RUN ./docker/load.sh install $BIN_DEST_FOLDER
-RUN ./docker/load.sh download_terraform_plugins
+ARG SCCACHE_REDIS
+ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
-# TODO: Make an image for ARM
-RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq -r .tag_name) && \
-    curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
-    chmod 755 /usr/bin/sccache
+# Init terraform providers
+RUN for i in $(find lib-engine/lib -name "tf-providers*") ; do \
+    provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/') ; \
+    mkdir -p docker/engine/providers/$provider ; \
+    cp $i docker/engine/providers/$provider/ ;  \
+    sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/* ; \
+  done && \
+  ./docker/download_terraform_plugins.sh
 
-## build engine
-RUN sccache --version && sccache --show-stats && cargo build --release && sccache --show-stats
+# build engine
+# If sscache is set we set rustc wrapper
+RUN if [ -z "${SCCACHE_REDIS}" ]; \
+    then \
+      unset SCCACHE_REDIS; \ 
+      cargo build --release; \
+    else \
+      echo "USING SSCACHE" ; \
+      export RUSTC_WRAPPER=/usr/bin/sccache; \
+      sccache --version && cargo build --release && sccache --show-stats; \
+    fi 
 
-# Final image
+
+
+
+###########################################
+#
+#  ENGINE FINAL IMAGE 
+#
+###########################################
 FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 as run
 
 ARG BIN_DEST_FOLDER
@@ -39,38 +114,70 @@ ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 
-RUN apt-get update && apt-get -y dist-upgrade && apt-get -y install curl gnupg lsb-release &&\
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
-    echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
-    apt-get update &&\
-    apt-get -y install docker-ce docker-ce-cli containerd.io procps netcat-openbsd iproute2 dumb-init git-lfs unzip &&\
-    cd tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" &&\
-    unzip awscliv2.zip &&\
-    ./aws/install &&\
-    cd - &&\
-    apt-get clean &&\
-    groupadd -g 1000 qovery &&\
-    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery &&\
-    mkdir -p $TF_PLUGIN_CACHE_DIR &&\
+ARG HELM_VERSION
+ARG KUBECTL_VERSION
+ARG TERRAFORM_VERSION
+ARG VAULT_VERSION
+ARG HELM_DIFF_VERSION
+ARG AWS_IAM_AUTHENTICATOR_VERSION
+ARG DOCKER_VERSION
+ARG CONTAINERD_VERSION
+
+RUN apt-get update && apt-get install -y \
+    apt-transport-https ca-certificates curl gnupg lsb-release && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
+    curl https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
+    curl https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list && \
+    apt-get update && \
+    apt-get dist-upgrade -y && \
+    apt-get install -y \
+    docker-ce=$DOCKER_VERSION \
+    docker-ce-cli=$DOCKER_VERSION \
+    containerd.io=$CONTAINERD_VERSION \
+    helm=$HELM_VERSION \
+    kubectl=$KUBECTL_VERSION \
+    vault=$VAULT_VERSION \
+    procps netcat-openbsd iproute2 dumb-init git-lfs unzip && \
+    curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
+    helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
+    apt-get clean && rm -rf /var/lib/apt/lists
+
+RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/').zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws
+
+RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
+    unzip terraform.zip && \
+    mv terraform /usr/bin/ && \
+    rm -rf terraform.zip 
+
+RUN groupadd -g 1000 qovery && \
+    useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
+    mkdir -p $TF_PLUGIN_CACHE_DIR && \
     chown -Rf 1000:1000 $HOME_DIR/.terraform.d
+
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
-COPY --from=build /root/target/release/engine_grpc .
-COPY --from=build /root/docker/load.sh $HOME_DIR
-COPY --from=build /root/docker/engine/run.sh $HOME_DIR
-COPY --from=build /root/bin_versions $HOME_DIR
+COPY --from=build /build/target/release/engine_grpc .
+COPY --from=build /build/docker/engine/run.sh $HOME_DIR
+COPY --from=build /build/docker/bin_versions $HOME_DIR
 COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
-COPY --from=build $BIN_DEST_FOLDER $BIN_DIR
+COPY --from=build $BIN_DEST_FOLDER/aws-iam-authenticator /usr/bin/aws-iam-authenticator
 
-RUN ./load.sh install $BIN_DIR && \
-    chown -Rf qovery. . && \
-    chmod 500 engine_grpc
+RUN chown -Rf qovery:qovery . && \
+  chown qovery:qovery /usr/bin/vault && \
+  chown qovery:qovery /usr/bin/aws-iam-authenticator && \
+  chmod 500 engine_grpc 
 
 USER qovery
 RUN echo "disable_checkpoint = true" > ~/.terraform.rc
-RUN ./load.sh post_install && \
-    rm -f ./load.sh
 
 # for local use only
 VOLUME /qovery_libs
