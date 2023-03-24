@@ -34,8 +34,6 @@ spec:
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       {{ end }}
       securityContext:
-        fsGroup: 1000
-        fsGroupChangePolicy: "OnRootMismatch"
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

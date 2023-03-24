@@ -62,7 +62,8 @@ serviceAccount:
   name: ""
 
 podSecurityContext:
-  {}
+  fsGroup: 1000
+  fsGroupChangePolicy: "OnRootMismatch"
   # fsGroup: 2000
 
 securityContext:
