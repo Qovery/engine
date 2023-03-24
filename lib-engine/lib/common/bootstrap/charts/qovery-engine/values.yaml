@@ -67,8 +67,6 @@ podSecurityContext:
 
 securityContext:
   privileged: true
-  fsGroup: 1000
-  fsGroupChangePolicy: "OnRootMismatch"
   # capabilities:
   #   drop:
   #   - ALL
