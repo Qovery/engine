@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-echo "Cleaning workspace ${WORKSPACE_ROOT_DIR}/.qovery-workspace"
+
+echo "Cleaning workspace ${WORKSPACE_ROOT_DIR:=/home/qovery}/.qovery-workspace"
 rm -rf ${WORKSPACE_ROOT_DIR}/.qovery-workspace 
 mkdir ${WORKSPACE_ROOT_DIR}/.qovery-workspace 
 

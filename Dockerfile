@@ -88,7 +88,8 @@ RUN for i in $(find lib-engine/lib -name "tf-providers*") ; do \
 
 # build engine
 # If sscache is set we set rustc wrapper
-RUN if [ -z "${SCCACHE_REDIS}" ]; \
+RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"; \
+  if [ -z "${SCCACHE_REDIS}" ]; \
     then \
       unset SCCACHE_REDIS; \ 
       cargo build --release; \
@@ -141,7 +142,6 @@ RUN apt-get update && apt-get install -y \
     docker-ce-cli=$DOCKER_VERSION \
     helm=$HELM_VERSION \
     kubectl=$KUBECTL_VERSION \
-    vault=$VAULT_VERSION \
     procps netcat-openbsd iproute2 dumb-init git-lfs unzip && \
     curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
     helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
@@ -172,7 +172,6 @@ COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
 COPY --from=build $BIN_DEST_FOLDER/aws-iam-authenticator /usr/bin/aws-iam-authenticator
 
 RUN chown -Rf qovery:qovery . && \
-  chown qovery:qovery /usr/bin/vault && \
   chown qovery:qovery /usr/bin/aws-iam-authenticator && \
   chmod 500 engine_grpc 
 
