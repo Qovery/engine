@@ -1,5 +1,5 @@
 image:
-  repository: qoveryrd/engine
+  repository: public.ecr.aws/r3m4q3r9/engine
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -44,14 +44,11 @@ volumes:
   qoveryWorkspace:
     size: 20Gi
     path: /home/qovery/.qovery-workspace
-  dockerGraphStorage:
-    size: 50Gi
-    path: /var/lib/docker
 
 buildContainer:
   enabled: true
   image: docker
-  tag: 20.10.14-dind
+  tag: 23.0-dind
 
 terminationGracePeriodSeconds: 7200
 
@@ -88,14 +85,12 @@ buildResources:
   # limits:
   #   cpu: 100m
   #   memory: 128Mi
-  #   ephemeral-storage: 40Gi
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
-  #   ephemeral-storage: 40Gi
 
 nodeSelector:
-  kubernetes.io/arch: amd64
+  {}
 
 tolerations: []
 
