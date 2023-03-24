@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image: public.ecr.aws/r3m4q3r9/qovery-ci:base-2023-03-24T13-48-55
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-03-24T15-42-21
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
@@ -50,7 +50,7 @@ build-engine-ci-image:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx build --platform=linux/amd64,linux/arm64
       --target=engine_ci
-      -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-${CI_COMMIT_SHA}
+      -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-$(date +%Y-%m-%dT%H-%M-%S)
       --push .
   tags:
     - vm-1cpu-1gmem-0g
