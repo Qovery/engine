@@ -4,6 +4,7 @@ use crate::helpers::utilities::{
 use function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
+use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::{Transaction, TransactionResult};
@@ -72,6 +73,7 @@ fn test_ec2_database(
             None,
             1,
             1,
+            CpuArchitecture::AMD64,
             EngineLocation::QoverySide,
         );
 

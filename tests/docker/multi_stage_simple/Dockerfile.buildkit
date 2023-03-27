@@ -1,4 +1,4 @@
-FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 AS build
+FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6-ci AS build
 
 # ../ is not valid if using old docker engine, only allowed with buildkit
 COPY ../hello.sh /hello.sh

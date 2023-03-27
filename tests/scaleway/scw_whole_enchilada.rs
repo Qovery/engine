@@ -3,6 +3,7 @@ use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
@@ -46,6 +47,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::Classic,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
+            CpuArchitecture::AMD64,
             Some(&env_action),
         )
     })
@@ -87,6 +89,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::WithPause,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
+            CpuArchitecture::AMD64,
             Some(&env_action),
         )
     })
@@ -128,6 +131,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::WithUpgrade,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
+            CpuArchitecture::AMD64,
             Some(&env_action),
         )
     })
