@@ -75,6 +75,7 @@ pub fn aws_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> I
         None,
         KUBERNETES_MIN_NODES,
         KUBERNETES_MAX_NODES,
+        CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
     )
 }
@@ -90,6 +91,7 @@ impl Cluster<AWS, Options> for AWS {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
     ) -> InfrastructureContext {
         // use ECR
@@ -117,6 +119,7 @@ impl Cluster<AWS, Options> for AWS {
             vpc_network_mode,
             min_nodes,
             max_nodes,
+            cpu_archi,
             engine_location,
         );
 
@@ -185,16 +188,16 @@ impl Cluster<AWS, Options> for AWS {
         ))
     }
 
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
-        vec![NodeGroups::new(
-            "groupeks0".to_string(),
-            min_nodes,
-            max_nodes,
-            "t3a.large".to_string(),
-            100,
-            CpuArchitecture::AMD64,
-        )
-        .expect("Problem while setup EKS nodes")]
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+        let node_type = match cpu_archi {
+            CpuArchitecture::AMD64 => "t3a.large".to_string(),
+            CpuArchitecture::ARM64 => "m6g.xlarge".to_string(),
+        };
+
+        vec![
+            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, node_type, 100, cpu_archi)
+                .expect("Problem while setup EKS nodes"),
+        ]
     }
 
     fn kubernetes_cluster_options(

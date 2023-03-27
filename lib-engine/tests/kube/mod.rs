@@ -102,7 +102,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6".to_string(),
+                tag: "11.6-ci".to_string(),
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
@@ -238,7 +238,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         url: Url::parse("https://public.ecr.aws").unwrap(),
                     },
                     image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                    tag: "11.6".to_string(),
+                    tag: "11.6-ci".to_string(),
                 },
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,

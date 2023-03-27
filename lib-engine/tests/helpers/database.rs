@@ -25,6 +25,7 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
+use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
@@ -658,6 +659,7 @@ pub fn test_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
@@ -670,6 +672,7 @@ pub fn test_db(
                     None,
                     1,
                     1,
+                    CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
@@ -682,6 +685,7 @@ pub fn test_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -771,6 +775,7 @@ pub fn test_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
@@ -783,6 +788,7 @@ pub fn test_db(
                     None,
                     1,
                     1,
+                    CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
@@ -795,6 +801,7 @@ pub fn test_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -946,6 +953,7 @@ pub fn test_pause_managed_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
@@ -958,6 +966,7 @@ pub fn test_pause_managed_db(
                     None,
                     1,
                     1,
+                    CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
@@ -970,6 +979,7 @@ pub fn test_pause_managed_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -1048,6 +1058,7 @@ pub fn test_pause_managed_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
@@ -1060,6 +1071,7 @@ pub fn test_pause_managed_db(
                     None,
                     1,
                     1,
+                    CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
@@ -1072,6 +1084,7 @@ pub fn test_pause_managed_db(
                     None,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -1226,6 +1239,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -1240,6 +1254,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
     };
@@ -1309,6 +1324,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -1323,6 +1339,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
     };
