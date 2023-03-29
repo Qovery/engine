@@ -242,7 +242,7 @@ where
                 // Get JSON output from shared volume
                 let result_json_output = kubectl_get_job_pod_output(
                     kubernetes_config_file_path.clone(),
-                    target.kubernetes.cloud_provider().credentials_environment_variables(),
+                    target.cloud_provider.credentials_environment_variables(),
                     target.environment.namespace(),
                     &pod_name,
                 );

@@ -31,7 +31,7 @@ use crate::models::database::{Database, DatabaseMode};
 use crate::models::types::{CloudProvider, VersionsNumber};
 use crate::runtime::block_on;
 
-pub trait Service {
+pub trait Service: Send {
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;

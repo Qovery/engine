@@ -26,7 +26,7 @@ pub enum JobError {
 
 pub struct Job<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
