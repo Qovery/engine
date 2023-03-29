@@ -7,6 +7,7 @@ use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
@@ -34,6 +35,7 @@ fn create_and_destroy_kapsule_cluster(
                 cluster_id: to_short_id(&cluster_id),
             },
             vpc_network_mode,
+            CpuArchitecture::AMD64,
             None,
         )
     })

@@ -93,6 +93,7 @@ pub fn scw_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> I
         None,
         KUBERNETES_MIN_NODES,
         KUBERNETES_MAX_NODES,
+        CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
     )
 }
@@ -108,6 +109,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        _cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
     ) -> InfrastructureContext {
         // use Scaleway CR
@@ -131,6 +133,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             vpc_network_mode,
             min_nodes,
             max_nodes,
+            CpuArchitecture::AMD64,
             engine_location,
         );
 
@@ -182,17 +185,17 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         ))
     }
 
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+        let node_type = match cpu_archi {
+            CpuArchitecture::AMD64 => "dev1-l".to_string(),
+            CpuArchitecture::ARM64 => panic!("ARM64 not managed"),
+        };
+
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![NodeGroups::new(
-            "groupscw0".to_string(),
-            min_nodes,
-            max_nodes,
-            "dev1-l".to_string(),
-            0,
-            CpuArchitecture::AMD64,
-        )
-        .expect("Problem while setup SCW nodes")]
+        vec![
+            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, node_type, 0, cpu_archi)
+                .expect("Problem while setup SCW nodes"),
+        ]
     }
 
     fn kubernetes_cluster_options(

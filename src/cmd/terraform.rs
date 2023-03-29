@@ -1332,9 +1332,9 @@ in the dependency lock file
 # This file is maintained automatically by "terraform init".
 # Manual edits may be lost in future updates.
 
-provider "registry.terraform.io/hashicorp/local" {
-  version     = "1.4.0"
-  constraints = "~> 1.4"
+provider "registry.terraform.io/hashicorp/time" {
+  version     = "0.9.0"
+  constraints = "~> 0.9"
   hashes = [
     "h1:bZN53L85E49Pc5o3HUUCUqP5rZBziMF2KfKOaFsqN7w=",
     "zh:1b265fcfdce8cc3ccb51969c6d7a61531bf8a6e1218d95c1a74c40f25595c74b",
@@ -1346,8 +1346,8 @@ provider "registry.terraform.io/hashicorp/local" {
 terraform {
   required_providers {
     local = {
-      source = "hashicorp/local"
-      version = "~> 1.4"
+      source = "hashicorp/time"
+      version = "~> 0.9"
     }
   }
   required_version = ">= 0.14"

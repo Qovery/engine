@@ -11,7 +11,9 @@ use qovery_engine::cloud_provider::aws::{
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CustomDomain, EnvironmentVariable, MountedFile, Route, Storage};
+use qovery_engine::cloud_provider::models::{
+    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage,
+};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::DeploymentTarget;
@@ -93,7 +95,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 },
             )),
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
-            AWS::kubernetes_nodes(3, 5),
+            AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
             ClusterAdvancedSettings {
                 load_balancer_size: "my_load_balancer_size".to_string(),
@@ -530,6 +532,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         None,
         3,
         5,
+        CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
     )
 }

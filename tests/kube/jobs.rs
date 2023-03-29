@@ -62,7 +62,7 @@ fn should_have_mounted_files_as_volume() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6".to_string(),
+            tag: "11.6-ci".to_string(),
         };
         cron_job.max_nb_restart = 1;
         cron_job.max_duration_in_sec = 120;

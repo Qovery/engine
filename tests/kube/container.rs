@@ -213,7 +213,7 @@ fn should_have_mounted_files_as_volume() {
 
         // Use an app crashing in case file doesn't exists
         container.image = "r3m4q3r9/pub-mirror-debian".to_string();
-        container.tag = "11.6".to_string();
+        container.tag = "11.6-ci".to_string();
         container.command_args = vec![
             "/bin/sh".to_string(),
             "-c".to_string(),

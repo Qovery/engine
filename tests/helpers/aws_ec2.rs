@@ -61,6 +61,7 @@ pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) 
         None,
         AWS_EC2_KUBERNETES_MIN_NODES,
         AWS_EC2_KUBERNETES_MAX_NODES,
+        CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
     )
 }

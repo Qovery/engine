@@ -14,6 +14,7 @@ use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
+use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -55,6 +56,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     logger: Box<dyn Logger>,
     min_nodes: i32,
     max_nodes: i32,
+    cpu_archi: CpuArchitecture,
 ) -> Box<dyn Kubernetes + 'a> {
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
         KubernetesKind::Eks => {
@@ -77,7 +79,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     options,
-                    AWS::kubernetes_nodes(min_nodes, max_nodes),
+                    AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
@@ -126,7 +128,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
                 cloud_provider,
                 dns_provider,
-                Scaleway::kubernetes_nodes(min_nodes, max_nodes),
+                Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                 Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                 logger,
                 ClusterAdvancedSettings {
@@ -152,6 +154,7 @@ pub fn cluster_test(
     test_type: ClusterTestType,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    cpu_archi: CpuArchitecture,
     environment_to_deploy: Option<&EnvironmentRequest>,
 ) -> String {
     init();
@@ -180,6 +183,7 @@ pub fn cluster_test(
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            cpu_archi,
             EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -192,6 +196,7 @@ pub fn cluster_test(
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
     };
@@ -263,6 +268,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
@@ -275,6 +281,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -309,6 +316,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     min_nodes,
                     max_nodes,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
@@ -321,6 +329,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     min_nodes,
                     max_nodes,
+                    CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
             };
@@ -377,6 +386,7 @@ pub fn get_environment_test_kubernetes(
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     min_nodes: i32,
     max_nodes: i32,
+    cpu_archi: CpuArchitecture,
     engine_location: EngineLocation,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
@@ -401,7 +411,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     options,
-                    AWS::kubernetes_nodes(min_nodes, max_nodes),
+                    AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
@@ -454,7 +464,7 @@ pub fn get_environment_test_kubernetes(
                     zone,
                     cloud_provider,
                     dns_provider,
-                    Scaleway::kubernetes_nodes(min_nodes, max_nodes),
+                    Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                     logger,
                     ClusterAdvancedSettings {
