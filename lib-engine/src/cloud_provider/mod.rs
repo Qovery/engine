@@ -35,7 +35,7 @@ pub mod scaleway;
 pub mod service;
 pub mod utilities;
 
-pub trait CloudProvider {
+pub trait CloudProvider: Send {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;

@@ -14,7 +14,7 @@ pub trait Task: Send + Sync {
     fn id(&self) -> &str;
     fn run(&self);
     fn cancel(&self) -> bool;
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync>;
 }
 
 fn basename(path: &str, sep: char) -> Cow<str> {

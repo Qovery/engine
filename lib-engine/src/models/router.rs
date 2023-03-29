@@ -66,7 +66,7 @@ impl RouterAdvancedSettings {
 
 pub struct Router<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
     pub(crate) id: String,
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
