@@ -1,10 +1,12 @@
 use super::Task;
 use crate::build_platform;
-use crate::build_platform::{BuildError, BuildPlatform};
+use crate::build_platform::{to_build_error, BuildError, BuildPlatform};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
+use crate::cmd::command::CommandKiller;
+use crate::cmd::docker;
 use crate::cmd::docker::Docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry};
@@ -20,7 +22,9 @@ use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::transaction::DeploymentOption;
 use itertools::Itertools;
+use std::cmp::{max, min};
 use std::collections::HashSet;
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{env, fs, thread};
@@ -90,7 +94,7 @@ impl EnvironmentTask {
     }
 
     fn _is_canceled(&self) -> bool {
-        self.cancel_requested.load(Ordering::Acquire)
+        self.cancel_requested.load(Ordering::Relaxed)
     }
 
     fn get_event_details(&self, step: EnvironmentStep) -> EventDetails {
@@ -102,19 +106,49 @@ impl EnvironmentTask {
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
         max_build_in_parallel: usize,
+        env_logger: impl Fn(String),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
-        // do the same for applications
+        // Only keep services that have something to build
         let mut services_to_build = services
             .into_iter()
             .filter(|srv| srv.build().is_some())
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        if services_to_build.is_empty() {
-            return Ok(());
-        }
+        let first_service = match services_to_build.first() {
+            None => return Ok(()),
+            Some(srv) => srv,
+        };
+
+        // Provision necessary builder for being able to build in parallel
+        let nb_builder = max(min(max_build_in_parallel, services_to_build.len()), 1);
+        env_logger(format!(
+            "🧑‍🏭 Provisioning {nb_builder} docker builder for parallel build. This can take some time"
+        ));
+        let builder_handle = match infra_ctx.context().docker.spawn_builder(
+            NonZeroUsize::new(nb_builder).unwrap(),
+            infra_ctx
+                .kubernetes()
+                .cpu_architectures()
+                .iter()
+                .map(docker::Architecture::from)
+                .collect_vec()
+                .as_slice(),
+            &CommandKiller::from_cancelable(should_abort),
+        ) {
+            Ok(build_handle) => build_handle,
+            Err(err) => {
+                let build_error = to_build_error(first_service.long_id().to_string(), err);
+                let engine_error = build_platform::to_engine_error(
+                    first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
+                    build_error,
+                    "Cannot provision docker builder. Please retry later.".to_string(),
+                );
+                return Err(Box::new(engine_error));
+            }
+        };
 
         // To convert ContainerError to EngineError
         let cr_registry = infra_ctx.container_registry();
@@ -135,7 +169,7 @@ impl EnvironmentTask {
         let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
 
         let ret: Result<(), Box<EngineError>> = thread::scope(|scope| {
-            for services in &services_to_build.iter_mut().chunks(max_build_in_parallel) {
+            for services in &services_to_build.iter_mut().chunks(builder_handle.nb_builder.get()) {
                 let mut threads = vec![];
 
                 for service in services {
@@ -238,6 +272,7 @@ impl EnvironmentTask {
     pub fn deploy_environment(
         mut environment: Environment,
         infra_ctx: &InfrastructureContext,
+        env_logger: impl Fn(String),
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
@@ -263,6 +298,7 @@ impl EnvironmentTask {
                 },
                 infra_ctx,
                 environment.max_parallel_build as usize,
+                env_logger,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
                 should_abort,
             )?;
@@ -374,7 +410,13 @@ impl Task for EnvironmentTask {
         };
 
         // run the actions
-        let deployment_ret = EnvironmentTask::deploy_environment(environment, &infra_context, &self.cancel_checker());
+        let env_logger = |msg: String| {
+            self.logger
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new(msg, None)));
+        };
+
+        let deployment_ret =
+            EnvironmentTask::deploy_environment(environment, &infra_context, env_logger, &self.cancel_checker());
         match (&self.request.action, deployment_ret) {
             (Action::Create, Ok(())) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
