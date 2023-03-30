@@ -23,10 +23,12 @@ use crate::logger::Logger;
 use crate::transaction::DeploymentOption;
 use itertools::Itertools;
 use std::cmp::{max, min};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread::ScopedJoinHandle;
+use std::time::Duration;
 use std::{env, fs, thread};
 use uuid::Uuid;
 
@@ -111,7 +113,7 @@ impl EnvironmentTask {
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
-        let mut services_to_build = services
+        let services_to_build = services
             .into_iter()
             .filter(|srv| srv.build().is_some())
             .collect::<Vec<_>>();
@@ -159,59 +161,38 @@ impl EnvironmentTask {
 
         // Do setup of registry and be sure we are login to the registry
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
-        let img_retention_time_sec = infra_ctx
-            .kubernetes()
-            .advanced_settings()
-            .registry_image_retention_time_sec;
 
         // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
         let should_abort_flag = AtomicBool::new(false);
         let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
 
-        let ret: Result<(), Box<EngineError>> = thread::scope(|scope| {
-            for services in &services_to_build.iter_mut().chunks(builder_handle.nb_builder.get()) {
-                let mut threads = vec![];
-
-                for service in services {
-                    let cr_registry = infra_ctx.container_registry();
-                    let build_platform = infra_ctx.build_platform();
-
-                    threads.push(scope.spawn(|| {
-                        Self::build_and_push_service(
-                            *service,
-                            option,
-                            cr_registry,
-                            build_platform,
-                            img_retention_time_sec,
-                            cr_to_engine_error,
-                            &mk_logger,
-                            &should_abort,
-                        )
-                    }));
+        // Prepare our tasks
+        let img_retention_time_sec = infra_ctx
+            .kubernetes()
+            .advanced_settings()
+            .registry_image_retention_time_sec;
+        let cr_registry = infra_ctx.container_registry();
+        let build_platform = infra_ctx.build_platform();
+        let build_tasks = services_to_build
+            .into_iter()
+            .map(|service| {
+                || {
+                    Self::build_and_push_service(
+                        service,
+                        option,
+                        cr_registry,
+                        build_platform,
+                        img_retention_time_sec,
+                        cr_to_engine_error,
+                        &mk_logger,
+                        &should_abort,
+                    )
                 }
+            })
+            .collect_vec();
 
-                let mut ret = Ok(());
-                for thread in threads {
-                    match thread.join() {
-                        Ok(Ok(())) => {}
-                        Ok(Err(err)) => {
-                            // We want to store only the first error
-                            if ret.is_ok() {
-                                should_abort_flag.store(true, Ordering::Relaxed);
-                                ret = Err(err)
-                            }
-                        }
-                        Err(err) => panic!("Building thread panicked: {err:?}"),
-                    }
-                }
-
-                ret?
-            }
-
-            Ok(())
-        });
-
-        ret
+        let builder_threadpool = BuilderThreadPool::new();
+        builder_threadpool.run(build_tasks, builder_handle.nb_builder, &should_abort_flag, should_abort)
     }
 
     fn build_and_push_service(
@@ -522,5 +503,161 @@ impl Task for EnvironmentTask {
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         let cancel_requested = self.cancel_requested.clone();
         Box::new(move || cancel_requested.load(Ordering::Relaxed))
+    }
+}
+
+struct BuilderThreadPool {}
+
+impl BuilderThreadPool {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn run<Err, Task>(
+        &self,
+        tasks: Vec<Task>,
+        max_parallelism: NonZeroUsize,
+        should_abort_flag: &AtomicBool,
+        should_abort: impl Fn() -> bool + Send + Sync,
+    ) -> Result<(), Err>
+    where
+        Err: Send,
+        Task: FnMut() -> Result<(), Err> + Send,
+    {
+        // Launch our thread-pool
+        let current_thread = thread::current();
+        thread::scope(|scope| {
+            let mut ret = Ok(());
+            let mut active_threads: VecDeque<ScopedJoinHandle<Result<(), Err>>> =
+                VecDeque::with_capacity(max_parallelism.get());
+
+            let mut handle_thread_result = |th_result: thread::Result<Result<(), Err>>| {
+                match th_result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) => {
+                        // We want to store only the first error
+                        if ret.is_ok() {
+                            should_abort_flag.store(true, Ordering::Relaxed);
+                            ret = Err(err);
+                        }
+                    }
+                    Err(err) => panic!("Building thread panicked: {err:?}"),
+                }
+            };
+
+            let mut await_build_slot = |active_threads: &mut VecDeque<ScopedJoinHandle<_>>| {
+                if active_threads.len() <= max_parallelism.get() {
+                    return;
+                }
+
+                // There is no available build slot, so we wait for a thread to terminate
+                let terminated_thread_ix = loop {
+                    match active_threads.iter().position(|th| th.is_finished()) {
+                        None => thread::park_timeout(Duration::from_secs(10)),
+                        Some(position) => break position,
+                    }
+                };
+
+                handle_thread_result(active_threads.swap_remove_back(terminated_thread_ix).unwrap().join());
+            };
+
+            // Launch our build in parallel for each service
+            for mut service in tasks {
+                // Ensure we have a slot available to run a new thread
+                await_build_slot(&mut active_threads);
+
+                if should_abort() {
+                    break;
+                }
+
+                // We have a slot to run a new thread, so start a new build
+                active_threads.push_back(scope.spawn({
+                    let current_thread = current_thread.clone();
+                    move || {
+                        let ret = service();
+                        current_thread.unpark();
+                        ret
+                    }
+                }));
+            }
+
+            // Wait for all threads to terminate
+            for th in active_threads {
+                handle_thread_result(th.join());
+            }
+
+            ret
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::time::Duration;
+
+    #[test]
+    fn test_builder_thread_pool() {
+        let pool = BuilderThreadPool::new();
+
+        // Test we can run 10 tasks in parallel
+        let active_tasks = AtomicUsize::new(0);
+        let mut tasks = Vec::new();
+        for _i in 0..10 {
+            tasks.push(|| {
+                active_tasks.fetch_add(1, Ordering::Relaxed);
+                thread::sleep(Duration::from_millis(100));
+                Result::<(), ()>::Ok(())
+            });
+        }
+        pool.run(tasks, NonZeroUsize::new(3).unwrap(), &AtomicBool::new(false), || false)
+            .unwrap();
+
+        assert_eq!(active_tasks.load(Ordering::Relaxed), 10);
+
+        // Test max parallelism
+        let active_tasks = AtomicUsize::new(0);
+        let max_active_task = AtomicUsize::new(0);
+        let mut tasks = Vec::new();
+        for _i in 0..10 {
+            tasks.push(|| {
+                let nb_tasks = active_tasks.fetch_add(1, Ordering::Relaxed);
+                max_active_task.fetch_max(nb_tasks, Ordering::Relaxed);
+                thread::sleep(Duration::from_millis(1000));
+                active_tasks.fetch_sub(1, Ordering::Relaxed);
+                Result::<(), ()>::Ok(())
+            });
+        }
+        pool.run(tasks, NonZeroUsize::new(3).unwrap(), &AtomicBool::new(false), || false)
+            .unwrap();
+
+        assert_eq!(active_tasks.load(Ordering::Relaxed), 0);
+        assert_eq!(max_active_task.load(Ordering::Relaxed), 3);
+
+        // Test we get our error, and that we try to stop all tasks on first error
+        let mut tasks = Vec::new();
+        let active_taks = Arc::new(AtomicUsize::new(0));
+        let should_abort_flag = AtomicBool::new(false);
+        for i in 0..10 {
+            tasks.push({
+                let active_tasks = active_taks.clone();
+                move || {
+                    active_tasks.fetch_add(1, Ordering::Relaxed);
+                    thread::sleep(Duration::from_millis(100));
+                    if i == 5 {
+                        Result::<(), ()>::Err(())
+                    } else {
+                        Result::<(), ()>::Ok(())
+                    }
+                }
+            });
+        }
+        let ret = pool.run(tasks, NonZeroUsize::new(2).unwrap(), &should_abort_flag, || {
+            should_abort_flag.load(Ordering::Relaxed)
+        });
+
+        assert!(ret.is_err());
+        assert_ne!(active_taks.load(Ordering::Relaxed), 10);
     }
 }
