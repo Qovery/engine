@@ -13,7 +13,7 @@ pub mod ecr;
 pub mod errors;
 pub mod scaleway_container_registry;
 
-pub trait ContainerRegistry {
+pub trait ContainerRegistry: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -72,10 +72,10 @@ pub struct ContainerRegistryInfo {
     // give it the name of your image, and it returns the full name with prefix if needed
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
-    pub get_image_name: Box<dyn Fn(&str) -> String>,
+    pub get_image_name: Box<dyn Fn(&str) -> String + Send + Sync>,
 
     // Give it the name of your image, and it return the name of the repository that will be used
-    pub get_repository_name: Box<dyn Fn(&str) -> String>,
+    pub get_repository_name: Box<dyn Fn(&str) -> String + Send + Sync>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]

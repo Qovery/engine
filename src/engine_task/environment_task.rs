@@ -1,13 +1,13 @@
 use super::Task;
 use crate::build_platform;
-use crate::build_platform::BuildError;
+use crate::build_platform::{BuildError, BuildPlatform};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
 use crate::cmd::docker::Docker;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::to_engine_error;
+use crate::container_registry::{to_engine_error, ContainerRegistry};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
@@ -19,10 +19,11 @@ use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::transaction::DeploymentOption;
+use itertools::Itertools;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::{env, fs};
+use std::{env, fs, thread};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -100,11 +101,12 @@ impl EnvironmentTask {
         services: Vec<&mut dyn Service>,
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
-        mk_logger: impl Fn(&dyn Service) -> EnvLogger,
-        should_abort: &dyn Fn() -> bool,
+        max_build_in_parallel: usize,
+        mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // do the same for applications
-        let services_to_build = services
+        let mut services_to_build = services
             .into_iter()
             .filter(|srv| srv.build().is_some())
             .collect::<Vec<_>>();
@@ -115,76 +117,128 @@ impl EnvironmentTask {
         }
 
         // To convert ContainerError to EngineError
+        let cr_registry = infra_ctx.container_registry();
         let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
-            let event_details = infra_ctx
-                .container_registry()
-                .get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+            let event_details = cr_registry.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
             to_engine_error(event_details, err)
         };
 
         // Do setup of registry and be sure we are login to the registry
-        let cr_registry = infra_ctx.container_registry();
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
+        let img_retention_time_sec = infra_ctx
+            .kubernetes()
+            .advanced_settings()
+            .registry_image_retention_time_sec;
 
-        for service in services_to_build {
-            let logger = mk_logger(service);
-            let build = match service.build_mut() {
-                Some(build) => build,
-                None => continue, // this case should not happen as we filter on buildable services
-            };
-            let image_name = build.image.full_image_name_with_tag();
+        // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
+        let should_abort_flag = AtomicBool::new(false);
+        let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
 
-            // If image already exist in the registry, skip the build
-            if !option.force_build && cr_registry.does_image_exists(&build.image) {
-                let msg = format!("✅ Container image {image_name} already exists and ready to use");
-                logger.send_success(msg);
-                continue;
+        let ret: Result<(), Box<EngineError>> = thread::scope(|scope| {
+            for services in &services_to_build.iter_mut().chunks(max_build_in_parallel) {
+                let mut threads = vec![];
+
+                for service in services {
+                    let cr_registry = infra_ctx.container_registry();
+                    let build_platform = infra_ctx.build_platform();
+
+                    threads.push(scope.spawn(|| {
+                        Self::build_and_push_service(
+                            *service,
+                            option,
+                            cr_registry,
+                            build_platform,
+                            img_retention_time_sec,
+                            cr_to_engine_error,
+                            &mk_logger,
+                            &should_abort,
+                        )
+                    }));
+                }
+
+                let mut ret = Ok(());
+                for thread in threads {
+                    match thread.join() {
+                        Ok(Ok(())) => {}
+                        Ok(Err(err)) => {
+                            // We want to store only the first error
+                            if ret.is_ok() {
+                                should_abort_flag.store(true, Ordering::Relaxed);
+                                ret = Err(err)
+                            }
+                        }
+                        Err(err) => panic!("Building thread panicked: {err:?}"),
+                    }
+                }
+
+                ret?
             }
 
-            // Be sure that our repository exist before trying to pull/push images from it
-            logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
-            cr_registry
-                .create_repository(
-                    build.image.repository_name(),
-                    infra_ctx
-                        .kubernetes()
-                        .advanced_settings()
-                        .registry_image_retention_time_sec,
-                )
-                .map_err(cr_to_engine_error)?;
+            Ok(())
+        });
 
-            // Ok now everything is setup, we can try to build the app
-            let build_result = infra_ctx.build_platform().build(build, &logger, should_abort);
-            match build_result {
-                Ok(_) => {
-                    let msg = format!("✅ Container image {} is built and ready to use", &image_name);
-                    logger.send_success(msg);
-                    Ok(())
-                }
-                Err(err @ BuildError::Aborted { .. }) => {
-                    let msg = format!("🚫 Container image {} build has been canceled", &image_name);
-                    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
-                    let build_result = build_platform::to_engine_error(event_details, err, msg);
-                    logger.send_error(build_result.clone());
-                    Err(build_result)
-                }
-                Err(err) => {
-                    let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
-                    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
-                    let build_result = build_platform::to_engine_error(event_details, err, msg);
-                    logger.send_error(build_result.clone());
-                    Err(build_result)
-                }
-            }?;
+        ret
+    }
+
+    fn build_and_push_service(
+        service: &mut dyn Service,
+        option: &DeploymentOption,
+        cr_registry: &dyn ContainerRegistry,
+        build_platform: &dyn BuildPlatform,
+        image_retention_time_sec: u32,
+        cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
+        mk_logger: impl Fn(&dyn Service) -> EnvLogger,
+        should_abort: &dyn Fn() -> bool,
+    ) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(service);
+        let build = match service.build_mut() {
+            Some(build) => build,
+            None => return Ok(()), // this case should not happen as we filter on buildable services
+        };
+        let image_name = build.image.full_image_name_with_tag();
+
+        // If image already exist in the registry, skip the build
+        if !option.force_build && cr_registry.does_image_exists(&build.image) {
+            let msg = format!("✅ Container image {image_name} already exists and ready to use");
+            logger.send_success(msg);
+            return Ok(());
         }
 
-        Ok(())
+        // Be sure that our repository exist before trying to pull/push images from it
+        logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
+        cr_registry
+            .create_repository(build.image.repository_name(), image_retention_time_sec)
+            .map_err(cr_to_engine_error)?;
+
+        // Ok now everything is setup, we can try to build the app
+        let build_result = build_platform.build(build, &logger, should_abort);
+        match build_result {
+            Ok(_) => {
+                let msg = format!("✅ Container image {} is built and ready to use", &image_name);
+                logger.send_success(msg);
+                Ok(())
+            }
+            Err(err @ BuildError::Aborted { .. }) => {
+                let msg = format!("🚫 Container image {} build has been canceled", &image_name);
+                let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
+                let build_result = build_platform::to_engine_error(event_details, err, msg);
+                logger.send_error(build_result.clone());
+                Err(Box::new(build_result))
+            }
+            Err(err) => {
+                let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
+                let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+                let build_result = build_platform::to_engine_error(event_details, err, msg);
+                logger.send_error(build_result.clone());
+                Err(Box::new(build_result))
+            }
+        }
     }
 
     pub fn deploy_environment(
         mut environment: Environment,
         infra_ctx: &InfrastructureContext,
-        should_abort: &dyn Fn() -> bool,
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
@@ -208,6 +262,7 @@ impl EnvironmentTask {
                     force_push: false,
                 },
                 infra_ctx,
+                environment.max_parallel_build as usize,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
                 should_abort,
             )?;
@@ -422,7 +477,7 @@ impl Task for EnvironmentTask {
         true
     }
 
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         let cancel_requested = self.cancel_requested.clone();
         Box::new(move || cancel_requested.load(Ordering::Relaxed))
     }

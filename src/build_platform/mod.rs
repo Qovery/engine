@@ -64,7 +64,7 @@ pub fn to_engine_error(event_details: EventDetails, err: BuildError, user_messag
     }
 }
 
-pub trait BuildPlatform {
+pub trait BuildPlatform: Send + Sync {
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
@@ -118,7 +118,7 @@ pub struct SshKey {
 
 pub struct GitRepository {
     pub url: Url,
-    pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials>>>,
+    pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials> + Send>>,
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<PathBuf>,

@@ -225,7 +225,7 @@ impl Task for InfrastructureTask {
         false
     }
 
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         Box::new(|| false)
     }
 }
