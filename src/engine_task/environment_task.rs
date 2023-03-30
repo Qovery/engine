@@ -553,6 +553,8 @@ impl BuilderThreadPool {
                 // There is no available build slot, so we wait for a thread to terminate
                 let terminated_thread_ix = loop {
                     match active_threads.iter().position(|th| th.is_finished()) {
+                        // timeout is needed because we call unpark within the thread
+                        // So it can happens that we got unparked but the thread is not marked as finished yet
                         None => thread::park_timeout(Duration::from_secs(10)),
                         Some(position) => break position,
                     }
@@ -562,7 +564,7 @@ impl BuilderThreadPool {
             };
 
             // Launch our build in parallel for each service
-            for mut service in tasks {
+            for mut task in tasks {
                 // Ensure we have a slot available to run a new thread
                 await_build_slot(&mut active_threads);
 
@@ -571,14 +573,15 @@ impl BuilderThreadPool {
                 }
 
                 // We have a slot to run a new thread, so start a new build
-                active_threads.push_back(scope.spawn({
+                let th = thread::Builder::new().name("builder".to_string()).spawn_scoped(scope, {
                     let current_thread = current_thread.clone();
                     move || {
-                        let ret = service();
+                        let ret = task();
                         current_thread.unpark();
                         ret
                     }
-                }));
+                });
+                active_threads.push_back(th.unwrap());
             }
 
             // Wait for all threads to terminate
