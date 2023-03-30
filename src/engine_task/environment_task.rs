@@ -546,7 +546,7 @@ impl BuilderThreadPool {
             };
 
             let mut await_build_slot = |active_threads: &mut VecDeque<ScopedJoinHandle<_>>| {
-                if active_threads.len() <= max_parallelism.get() {
+                if active_threads.len() < max_parallelism.get() {
                     return;
                 }
 
@@ -625,7 +625,7 @@ mod test {
         for _i in 0..10 {
             tasks.push(|| {
                 let nb_tasks = active_tasks.fetch_add(1, Ordering::Relaxed);
-                max_active_task.fetch_max(nb_tasks, Ordering::Relaxed);
+                max_active_task.fetch_max(nb_tasks + 1, Ordering::Relaxed);
                 thread::sleep(Duration::from_millis(1000));
                 active_tasks.fetch_sub(1, Ordering::Relaxed);
                 Result::<(), ()>::Ok(())
