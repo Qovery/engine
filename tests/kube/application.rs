@@ -20,7 +20,7 @@ use qovery_engine::transaction::TransactionResult;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::{span, Level};
 
-#[cfg(feature = "test-local-kube")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[test]
 #[named]
 fn should_increase_app_storage_size() {
@@ -174,7 +174,7 @@ fn should_increase_app_storage_size() {
     });
 }
 
-#[cfg(feature = "test-local-kube")]
+#[cfg(feature = "test-aws-minimal")]
 #[test]
 #[named]
 fn should_have_mounted_files_as_volume() {

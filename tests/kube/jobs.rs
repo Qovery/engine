@@ -11,7 +11,7 @@ use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
 
-#[cfg(feature = "test-local-kube")]
+#[cfg(feature = "test-aws-minimal")]
 #[test]
 #[named]
 fn should_have_mounted_files_as_volume() {
