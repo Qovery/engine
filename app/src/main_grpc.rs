@@ -344,7 +344,7 @@ pub fn main() -> io::Result<()> {
     };
 
     let docker = if cli.builder_kube_enabled {
-        tokio_utils::launch_task(dead_builder_reaper(cli.builder_namespace.clone(), cli.engine_name.clone()));
+        tokio_utils::launch_task(dead_builder_reaper(cli.builder_namespace.clone(), "qovery-engine".to_string()));
         Docker::new_with_kube_builder(
             cli.docker_host,
             &cli.builder_cpu_architectures,
