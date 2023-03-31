@@ -135,7 +135,9 @@ impl EnvironmentTask {
         // Provision necessary builder for being able to build in parallel
         let builder_handle = {
             let nb_builder = if build_needs_builpacks {
-                env_logger("⚠️ By using buildpacks you cannot build in parallel ⚠️ Please migrate to docker build to benefit of parallel builds ⚠️".to_string());
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+                env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
                 NonZeroUsize::new(1).unwrap()
             } else {
                 NonZeroUsize::new(max(min(max_build_in_parallel, services_to_build.len()), 1)).unwrap()
