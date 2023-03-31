@@ -82,12 +82,6 @@ spec:
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
-          lifecycle:
-            preStop:
-              exec:
-                # Check if no task is running before shutting down engine. DO NOT REMOVE.
-                # If we don't check it, processes like terraform are hard kill and it generates issues.
-                command: ["/bin/sh", "-c", "echo 'Stopping engine container...' > /proc/1/fd/1 ; while [ $(curl -s http://127.0.0.1:8080/metrics | awk '/^taskmanager_nb_running_tasks/{ print $2}') -ne 0 ] ; do sleep 1  ; done;  echo 'Stopping engine container now...' > /proc/1/fd/1"]
         - name: docker-build
           image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}

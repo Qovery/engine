@@ -230,6 +230,26 @@ pub fn main() -> io::Result<()> {
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
     let logger = Box::new(StdIoLogger::new());
 
+    let should_shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_callback = {
+        let should_shutdown = should_shutdown.clone();
+
+        async move {
+            info!("WAITING for program to receive ctrl+c or sigterm");
+            let ctrl_c = tokio::signal::ctrl_c();
+            let mut sigterm_s = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+            let sigterm = sigterm_s.recv();
+
+            pin_mut!(ctrl_c);
+            pin_mut!(sigterm);
+            let _ = select(ctrl_c, sigterm).await;
+            warn!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
+            should_shutdown.store(true, Ordering::Relaxed);
+        }
+    };
+    tokio_utils::launch_task(shutdown_callback);
+    tokio_utils::launch(&cli.http_listen_on);
+
     info!(
         "running from current directory: {}",
         env::current_dir().unwrap().to_str().unwrap()
@@ -263,26 +283,6 @@ pub fn main() -> io::Result<()> {
             process::exit(1);
         }
     }
-
-    let should_shutdown = Arc::new(AtomicBool::new(false));
-    let shutdown_callback = {
-        let should_shutdown = should_shutdown.clone();
-
-        async move {
-            info!("WAITING for program to receive ctrl+c or sigterm");
-            let ctrl_c = tokio::signal::ctrl_c();
-            let mut sigterm_s = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
-            let sigterm = sigterm_s.recv();
-
-            pin_mut!(ctrl_c);
-            pin_mut!(sigterm);
-            let _ = select(ctrl_c, sigterm).await;
-            info!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
-            should_shutdown.store(true, Ordering::Relaxed);
-        }
-    };
-    tokio_utils::launch_task(shutdown_callback);
-    tokio_utils::launch(&cli.http_listen_on);
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
     // docker daemon is slower to start than the engine
