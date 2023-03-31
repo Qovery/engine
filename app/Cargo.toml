@@ -43,6 +43,10 @@ warp = "0.3.2"
 lazy_static = "1.4.0"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 
+# Kubernetes
+kube = { version = "0.73.1", features = ["default"] }
+k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_22"] }
+
 # GRPC
 tonic = { version = "0.8.3", features = ["tls", "tls-roots", "gzip", "transport"] }
 prost = "0.11.5"

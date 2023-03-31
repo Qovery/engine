@@ -11,6 +11,7 @@ extern crate core;
 use std::net::TcpStream;
 use std::path::Path;
 
+use chrono::Utc;
 use clap::Parser;
 use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,6 +24,10 @@ use dirs::home_dir;
 use dotenv::dotenv;
 use futures_util::future::select;
 use futures_util::{pin_mut, stream, StreamExt};
+use k8s_openapi::api::apps::v1::Deployment;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
+use kube::api::{DeleteParams, ListParams};
+use kube::{Api, ResourceExt};
 use qovery_engine::cmd::docker;
 use retry::delay::Fixed;
 use retry::OperationResult;
@@ -339,6 +344,7 @@ pub fn main() -> io::Result<()> {
     };
 
     let docker = if cli.builder_kube_enabled {
+        tokio_utils::launch_task(dead_builder_reaper(cli.builder_namespace.clone(), cli.engine_name.clone()));
         Docker::new_with_kube_builder(
             cli.docker_host,
             &cli.builder_cpu_architectures,
@@ -600,4 +606,53 @@ async fn fetch_and_exec_deployments(
     }
 
     Ok(())
+}
+
+#[instrument]
+async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) -> Result<(), kube::Error> {
+    async fn run_reaper(
+        deployments_api: &Api<Deployment>,
+        max_allowed_lifetime: chrono::Duration,
+        builder_name: &str,
+    ) -> Result<(), kube::Error> {
+        let deployments = deployments_api.list(&ListParams::default()).await?;
+        let to_delete: Vec<String> = deployments
+            .items
+            .into_iter()
+            .filter_map(|deployment| {
+                let deployment_name = deployment.name();
+
+                if deployment_name.starts_with(builder_name)
+                    && Utc::now() - deployment.metadata.creation_timestamp.unwrap_or(Time(Utc::now())).0
+                        >= max_allowed_lifetime
+                {
+                    Some(deployment_name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for deployment_name in to_delete {
+            warn!("Deleting dead builder {}", deployment_name);
+            let _ = deployments_api
+                .delete(&deployment_name, &DeleteParams::background())
+                .await;
+        }
+
+        Ok(())
+    }
+
+    let client = kube::Client::try_default().await?;
+    let deployments_api: Api<Deployment> = Api::namespaced(client, &builder_namespace);
+    let max_allowed_lifetime = chrono::Duration::hours(6);
+    let builder_prefix = format!("builder-{}", builder_prefix);
+
+    loop {
+        info!("Running dead builder reaper for namespace: {builder_namespace} with max allowed lifetime of {max_allowed_lifetime}");
+        if let Err(err) = run_reaper(&deployments_api, max_allowed_lifetime, &builder_prefix).await {
+            error!("Error while reaping dead builders: {}", err);
+        }
+        tokio::time::sleep(Duration::from_secs(3600)).await;
+    }
 }

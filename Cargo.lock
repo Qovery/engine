@@ -64,6 +64,8 @@ dependencies = [
  "dirs",
  "dotenv",
  "futures-util",
+ "k8s-openapi",
+ "kube",
  "lazy_static",
  "prometheus",
  "prost",
