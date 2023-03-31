@@ -55,6 +55,14 @@ impl ToCommonHelmChart for ExternalDNSChart {
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
+                        key: "image.registry".to_string(),
+                        value: "public.ecr.aws".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: "r3m4q3r9/pub-mirror-externaldns".to_string(),
+                    },
+                    ChartSetValue {
                         key: "provider".to_string(),
                         value: self.dns_provider_configuration.get_cert_manager_config_name(),
                     },

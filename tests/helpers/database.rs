@@ -73,6 +73,7 @@ impl Infrastructure for EnvironmentRequest {
             &deployment_option,
             infra_ctx,
             1,
+            |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| false,
         );
@@ -96,7 +97,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -118,7 +119,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -140,7 +141,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -162,7 +163,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -535,6 +536,10 @@ pub fn test_db(
                 _ => "superuser".to_string(),
             },
             CONTAINER => "".to_string(),
+        },
+        DatabaseKind::Mysql => match database_mode {
+            CONTAINER => "qovery".to_string(),
+            _ => "superuser".to_string(),
         },
         _ => "superuser".to_string(),
     };

@@ -57,6 +57,18 @@ pub enum BuildError {
     },
 }
 
+pub fn to_build_error(service_id: String, err: DockerError) -> BuildError {
+    match err {
+        DockerError::Aborted { .. } => BuildError::Aborted {
+            application: service_id,
+        },
+        _ => BuildError::DockerError {
+            application: service_id,
+            raw_error: err,
+        },
+    }
+}
+
 pub fn to_engine_error(event_details: EventDetails, err: BuildError, user_message: String) -> EngineError {
     match err {
         BuildError::Aborted { .. } => EngineError::new_task_cancellation_requested(event_details),

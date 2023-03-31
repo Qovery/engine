@@ -1,6 +1,6 @@
 image:
-  registry: {{ registry_name}}
-  repository: {{ repository_name}}
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
   tag: "{{ version }}"
 
 nameOverride: "{{ sanitized_name }}"
@@ -8,6 +8,9 @@ fullnameOverride: "{{ sanitized_name }}"
 
 volumePermissions:
   enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}
 
 ## sanitized_name of an already existing service account. Setting name value disables the automatic service account creation.
 

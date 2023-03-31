@@ -1,3 +1,6 @@
+image:
+  repository: set-by-engine-code
+
 rbac:
   create: true
   pspEnabled: true

@@ -82,8 +82,8 @@ charts:
     version: 0.11.1
     repo_name: pleco
   - name: prometheus-adapter
-    version: 3.3.1
     repo_name: prometheus-community
+    version: 4.1.1
   - name: datadog
     repo_name: datadog
     version: 2.22.17

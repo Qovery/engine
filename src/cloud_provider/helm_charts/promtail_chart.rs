@@ -46,10 +46,28 @@ impl ToCommonHelmChart for PromtailChart {
                 // because of priorityClassName, we need to add it to kube-system
                 namespace: HelmChartNamespaces::KubeSystem,
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![ChartSetValue {
-                    key: "config.clients[0].url".to_string(),
-                    value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
-                }],
+                values: vec![
+                    ChartSetValue {
+                        key: "initContainer.image.registry".to_string(),
+                        value: "public.ecr.aws".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "initContainer.image.repository".to_string(),
+                        value: "r3m4q3r9/pub-mirror-busybox".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "image.registry".to_string(),
+                        value: "public.ecr.aws".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: "r3m4q3r9/pub-mirror-promtail".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "config.clients[0].url".to_string(),
+                        value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
+                    },
+                ],
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),

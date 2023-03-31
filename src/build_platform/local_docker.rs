@@ -10,10 +10,10 @@ use sysinfo::{DiskExt, RefreshKind, SystemExt};
 use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
-use crate::build_platform::{Build, BuildError, BuildPlatform, Kind};
+use crate::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::docker::{Architecture, ContainerImage, DockerError};
+use crate::cmd::docker::{Architecture, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
@@ -186,16 +186,7 @@ impl LocalDocker {
             &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
-        match exit_status {
-            Ok(()) => Ok(()),
-            Err(DockerError::Aborted { .. }) => Err(BuildError::Aborted {
-                application: build.image.application_id.clone(),
-            }),
-            Err(err) => Err(BuildError::DockerError {
-                application: build.image.application_id.clone(),
-                raw_error: err,
-            }),
-        }
+        exit_status.map_err(|err| to_build_error(build.image.application_id.clone(), err))
     }
 
     fn build_image_with_buildpacks(

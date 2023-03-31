@@ -21,6 +21,8 @@ replicas: 1
 
 # TODO: Remove after chart support a version we is built for ARM64
 image:
+  registry: set-by-engine-code
+  repository: set-by-engine-code
   tag: 0.13.2-debian-11-r17
 
 resources:

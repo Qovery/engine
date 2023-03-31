@@ -2,7 +2,9 @@ use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::process::ExitStatus;
 use std::str::FromStr;
@@ -35,7 +37,7 @@ lazy_static! {
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Architecture {
     AMD64,
     ARM64,
@@ -135,18 +137,38 @@ impl ContainerImage {
 }
 
 #[derive(Debug)]
+enum BuilderLocation {
+    Local,
+    Kubernetes {
+        namespace: String,
+        builder_id: String,
+        builder_name: String,
+        cpu_request: u32,
+        cpu_limit: u32,
+        memory_request_gib: u32,
+        memory_limit_gib: u32,
+        supported_architectures: BTreeSet<Architecture>,
+    },
+}
+
+#[derive(Debug)]
 pub struct Docker {
-    use_kube_builder: Option<String>, // contains the builder name if using kube builder
+    builder_location: BuilderLocation,
     socket_location: Option<Url>,
     common_envs: Vec<(String, String)>,
 }
 
-impl Drop for Docker {
+pub struct BuilderHandle {
+    pub nb_builder: NonZeroUsize,
+    builder_name: Option<String>,
+}
+
+impl Drop for BuilderHandle {
     fn drop(&mut self) {
-        if let Some(builder_name) = &self.use_kube_builder {
+        if let Some(builder_name) = &self.builder_name {
             let _ = docker_exec(
-                &["buildx", "rm", builder_name],
-                &self.get_all_envs(&[]),
+                &["buildx", "rm", "-f", builder_name],
+                &[],
                 &mut |_| {},
                 &mut |_| {},
                 &CommandKiller::never(),
@@ -158,7 +180,7 @@ impl Drop for Docker {
 impl Docker {
     fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
-            use_kube_builder: None,
+            builder_location: BuilderLocation::Local,
             socket_location,
             common_envs: vec![("DOCKER_BUILDKIT".to_string(), "1".to_string())],
         };
@@ -227,40 +249,103 @@ impl Docker {
         let mut docker = Self::new(socket_location)?;
 
         let builder_name = "engine-builder";
-        docker.use_kube_builder = Some(builder_name.to_string());
+        docker.builder_location = BuilderLocation::Kubernetes {
+            namespace: namespace.to_string(),
+            builder_id: builder_id.to_string(),
+            builder_name: builder_name.to_string(),
+            cpu_request,
+            cpu_limit,
+            memory_request_gib,
+            memory_limit_gib,
+            supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
+        };
         docker.common_envs.extend(args);
 
-        // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
-
-        for arch in supported_architectures {
-            let node_name = format!("builder-{builder_id}-{arch}");
-            let driver_opt = format!("--driver-opt=namespace={namespace},nodeselector=kubernetes.io/arch={arch},requests.cpu={cpu_request},limits.cpu={cpu_limit},requests.memory={memory_request_gib}G,limits.memory={memory_limit_gib}G");
-            let platform = format!("linux/{arch}");
-            let args = vec![
-                "buildx",
-                "create",
-                "--append",
-                "--name",
-                builder_name,
-                "--platform",
-                &platform,
-                "--node",
-                &node_name,
-                "--driver=kubernetes",
-                &driver_opt,
-                "--bootstrap",
-                "--use",
-            ];
-            docker_exec(
-                &args,
-                &docker.get_all_envs(&[]),
-                &mut |line| info!("{}", line),
-                &mut |line| info!("{}", line),
-                &CommandKiller::never(),
-            )?;
-        }
-
         Ok(docker)
+    }
+
+    pub fn spawn_builder(
+        &self,
+        nb_builder: NonZeroUsize,
+        requested_architectures: &[Architecture],
+        should_abort: &CommandKiller,
+    ) -> Result<BuilderHandle, DockerError> {
+        match &self.builder_location {
+            // For local builder, we have at max 1 builder available
+            BuilderLocation::Local => Ok(BuilderHandle {
+                nb_builder: NonZeroUsize::new(1).unwrap(),
+                builder_name: None,
+            }),
+            BuilderLocation::Kubernetes {
+                namespace,
+                builder_id,
+                builder_name,
+                cpu_request,
+                cpu_limit,
+                memory_request_gib,
+                memory_limit_gib,
+                supported_architectures,
+            } => {
+                let available_architectures = requested_architectures
+                    .iter()
+                    .filter(|arch| supported_architectures.contains(arch))
+                    .count();
+
+                if available_architectures != requested_architectures.len() {
+                    return Err(DockerError::InvalidConfig {
+                        raw_error_message:
+                        format!("Some requested architectures are not supported by current docker builder. Available architectures are {supported_architectures:?} while requested are {requested_architectures:?}.")
+                    });
+                }
+
+                // We create build handle here to force the drop to run if some operation fail
+                let build_handle = BuilderHandle {
+                    nb_builder,
+                    builder_name: Some(builder_name.to_string()),
+                };
+
+                // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
+                for arch in requested_architectures {
+                    let node_name = format!("builder-{builder_id}-{arch}");
+                    let platform = format!("linux/{arch}");
+                    let driver_opt = format!(concat!(
+                    "--driver-opt=",
+                    "\"namespace={}\",",
+                    "\"replicas={}\",",
+                    "\"nodeselector=kubernetes.io/arch={}\",",
+                    "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                    "\"requests.cpu={}\",",
+                    "\"limits.cpu={}\",",
+                    "\"requests.memory={}G\",",
+                    "\"limits.memory={}G\""
+                    ), namespace, nb_builder, arch, cpu_request, cpu_limit, memory_request_gib, memory_limit_gib);
+                    let args = vec![
+                        "buildx",
+                        "create",
+                        "--append",
+                        "--name",
+                        builder_name,
+                        "--platform",
+                        &platform,
+                        "--node",
+                        &node_name,
+                        "--driver=kubernetes",
+                        &driver_opt,
+                        "--bootstrap",
+                        "--use",
+                    ];
+                    docker_exec(
+                        &args,
+                        &self.get_all_envs(&[]),
+                        &mut |line| info!("{}", line),
+                        &mut |line| info!("{}", line),
+                        should_abort,
+                    )?;
+                }
+
+                Ok(build_handle)
+            }
+        }
     }
 
     pub fn socket_url(&self) -> &Option<Url> {
@@ -619,6 +704,7 @@ where
 mod tests {
     use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
+    use std::num::NonZeroUsize;
     use std::path::Path;
     use std::time::Duration;
     use url::Url;
@@ -836,6 +922,9 @@ mod tests {
             args,
         )
         .unwrap();
+        let _builder = docker
+            .spawn_builder(NonZeroUsize::new(1).unwrap(), &[Architecture::AMD64], &CommandKiller::never())
+            .unwrap();
 
         let image_to_build = ContainerImage::new(
             private_registry_url(),

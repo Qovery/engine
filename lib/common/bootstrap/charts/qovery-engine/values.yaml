@@ -47,10 +47,9 @@ volumes:
 
 buildContainer:
   enabled: true
-  image: docker
-  tag: 23.0-dind
+  image: public.ecr.aws/r3m4q3r9/pub-mirror-docker
+  tag: 20.10.23-dind
 
-terminationGracePeriodSeconds: 7200
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -90,10 +89,14 @@ buildResources:
   #   cpu: 100m
   #   memory: 128Mi
 
-nodeSelector:
-  {}
+nodeSelector: {}
 
-tolerations: []
+terminationGracePeriodSeconds: 7200
+tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 7200
 
 affinity: {}
 

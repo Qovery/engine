@@ -275,8 +275,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         // repository and image location
         let registry_name = "public.ecr.aws";
         let repository_name = format!("r3m4q3r9/pub-mirror-{}", T::db_type().to_string().to_lowercase());
+        let repository_name_minideb = "r3m4q3r9/pub-mirror-minideb".to_string();
         context.insert("registry_name", registry_name);
         context.insert("repository_name", repository_name.as_str());
+        context.insert("repository_name_minideb", repository_name_minideb.as_str());
         context.insert(
             "repository_with_registry",
             format!("{registry_name}/{repository_name}").as_str(),

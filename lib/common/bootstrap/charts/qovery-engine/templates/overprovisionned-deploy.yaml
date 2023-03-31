@@ -48,7 +48,7 @@ spec:
       containers:
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache
-        image: "moby/buildkit:buildx-stable-1"
+        image: "public.ecr.aws/r3m4q3r9/pub-mirror-buildkit:v0.11.4"
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
         {{- toYaml .Values.buildResources | nindent 10 }}

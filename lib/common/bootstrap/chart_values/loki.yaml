@@ -1,3 +1,5 @@
+image:
+  repository: set-by-engine-code
 config:
   server:
     http_listen_port: 3100
@@ -5,24 +7,24 @@ config:
   distributor:
     ring:
       kvstore:
-        store: memberlist                 # qovery setting
+        store: memberlist # qovery setting
   ingester:
-    chunk_idle_period: 3m                 # qovery setting
-    chunk_block_size: 262144              # qovery setting
-    chunk_retain_period: 1m               # qovery setting
-    max_transfer_retries: 0               # qovery setting
+    chunk_idle_period: 3m # qovery setting
+    chunk_block_size: 262144 # qovery setting
+    chunk_retain_period: 1m # qovery setting
+    max_transfer_retries: 0 # qovery setting
     lifecycler:
       ring:
         kvstore:
-          store: memberlist               # qovery setting
-        replication_factor: 1             # qovery setting
+          store: memberlist # qovery setting
+        replication_factor: 1 # qovery setting
   limits_config:
-    ingestion_rate_mb: 20                 # qovery setting
-    ingestion_burst_size_mb: 30           # qovery setting
-    enforce_metric_name: false            # qovery setting
-    reject_old_samples: true              # qovery setting
-    reject_old_samples_max_age: 168h      # qovery setting
-    max_concurrent_tail_requests: 100     # qovery setting (default 10)
+    ingestion_rate_mb: 20 # qovery setting
+    ingestion_burst_size_mb: 30 # qovery setting
+    enforce_metric_name: false # qovery setting
+    reject_old_samples: true # qovery setting
+    reject_old_samples_max_age: 168h # qovery setting
+    max_concurrent_tail_requests: 100 # qovery setting (default 10)
   schema_config:
     configs:
       - from: 2020-05-15
@@ -34,33 +36,33 @@ config:
           period: 24h
   storage_config:
     aws:
-      s3: set-by-engine-code                 # qovery setting
-      endpoint: set-by-engine-code           # qovery setting
-      region: set-by-engine-code             # qovery setting
-      access_key_id: set-by-engine-code      # qovery setting
-      secret_access_key: set-by-engine-code  # qovery setting
-      s3forcepathstyle: set-by-engine-code   # qovery setting
-      bucketnames: set-by-engine-code        # qovery setting
-      sse_encryption: set-by-engine-code     # qovery setting
-      insecure: set-by-engine-code           # qovery setting
+      s3: set-by-engine-code # qovery setting
+      endpoint: set-by-engine-code # qovery setting
+      region: set-by-engine-code # qovery setting
+      access_key_id: set-by-engine-code # qovery setting
+      secret_access_key: set-by-engine-code # qovery setting
+      s3forcepathstyle: set-by-engine-code # qovery setting
+      bucketnames: set-by-engine-code # qovery setting
+      sse_encryption: set-by-engine-code # qovery setting
+      insecure: set-by-engine-code # qovery setting
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
   chunk_store_config:
-    max_look_back_period: 12w            # qovery setting (default 12 week)
+    max_look_back_period: 12w # qovery setting (default 12 week)
   table_manager:
     retention_deletes_enabled: true
-    retention_period: 12w                 # qovery setting (default 12 week)
+    retention_period: 12w # qovery setting (default 12 week)
   memberlist:
-    abort_if_cluster_join_fails: false    # qovery setting
-    bind_port: 7946                       # qovery setting
+    abort_if_cluster_join_fails: false # qovery setting
+    bind_port: 7946 # qovery setting
     join_members:
-      - loki-headless.logging.svc:7946    # qovery setting
-    max_join_backoff: 1m                  # qovery setting
-    max_join_retries: 10                  # qovery setting
-    min_join_backoff: 1s                  # qovery setting
+      - loki-headless.logging.svc:7946 # qovery setting
+    max_join_backoff: 1m # qovery setting
+    max_join_retries: 10 # qovery setting
+    min_join_backoff: 1s # qovery setting
 
 extraPorts:
   - name: gossip

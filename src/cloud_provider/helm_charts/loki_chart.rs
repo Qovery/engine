@@ -74,6 +74,10 @@ impl ToCommonHelmChart for LokiChart {
                 timeout_in_seconds: 900,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: "public.ecr.aws/r3m4q3r9/pub-mirror-loki".to_string(),
+                    },
                     // AWS
                     ChartSetValue {
                         key: "config.storage_config.aws.s3forcepathstyle".to_string(),
