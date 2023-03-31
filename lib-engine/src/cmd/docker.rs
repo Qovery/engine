@@ -307,8 +307,18 @@ impl Docker {
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
                 for arch in requested_architectures {
                     let node_name = format!("builder-{builder_id}-{arch}");
-                    let driver_opt = format!("--driver-opt=namespace={namespace},replicas={nb_builder},nodeselector=kubernetes.io/arch={arch},requests.cpu={cpu_request},limits.cpu={cpu_limit},requests.memory={memory_request_gib}G,limits.memory={memory_limit_gib}G");
                     let platform = format!("linux/{arch}");
+                    let driver_opt = format!(concat!(
+                    "--driver-opt=",
+                    "\"namespace={}\",",
+                    "\"replicas={}\",",
+                    "\"nodeselector=kubernetes.io/arch={}\",",
+                    "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                    "\"requests.cpu={}\",",
+                    "\"limits.cpu={}\",",
+                    "\"requests.memory={}G\",",
+                    "\"limits.memory={}G\""
+                    ), namespace, nb_builder, arch, cpu_request, cpu_limit, memory_request_gib, memory_limit_gib);
                     let args = vec![
                         "buildx",
                         "create",
@@ -694,6 +704,7 @@ where
 mod tests {
     use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
+    use std::num::NonZeroUsize;
     use std::path::Path;
     use std::time::Duration;
     use url::Url;
@@ -911,6 +922,9 @@ mod tests {
             args,
         )
         .unwrap();
+        let _builder = docker
+            .spawn_builder(NonZeroUsize::new(1).unwrap(), &[Architecture::AMD64], &CommandKiller::never())
+            .unwrap();
 
         let image_to_build = ContainerImage::new(
             private_registry_url(),
