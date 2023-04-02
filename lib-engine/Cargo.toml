@@ -66,8 +66,8 @@ serde_derive = "1.0.137"
 serde_yaml = "0.9.13"
 
 # Secrets manager
-vaultrs = "0.6.0"
-vaultrs-login = "0.1.6"
+vaultrs = "0.7.0"
+vaultrs-login = "0.1.7"
 
 # AWS deps
 tokio = { version = "1.18.1", features = ["full"] }
