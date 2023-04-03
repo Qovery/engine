@@ -78,12 +78,12 @@ release-engine-image:
   when: manual
   interruptible: true
   rules:
-  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    when: manual
-    allow_failure: true
-  - if: $CI_COMMIT_BRANCH == "main"
-    when: always
-    allow_failure: false
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+      allow_failure: false
 
 gitguardian:
   stage: build-and-lint
@@ -103,6 +103,19 @@ gitguardian:
 #################
 # MINIMAL TESTS #
 #################
+
+check-pr-labels-is-set:
+  stage: minimal-tests
+  retry: 0
+  script:
+    - test $CI_MERGE_REQUEST_LABELS == "" && exit 1
+  when: always
+  tags:
+    - vm-250mcpu-1gmem-0g
+  interruptible: true
+  only:
+    refs:
+      - merge_requests
 
 unit-tests:
   stage: minimal-tests
@@ -187,6 +200,7 @@ aws-infra:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Infra/
   artifacts:
     when: always
     reports:
@@ -214,6 +228,7 @@ aws-ec2-infra:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Infra/
   artifacts:
     when: always
     reports:
@@ -240,6 +255,7 @@ aws-managed-services:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -266,6 +282,7 @@ aws-ec2-managed-services:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -293,6 +310,7 @@ aws-self-hosted:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -319,6 +337,7 @@ aws-ec2-self-hosted:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -346,6 +365,8 @@ aws-whole-enchilada:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Infra/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -399,6 +420,7 @@ scw-infra:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Infra/
   artifacts:
     when: always
     reports:
@@ -426,6 +448,7 @@ scw-managed-services:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -452,6 +475,7 @@ scw-self-hosted:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
@@ -478,6 +502,8 @@ scw-whole-enchilada:
     variables:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Infra/
+      - $CI_MERGE_REQUEST_LABELS =~ /^tests:.*Env/
   artifacts:
     when: always
     reports:
