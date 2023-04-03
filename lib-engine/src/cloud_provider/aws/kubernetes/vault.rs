@@ -1,29 +1,56 @@
 use crate::cloud_provider::kubernetes::Kind;
-use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
-use crate::secret_manager::vault::get_vault_mount_name;
+use crate::secret_manager::vault;
 use crate::secret_manager::vault::QVaultClient;
-use serde::de;
 use serde_derive::{Deserialize, Serialize};
 use vaultrs::api::kv2::responses::SecretVersionMetadata;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ClusterSecrets {
-    Aws(ClusterSecretsAws),
-    Scaleway(ClusterSecretsScaleway),
+pub struct ClusterSecretsIoAws {
+    pub aws_access_key: String,
+    pub aws_default_region: String,
+    pub aws_secret_access_key: String,
+    pub kubeconfig_b64: Option<String>,
+    pub k8s_cluster_endpoint: Option<String>,
+    pub cloud_provider: Kind,
+    pub cluster_name: String,
+    pub cluster_id: String,
+    pub grafana_login: String,
+    pub grafana_password: String,
+    pub organization_id: String,
+    pub test_cluster: String,
 }
 
-fn deserialize_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let s: &str = de::Deserialize::deserialize(deserializer)?;
-
-    match s {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(de::Error::unknown_variant(s, &["true", "false"])),
+impl ClusterSecretsIoAws {
+    pub fn new(
+        aws_access_key: String,
+        aws_default_region: String,
+        aws_secret_access_key: String,
+        kubeconfig_b64: Option<String>,
+        k8s_cluster_endpoint: Option<String>,
+        cloud_provider: Kind,
+        cluster_name: String,
+        cluster_id: String,
+        grafana_login: String,
+        grafana_password: String,
+        organization_id: String,
+        test_cluster: String,
+    ) -> ClusterSecretsIoAws {
+        ClusterSecretsIoAws {
+            aws_access_key,
+            aws_default_region,
+            aws_secret_access_key,
+            kubeconfig_b64,
+            k8s_cluster_endpoint,
+            cloud_provider,
+            cluster_name,
+            cluster_id,
+            grafana_login,
+            grafana_password,
+            organization_id,
+            test_cluster,
+        }
     }
 }
 
@@ -43,7 +70,6 @@ pub struct ClusterSecretsAws {
     pub grafana_login: String,
     pub grafana_password: String,
     pub organization_id: String,
-    #[serde(deserialize_with = "deserialize_bool")]
     pub test_cluster: bool,
     pub vault_mount_name: String,
 }
@@ -63,10 +89,12 @@ impl ClusterSecretsAws {
         organization_id: String,
         test_cluster: bool,
     ) -> ClusterSecretsAws {
+        let vault_mount_name = vault::get_vault_mount_name(test_cluster);
+
         ClusterSecretsAws {
             aws_access_key_id,
-            aws_secret_access_key,
             aws_default_region,
+            aws_secret_access_key,
             kubeconfig_b64,
             k8s_cluster_endpoint,
             cloud_provider,
@@ -76,164 +104,61 @@ impl ClusterSecretsAws {
             grafana_password,
             organization_id,
             test_cluster,
-            vault_mount_name: get_vault_mount_name(test_cluster),
+            vault_mount_name,
         }
     }
-}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ClusterSecretsScaleway {
-    #[serde(rename = "SCW_ACCESS_KEY")]
-    pub scw_access_key: String,
-    #[serde(rename = "SCW_SECRET_KEY")]
-    pub scw_secret_key: String,
-    #[serde(rename = "SCW_DEFAULT_PROJECT_ID")]
-    pub scw_default_project_id: String,
-    #[serde(rename = "SCW_DEFAULT_REGION")]
-    pub scw_default_region: String,
-    #[serde(rename = "SCW_DEFAULT_ZONE")]
-    pub scw_default_zone: String,
-    pub kubeconfig_b64: Option<String>,
-    pub k8s_cluster_endpoint: Option<String>,
-    pub cloud_provider: Kind,
-    pub cluster_name: String,
-    pub cluster_id: String,
-    pub grafana_login: String,
-    pub grafana_password: String,
-    pub organization_id: String,
-    #[serde(deserialize_with = "deserialize_bool")]
-    pub test_cluster: bool,
-    pub vault_mount_name: String,
-}
+    pub fn new_from_cluster_secrets_io(
+        cluster_secret: ClusterSecretsIoAws,
+        event_details: EventDetails,
+    ) -> Result<ClusterSecretsAws, Box<EngineError>> {
+        let test_cluster =
+            match cluster_secret.test_cluster.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => return Err(Box::new(EngineError::new_error_when_create_cluster_secrets(
+                    event_details,
+                    CommandError::new(
+                        "Qovery error when manipulating ClusterSecrets".to_string(),
+                        Some(
+                            "Qovery error when manipulating ClusterSecrets. Expected true or false for test cluster"
+                                .to_string(),
+                        ),
+                        None,
+                    ),
+                ))),
+            };
 
-impl ClusterSecretsScaleway {
-    pub fn new(
-        scw_access_key: String,
-        scw_secret_key: String,
-        scw_default_project_id: String,
-        scw_default_region: String,
-        scw_default_zone: String,
-        kubeconfig_b64: Option<String>,
-        k8s_cluster_endpoint: Option<String>,
-        cloud_provider: Kind,
-        cluster_name: String,
-        cluster_id: String,
-        grafana_login: String,
-        grafana_password: String,
-        organization_id: String,
-        test_cluster: bool,
-    ) -> ClusterSecretsScaleway {
-        ClusterSecretsScaleway {
-            scw_access_key,
-            scw_secret_key,
-            scw_default_project_id,
-            scw_default_region,
-            scw_default_zone,
-            kubeconfig_b64,
-            k8s_cluster_endpoint,
-            cloud_provider,
-            cluster_name,
-            cluster_id,
-            grafana_login,
-            grafana_password,
-            organization_id,
+        Ok(Self::new(
+            cluster_secret.aws_access_key.clone(),
+            cluster_secret.aws_default_region.clone(),
+            cluster_secret.aws_secret_access_key.clone(),
+            cluster_secret.kubeconfig_b64.clone(),
+            cluster_secret.k8s_cluster_endpoint.clone(),
+            cluster_secret.cloud_provider.clone(),
+            cluster_secret.cluster_name.clone(),
+            cluster_secret.cluster_id.clone(),
+            cluster_secret.grafana_login.clone(),
+            cluster_secret.grafana_password.clone(),
+            cluster_secret.organization_id,
             test_cluster,
-            vault_mount_name: get_vault_mount_name(test_cluster),
-        }
-    }
-}
-
-impl ClusterSecrets {
-    pub fn new(cluster_secrets: ClusterSecrets) -> ClusterSecrets {
-        cluster_secrets
-    }
-
-    pub fn new_aws(cluster_secrets: ClusterSecretsAws) -> ClusterSecrets {
-        ClusterSecrets::Aws(cluster_secrets)
-    }
-
-    pub fn new_scaleway(cluster_secrets: ClusterSecretsScaleway) -> ClusterSecrets {
-        ClusterSecrets::Scaleway(cluster_secrets)
-    }
-
-    pub fn get_vault_mount_name(&self) -> String {
-        let is_test_cluster = match self {
-            ClusterSecrets::Aws(aws) => aws.test_cluster,
-            ClusterSecrets::Scaleway(scaleway) => scaleway.test_cluster,
-        };
-        get_vault_mount_name(is_test_cluster)
+        ))
     }
 
     pub fn get_secret(
         qvault_client: &QVaultClient,
-        cloud_provider: CloudProviderKind,
         cluster_id: &str,
         is_test_cluster: bool,
         event_details: EventDetails,
-    ) -> Result<ClusterSecrets, Box<EngineError>> {
-        let mount = get_vault_mount_name(is_test_cluster);
-        let err = |e| {
-            Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
+    ) -> Result<ClusterSecretsAws, Box<EngineError>> {
+        let mount = vault::get_vault_mount_name(is_test_cluster);
+
+        match qvault_client.get_secret(mount.as_str(), cluster_id) {
+            Ok(x) => Ok(x),
+            Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
                 event_details,
-                CommandError::new(
-                    format!("Vault secret couldn't be retrieved ({cloud_provider}/{cluster_id})"),
-                    Some(format!("{e}")),
-                    None,
-                ),
-            ))
-        };
-
-        match cloud_provider {
-            CloudProviderKind::Aws => match qvault_client.get_secret(mount.as_str(), cluster_id) {
-                Ok(x) => Ok(ClusterSecrets::Aws(x)),
-                Err(e) => Err(err(e)),
-            },
-            CloudProviderKind::Scw => match qvault_client.get_secret(mount.as_str(), cluster_id) {
-                Ok(x) => Ok(ClusterSecrets::Scaleway(x)),
-                Err(e) => Err(err(e)),
-            },
-        }
-    }
-
-    pub fn get_cloud_provider(&self) -> CloudProviderKind {
-        match self {
-            ClusterSecrets::Aws(_) => CloudProviderKind::Aws,
-            ClusterSecrets::Scaleway(_) => CloudProviderKind::Scw,
-        }
-    }
-
-    pub fn get_cluster_id(&self) -> &str {
-        match self {
-            ClusterSecrets::Aws(x) => x.cluster_id.as_str(),
-            ClusterSecrets::Scaleway(x) => x.cluster_id.as_str(),
-        }
-    }
-
-    pub fn get_test_cluster(&self) -> bool {
-        match self {
-            ClusterSecrets::Aws(x) => x.test_cluster,
-            ClusterSecrets::Scaleway(x) => x.test_cluster,
-        }
-    }
-
-    pub fn set_k8s_cluster_endpoint(&mut self, k8s_cluster_endpoint: String) {
-        match self {
-            ClusterSecrets::Aws(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
-            ClusterSecrets::Scaleway(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
-        }
-    }
-
-    pub fn set_kubeconfig_b64(&mut self, kubeconfig_b64: String) {
-        match self {
-            ClusterSecrets::Aws(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
-            ClusterSecrets::Scaleway(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
-        }
-    }
-
-    pub fn set_organization_id(&mut self, organization_id: String) {
-        match self {
-            ClusterSecrets::Aws(x) => x.organization_id = organization_id,
-            ClusterSecrets::Scaleway(x) => x.organization_id = organization_id,
+                CommandError::new("Vault secret couldn't be retrieved".to_string(), Some(format!("{e}")), None),
+            ))),
         }
     }
 
@@ -244,25 +169,16 @@ impl ClusterSecrets {
         event_details: EventDetails,
     ) -> Result<Option<SecretVersionMetadata>, Box<EngineError>> {
         // check if secret already exists and has the same content to avoid to create a new version
-        // then update if needed
         match Self::get_secret(
             qvault_client,
-            self.get_cloud_provider(),
-            self.get_cluster_id(),
-            self.get_test_cluster(),
+            self.cluster_id.as_str(),
+            self.test_cluster,
             event_details.clone(),
         ) {
             Ok(mut x) if ignore_kubeconfig_compare => {
-                // blank kubeconfig_b64 to avoid to compare it
-                match x {
-                    ClusterSecrets::Aws(ref mut x) => x.kubeconfig_b64 = None,
-                    ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
-                }
+                x.kubeconfig_b64 = None;
                 let mut current_secret = x.clone();
-                match current_secret {
-                    ClusterSecrets::Aws(ref mut x) => x.kubeconfig_b64 = None,
-                    ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
-                }
+                current_secret.kubeconfig_b64 = None;
                 if x == current_secret {
                     return Ok(None);
                 }
@@ -275,13 +191,7 @@ impl ClusterSecrets {
             Err(_) => {}
         };
 
-        // create a new secret
-        let (vault_mount_name, secret_name) = match self {
-            ClusterSecrets::Aws(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
-            ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
-        };
-
-        match qvault_client.crate_update_secret(vault_mount_name, secret_name, self) {
+        match qvault_client.crate_update_secret(self.vault_mount_name.as_str(), self.cluster_id.as_str(), self) {
             Ok(x) => Ok(Some(x)),
             Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_created_or_updated(
                 event_details,
@@ -301,12 +211,7 @@ impl ClusterSecrets {
         qvault_client: &QVaultClient,
         event_details: EventDetails,
     ) -> Result<(), Box<EngineError>> {
-        let (vault_mount_name, secret_name) = match self {
-            ClusterSecrets::Aws(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
-            ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
-        };
-
-        match qvault_client.delete_secret(vault_mount_name, secret_name) {
+        match qvault_client.delete_secret(self.vault_mount_name.as_str(), self.cluster_id.as_str()) {
             Ok(_) => Ok(()),
             Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_created_or_updated(
                 event_details,
@@ -322,8 +227,8 @@ impl ClusterSecrets {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::aws::kubernetes::vault::ClusterSecretsAws;
     use crate::cloud_provider::kubernetes::Kind;
-    use crate::cloud_provider::Kind as CloudProviderKind;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
     use crate::runtime::block_on;
@@ -333,8 +238,6 @@ mod tests {
     use vaultrs::api::kv2::responses::ReadSecretMetadataResponse;
     use vaultrs::error::ClientError;
     use vaultrs::kv2;
-
-    use super::{ClusterSecrets, ClusterSecretsAws};
 
     fn get_event_details() -> EventDetails {
         EventDetails::new(
@@ -347,8 +250,8 @@ mod tests {
         )
     }
 
-    fn cluster_aws_secret(cluster_id: Uuid, org_id: String) -> ClusterSecrets {
-        ClusterSecrets::Aws(ClusterSecretsAws::new(
+    fn cluster_secret() -> ClusterSecretsAws {
+        ClusterSecretsAws::new(
             "AWSACCESSKEY".to_string(),
             "us-west-42".to_string(),
             "AWSSECRETKEY".to_string(),
@@ -356,12 +259,12 @@ mod tests {
             Some("http://127.0.0.1:443".to_string()),
             Kind::Ec2,
             "cluster_name".to_string(),
-            cluster_id.to_string(),
+            Uuid::new_v4().to_string(),
             "admin".to_string(),
             "password".to_string(),
-            org_id,
+            "123e4567-e89b-12d3-a456-426614174000".to_string(),
             true,
-        ))
+        )
     }
 
     impl QVaultClient {
@@ -375,9 +278,7 @@ mod tests {
     fn manage_secret() {
         // todo(pmavro): check both auth (token/app_role), not only the one set
         let event_details = get_event_details();
-        let cluster_id = Uuid::new_v4();
-        let org_id = "123e4567-e89b-12d3-a456-426614174000".to_string();
-        let mut cluster_secret = cluster_aws_secret(cluster_id, org_id);
+        let mut cluster_secret = cluster_secret();
         let qvault_client =
             QVaultClient::new(event_details.clone()).expect("should have a vault connexion but something is missing");
 
@@ -393,10 +294,9 @@ mod tests {
 
         // read created secret to ensure it's present
         assert_eq!(
-            ClusterSecrets::get_secret(
+            ClusterSecretsAws::get_secret(
                 &qvault_client,
-                CloudProviderKind::Aws,
-                cluster_id.to_string().as_str(),
+                cluster_secret.cluster_id.as_str(),
                 true, // keep it this way to avoid searching in the wrong path
                 event_details.clone()
             ),
@@ -405,7 +305,7 @@ mod tests {
 
         // update with new content (version should be 2)
         let org_uuid = Uuid::new_v4();
-        cluster_secret.set_organization_id(org_uuid.to_string());
+        cluster_secret.organization_id = org_uuid.to_string();
         assert_eq!(
             cluster_secret
                 .create_or_update_secret(&qvault_client, false, event_details.clone())
@@ -417,10 +317,9 @@ mod tests {
 
         // read updated secret
         assert_eq!(
-            ClusterSecrets::get_secret(
+            ClusterSecretsAws::get_secret(
                 &qvault_client,
-                CloudProviderKind::Aws,
-                cluster_id.to_string().as_str(),
+                cluster_secret.cluster_id.as_str(),
                 true,
                 event_details.clone()
             ),
@@ -442,7 +341,7 @@ mod tests {
         // ensure we're still on v2 and no update have been made
         assert_eq!(
             qvault_client
-                .get_secret_metadata(cluster_id.to_string().as_str())
+                .get_secret_metadata(cluster_secret.cluster_id.as_str())
                 .unwrap()
                 .current_version,
             2

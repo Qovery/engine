@@ -34,7 +34,6 @@ pub mod qovery;
 pub mod scaleway;
 pub mod service;
 pub mod utilities;
-pub mod vault;
 
 pub trait CloudProvider: Send {
     fn context(&self) -> &Context;
