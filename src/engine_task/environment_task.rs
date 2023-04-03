@@ -113,9 +113,17 @@ impl EnvironmentTask {
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
+        let mut build_needs_builpacks = false;
         let services_to_build = services
             .into_iter()
-            .filter(|srv| srv.build().is_some())
+            .filter(|srv| {
+                if let Some(build) = srv.build() {
+                    build_needs_builpacks = build_needs_builpacks || build.use_buildpacks();
+                    true
+                } else {
+                    false
+                }
+            })
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
@@ -125,30 +133,40 @@ impl EnvironmentTask {
         };
 
         // Provision necessary builder for being able to build in parallel
-        let nb_builder = max(min(max_build_in_parallel, services_to_build.len()), 1);
-        env_logger(format!(
-            "🧑‍🏭 Provisioning {nb_builder} docker builder for parallel build. This can take some time"
-        ));
-        let builder_handle = match infra_ctx.context().docker.spawn_builder(
-            NonZeroUsize::new(nb_builder).unwrap(),
-            infra_ctx
-                .kubernetes()
-                .cpu_architectures()
-                .iter()
-                .map(docker::Architecture::from)
-                .collect_vec()
-                .as_slice(),
-            &CommandKiller::from_cancelable(should_abort),
-        ) {
-            Ok(build_handle) => build_handle,
-            Err(err) => {
-                let build_error = to_build_error(first_service.long_id().to_string(), err);
-                let engine_error = build_platform::to_engine_error(
-                    first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
-                    build_error,
-                    "Cannot provision docker builder. Please retry later.".to_string(),
-                );
-                return Err(Box::new(engine_error));
+        let builder_handle = {
+            let nb_builder = if build_needs_builpacks {
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+                env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+                NonZeroUsize::new(1).unwrap()
+            } else {
+                NonZeroUsize::new(max(min(max_build_in_parallel, services_to_build.len()), 1)).unwrap()
+            };
+
+            env_logger(format!(
+                "🧑‍🏭 Provisioning {nb_builder} docker builder for parallel build. This can take some time"
+            ));
+            match infra_ctx.context().docker.spawn_builder(
+                nb_builder,
+                infra_ctx
+                    .kubernetes()
+                    .cpu_architectures()
+                    .iter()
+                    .map(docker::Architecture::from)
+                    .collect_vec()
+                    .as_slice(),
+                &CommandKiller::from_cancelable(should_abort),
+            ) {
+                Ok(build_handle) => build_handle,
+                Err(err) => {
+                    let build_error = to_build_error(first_service.long_id().to_string(), err);
+                    let engine_error = build_platform::to_engine_error(
+                        first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
+                        build_error,
+                        "Cannot provision docker builder. Please retry later.".to_string(),
+                    );
+                    return Err(Box::new(engine_error));
+                }
             }
         };
 

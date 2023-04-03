@@ -897,16 +897,16 @@ mod tests {
         assert!(matches!(ret, Ok(_)));
     }
 
-    #[ignore]
+    #[cfg(feature = "test-local-kube")]
     #[test]
     fn test_with_kube_builder() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let args = vec![
             ("AWS_DEFAULT_REGION", "eu-west-3"),
-            ("AWS_SECRET_ACCESS_KEY", "xxxxx"),
-            ("AWS_ACCESS_KEY_ID", "xxxx"),
-            ("KUBECONFIG", "xxx"),
+            // ("AWS_SECRET_ACCESS_KEY", "xxxxx"),
+            // ("AWS_ACCESS_KEY_ID", "xxxx"),
+            // ("KUBECONFIG", "xxx"),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -915,10 +915,10 @@ mod tests {
         let docker = Docker::new_with_kube_builder(
             None,
             &[Architecture::ARM64, Architecture::AMD64],
-            "qovery",
+            "default",
             Uuid::new_v4().to_string().as_str(),
-            (1, 1),
-            (1, 1),
+            (0, 1),
+            (0, 1),
             args,
         )
         .unwrap();

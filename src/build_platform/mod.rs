@@ -107,6 +107,10 @@ impl Build {
             &self.git_repository.commit_id,
         );
     }
+
+    pub fn use_buildpacks(&self) -> bool {
+        self.git_repository.dockerfile_path.is_none()
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
