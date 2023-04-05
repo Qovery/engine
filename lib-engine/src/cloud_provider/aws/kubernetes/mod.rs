@@ -24,7 +24,6 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
-use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
@@ -36,6 +35,7 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
+use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
@@ -68,7 +68,6 @@ pub mod eks_helm_charts;
 pub mod helm_charts;
 pub mod node;
 pub mod roles;
-mod vault;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1025,23 +1024,20 @@ fn create(
         }
     }
 
-    let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
-        ClusterSecretsIoAws::new(
-            kubernetes.cloud_provider().access_key_id(),
-            kubernetes.region().to_string(),
-            kubernetes.cloud_provider().secret_access_key(),
-            None,
-            None,
-            kubernetes.kind(),
-            kubernetes.cluster_name(),
-            kubernetes_long_id.to_string(),
-            options.grafana_admin_user.clone(),
-            options.grafana_admin_password.clone(),
-            kubernetes.cloud_provider().organization_long_id().to_string(),
-            kubernetes.context().is_test_cluster().to_string(),
-        ),
-        event_details.clone(),
-    )?;
+    let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+        kubernetes.cloud_provider().access_key_id(),
+        kubernetes.region().to_string(),
+        kubernetes.cloud_provider().secret_access_key(),
+        None,
+        None,
+        kubernetes.kind(),
+        kubernetes.cluster_name(),
+        kubernetes_long_id.to_string(),
+        options.grafana_admin_user.clone(),
+        options.grafana_admin_password.clone(),
+        kubernetes.cloud_provider().organization_long_id().to_string(),
+        kubernetes.context().is_test_cluster(),
+    ));
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
@@ -1064,7 +1060,7 @@ fn create(
                 Err(_) => None,
             };
             if let Some(vault) = vault_conn {
-                cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+                cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
                 // update info without taking care of the kubeconfig because we don't have it yet
                 let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
             };
@@ -1185,7 +1181,7 @@ fn create(
         let kubeconfig_content =
             fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
         let kubeconfig_b64 = base64::encode(kubeconfig_content);
-        cluster_secrets.kubeconfig_b64 = Some(kubeconfig_b64);
+        cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
 
         // update info without taking care of the kubeconfig because we don't have it yet
         let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
@@ -1712,25 +1708,22 @@ fn delete(
                 Ok(x) => Some(x),
                 Err(_) => None,
             };
-            let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
-                ClusterSecretsIoAws::new(
-                    kubernetes.cloud_provider().access_key_id(),
-                    kubernetes.region().to_string(),
-                    kubernetes.cloud_provider().secret_access_key(),
-                    None,
-                    None,
-                    kubernetes.kind(),
-                    kubernetes.cluster_name(),
-                    kubernetes.long_id().to_string(),
-                    options.grafana_admin_user.clone(),
-                    options.grafana_admin_password.clone(),
-                    kubernetes.cloud_provider().organization_id().to_string(),
-                    kubernetes.context().is_test_cluster().to_string(),
-                ),
-                event_details.clone(),
-            )?;
+            let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+                kubernetes.cloud_provider().access_key_id(),
+                kubernetes.region().to_string(),
+                kubernetes.cloud_provider().secret_access_key(),
+                None,
+                None,
+                kubernetes.kind(),
+                kubernetes.cluster_name(),
+                kubernetes.long_id().to_string(),
+                options.grafana_admin_user.clone(),
+                options.grafana_admin_password.clone(),
+                kubernetes.cloud_provider().organization_id().to_string(),
+                kubernetes.context().is_test_cluster(),
+            ));
             if let Some(vault) = vault_conn {
-                cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+                cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
                 // update info without taking care of the kubeconfig because we don't have it yet
                 let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
             };
