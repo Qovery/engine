@@ -413,7 +413,7 @@ scw-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   only:
     refs:
       - merge_requests
