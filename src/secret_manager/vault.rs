@@ -147,7 +147,7 @@ impl QVaultClient {
 pub fn get_vault_mount_name(is_test_cluster: bool) -> String {
     match is_test_cluster {
         false => "official-clusters-access",
-        true => "engine-unit-tests",
+        true => "engine-unit-test",
     }
     .to_string()
 }

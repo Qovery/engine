@@ -20,6 +20,7 @@ use crate::models::database::{
 };
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
+use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
@@ -36,7 +37,6 @@ use aws_sdk_elasticache::error::DescribeCacheClustersError;
 use aws_sdk_elasticache::output::DescribeCacheClustersOutput;
 use aws_sdk_rds::error::DescribeDBInstancesError;
 use aws_sdk_rds::output::DescribeDbInstancesOutput;
-use aws_types::SdkConfig;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};

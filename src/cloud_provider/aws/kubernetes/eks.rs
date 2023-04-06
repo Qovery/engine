@@ -24,11 +24,11 @@ use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use async_trait::async_trait;
-use aws_config::SdkConfig;
 use aws_sdk_eks::error::{
     DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
 };
-use aws_sdk_eks::model::NodegroupIssueCode;
+use aws_types::SdkConfig;
+
 use aws_sdk_eks::output::{
     DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
 };
@@ -813,7 +813,7 @@ pub async fn delete_eks_failed_nodegroups(
                                     .issues()
                                     .unwrap_or_default()
                                     .iter()
-                                    .map(|x| format!("{:?}: {}", x.code().unwrap_or(&NodegroupIssueCode::Unknown("unknown AWS nodegroup code".to_string())), x.message().unwrap_or("no AWS specific message given, please contact Qovery and AWS support regarding this nodegroup issue")))
+                                    .map(|x| format!("{:?}: {}", x.code(), x.message().unwrap_or("no AWS specific message given, please contact Qovery and AWS support regarding this nodegroup issue")))
                                     .collect::<Vec<String>>()
                                     .join(", "),
                                 None => "can't get nodegroup status from cloud provider".to_string(),
