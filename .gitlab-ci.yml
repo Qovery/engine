@@ -108,7 +108,7 @@ check-pr-labels-is-set:
   stage: minimal-tests
   retry: 0
   script:
-    - test $CI_MERGE_REQUEST_LABELS == "" && exit 1
+    - if [ "$CI_MERGE_REQUEST_LABELS" == "" ] ; then echo "You need to set labels to make the job success" ; exit 1 ; fi
   when: always
   tags:
     - vm-250mcpu-1gmem-0g
