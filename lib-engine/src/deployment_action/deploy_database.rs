@@ -16,7 +16,7 @@ use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::database::{
-    get_database_with_invalid_storage_size, Container, Database, DatabaseService, DatabaseType, Managed,
+    get_database_with_invalid_storage_size, Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed,
 };
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -445,14 +445,18 @@ fn managed_database_exists(
             let result = match block_on(aws_conn.find_managed_rds_database(db_id)) {
                 Ok(result) => result,
                 Err(e) => {
-                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
-                        true => Ok(false),
-                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_rds_instances(
+                    let err = e.to_string();
+                    return match DatabaseError::from_rds_sdk_error(e, db_type, db_id.to_string()) {
+                        DatabaseError::DatabaseNotFound {
+                            database_type: _,
+                            database_id: _,
+                        } => Ok(false),
+                        _ => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
                             event_details.clone(),
-                            e,
+                            err,
                             Some(db_id),
                         ))),
-                    }
+                    };
                 }
             };
 
@@ -468,14 +472,18 @@ fn managed_database_exists(
             let result = match block_on(aws_conn.find_managed_doc_db_database(db_id)) {
                 Ok(result) => result,
                 Err(e) => {
-                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
-                        true => Ok(false),
-                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_doc_db_clusters(
+                    let err = e.to_string();
+                    return match DatabaseError::from_documentdb_sdk_error(e, db_type, db_id.to_string()) {
+                        DatabaseError::DatabaseNotFound {
+                            database_type: _,
+                            database_id: _,
+                        } => Ok(false),
+                        _ => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
                             event_details.clone(),
-                            e,
+                            err,
                             Some(db_id),
                         ))),
-                    }
+                    };
                 }
             };
 
@@ -491,14 +499,18 @@ fn managed_database_exists(
             let result = match block_on(aws_conn.find_managed_elasticache_database(db_id)) {
                 Ok(result) => result,
                 Err(e) => {
-                    return match e.to_string().contains("not found") && e.to_string().contains(db_id) {
-                        true => Ok(false),
-                        false => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
+                    let err = e.to_string();
+                    return match DatabaseError::from_elasticache_sdk_error(e, db_type, db_id.to_string()) {
+                        DatabaseError::DatabaseNotFound {
+                            database_type: _,
+                            database_id: _,
+                        } => Ok(false),
+                        _ => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
                             event_details.clone(),
-                            e,
+                            err,
                             Some(db_id),
                         ))),
-                    }
+                    };
                 }
             };
             match result.cache_clusters() {
