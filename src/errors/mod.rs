@@ -4,6 +4,7 @@ extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
+use crate::cloud_provider::service::DatabaseType;
 use crate::cloud_provider::Kind;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
@@ -14,6 +15,7 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::command;
 use crate::events::{EventDetails, Stage};
+use crate::models::database::DatabaseError;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use aws_sdk_docdb::error::DescribeDBClustersError;
@@ -285,6 +287,63 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+        }
+    }
+}
+
+impl DatabaseError {
+    pub fn from_rds_sdk_error(
+        sdk_error: RdsSdkError<DescribeDBInstancesError>,
+        database_type: DatabaseType,
+        database_id: String,
+    ) -> Self {
+        let err = sdk_error.to_string();
+        match sdk_error.into_service_error().kind {
+            aws_sdk_rds::error::DescribeDBInstancesErrorKind::DbInstanceNotFoundFault(_) => {
+                DatabaseError::DatabaseNotFound {
+                    database_type,
+                    database_id,
+                }
+            }
+            _ => DatabaseError::UnknownError(err),
+        }
+    }
+}
+
+impl DatabaseError {
+    pub fn from_elasticache_sdk_error(
+        sdk_error: ElasticacheSdkError<DescribeCacheClustersError>,
+        database_type: DatabaseType,
+        database_id: String,
+    ) -> Self {
+        let err = sdk_error.to_string();
+        match sdk_error.into_service_error().kind {
+            aws_sdk_elasticache::error::DescribeCacheClustersErrorKind::CacheClusterNotFoundFault(_) => {
+                DatabaseError::DatabaseNotFound {
+                    database_type,
+                    database_id,
+                }
+            }
+            _ => DatabaseError::UnknownError(err),
+        }
+    }
+}
+
+impl DatabaseError {
+    pub fn from_documentdb_sdk_error(
+        sdk_error: DocdbSdkError<DescribeDBClustersError>,
+        database_type: DatabaseType,
+        database_id: String,
+    ) -> Self {
+        let err = sdk_error.to_string();
+        match sdk_error.into_service_error().kind {
+            aws_sdk_docdb::error::DescribeDBClustersErrorKind::DbClusterNotFoundFault(_) => {
+                DatabaseError::DatabaseNotFound {
+                    database_type,
+                    database_id,
+                }
+            }
+            _ => DatabaseError::UnknownError(err),
         }
     }
 }
@@ -3540,7 +3599,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     pub fn new_aws_sdk_cannot_list_elasticache_clusters(
         event_details: EventDetails,
-        error: ElasticacheSdkError<DescribeCacheClustersError>,
+        raw_error: String,
         db_id: Option<&str>,
     ) -> EngineError {
         let message = match db_id {
@@ -3552,7 +3611,7 @@ impl EngineError {
             event_details,
             Tag::AwsSdkListElasticacheClusters,
             message.clone(),
-            Some(CommandError::new(message, Some(error.to_string()), None)),
+            Some(CommandError::new(message, Some(raw_error), None)),
             None,
             None,
         )

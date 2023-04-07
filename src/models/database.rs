@@ -81,6 +81,15 @@ pub enum DatabaseError {
 
     #[error("Managed database for {0:?} is not supported (yet) by provider {1}")]
     UnsupportedManagedMode(service::DatabaseType, String),
+
+    #[error("Database not found error for `{database_type:?}/{database_id}`")]
+    DatabaseNotFound {
+        database_type: service::DatabaseType,
+        database_id: String,
+    },
+
+    #[error("Unknown Database error: {0}")]
+    UnknownError(String),
 }
 
 pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
