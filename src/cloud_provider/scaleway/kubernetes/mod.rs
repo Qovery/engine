@@ -14,8 +14,8 @@ use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, 
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
+use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
@@ -36,8 +36,10 @@ use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
+use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
 use crate::utilities::to_short_id;
+use crate::{cmd, secret_manager};
 use ::function_name::named;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
@@ -48,6 +50,7 @@ use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -722,6 +725,45 @@ impl Kapsule {
                 CommandError::new_from_safe_message("Error, no cluster found from the Scaleway API".to_string()),
             )));
         }
+
+        let cluster_endpoint = match cluster_info.clone() {
+            Some(x) => x.cluster_url,
+            None => None,
+        };
+        let mut cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
+            self.cloud_provider.access_key_id(),
+            self.cloud_provider.secret_access_key(),
+            self.options.scaleway_project_id.to_string(),
+            self.region().to_string(),
+            self.zone().to_string(),
+            None,
+            cluster_endpoint,
+            self.kind(),
+            self.cloud_provider().name().to_string(),
+            self.long_id().to_string(),
+            self.options.grafana_admin_user.clone(),
+            self.options.grafana_admin_password.clone(),
+            self.cloud_provider.organization_long_id().to_string(),
+            self.context().is_test_cluster(),
+        ));
+
+        // send cluster info with kubeconfig
+        // create vault connection (Vault connectivity should not be on the critical deployment path,
+        // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            // encode base64 kubeconfig
+            let kubeconfig_content =
+                fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
+            let kubeconfig_b64 = base64::encode(kubeconfig_content);
+            cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
+
+            // update info without taking care of the kubeconfig because we don't have it yet
+            let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
+        };
 
         let current_nodegroups = match self
             .get_existing_sanitized_node_groups(cluster_info.expect("A cluster should be present at this create stage"))
@@ -1422,16 +1464,25 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform destroy".to_string()),
         ));
 
-        match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
-            Ok(_) => {
-                self.logger().log(EngineEvent::Info(
-                    event_details,
-                    EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
-                ));
-                Ok(())
-            }
-            Err(err) => Err(Box::new(EngineError::new_terraform_error(event_details, err))),
+        if let Err(err) = cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
+            return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
+
+        // delete info on vault
+        let vault_conn = QVaultClient::new(event_details.clone());
+        if let Ok(vault_conn) = vault_conn {
+            let mount = secret_manager::vault::get_vault_mount_name(self.context().is_test_cluster());
+
+            // ignore on failure
+            let _ = vault_conn.delete_secret(mount.as_str(), self.long_id().to_string().as_str());
+        };
+
+        self.logger().log(EngineEvent::Info(
+            event_details,
+            EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
+        ));
+
+        Ok(())
     }
 
     fn delete_error(&self) -> Result<(), Box<EngineError>> {

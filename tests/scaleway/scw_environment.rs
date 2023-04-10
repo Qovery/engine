@@ -256,6 +256,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore] // we don't want to support buildpack in middle term, and we know this one randomly fails
 #[test]
 fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
     let test_name = function_name!();
