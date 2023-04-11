@@ -363,6 +363,7 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_schedule(&self) -> &JobSchedule;
     fn max_duration(&self) -> &Duration;
+    fn max_restarts(&self) -> u32;
     fn is_force_trigger(&self) -> bool;
 }
 
@@ -402,6 +403,10 @@ where
 
     fn max_duration(&self) -> &Duration {
         &self.max_duration
+    }
+
+    fn max_restarts(&self) -> u32 {
+        self.max_nb_restart
     }
 
     fn is_force_trigger(&self) -> bool {
