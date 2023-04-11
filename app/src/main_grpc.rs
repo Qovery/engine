@@ -344,12 +344,16 @@ pub fn main() -> io::Result<()> {
     };
 
     let docker = if cli.builder_kube_enabled {
-        tokio_utils::launch_task(dead_builder_reaper(cli.builder_namespace.clone(), "qovery-engine".to_string()));
+        let builder_id = format!("builder-{}", &cli.engine_name);
+        tokio_utils::launch_task(dead_builder_reaper(
+            cli.builder_namespace.clone(),
+            builder_id[.."builder-qovery-engine".len()].to_string(),
+        ));
         Docker::new_with_kube_builder(
             cli.docker_host,
             &cli.builder_cpu_architectures,
             &cli.builder_namespace,
-            &cli.engine_name,
+            &builder_id,
             (cli.builder_cpu_request, cli.builder_cpu_limit),
             (cli.builder_memory_request_gib, cli.builder_memory_limit_gib),
             vec![],
@@ -646,7 +650,6 @@ async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) 
     let client = kube::Client::try_default().await?;
     let deployments_api: Api<Deployment> = Api::namespaced(client, &builder_namespace);
     let max_allowed_lifetime = chrono::Duration::hours(6);
-    let builder_prefix = format!("builder-{}", builder_prefix);
 
     loop {
         info!("Running dead builder reaper for namespace: {builder_namespace} with max allowed lifetime of {max_allowed_lifetime}");
