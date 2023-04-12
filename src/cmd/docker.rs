@@ -306,7 +306,7 @@ impl Docker {
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
                 for arch in requested_architectures {
-                    let node_name = format!("builder-{builder_id}-{arch}");
+                    let node_name = format!("{builder_id}-{arch}");
                     let platform = format!("linux/{arch}");
                     let driver_opt = format!(concat!(
                     "--driver-opt=",
