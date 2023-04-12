@@ -1,6 +1,6 @@
 use crate::cloud_provider::service::ServiceType;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use uuid::Uuid;
 
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -87,10 +87,19 @@ pub struct NodeGroups {
     pub instance_architecture: CpuArchitecture,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy, Hash)]
 pub enum CpuArchitecture {
     AMD64,
     ARM64,
+}
+
+impl fmt::Display for CpuArchitecture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CpuArchitecture::AMD64 => write!(f, "AMD64"),
+            CpuArchitecture::ARM64 => write!(f, "ARM64"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]

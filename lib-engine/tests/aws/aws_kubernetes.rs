@@ -81,20 +81,14 @@ fn create_and_destroy_arm64_eks_cluster(
     It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
 */
 
+// x86-64
+
 #[cfg(feature = "test-aws-infra")]
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
-}
-
-#[cfg(feature = "test-aws-infra")]
-#[named]
-#[test]
-fn create_and_destroy_arm64_eks_cluster_eu_west3() {
-    let region = "eu-west-3".to_string();
-    create_and_destroy_arm64_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
 }
 
 #[cfg(feature = "test-aws-infra")]
@@ -130,4 +124,14 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(region, ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
+}
+
+// ARM64
+
+#[cfg(feature = "test-aws-infra")]
+#[named]
+#[test]
+fn create_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
+    let region = "eu-west-3".to_string();
+    create_and_destroy_arm64_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
 }

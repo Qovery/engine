@@ -16,7 +16,7 @@ impl AwsVpcCniAddon {
             version: match k8s_version {
                 KubernetesVersion::V1_22 { .. } => "v1.11.4-eksbuild.1",
                 KubernetesVersion::V1_23 { .. } => "v1.12.1-eksbuild.1",
-                KubernetesVersion::V1_24 { .. } => "v1.12.1-eksbuild.1",
+                KubernetesVersion::V1_24 { .. } => "v1.12.2-eksbuild.1",
             }
             .to_string(),
         }

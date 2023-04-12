@@ -5,6 +5,8 @@ mod database_utils;
 mod job;
 mod router;
 
+use std::fmt::{Display, Formatter};
+
 use crate::models::types::{AWSEc2, CloudProvider};
 
 pub struct AwsEc2AppExtraSettings {}
@@ -44,4 +46,27 @@ pub enum AwsEc2StorageType {
     ST1,
     GP2,
     IO1,
+}
+
+impl Display for AwsEc2StorageType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AwsEc2StorageType::SC1 => write!(f, "SC1"),
+            AwsEc2StorageType::ST1 => write!(f, "ST1"),
+            AwsEc2StorageType::GP2 => write!(f, "GP2"),
+            AwsEc2StorageType::IO1 => write!(f, "IO1"),
+        }
+    }
+}
+
+impl AwsEc2StorageType {
+    pub fn to_k8s_storage_class(&self) -> String {
+        match self {
+            AwsEc2StorageType::SC1 => "aws-ebs-sc1-0",
+            AwsEc2StorageType::ST1 => "aws-ebs-st1-0",
+            AwsEc2StorageType::GP2 => "aws-ebs-gp2-0",
+            AwsEc2StorageType::IO1 => "aws-ebs-io1-0",
+        }
+        .to_string()
+    }
 }

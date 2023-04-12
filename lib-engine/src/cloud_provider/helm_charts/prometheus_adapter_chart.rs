@@ -48,7 +48,7 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
             chart_info: ChartInfo {
                 name: "prometheus-adapter".to_string(),
                 path: self.chart_path.to_string(),
-                last_breaking_version_requiring_restart: Some(Version::new(3, 3, 1)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
                 namespace: self.prometheus_namespace,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![ChartSetValue {

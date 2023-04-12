@@ -7,3 +7,11 @@ deleteLocalData: true
 ignoreDaemonSets: true
 podTerminationGracePeriod: 300
 nodeTerminationGracePeriod: 120
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi

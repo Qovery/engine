@@ -1,7 +1,6 @@
 prometheus:
   monitor:
-    enabled: true
-
+    enabled: false
 resources:
   limits:
     cpu: 75m

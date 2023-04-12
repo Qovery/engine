@@ -2,6 +2,7 @@ use core::fmt;
 use k8s_openapi::api::apps::v1::DaemonSet;
 use kube::api::{Patch, PatchParams};
 use kube::Api;
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
@@ -31,7 +32,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
 use crate::cloud_provider::models::{
-    KubernetesClusterAction, NodeGroups, NodeGroupsFormat, NodeGroupsWithDesiredState,
+    CpuArchitecture, KubernetesClusterAction, NodeGroups, NodeGroupsFormat, NodeGroupsWithDesiredState,
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
@@ -1224,6 +1225,13 @@ fn create(
         })?;
     }
 
+    // retrieve cluster CPU architectures
+    let mut nodegroups_arch_set = HashSet::new();
+    for n in node_groups {
+        nodegroups_arch_set.insert(n.instance_architecture);
+    }
+    let cpu_architectures = nodegroups_arch_set.into_iter().collect::<Vec<CpuArchitecture>>();
+
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
             let charts_prerequisites = EksChartsConfigPrerequisites {
@@ -1234,6 +1242,7 @@ fn create(
                 cluster_long_id: kubernetes_long_id,
                 region: kubernetes.region().to_string(),
                 cluster_name: kubernetes.cluster_name(),
+                cpu_architectures,
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),
                 aws_access_key_id: kubernetes.cloud_provider().access_key_id(),
@@ -1281,6 +1290,7 @@ fn create(
                 cluster_long_id: kubernetes_long_id,
                 region: kubernetes.region().to_string(),
                 cluster_name: kubernetes.cluster_name(),
+                cpu_architectures: cpu_architectures[0],
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),
                 aws_access_key_id: kubernetes.cloud_provider().access_key_id(),

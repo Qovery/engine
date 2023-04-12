@@ -1,4 +1,5 @@
 annotations:
+  artifacthub.io/license: Apache-2.0
   artifacthub.io/links: |
     - name: Chart Source
       url: https://github.com/prometheus-community/helm-charts
@@ -6,20 +7,20 @@ annotations:
       url: https://github.com/prometheus-operator/kube-prometheus
   artifacthub.io/operator: "true"
 apiVersion: v2
-appVersion: 0.56.3
+appVersion: v0.63.0
 dependencies:
 - condition: kubeStateMetrics.enabled
   name: kube-state-metrics
   repository: https://prometheus-community.github.io/helm-charts
-  version: 4.7.*
+  version: 5.4.*
 - condition: nodeExporter.enabled
   name: prometheus-node-exporter
   repository: https://prometheus-community.github.io/helm-charts
-  version: 3.1.*
+  version: 4.16.*
 - condition: grafana.enabled
   name: grafana
   repository: https://grafana.github.io/helm-charts
-  version: 6.29.*
+  version: 6.52.*
 description: kube-prometheus-stack collects Kubernetes manifests, Grafana dashboards,
   and Prometheus rules combined with documentation and scripts to provide easy to
   operate end-to-end Kubernetes cluster monitoring with Prometheus using the Prometheus
@@ -34,9 +35,6 @@ kubeVersion: '>=1.16.0-0'
 maintainers:
 - email: andrew@quadcorps.co.uk
   name: andrewgkew
-- name: bismarck
-- email: cedric@desaintmartin.fr
-  name: desaintmartin
 - email: gianrubio@gmail.com
   name: gianrubio
 - email: github.gkarthiks@gmail.com
@@ -47,9 +45,11 @@ maintainers:
   name: scottrigby
 - email: miroslav.hadzhiev@gmail.com
   name: Xtigyro
+- email: quentin.bisson@gmail.com
+  name: QuentinBisson
 name: kube-prometheus-stack
 sources:
 - https://github.com/prometheus-community/helm-charts
 - https://github.com/prometheus-operator/kube-prometheus
 type: application
-version: 35.5.0
+version: 45.10.1

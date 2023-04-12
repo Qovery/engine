@@ -73,7 +73,7 @@ spec:
       {{- end }}
       containers:
         - name: external-dns
-          image: {{ include "external-dns.image" . | quote }}
+          image: {{ template "external-dns.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
           {{- if .Values.command }}
           command: {{- include "common.tplvalues.render" (dict "value" .Values.command "context" $) | nindent 12 }}
@@ -443,6 +443,23 @@ spec:
                 secretKeyRef:
                   name: {{ template "external-dns.secretName" . }}
                   key: digitalocean_api_token
+            {{- end }}
+            {{- if (eq .Values.provider "exoscale") }}
+            # Exoscale environment variables
+            {{- if (or .Values.exoscale.apiKey .Values.exoscale.secretName) }}
+            - name: EXTERNAL_DNS_EXOSCALE_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: exoscale_api_key
+            {{- end }}
+            {{- if (or .Values.exoscale.apiToken .Values.exoscale.secretName) }}
+            - name: EXTERNAL_DNS_EXOSCALE_APISECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: exoscale_api_token
+            {{- end }}
             {{- end }}
             {{- if eq .Values.provider "google" }}
             # Google environment variables

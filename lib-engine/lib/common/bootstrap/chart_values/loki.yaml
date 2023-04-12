@@ -1,13 +1,14 @@
-image:
+kubectlImage:
+  registry: set-by-engine-code
   repository: set-by-engine-code
-config:
-  server:
-    http_listen_port: 3100
+
+loki:
+  image:
+    registry: set-by-engine-code
+    repository: set-by-engine-code
   auth_enabled: false
-  distributor:
-    ring:
-      kvstore:
-        store: memberlist # qovery setting
+  commonConfig:
+    replication_factor: 1 # qovery setting - single binary version
   ingester:
     chunk_idle_period: 3m # qovery setting
     chunk_block_size: 262144 # qovery setting
@@ -18,6 +19,14 @@ config:
         kvstore:
           store: memberlist # qovery setting
         replication_factor: 1 # qovery setting
+  memberlist:
+    abort_if_cluster_join_fails: false # qovery setting
+    bind_port: 7946 # qovery setting
+    join_members:
+      - loki-headless.logging.svc:7946 # qovery setting
+    max_join_backoff: 1m # qovery setting
+    max_join_retries: 10 # qovery setting
+    min_join_backoff: 1s # qovery setting
   limits_config:
     ingestion_rate_mb: 20 # qovery setting
     ingestion_burst_size_mb: 30 # qovery setting
@@ -25,12 +34,31 @@ config:
     reject_old_samples: true # qovery setting
     reject_old_samples_max_age: 168h # qovery setting
     max_concurrent_tail_requests: 100 # qovery setting (default 10)
+    split_queries_by_interval: 15m # qovery setting (default 15m)
+    max_query_lookback: 12w # qovery setting (default 0)
+  compactor:
+    working_directory: /data/retention
+    shared_store: aws
+    compaction_interval: 10m
+    retention_enabled: set-by-engine-code # qovery setting
+    retention_delete_delay: 2h
+    retention_delete_worker_count: 150
+  table_manager:
+    retention_deletes_enabled: set-by-engine-code # qovery setting
+    retention_period: set-by-engine-code # qovery setting
   schema_config:
     configs:
       - from: 2020-05-15
         store: boltdb-shipper
         object_store: s3
         schema: v11
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2023-06-01
+        store: boltdb-shipper
+        object_store: s3
+        schema: v12
         index:
           prefix: index_
           period: 24h
@@ -50,30 +78,52 @@ config:
       shared_store: s3
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
-  chunk_store_config:
-    max_look_back_period: 12w # qovery setting (default 12 week)
-  table_manager:
-    retention_deletes_enabled: true
-    retention_period: 12w # qovery setting (default 12 week)
-  memberlist:
-    abort_if_cluster_join_fails: false # qovery setting
-    bind_port: 7946 # qovery setting
-    join_members:
-      - loki-headless.logging.svc:7946 # qovery setting
-    max_join_backoff: 1m # qovery setting
-    max_join_retries: 10 # qovery setting
-    min_join_backoff: 1s # qovery setting
 
-extraPorts:
-  - name: gossip
-    port: 7946
-    protocol: TCP
-    targetPort: 7946
+monitoring:
+  dashboards:
+    enabled: false # qovery setting (we don't want a dedicated grafana to be deployed)
+  rules:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+    metricsInstance:
+      enabled: false # qovery setting (single binary version)
+  selfMonitoring:
+    enabled: false # qovery setting (single binary version)
+    grafanaAgent:
+      installOperator: false # qovery setting (single binary version)or: false
 
-resources:
-  limits:
-    cpu: 1
-    memory: 2Gi
-  requests:
-    cpu: 300m
-    memory: 1Gi
+  grafanaAgent:
+    enabled: false # qovery setting (single binary version)
+  lokiCanary:
+    enabled: false # qovery setting (single binary version)
+
+test:
+  enabled: false # qovery setting (single binary version)
+
+gateway:
+  enabled: false # qovery setting (single binary version)
+
+singleBinary:
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 300m
+      memory: 1Gi
+  persistence:
+    enabled: false
+  extraVolumes:
+    - name: data
+      emptyDir: {}
+    - name: storage
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: data
+      mountPath: /data
+    - name: storage
+      mountPath: /var/loki
+  # persistence:
+  #   storageClass: set-by-engine-code # qovery setting

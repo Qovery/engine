@@ -176,17 +176,14 @@ function deploy_engines_envs() { ## Release GA to prod
   helm upgrade --kubeconfig="$CI_KUBECONFIG_ENGINES_AWS" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
+  --set image.tag="$tag",\
+buildContainer.enabled="true",\
 environmentVariables.BUILDER_KUBE_ENABLED='true',\
 environmentVariables.BUILDER_CPU_ARCHITECTURES='AMD64\,ARM64',\
 environmentVariables.BUILDER_CPU_REQUEST='3',\
 environmentVariables.BUILDER_CPU_LIMIT='4',\
 environmentVariables.BUILDER_MEMORY_REQUEST_GIB='6',\
 environmentVariables.BUILDER_MEMORY_LIMIT_GIB='7',\
-buildResources.requests.cpu="3",\
-buildResources.limits.cpu="4",\
-buildResources.requests.memory="6Gi",\
-buildResources.limits.memory="7Gi"\
-  --set image.tag="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
@@ -198,8 +195,6 @@ environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="4ceb7649-ed84-4c52-a27b-e7fca06afaa5",\
 environmentVariables.CLUSTER_JWT_TOKEN="$ENV_CLUSTER_JWT_TOKEN",\
-buildContainer.enabled="true",\
-volumes.useNetworkDisks="false",\
 metrics.enabled="true",\
 autoscaler.enabled="true",\
 autoscaler.minReplicas="2",\

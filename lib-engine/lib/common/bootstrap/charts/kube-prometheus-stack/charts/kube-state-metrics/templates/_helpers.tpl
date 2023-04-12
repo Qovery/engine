@@ -77,6 +77,80 @@ release: {{ .Release.Name }}
 Selector labels
 */}}
 {{- define "kube-state-metrics.selectorLabels" }}
+{{- if .Values.selectorOverride }}
+{{ toYaml .Values.selectorOverride }}
+{{- else }}
 app.kubernetes.io/name: {{ include "kube-state-metrics.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- end }}
+
+{{/* Sets default scrape limits for servicemonitor */}}
+{{- define "servicemonitor.scrapeLimits" -}}
+{{- with .sampleLimit }}
+sampleLimit: {{ . }}
+{{- end }}
+{{- with .targetLimit }}
+targetLimit: {{ . }}
+{{- end }}
+{{- with .labelLimit }}
+labelLimit: {{ . }}
+{{- end }}
+{{- with .labelNameLengthLimit }}
+labelNameLengthLimit: {{ . }}
+{{- end }}
+{{- with .labelValueLengthLimit }}
+labelValueLengthLimit: {{ . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Formats imagePullSecrets. Input is (dict "Values" .Values "imagePullSecrets" .{specific imagePullSecrets})
+*/}}
+{{- define "kube-state-metrics.imagePullSecrets" -}}
+{{- range (concat .Values.global.imagePullSecrets .imagePullSecrets) }}
+  {{- if eq (typeOf .) "map[string]interface {}" }}
+- {{ toYaml . | trim }}
+  {{- else }}
+- name: {{ . }}
+  {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+The image to use for kube-state-metrics
+*/}}
+{{- define "kube-state-metrics.image" -}}
+{{- if .Values.image.sha }}
+{{- if .Values.global.imageRegistry }}
+{{- printf "%s/%s:%s@%s" .Values.global.imageRegistry .Values.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.image.tag) .Values.image.sha }}
+{{- else }}
+{{- printf "%s/%s:%s@%s" .Values.image.registry .Values.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.image.tag) .Values.image.sha }}
+{{- end }}
+{{- else }}
+{{- if .Values.global.imageRegistry }}
+{{- printf "%s/%s:%s" .Values.global.imageRegistry .Values.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.image.tag) }}
+{{- else }}
+{{- printf "%s/%s:%s" .Values.image.registry .Values.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.image.tag) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+The image to use for kubeRBACProxy
+*/}}
+{{- define "kubeRBACProxy.image" -}}
+{{- if .Values.kubeRBACProxy.image.sha }}
+{{- if .Values.global.imageRegistry }}
+{{- printf "%s/%s:%s@%s" .Values.global.imageRegistry .Values.kubeRBACProxy.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.kubeRBACProxy.image.tag) .Values.kubeRBACProxy.image.sha }}
+{{- else }}
+{{- printf "%s/%s:%s@%s" .Values.kubeRBACProxy.image.registry .Values.kubeRBACProxy.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.kubeRBACProxy.image.tag) .Values.kubeRBACProxy.image.sha }}
+{{- end }}
+{{- else }}
+{{- if .Values.global.imageRegistry }}
+{{- printf "%s/%s:%s" .Values.global.imageRegistry .Values.kubeRBACProxy.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.kubeRBACProxy.image.tag) }}
+{{- else }}
+{{- printf "%s/%s:%s" .Values.kubeRBACProxy.image.registry .Values.kubeRBACProxy.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.kubeRBACProxy.image.tag) }}
+{{- end }}
+{{- end }}
 {{- end }}
