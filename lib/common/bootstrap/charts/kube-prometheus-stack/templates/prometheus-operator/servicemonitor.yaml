@@ -7,7 +7,11 @@ metadata:
   labels:
     app: {{ template "kube-prometheus-stack.name" . }}-operator
 {{ include "kube-prometheus-stack.labels" . | indent 4 }}
+{{- with .Values.prometheusOperator.serviceMonitor.additionalLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
 spec:
+  {{- include "servicemonitor.scrapeLimits" .Values.prometheusOperator.serviceMonitor | nindent 2 }}
   endpoints:
   {{- if .Values.prometheusOperator.tls.enabled }}
   - port: https

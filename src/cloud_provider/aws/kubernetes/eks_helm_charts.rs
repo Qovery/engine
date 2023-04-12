@@ -6,6 +6,7 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::qovery::EngineLocation;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -30,6 +31,7 @@ use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::models::aws::AwsStorageType;
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -58,6 +60,7 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_long_id: uuid::Uuid,
     pub region: String,
     pub cluster_name: String,
+    pub cpu_architectures: Vec<CpuArchitecture>,
     pub cloud_provider: String,
     pub test_cluster: bool,
     pub aws_access_key_id: String,
@@ -231,7 +234,7 @@ pub fn eks_aws_helm_charts(
         true => Some(
             KubePrometheusStackChart::new(
                 chart_prefix_path,
-                "aws-ebs-gp2-0".to_string(),
+                AwsStorageType::GP2.to_k8s_storage_class(),
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 false,
@@ -294,7 +297,7 @@ pub fn eks_aws_helm_charts(
                         qovery_terraform_config.aws_iam_cloudwatch_secret,
                     )),
                 },
-                "aws-ebs-gp2-0".to_string(), // TODO(benjaminch): introduce proper type here
+                AwsStorageType::GP2.to_k8s_storage_class(),
             )
             .to_common_helm_chart(),
         ),
@@ -331,6 +334,15 @@ pub fn eks_aws_helm_charts(
                 ChartSetValue {
                     key: "controller.admissionWebhooks.enabled".to_string(),
                     value: "false".to_string(),
+                },
+                // metrics
+                ChartSetValue {
+                    key: "controller.metrics.enabled".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                },
+                ChartSetValue {
+                    key: "controller.metrics.serviceMonitor.enabled".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
                 },
                 // Controller resources limits
                 ChartSetValue {
@@ -462,18 +474,17 @@ pub fn eks_aws_helm_charts(
                         CommandError::new("cannot get engine version".to_string(), Some(e.to_string()), None)
                     })?,
                 },
-                ChartSetValue {
-                    key: "autoscaler.min_replicas".to_string(),
-                    value: "1".to_string(),
-                },
+                // metrics
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
                     value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
                 },
+                // autoscaler
                 ChartSetValue {
-                    key: "volumes.storageClassName".to_string(),
-                    value: "aws-ebs-gp2-0".to_string(),
+                    key: "autoscaler.enabled".to_string(),
+                    value: "true".to_string(),
                 },
+                // env vars
                 ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
                     value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
@@ -510,39 +521,55 @@ pub fn eks_aws_helm_charts(
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: chart_config_prerequisites.organization_long_id.to_string(),
                 },
+                // builder (look also in values string)
+                ChartSetValue {
+                    key: "buildContainer.enabled".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES".to_string(),
+                    value: chart_config_prerequisites
+                        .cpu_architectures
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<String>>()
+                        .join(","),
+                },
                 // engine resources limits
                 ChartSetValue {
                     key: "engineResources.limits.cpu".to_string(),
-                    value: "1".to_string(),
+                    value: "1000m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.limits.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "2Gi".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "2Gi".to_string(),
                 },
-                // build resources limits
+            ],
+            values_string: vec![
+                // builder int as string
                 ChartSetValue {
-                    key: "buildResources.limits.cpu".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_REQUEST".to_string(),
                     value: "1".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_LIMIT".to_string(),
+                    value: "1".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.limits.memory".to_string(),
-                    value: "4Gi".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_REQUEST_GIB".to_string(),
+                    value: "3".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.requests.memory".to_string(),
-                    value: "4Gi".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_LIMIT_GIB".to_string(),
+                    value: "3".to_string(),
                 },
             ],
             ..Default::default()

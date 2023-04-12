@@ -331,6 +331,15 @@ pub fn scw_helm_charts(
                     key: "controller.admissionWebhooks.enabled".to_string(),
                     value: "false".to_string(),
                 },
+                // metrics
+                ChartSetValue {
+                    key: "controller.metrics.enabled".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                },
+                ChartSetValue {
+                    key: "controller.metrics.serviceMonitor.enabled".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                },
                 // Controller resources limits
                 ChartSetValue {
                     key: "controller.resources.limits.cpu".to_string(),
@@ -461,17 +470,15 @@ pub fn scw_helm_charts(
                     })?,
                 },
                 ChartSetValue {
-                    key: "autoscaler.min_replicas".to_string(),
-                    value: "2".to_string(),
-                },
-                ChartSetValue {
                     key: "metrics.enabled".to_string(),
                     value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
                 },
+                // autoscaler
                 ChartSetValue {
-                    key: "volumes.storageClassName".to_string(),
-                    value: "scw-sbv-ssd-0".to_string(),
+                    key: "autoscaler.enabled".to_string(),
+                    value: "true".to_string(),
                 },
+                // env vars
                 ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
                     value: chart_config_prerequisites.organization_id.clone(),
@@ -508,39 +515,50 @@ pub fn scw_helm_charts(
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: chart_config_prerequisites.organization_long_id.to_string(),
                 },
+                // builder (look also in values string)
+                ChartSetValue {
+                    key: "buildContainer.enabled".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES".to_string(),
+                    value: "AMD64".to_string(), // Scaleway doesn't support ARM arch yet
+                },
                 // engine resources limits
                 ChartSetValue {
                     key: "engineResources.limits.cpu".to_string(),
-                    value: "1".to_string(),
+                    value: "1000m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.limits.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "2Gi".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "2Gi".to_string(),
                 },
-                // build resources limits
+            ],
+            values_string: vec![
+                // builder int as string
                 ChartSetValue {
-                    key: "buildResources.limits.cpu".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_REQUEST".to_string(),
                     value: "1".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_LIMIT".to_string(),
+                    value: "1".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.limits.memory".to_string(),
-                    value: "4Gi".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_REQUEST_GIB".to_string(),
+                    value: "3".to_string(),
                 },
                 ChartSetValue {
-                    key: "buildResources.requests.memory".to_string(),
-                    value: "4Gi".to_string(),
+                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_LIMIT_GIB".to_string(),
+                    value: "3".to_string(),
                 },
             ],
             ..Default::default()

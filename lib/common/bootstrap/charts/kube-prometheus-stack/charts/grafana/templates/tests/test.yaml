@@ -1,38 +1,36 @@
 {{- if .Values.testFramework.enabled }}
+{{- $root := . }}
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ template "grafana.fullname" . }}-test
+  name: {{ include "grafana.fullname" . }}-test
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test-success
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
-  namespace: {{ template "grafana.namespace" . }}
+  namespace: {{ include "grafana.namespace" . }}
 spec:
-  serviceAccountName: {{ template "grafana.serviceAccountNameTest" . }}
-  {{- if .Values.testFramework.securityContext }}
-  securityContext: {{ toYaml .Values.testFramework.securityContext | nindent 4 }}
+  serviceAccountName: {{ include "grafana.serviceAccountNameTest" . }}
+  {{- with .Values.testFramework.securityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
   {{- end }}
-  {{- $root := . }}
-  {{- if .Values.image.pullSecrets }}
+  {{- if or .Values.image.pullSecrets .Values.global.imagePullSecrets }}
   imagePullSecrets:
-  {{- range .Values.image.pullSecrets }}
-    - name: {{ tpl . $root }}
-  {{- end}}
+    {{- include "grafana.imagePullSecrets" (dict "root" $root "imagePullSecrets" .Values.image.pullSecrets) | nindent 4 }}
   {{- end }}
   {{- with .Values.nodeSelector }}
   nodeSelector:
-{{ toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
-  {{- $root := . }}
   {{- with .Values.affinity }}
   affinity:
-{{ tpl (toYaml .) $root | indent 4 }}
+    {{- tpl (toYaml .) $root | nindent 4 }}
   {{- end }}
   {{- with .Values.tolerations }}
   tolerations:
-{{ toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   containers:
     - name: {{ .Release.Name }}-test
@@ -44,8 +42,8 @@ spec:
           name: tests
           readOnly: true
   volumes:
-  - name: tests
-    configMap:
-      name: {{ template "grafana.fullname" . }}-test
+    - name: tests
+      configMap:
+        name: {{ include "grafana.fullname" . }}-test
   restartPolicy: Never
 {{- end }}

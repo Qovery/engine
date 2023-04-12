@@ -594,17 +594,14 @@ impl Helm {
         // then we compare this breaking version with the currently installed version if any.
         // If current installed version is older than breaking change one, then we delete
         // the chart before applying it.
-        if let Some(breaking_version) = &chart.last_breaking_version_requiring_restart {
+        if let Some(breaking_version) = &chart.reinstall_chart_if_installed_version_is_below_than {
             if let Some(installed_versions) =
                 self.get_chart_version(&chart.name, Some(chart.get_namespace_string().as_str()), envs)?
             {
-                if installed_versions.chart_version.is_some()
-                    && installed_versions
-                        .chart_version
-                        .expect("No chart version found")
-                        .lt(breaking_version)
-                {
-                    self.uninstall(chart, envs)?;
+                if let Some(version) = installed_versions.chart_version {
+                    if &version < breaking_version {
+                        self.uninstall(chart, envs)?;
+                    }
                 }
             }
         }

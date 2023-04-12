@@ -41,20 +41,12 @@ impl ToCommonHelmChart for PromtailChart {
         CommonChart {
             chart_info: ChartInfo {
                 name: PromtailChart::chart_name(),
-                last_breaking_version_requiring_restart: Some(Version::new(5, 1, 0)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
                 path: self.chart_path.to_string(),
                 // because of priorityClassName, we need to add it to kube-system
                 namespace: HelmChartNamespaces::KubeSystem,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
-                    ChartSetValue {
-                        key: "initContainer.image.registry".to_string(),
-                        value: "public.ecr.aws".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "initContainer.image.repository".to_string(),
-                        value: "r3m4q3r9/pub-mirror-busybox".to_string(),
-                    },
                     ChartSetValue {
                         key: "image.registry".to_string(),
                         value: "public.ecr.aws".to_string(),

@@ -38,18 +38,17 @@ environmentVariables:
   #CLOUD_PROVIDER: ""
   #REGION: ""
 
-volumes:
-  useNetworkDisks: true
-  storageClassName: ""
-  qoveryWorkspace:
-    size: 20Gi
-    path: /home/qovery/.qovery-workspace
-
 buildContainer:
   enabled: true
   image: public.ecr.aws/r3m4q3r9/pub-mirror-docker
-  tag: 20.10.23-dind
-
+  tag: 23.0.4-dind
+  environmentVariables:
+    BUILDER_KUBE_ENABLED: "true"
+    BUILDER_CPU_ARCHITECTURES: "ARM64"
+    BUILDER_CPU_REQUEST: "1"
+    BUILDER_CPU_LIMIT: "1"
+    BUILDER_MEMORY_REQUEST_GIB: "3"
+    BUILDER_MEMORY_LIMIT_GIB: "3"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -74,20 +73,13 @@ securityContext:
   # runAsNonRoot: true
   # runAsUser: 1000
 
-engineResources: {}
-
-buildResources:
-  {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+engineResources:
+  requests:
+    cpu: 200m
+    memory: 2Gi
+  limits:
+    cpu: 1
+    memory: 2Gi
 
 nodeSelector: {}
 

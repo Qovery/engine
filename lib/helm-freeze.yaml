@@ -1,10 +1,12 @@
 charts:
   - name: cert-manager
-    version: v1.11.0
+    version: v1.11.1
     repo_name: jetstack
+    comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns
     repo_name: bitnami
-    version: 6.14.0
+    version: 6.17.0
+    comment: https://artifacthub.io/packages/helm/bitnami/external-dns
   - name: grafana
     version: 6.16.10
     repo_name: grafana
@@ -14,47 +16,57 @@ charts:
       Need to look if we can move them out of this repo
   - name: ingress-nginx
     repo_name: ingress-nginx
-    version: 4.1.2
+    version: 4.6.0
+    comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 35.5.0
+    version: 45.10.1
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
-    version: 0.20.3
-  - name: aws-vpc-cni
-    repo_name: aws
-    dest: aws-bootstrap
-    version: 1.1.21
-  - name: aws-calico
-    repo_name: aws
-    dest: aws-bootstrap
-    version: 0.3.10
+    comment: https://github.com/aws/eks-charts/blob/master/stable/aws-node-termination-handler/Chart.yaml#L5
+    version: 0.21.0
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap
-    version: 9.21.1
+    version: 9.28.0
+    comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
   - name: registry-creds
     repo_name: kir4h
     dest: aws-ec2-bootstrap
     version: 1.3.0
+    comment: https://github.com/kir4h/charts/blob/develop/charts/registry-creds/Chart.yaml#L5
   - name: aws-ebs-csi-driver
     repo_name: aws-ebs-csi-driver
     dest: aws-ec2-bootstrap
-    version: 2.6.8
+    version: 2.17.2
+    comment: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases?q=helm-chart&expanded=true
   - name: metrics-server
     repo_name: metrics-server
-    version: 3.8.3
+    version: 3.9.0
+    comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: kube-state-metrics
     repo_name: prometheus-community
-    version: 4.23.0
+    version: 5.3.0
+    comment: |
+      Chart upgrade will require 1.25+
+      https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
+  - name: prometheus-adapter
+    repo_name: prometheus-community
+    version: 4.1.1
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: loki
     repo_name: grafana
-    version: 2.11.1
+    version: 5.0.0
+    no_sync: true
+    comment: |
+      Chart is frozen due to custom modification see: https://github.com/grafana/loki/issues/9207
+      https://github.com/grafana/loki/blob/main/production/helm/loki/Chart.yaml#L6
   - name: promtail
     repo_name: grafana
-    version: 5.1.0
-    comment: https://github.com/grafana/loki/tree/master/production/helm
+    version: 6.10.0
+    comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mongodb
     repo_name: bitnami
@@ -81,9 +93,6 @@ charts:
   - name: pleco
     version: 0.11.1
     repo_name: pleco
-  - name: prometheus-adapter
-    repo_name: prometheus-community
-    version: 4.1.1
   - name: datadog
     repo_name: datadog
     version: 2.22.17

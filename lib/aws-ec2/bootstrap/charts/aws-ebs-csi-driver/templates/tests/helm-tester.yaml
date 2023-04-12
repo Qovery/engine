@@ -1,0 +1,215 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ebs-csi-driver-test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ebs-csi-driver-test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+rules:
+  - apiGroups: [ "" ]
+    resources:
+      - events
+      - nodes
+      - pods
+      - replicationcontrollers
+      - serviceaccounts
+      - configmaps
+      - persistentvolumes
+      - persistentvolumeclaims
+    verbs: [ "list" ]
+  - apiGroups: [ "" ]
+    resources:
+      - services
+      - nodes
+      - nodes/proxy
+      - persistentvolumes
+      - persistentvolumeclaims
+      - pods
+      - pods/log
+    verbs: [ "get" ]
+  - apiGroups: [ "" ]
+    resources:
+      - namespaces
+      - persistentvolumes
+      - persistentvolumeclaims
+      - pods
+      - pods/exec
+    verbs: [ "create" ]
+  - apiGroups: [ "" ]
+    resources:
+      - namespaces
+      - persistentvolumes
+      - persistentvolumeclaims
+      - pods
+    verbs: [ "delete" ]
+  - apiGroups: [ "" ]
+    resources:
+      - persistentvolumeclaims
+    verbs: [ "update" ]
+  - apiGroups: [ "" ]
+    resources:
+      - pods/ephemeralcontainers
+    verbs: [ "patch" ]
+  - apiGroups: [ "" ]
+    resources:
+      - serviceaccounts
+      - configmaps
+    verbs: [ "watch" ]
+  - apiGroups: [ "apps" ]
+    resources:
+      - replicasets
+      - daemonsets
+    verbs: [ "list" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources:
+      - storageclasses
+    verbs: [ "create" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources:
+      - storageclasses
+      - csinodes
+    verbs: [ "get" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources:
+      - storageclasses
+    verbs: [ "delete" ]
+  - apiGroups: [ "snapshot.storage.k8s.io" ]
+    resources:
+      - volumesnapshots
+      - volumesnapshotclasses
+      - volumesnapshotcontents
+    verbs: [ "create" ]
+  - apiGroups: [ "snapshot.storage.k8s.io" ]
+    resources:
+      - volumesnapshots
+      - volumesnapshotclasses
+      - volumesnapshotcontents
+    verbs: [ "get" ]
+  - apiGroups: [ "snapshot.storage.k8s.io" ]
+    resources:
+      - volumesnapshotcontents
+    verbs: [ "update" ]
+  - apiGroups: [ "snapshot.storage.k8s.io" ]
+    resources:
+      - volumesnapshots
+      - volumesnapshotclasses
+      - volumesnapshotcontents
+    verbs: [ "delete" ]
+  - apiGroups: [ "authorization.k8s.io" ]
+    resources:
+      - clusterroles
+    verbs: [ "list" ]
+  - apiGroups: [ "authorization.k8s.io" ]
+    resources:
+      - subjectaccessreviews
+    verbs: [ "create" ]
+  - apiGroups: [ "rbac.authorization.k8s.io" ]
+    resources:
+      - clusterroles
+    verbs: [ "list" ]
+  - apiGroups: [ "rbac.authorization.k8s.io" ]
+    resources:
+      - clusterrolebindings
+    verbs: [ "create" ]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ebs-csi-driver-test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+subjects:
+  - kind: ServiceAccount
+    name: ebs-csi-driver-test
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: ebs-csi-driver-test
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+data:
+  manifests.yaml: |
+    ShortName: ebs
+    StorageClass:
+      FromFile: storageclass.yaml
+    SnapshotClass:
+      FromName: true
+    DriverInfo:
+      Name: ebs.csi.aws.com
+      SupportedSizeRange:
+        Min: 1Gi
+        Max: 16Ti
+      SupportedFsType:
+        xfs: {}
+        ext4: {}
+      SupportedMountOption:
+        dirsync: {}
+      TopologyKeys: ["topology.ebs.csi.aws.com/zone"]
+      Capabilities:
+        persistence: true
+        fsGroup: true
+        block: true
+        exec: true
+        snapshotDataSource: true
+        pvcDataSource: false
+        multipods: true
+        controllerExpansion: true
+        nodeExpansion: true
+        volumeLimits: true
+        topology: true
+  storageclass.yaml: |
+    kind: StorageClass
+    apiVersion: storage.k8s.io/v1
+    metadata:
+      name: ebs.csi.aws.com
+    provisioner: ebs.csi.aws.com
+    volumeBindingMode: WaitForFirstConsumer
+metadata:
+  name: ebs-csi-driver-test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ebs-csi-driver-test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+spec:
+  containers:
+    - name: kubetest2
+      image: gcr.io/k8s-staging-test-infra/kubekins-e2e:v20220624-1a63fdd9f2-master
+      command: [ "/bin/sh", "-c" ]
+      args:
+        - |
+          cp /etc/config/storageclass.yaml /workspace/storageclass.yaml
+          go install sigs.k8s.io/kubetest2/...@latest
+          kubectl config set-cluster cluster --server=https://kubernetes.default --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          kubectl config set-context kubetest2 --cluster=cluster
+          kubectl config set-credentials sa --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          kubectl config set-context kubetest2 --user=sa
+          kubectl config use-context kubetest2
+          kubetest2 noop --run-id='e2e-kubernetes' --test=ginkgo -- --test-package-version=$(curl https://storage.googleapis.com/kubernetes-release/release/stable-1.25.txt) --skip-regex='\[Disruptive\]|\[Serial\]' --focus-regex='External.Storage' --parallel=25 --test-args='-storage.testdriver=/etc/config/manifests.yaml'
+      volumeMounts:
+      - name: config-vol
+        mountPath: /etc/config
+  serviceAccountName: ebs-csi-driver-test
+  volumes:
+    - name: config-vol
+      configMap:
+        name: ebs-csi-driver-test
+  restartPolicy: Never

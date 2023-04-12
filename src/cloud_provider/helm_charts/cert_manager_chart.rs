@@ -81,7 +81,7 @@ impl ToCommonHelmChart for CertManagerChart {
                 name: CertManagerChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: HelmChartNamespaces::CertManager,
-                last_breaking_version_requiring_restart: Some(Version::new(1, 4, 4)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(1, 4, 4)),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check

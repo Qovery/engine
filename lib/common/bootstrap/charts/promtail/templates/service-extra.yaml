@@ -4,7 +4,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "promtail.fullname" $ }}-{{ $key | lower }}
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" $ }}
   labels:
     {{- include "promtail.labels" $ | nindent 4 }}
     {{- with .labels }}
@@ -26,7 +26,7 @@ spec:
   {{- with .loadBalancerSourceRanges }}
   loadBalancerSourceRanges:
     {{- toYaml . | nindent 4 }}
-  {{- end -}}
+  {{- end }}
   {{- with .externalIPs }}
   externalIPs:
     {{- toYaml . | nindent 4 }}
@@ -38,7 +38,7 @@ spec:
   ports:
     - name: {{ .name | default $key }}
       targetPort: {{ .name | default $key }}
-      protocol: TCP
+      protocol: {{ $values.protocol | default "TCP" }}
       {{- if $values.service }}
       port: {{ $values.service.port | default $values.containerPort }}
       {{- if $values.service.nodePort }}
