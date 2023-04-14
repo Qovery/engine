@@ -323,20 +323,7 @@ impl EnvironmentTask {
             Err(err) => err,
         };
 
-        // Handle deployment error, send back all correct status
-        let to_stage = |action: &service::Action| -> Stage {
-            if deployment_err.tag().is_cancel() {
-                return Stage::Environment(EnvironmentStep::Cancelled);
-            }
-
-            match action {
-                service::Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
-                service::Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
-                service::Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
-                service::Action::Restart => Stage::Environment(EnvironmentStep::RestartedError),
-            }
-        };
-
+        // Handle deployment error, send back Cancelled event for all services that were not deployed
         let services = std::iter::empty()
             .chain(environment.applications.iter().map(|x| x.as_service()))
             .chain(environment.containers.iter().map(|x| x.as_service()))
@@ -349,7 +336,7 @@ impl EnvironmentTask {
                 continue;
             }
             infra_ctx.kubernetes().logger().log(EngineEvent::Info(
-                service.get_event_details(to_stage(service.action())),
+                service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
                 EventMessage::new_from_safe("".to_string()),
             ));
         }
