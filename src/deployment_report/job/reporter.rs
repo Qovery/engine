@@ -39,7 +39,8 @@ pub struct JobDeploymentReporter<T> {
     long_id: Uuid,
     job_type: JobType,
     is_force_trigger: bool,
-    max_duraction: Duration,
+    max_duration: Duration,
+    max_restarts: u32,
     action: Action,
     tag: String,
     namespace: String,
@@ -67,7 +68,8 @@ impl<T> JobDeploymentReporter<T> {
             job_type,
             action,
             is_force_trigger: job.is_force_trigger(),
-            max_duraction: *job.max_duration(),
+            max_duration: *job.max_duration(),
+            max_restarts: job.max_restarts(),
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
@@ -78,7 +80,7 @@ impl<T> JobDeploymentReporter<T> {
     }
 
     fn max_duration_human_str(&self) -> String {
-        format!("{0:.2} minutes", self.max_duraction.as_secs_f64() / 60.0)
+        format!("{0:.2} minutes", self.max_duration.as_secs_f64() / 60.0)
     }
 }
 
@@ -218,12 +220,12 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
-❌ {} failed to be executed in the given {} due to `{}`.
+❌ {} failed: either it couldn't be executed correctly after `{}` retries or its execution didn't finish after `{}`. Underlying error: `{}`.
 This most likely an issue with its configuration/code.
-Look at your logs in order to understand what went wrong or increase its max duration timeout
+Look at your job logs in order to understand if the problem comes from the job code failure or if you just need to increase its max duration timeout.
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type, self.max_duration_human_str(), job_failure_message.unwrap_or_default()).trim().to_string(),
+                "#, self.job_type, self.max_restarts, self.max_duration_human_str(), job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
         } else {
