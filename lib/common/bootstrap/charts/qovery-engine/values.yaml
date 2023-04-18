@@ -91,12 +91,12 @@ buildResources:
 
 nodeSelector: {}
 
-terminationGracePeriodSeconds: 7200
+terminationGracePeriodSeconds: 21600
 tolerations:
   - key: "node.kubernetes.io/not-ready"
     operator: "Exists"
     effect: "NoExecute"
-    tolerationSeconds: 7200
+    tolerationSeconds: 21600
 
 affinity: {}
 
