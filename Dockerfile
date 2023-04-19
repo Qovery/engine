@@ -144,7 +144,6 @@ RUN apt-get update && apt-get install -y \
     kubectl=$KUBECTL_VERSION \
     procps netcat-openbsd iproute2 dumb-init git-lfs unzip && \
     curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
-    helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
     apt-get clean && rm -rf /var/lib/apt/lists
 
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/').zip" -o "awscliv2.zip" && \
@@ -176,7 +175,8 @@ RUN chown -Rf qovery:qovery . && \
   chmod 500 engine_grpc 
 
 USER qovery
-RUN echo "disable_checkpoint = true" > ~/.terraform.rc
+RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
+  echo "disable_checkpoint = true" > ~/.terraform.rc
 
 # for local use only
 VOLUME /qovery_libs
