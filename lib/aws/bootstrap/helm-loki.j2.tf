@@ -97,9 +97,21 @@ resource "aws_s3_bucket_versioning" "loki_bucket_versioning" {
   }
 }
 
+resource "aws_s3_bucket_ownership_controls" "loki_bucket_ownership" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  rule {
+    object_ownership = "ObjectWriter"
+  }
+}
+
 resource "aws_s3_bucket_acl" "loki_bucket_acl" {
   bucket = aws_s3_bucket.loki_bucket.id
   acl    = "private"
+
+  depends_on = [
+    aws_s3_bucket_ownership_controls.loki_bucket_ownership,
+    aws_s3_bucket_public_access_block.loki_access,
+  ]
 }
 
 resource "aws_s3_bucket_public_access_block" "loki_access" {

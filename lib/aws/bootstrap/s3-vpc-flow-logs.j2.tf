@@ -45,6 +45,18 @@ resource "aws_s3_bucket_versioning" "vpc_flow_logs_versionning" {
 resource "aws_s3_bucket_acl" "vpc_flow_logs_acl" {
   bucket = aws_s3_bucket.vpc_flow_logs.id
   acl    = "private"
+
+  depends_on = [
+    aws_s3_bucket_ownership_controls.vpc_flow_logs_bucket_ownership,
+    aws_s3_bucket_public_access_block.flow_logs_access,
+  ]
+}
+
+resource "aws_s3_bucket_ownership_controls" "vpc_flow_logs_bucket_ownership" {
+  bucket = aws_s3_bucket.vpc_flow_logs.id
+  rule {
+    object_ownership = "ObjectWriter"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "flow_logs_bucket_encryption" {

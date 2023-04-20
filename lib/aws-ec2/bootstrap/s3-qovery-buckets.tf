@@ -21,6 +21,18 @@ resource "aws_s3_bucket_versioning" "kubeconfigs_bucket_versionning" {
 resource "aws_s3_bucket_acl" "kubeconfigs_bucket_acl" {
   bucket = aws_s3_bucket.kubeconfigs_bucket.id
   acl    = "private"
+
+  depends_on = [
+    aws_s3_bucket_ownership_controls.kubeconfig_bucket_ownership,
+    aws_s3_bucket_public_access_block.kubeconfigs_access,
+  ]
+}
+
+resource "aws_s3_bucket_ownership_controls" "kubeconfig_bucket_ownership" {
+  bucket = aws_s3_bucket.kubeconfigs_bucket.id
+  rule {
+    object_ownership = "ObjectWriter"
+  }
 }
 
 resource "aws_kms_key" "s3_kubeconfig_kms_encryption" {
