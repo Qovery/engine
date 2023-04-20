@@ -208,10 +208,10 @@ autoscaler.averageValue="0.9",\
 overprovisionning.enabled="true",\
 overprovisionning.replicas="9",\
 engineResources.limits.cpu="1",\
-engineResources.limits.memory="1Gi",\
+engineResources.limits.memory="2Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
-engineResources.requests.memory="1Gi",\
+engineResources.requests.memory="2Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
