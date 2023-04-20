@@ -97,8 +97,9 @@ gitguardian:
     - git config --global --add safe.directory $CI_PROJECT_DIR
   script: ggshield secret scan ci
   interruptible: true
+  # BM machine because ggshield does not support ARM64
   tags:
-    - vm-250mcpu-1gmem-0g
+    - bm-250mcpu-1gmem-0g
 
 #################
 # MINIMAL TESTS #

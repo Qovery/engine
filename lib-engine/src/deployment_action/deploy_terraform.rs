@@ -92,11 +92,16 @@ impl TerraformDeployment {
 }
 
 impl DeploymentAction for TerraformDeployment {
-    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
         let ret = cmd::terraform::terraform_init_validate_plan_apply(
             &self.destination_folder.to_string_lossy(),
             self.is_dry_run,
+            target
+                .kubernetes
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
         );
 
         if let Err(err) = ret {
@@ -112,7 +117,15 @@ impl DeploymentAction for TerraformDeployment {
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
-        match cmd::terraform::terraform_init_validate_destroy(&self.destination_folder.to_string_lossy(), false) {
+        match cmd::terraform::terraform_init_validate_destroy(
+            &self.destination_folder.to_string_lossy(),
+            false,
+            target
+                .kubernetes
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+        ) {
             Ok(_) => {
                 if let Err(err) = TerraformDeployment::delete_tfstate_secret(
                     target.kubernetes,

@@ -986,7 +986,14 @@ fn create(
         EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
     ));
     // terraform deployment dedicated to cloud resources
-    if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
+    if let Err(e) = terraform_init_validate_plan_apply(
+        temp_dir.as_str(),
+        kubernetes.context().is_dry_run_deploy(),
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    ) {
         // on EKS, clean possible nodegroup deployment failures because of quota issues
         // do not exit on this error to avoid masking the real Terraform issue
         if kubernetes.kind() == Kind::Eks {
@@ -1016,6 +1023,10 @@ fn create(
                     kubernetes.logger(),
                     &event_details,
                     kubernetes.context().is_dry_run_deploy(),
+                    kubernetes
+                        .cloud_provider()
+                        .credentials_environment_variables()
+                        .as_slice(),
                 ) {
                     return Err(Box::new(EngineError::new_terraform_error(event_details.clone(), err)));
                 }
@@ -1457,7 +1468,13 @@ fn pause(
 
     // pause: only select terraform workers elements to pause to avoid applying on the whole config
     // this to avoid failures because of helm deployments on removing workers nodes
-    let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str()) {
+    let tf_workers_resources = match terraform_init_validate_state_list(
+        temp_dir.as_str(),
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    ) {
         Ok(x) => {
             let mut tf_workers_resources_name = Vec::new();
             for name in x {
@@ -1548,7 +1565,14 @@ fn pause(
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
-    match terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources) {
+    match terraform_apply_with_tf_workers_resources(
+        temp_dir.as_str(),
+        tf_workers_resources,
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    ) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
             kubernetes
@@ -1664,7 +1688,14 @@ fn delete(
         EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
     ));
 
-    if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+    if let Err(e) = terraform_init_validate_plan_apply(
+        temp_dir.as_str(),
+        false,
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    ) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Warning(
             event_details.clone(),
@@ -2064,7 +2095,14 @@ fn delete(
         };
     }
 
-    if let Err(err) = cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
+    if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
+        temp_dir.as_str(),
+        false,
+        kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    ) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
     }
     kubernetes.logger().log(EngineEvent::Info(
