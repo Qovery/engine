@@ -46,7 +46,7 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
 
   launch_template {
     id      = aws_launch_template.eks_workers_nodes_{{ loop.index }}.id
-    version = "1"
+    version = "$Latest"
   }
 
   scaling_config {
