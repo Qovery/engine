@@ -700,11 +700,7 @@ impl Kapsule {
         }
 
         // terraform deployment dedicated to cloud resources
-        if let Err(e) = terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
-            self.context.is_dry_run_deploy(),
-            self.cloud_provider.credentials_environment_variables().as_slice(),
-        ) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
@@ -1087,10 +1083,7 @@ impl Kapsule {
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
-        let tf_workers_resources = match terraform_init_validate_state_list(
-            temp_dir.as_str(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
-        ) {
+        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str(), &[]) {
             Ok(x) => {
                 let mut tf_workers_resources_name = Vec::new();
                 for name in x {
@@ -1179,11 +1172,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        if let Err(e) = terraform_apply_with_tf_workers_resources(
-            temp_dir.as_str(),
-            tf_workers_resources,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
-        ) {
+        if let Err(e) = terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources, &[]) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
@@ -1262,11 +1251,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
 
-        if let Err(e) = terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
-            false,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
-        ) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false, &[]) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error(event_details.clone(), e),
@@ -1693,11 +1678,7 @@ impl Kubernetes for Kapsule {
             return Err(e);
         }
 
-        match terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
-            self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
-        ) {
+        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
             Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
