@@ -873,6 +873,7 @@ fn create(
         if let Err(e) = block_on(delete_eks_failed_nodegroups(
             aws_conn.clone(),
             kubernetes.cluster_name(),
+            kubernetes.context().is_first_cluster_deployment(),
             event_details.clone(),
         )) {
             // only return failures if the cluster is not absent, because it can be a VPC quota issue
@@ -1006,6 +1007,7 @@ fn create(
             if let Err(e) = block_on(delete_eks_failed_nodegroups(
                 aws_conn,
                 kubernetes.cluster_name(),
+                kubernetes.context().is_first_cluster_deployment(),
                 event_details.clone(),
             )) {
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
