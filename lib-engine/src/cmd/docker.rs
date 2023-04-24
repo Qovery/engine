@@ -916,7 +916,7 @@ mod tests {
             None,
             &[Architecture::ARM64, Architecture::AMD64],
             "default",
-            Uuid::new_v4().to_string().as_str(),
+            &format!("b{}", Uuid::new_v4()),
             (0, 1),
             (0, 1),
             args,
