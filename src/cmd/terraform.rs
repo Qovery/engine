@@ -743,11 +743,11 @@ fn terraform_plugins_failed_load(
             });
         };
         thread::sleep(sleep_time);
-        return terraform_init(root_dir);
+        return terraform_init(root_dir, &[]);
     }
 
     if error_string.contains("Plugin reinitialization required") {
-        return terraform_init(root_dir);
+        return terraform_init(root_dir, &[]);
     }
 
     Ok(vec![])
@@ -759,6 +759,7 @@ pub fn force_terraform_ec2_instance_type_switch(
     logger: &dyn Logger,
     event_details: &EventDetails,
     dry_run: bool,
+    envs: &[(&str, &str)],
 ) -> Result<Vec<String>, TerraformError> {
     // Error: Failed to change instance type for ec2
     let error_string = error.to_string();
@@ -771,20 +772,20 @@ pub fn force_terraform_ec2_instance_type_switch(
             EventMessage::new_from_safe("Removing invalid instance type".to_string()),
         ));
         terraform_state_rm_entry(root_dir, "aws_instance.ec2_instance")?;
-        return terraform_run(TerraformAction::VALIDATE | TerraformAction::APPLY, root_dir, dry_run);
+        return terraform_run(TerraformAction::VALIDATE | TerraformAction::APPLY, root_dir, dry_run, envs);
     }
 
     Err(error)
 }
 
-fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+fn terraform_init(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // issue with provider lock since 0.14 and CI, need to manage terraform lock
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
     // no more architectures have been added because of some not availables (mostly on mac os)
     let terraform_providers_lock_args = vec!["providers", "lock", "-platform=linux_amd64", "-platform=linux_arm64"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, terraform_providers_lock_args.clone()) {
+        match terraform_exec(root_dir, terraform_providers_lock_args.clone(), envs) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => OperationResult::Retry(err),
         }
@@ -805,7 +806,7 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["init", "-no-color"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err);
@@ -826,14 +827,14 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     }
 }
 
-fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+fn terraform_validate(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["validate", "-no-color"];
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
 
     // Retry is not needed, fixing it to 1 only for the time being
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // validate config
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err);
@@ -854,11 +855,11 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     }
 }
 
-pub fn terraform_state_list(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_state_list(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // get terraform state list output
     let terraform_args = vec!["state", "list"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform state list, retrying...
@@ -878,12 +879,12 @@ pub fn terraform_state_list(root_dir: &str) -> Result<Vec<String>, TerraformErro
     }
 }
 
-pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_plan(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // plan
     let terraform_args = vec!["plan", "-no-color", "-out", "tf_plan"];
     // Retry is not needed, fixing it to 1 only for the time being
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, "", &err);
@@ -904,16 +905,16 @@ pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     }
 }
 
-fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+fn terraform_apply(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["apply", "-no-color", "-auto-approve", "tf_plan"];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // ensure we do plan before apply otherwise apply could crash.
-        if let Err(e) = terraform_plan(root_dir) {
+        if let Err(e) = terraform_plan(root_dir, envs) {
             return OperationResult::Retry(e);
         };
 
         // terraform apply
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, "", &err);
@@ -937,6 +938,7 @@ fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
 pub fn terraform_apply_with_tf_workers_resources(
     root_dir: &str,
     tf_workers_resources: Vec<String>,
+    envs: &[(&str, &str)],
 ) -> Result<Vec<String>, TerraformError> {
     let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
     for x in tf_workers_resources {
@@ -945,12 +947,12 @@ pub fn terraform_apply_with_tf_workers_resources(
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
-        if let Err(err) = terraform_plan(root_dir) {
+        if let Err(err) = terraform_plan(root_dir, envs) {
             return OperationResult::Retry(err);
         }
 
         // terraform apply
-        match terraform_exec(root_dir, terraform_args_string.iter().map(|e| e.as_str()).collect()) {
+        match terraform_exec(root_dir, terraform_args_string.iter().map(|e| e.as_str()).collect(), envs) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform apply on rendered templates, retrying...
@@ -967,7 +969,7 @@ pub fn terraform_apply_with_tf_workers_resources(
 }
 
 pub fn terraform_state_rm_entry(root_dir: &str, entry: &str) -> Result<Vec<String>, TerraformError> {
-    match terraform_exec(root_dir, vec!["state", "rm", entry]) {
+    match terraform_exec(root_dir, vec!["state", "rm", entry], &[]) {
         Ok(out) => Ok(out),
         Err(err) => {
             // Error while trying to run terraform state rm entry, retrying...
@@ -979,17 +981,17 @@ pub fn terraform_state_rm_entry(root_dir: &str, entry: &str) -> Result<Vec<Strin
     }
 }
 
-pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_destroy(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // terraform destroy
     let terraform_args = vec!["destroy", "-no-color", "-auto-approve"];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
-        if let Err(err) = terraform_plan(root_dir) {
+        if let Err(err) = terraform_plan(root_dir, envs) {
             return OperationResult::Retry(err);
         }
 
         // terraform destroy
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), envs) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform destroy on rendered templates, retrying...
@@ -1064,7 +1066,7 @@ pub fn terraform_remove_resource_from_tf_state(root_dir: &str, resource: &str) -
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform destroy a specific resource
-        match terraform_exec(root_dir, terraform_args.clone()) {
+        match terraform_exec(root_dir, terraform_args.clone(), &[]) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
                 // Error while trying to run terraform init, retrying...
@@ -1084,49 +1086,60 @@ pub fn terraform_remove_resource_from_tf_state(root_dir: &str, resource: &str) -
     }
 }
 
-fn terraform_run(actions: TerraformAction, root_dir: &str, dry_run: bool) -> Result<Vec<String>, TerraformError> {
+fn terraform_run(
+    actions: TerraformAction,
+    root_dir: &str,
+    dry_run: bool,
+    envs: &[(&str, &str)],
+) -> Result<Vec<String>, TerraformError> {
     let mut output = vec![];
 
     if actions.contains(TerraformAction::INIT) {
-        output.extend(terraform_init(root_dir)?);
+        output.extend(terraform_init(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::VALIDATE) {
-        output.extend(terraform_validate(root_dir)?);
+        output.extend(terraform_validate(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::STATE_LIST) {
-        output.extend(terraform_state_list(root_dir)?);
+        output.extend(terraform_state_list(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::APPLY) && !dry_run {
-        output.extend(terraform_apply(root_dir)?);
+        output.extend(terraform_apply(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::DESTROY) && !dry_run {
-        output.extend(terraform_destroy(root_dir)?);
+        output.extend(terraform_destroy(root_dir, envs)?);
     }
 
     Ok(output)
 }
 
-pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_init_validate_plan_apply(
+    root_dir: &str,
+    dry_run: bool,
+    envs: &[(&str, &str)],
+) -> Result<Vec<String>, TerraformError> {
     // Terraform init, validate, plan and apply
     terraform_run(
         TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::APPLY,
         root_dir,
         dry_run,
+        envs,
     )
 }
 
-pub fn terraform_init_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_init_validate(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // Terraform init & validate
-    terraform_run(TerraformAction::INIT | TerraformAction::VALIDATE, root_dir, false)
+    terraform_run(TerraformAction::INIT | TerraformAction::VALIDATE, root_dir, false, envs)
 }
 
 pub fn terraform_init_validate_destroy(
     root_dir: &str,
     run_apply_before_destroy: bool,
+    envs: &[(&str, &str)],
 ) -> Result<Vec<String>, TerraformError> {
     let mut terraform_actions_to_be_performed = TerraformAction::INIT | TerraformAction::VALIDATE;
 
@@ -1135,15 +1148,24 @@ pub fn terraform_init_validate_destroy(
         terraform_actions_to_be_performed |= TerraformAction::APPLY;
     }
 
-    terraform_run(terraform_actions_to_be_performed | TerraformAction::DESTROY, root_dir, false)
+    terraform_run(
+        terraform_actions_to_be_performed | TerraformAction::DESTROY,
+        root_dir,
+        false,
+        envs,
+    )
 }
 
-pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+pub fn terraform_init_validate_state_list(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+) -> Result<Vec<String>, TerraformError> {
     // Terraform init, validate and statelist
     terraform_run(
         TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::STATE_LIST,
         root_dir,
         false,
+        envs,
     )
 }
 
@@ -1170,7 +1192,7 @@ fn terraform_exec_from_command(cmd: &mut impl ExecutableCommand) -> Result<Vec<S
 }
 
 /// This method should not be exposed to the outside world, it's internal magic.
-fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, TerraformError> {
+fn terraform_exec(root_dir: &str, args: Vec<&str>, env: &[(&str, &str)]) -> Result<Vec<String>, TerraformError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
         Some(val) => format!("{val:?}")
@@ -1183,8 +1205,9 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
         }
     };
 
-    let envs = &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
-    let mut cmd = QoveryCommand::new("terraform", &args, envs);
+    let mut envs = vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
+    envs.extend(env);
+    let mut cmd = QoveryCommand::new("terraform", &args, &envs);
     cmd.set_current_dir(root_dir);
 
     terraform_exec_from_command(&mut cmd)
@@ -1285,7 +1308,7 @@ in the dependency lock file
             raw_message: could_not_load_plugin.to_string(),
         };
         let result = manage_common_issues("", "/tmp/do_not_exists", &could_not_load_plugin_error);
-        assert_eq!(result, terraform_init(""));
+        assert_eq!(result, terraform_init("", &[]));
     }
 
     #[test]
@@ -1360,7 +1383,7 @@ terraform {
         let _ = fs::write(format!("{}/.terraform.lock.hcl", &dest_dir), terraform_lock_file);
         let _ = fs::write(format!("{}/providers.tf", &dest_dir), provider_file);
 
-        let res = terraform_init_validate(dest_dir);
+        let res = terraform_init_validate(dest_dir, &[]);
 
         assert!(res.is_ok());
     }

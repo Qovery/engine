@@ -371,7 +371,11 @@ impl Kubernetes for EKS {
                     EventMessage::new_from_safe("Upgrading Kubernetes master nodes.".to_string()),
                 ));
 
-                match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
+                match terraform_init_validate_plan_apply(
+                    temp_dir.as_str(),
+                    self.context.is_dry_run_deploy(),
+                    self.cloud_provider.credentials_environment_variables().as_slice(),
+                ) {
                     Ok(_) => {
                         self.logger().log(EngineEvent::Info(
                             event_details.clone(),
@@ -477,8 +481,12 @@ impl Kubernetes for EKS {
             let _ = self.set_cluster_autoscaler_replicas(ev, 1);
         });
 
-        terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy())
-            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+        terraform_init_validate_plan_apply(
+            temp_dir.as_str(),
+            self.context.is_dry_run_deploy(),
+            self.cloud_provider().credentials_environment_variables().as_slice(),
+        )
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string())
             .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;

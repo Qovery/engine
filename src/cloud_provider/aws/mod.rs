@@ -12,7 +12,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use uuid::Uuid;
 
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::Context;
@@ -157,6 +157,7 @@ impl CloudProvider for AWS {
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
+            (AWS_DEFAULT_REGION, self.region.as_str()),
             (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
         ]
