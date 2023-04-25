@@ -3,77 +3,87 @@ image:
   repository: {{ repository_name}}
   tag: "{{ version }}"
 
+## sanitized_name of an already existing service account. Setting name value disables the automatic service account creation.
 nameOverride: "{{ sanitized_name }}"
 fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
 
 volumePermissions:
   enabled: true
   image:
     registry: {{ registry_name }}
-    repository: {{ repository_name_minideb }}
+    repository: {{ repository_name_bitnami_shell }}
 
 ## sanitized_name of an already existing service account. Setting name value disables the automatic service account creation.
+serviceAccount:
+  create: true
+  name: "{{ sanitized_name }}"
 
 rbac:
   create: true
 
-postgresqlPostgresPassword: "{{ database_password }}"
-postgresqlUsername: "{{ database_login }}"
-postgresqlPassword: "{{ database_password }}"
-postgresqlDatabase: "{{ database_db_name }}"
-initdbUser: "{{ database_login }}"
-initdbPassword: "{{ database_password }}"
+audit:
+  logHostname: true
+  logConnectitrue: true
+  logDisconnections: true
 
-service:
-  type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
-  name: "{{ service_name }}"
-  {% if publicly_accessible -%}
-  annotations:
-    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
-    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
-    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
-    external-dns.alpha.kubernetes.io/ttl: "300"
-  {% endif %}
+auth:
+  postgresPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
 
-persistence:
-  storageClass: "{{ database_disk_type }}"
-  size: "{{ database_disk_size_in_gib }}Gi"
-  annotations:
-    ownerId: "{{ owner_id }}"
-    envId: "{{ environment_id }}"
-    databaseId: "{{ id }}"
-    databaseName: "{{ sanitized_name }}"
-
-master:
-  labels:
-    envId: "{{ environment_id }}"
-    databaseId: "{{ id }}"
-    databaseLongId: "{{ long_id }}"
-    envLongId: "{{ environment_long_id }}"
-    projectLongId: "{{ project_long_id }}"
-    qovery.com/service-id: "{{ long_id }}"
-    qovery.com/service-type: "database"
-    qovery.com/environment-id: "{{ environment_long_id }}"
-    qovery.com/project-id: "{{ project_long_id }}"
-  podLabels:
-    envId: "{{ environment_id }}"
-    databaseId: "{{ id }}"
-    databaseLongId: "{{ long_id }}"
-    envLongId: "{{ environment_long_id }}"
-    projectLongId: "{{ project_long_id }}"
-    qovery.com/service-id: "{{ long_id }}"
-    qovery.com/service-type: "database"
-    qovery.com/environment-id: "{{ environment_long_id }}"
-    qovery.com/project-id: "{{ project_long_id }}"
-
-resources:
-  requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
-  limits:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+primary:
+  initdb:
+    user: "{{ database_login }}"
+    password: "{{ database_password }}"
+  service:
+    name: "{{ service_name }}"
+    type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+    {% if publicly_accessible -%}
+    annotations:
+      service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+      service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+      service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+  persistence:
+    storageClass: "{{ database_disk_type }}"
+    labels:
+      # app label required for legacy cahrt (installed before 01/06/23)
+      app: "{{ sanitized_name }}" 
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+    size: "{{ database_disk_size_in_gib }}Gi"
+    annotations:
+      ownerId: "{{ owner_id }}"
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseName: "{{ sanitized_name }}"
+  resources:
+    requests:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+    limits:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"

@@ -1,22 +1,31 @@
 {{- if .Values.rbac.create }}
 kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: {{ include "common.capabilities.rbac.apiVersion" . }}
 metadata:
-  name: {{ template "postgresql.fullname" . }}
-  labels:
-    app: {{ template "postgresql.name" . }}
-    chart: {{ template "postgresql.chart" . }}
-    release: {{ .Release.Name | quote }}
-    heritage: {{ .Release.Service | quote }}
+  name: {{ include "common.names.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
   {{- if .Values.commonAnnotations }}
-  annotations: {{- include "postgresql.tplValue" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
+# yamllint disable rule:indentation
 rules:
-  {{- if .Values.psp.create }}
-  - apiGroups: ["extensions"]
-    resources: ["podsecuritypolicies"]
-    verbs: ["use"]
+  {{- $pspAvailable := (semverCompare "<1.25-0" (include "common.capabilities.kubeVersion" .)) -}}
+  {{- if and $pspAvailable .Values.psp.create }}
+  - apiGroups:
+      - 'policy'
+    resources:
+      - 'podsecuritypolicies'
+    verbs:
+      - 'use'
     resourceNames:
-      - {{ template "postgresql.fullname" . }}
+      - {{ include "common.names.fullname" . }}
   {{- end }}
+  {{- if .Values.rbac.rules }}
+  {{- include "common.tplvalues.render" ( dict "value" .Values.rbac.rules "context" $ ) | nindent 2 }}
+  {{- end }}
+# yamllint enable rule:indentation
 {{- end }}
