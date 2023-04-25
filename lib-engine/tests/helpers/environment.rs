@@ -37,7 +37,6 @@ pub fn working_environment(
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
-        max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: application_id.to_uuid(),
             name: application_name,
@@ -315,7 +314,6 @@ pub fn environment_2_app_2_routers_1_psql(
             },
         ],
         max_parallel_build: 1,
-        max_parallel_deploy: 1,
     }
 }
 
@@ -348,7 +346,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
-        max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
             name: format!("{}-{}", "echo-app", &suffix),
@@ -426,7 +423,6 @@ pub fn environment_only_http_server(
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
-        max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: application_id,
             name: application_name,
