@@ -15,11 +15,11 @@ pub struct SCW {}
 
 // CloudProvider trait allows to derive all the custom type we need per provider,
 // with our marker type defined above to be able to select the correct one
-pub trait CloudProvider: Send {
-    type AppExtraSettings: Send;
-    type DbExtraSettings: Send;
-    type RouterExtraSettings: Send;
-    type StorageTypes: Send;
+pub trait CloudProvider: Send + Sync {
+    type AppExtraSettings: Send + Sync;
+    type DbExtraSettings: Send + Sync;
+    type RouterExtraSettings: Send + Sync;
+    type StorageTypes: Send + Sync;
 
     fn short_name() -> &'static str;
     fn full_name() -> &'static str;

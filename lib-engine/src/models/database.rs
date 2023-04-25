@@ -56,8 +56,8 @@ pub struct MySQL {}
 pub struct MongoDB {}
 pub struct Redis {}
 
-pub trait DatabaseType<T: CloudProvider, M: DatabaseMode>: Send {
-    type DatabaseOptions: Send;
+pub trait DatabaseType<T: CloudProvider, M: DatabaseMode>: Send + Sync {
+    type DatabaseOptions: Send + Sync;
 
     fn short_name() -> &'static str;
     fn lib_directory_name() -> &'static str;
@@ -94,7 +94,7 @@ pub enum DatabaseError {
 
 pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     _marker: PhantomData<(C, M, T)>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
     pub(crate) id: String,
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
@@ -365,7 +365,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Managed>> Database<C, Managed, T> {
     }
 }
 
-pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
+pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Send {
     fn is_managed_service(&self) -> bool;
 
     fn db_type(&self) -> service::DatabaseType;
