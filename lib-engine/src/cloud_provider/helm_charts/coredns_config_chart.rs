@@ -2,6 +2,7 @@ use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath};
+use crate::cmd::command::CommandKiller;
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
     kubectl_exec_with_output,
@@ -195,6 +196,7 @@ impl HelmChart for CoreDNSConfigChart {
         kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(String, String)],
+        cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
@@ -209,7 +211,7 @@ impl HelmChart for CoreDNSConfigChart {
             },
             Err(e) => return Err(e),
         };
-        if let Err(e) = self.exec(kubernetes_config, envs, None) {
+        if let Err(e) = self.exec(kubernetes_config, envs, None, cmd_killer) {
             error!(
                 "Error while deploying chart: {:?}",
                 e.message(ErrorMessageVerbosity::FullDetails)
