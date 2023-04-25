@@ -26,7 +26,7 @@ pub enum JobError {
 
 pub struct Job<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
@@ -343,7 +343,7 @@ impl<T: CloudProvider> Service for Job<T> {
     }
 }
 
-pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
+pub trait JobService: Service + DeploymentAction + ToTeraContext {
     fn advanced_settings(&self) -> &JobAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;

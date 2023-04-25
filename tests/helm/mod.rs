@@ -138,7 +138,6 @@ fn test_environment(kube: &dyn Kubernetes) -> Environment {
         Action::Create,
         kube.context(),
         1,
-        1,
         vec![Box::new(app)],
         vec![Box::new(test_container(kube))],
         vec![Box::new(test_router(kube, app_id))],
