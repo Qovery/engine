@@ -306,14 +306,14 @@ impl EnvironmentTask {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
-            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort)?;
+            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort, logger.clone())?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
                 service::Action::Delete => env_deployment.on_delete(),
                 service::Action::Restart => env_deployment.on_restart(),
             };
-            deployed_services = env_deployment.deployed_services;
+            deployed_services = env_deployment.deployed_services.blocking_lock().clone();
 
             deployment_ret
         };

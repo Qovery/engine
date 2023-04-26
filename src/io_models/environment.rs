@@ -26,12 +26,23 @@ pub struct EnvironmentRequest {
     pub project_long_id: Uuid,
     pub organization_long_id: Uuid,
     pub action: Action,
+    #[serde(default = "default_max_parallel_build")]
     pub max_parallel_build: u32,
+    #[serde(default = "default_max_parallel_deploy")]
+    pub max_parallel_deploy: u32,
     pub applications: Vec<Application>,
     pub containers: Vec<Container>,
     pub jobs: Vec<Job>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
+}
+
+fn default_max_parallel_build() -> u32 {
+    1u32
+}
+
+fn default_max_parallel_deploy() -> u32 {
+    1u32
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -214,6 +225,7 @@ impl EnvironmentRequest {
             self.action.to_service_action(),
             context,
             self.max_parallel_build,
+            self.max_parallel_deploy,
             applications,
             containers,
             routers,
