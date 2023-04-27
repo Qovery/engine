@@ -134,7 +134,7 @@ pub struct SshKey {
 
 pub struct GitRepository {
     pub url: Url,
-    pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials> + Send>>,
+    pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials> + Send + Sync>>,
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<PathBuf>,

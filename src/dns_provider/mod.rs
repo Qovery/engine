@@ -38,7 +38,7 @@ impl DnsProviderConfiguration {
     }
 }
 
-pub trait DnsProvider: Send {
+pub trait DnsProvider: Send + Sync {
     fn context(&self) -> &Context;
     fn provider_name(&self) -> &str;
     fn kind(&self) -> Kind;

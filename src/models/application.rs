@@ -33,7 +33,7 @@ pub enum ApplicationError {
 
 pub struct Application<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) action: Action,
@@ -435,7 +435,7 @@ impl<T: CloudProvider> Service for Application<T> {
     }
 }
 
-pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
+pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
     fn public_ports(&self) -> Vec<&Port>;

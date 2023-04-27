@@ -18,7 +18,7 @@ mod restart_service;
 mod test_utils;
 mod utils;
 
-pub trait DeploymentAction {
+pub trait DeploymentAction: Send + Sync {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>>;
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>>;
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>>;

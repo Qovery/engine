@@ -237,7 +237,7 @@ impl FromStr for KubernetesVersion {
     }
 }
 
-pub trait Kubernetes {
+pub trait Kubernetes: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;

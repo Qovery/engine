@@ -53,6 +53,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
+        max_parallel_deploy: 1,
         applications: vec![],
         containers: vec![],
         jobs: vec![],

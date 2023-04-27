@@ -36,7 +36,7 @@ pub mod service;
 pub mod utilities;
 pub mod vault;
 
-pub trait CloudProvider: Send {
+pub trait CloudProvider: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;
@@ -119,7 +119,7 @@ pub struct DeploymentTarget<'a> {
     pub docker: &'a Docker,
     pub kube: kube::Client,
     pub helm: Helm,
-    pub should_abort: &'a dyn Fn() -> bool,
+    pub should_abort: &'a (dyn Fn() -> bool + Send + Sync),
     logger: Arc<Box<dyn Logger>>,
     pub is_dry_run_deploy: bool,
     pub is_test_cluster: bool,
@@ -129,7 +129,7 @@ impl<'a> DeploymentTarget<'a> {
     pub fn new(
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
-        should_abort: &'a dyn Fn() -> bool,
+        should_abort: &'a (dyn Fn() -> bool + Sync + Send),
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();

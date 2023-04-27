@@ -31,7 +31,7 @@ pub enum ContainerError {
 
 pub struct Container<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send>,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
@@ -336,7 +336,7 @@ impl<T: CloudProvider> Service for Container<T> {
     }
 }
 
-pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
+pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;

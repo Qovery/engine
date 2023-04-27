@@ -228,6 +228,7 @@ pub fn environment_3_apps_3_databases(
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
+        max_parallel_deploy: 1,
         applications: vec![
             Application {
                 long_id: Uuid::new_v4(),
@@ -435,6 +436,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
+        max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
             name: application_name,
@@ -478,6 +480,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         max_parallel_build: 1,
+        max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::from_str("9d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
             name: application_name,

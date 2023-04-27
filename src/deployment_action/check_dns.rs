@@ -10,7 +10,7 @@ use std::time::Duration;
 pub struct CheckDnsForDomains<'a> {
     pub resolve_to_ip: Vec<String>,
     pub resolve_to_cname: Vec<CustomDomain>,
-    pub log: Box<dyn Fn(String) + 'a>,
+    pub log: Box<dyn Fn(String) + 'a + Send + Sync>,
 }
 
 const DEFAULT_CHECK_FREQUENCY: Duration = Duration::from_secs(30);
