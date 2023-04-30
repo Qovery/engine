@@ -124,7 +124,7 @@ impl<'a> EnvironmentDeployment<'a> {
         ns.exec_action(target, target.environment.action)?;
 
         let services_to_deploy = Self::services_without_routers_iter(target.environment);
-        let routers_to_deploy = Self::services_without_routers_iter(target.environment);
+        let routers_to_deploy = Self::services_routers_iter(target.environment);
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
         self.logger.log(EngineEvent::Info(
