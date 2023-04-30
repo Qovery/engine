@@ -81,7 +81,7 @@ pub fn mirror_image(
 
     // Once we are logged to the registry, we mirror the user image into our cluster private registry
     // This is required only to avoid to manage rotating credentials
-    logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
+    logger.info("🪞 Mirroring image to private cluster registry to ensure reproductibility".to_string());
     let registry_info = target.container_registry.registry_info();
 
     let mirror_repo_name = get_mirror_repository_name(service_id);
