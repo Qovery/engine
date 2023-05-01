@@ -590,7 +590,7 @@ pub fn test_db(
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
-        kind: db_kind,
+        kind: db_kind.clone(),
         action: Action::Create,
         long_id: Uuid::new_v4(),
         name: to_short_id(&db_id),
@@ -633,7 +633,11 @@ pub fn test_db(
                 publicly_accessible: true,
                 protocol: Protocol::HTTP,
             }];
-            app.dockerfile_path = Some(format!("Dockerfile-{version}"));
+            app.dockerfile_path = match db_kind {
+                // to be able to support outdated container image versions, we jump to a higher version
+                DatabaseKind::Mongodb if version.contains("4.0") => Some("Dockerfile-4.4".to_string()),
+                _ => Some(format!("Dockerfile-{version}")),
+            };
             app.command_args = vec![];
             app.entrypoint = None;
             app.environment_vars = db_infos.app_env_vars.clone();
