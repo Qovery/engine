@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::cloud_provider::{
     kubernetes::Kind as KubernetesKind, CloudProvider, EngineError, Kind, TerraformStateCredentials,
 };
-use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
+use crate::constants::{SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY};
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
@@ -105,9 +105,9 @@ impl CloudProvider for Scaleway {
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
-            (SCALEWAY_ACCESS_KEY, self.access_key.as_str()),
-            (SCALEWAY_SECRET_KEY, self.secret_key.as_str()),
-            (SCALEWAY_DEFAULT_PROJECT_ID, self.project_id.as_str()),
+            (SCW_ACCESS_KEY, self.access_key.as_str()),
+            (SCW_SECRET_KEY, self.secret_key.as_str()),
+            (SCW_DEFAULT_PROJECT_ID, self.project_id.as_str()),
         ]
     }
 
