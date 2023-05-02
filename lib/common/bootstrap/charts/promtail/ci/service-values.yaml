@@ -8,6 +8,9 @@ extraPorts:
   httpPush:
     name: http-push
     containerPort: 3500
+    ingress:
+      hosts:
+        - chart-example.local
   grpcPush:
     name: grpc-push
     containerPort: 3600

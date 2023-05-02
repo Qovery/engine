@@ -1,0 +1,21 @@
+{{- if and .Values.serviceMonitor.enabled .Values.serviceMonitor.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "promtail.fullname" . }}
+  {{- with .Values.serviceMonitor.prometheusRule.namespace }}
+  namespace: {{ . | quote }}
+  {{- end }}
+  labels:
+    {{- include "promtail.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+{{- if .Values.serviceMonitor.prometheusRule.rules }}
+  groups:
+  - name: {{ template "promtail.fullname" . }}
+    rules:
+    {{- toYaml .Values.serviceMonitor.prometheusRule.rules | nindent 4 }}
+{{- end }}
+{{- end }}

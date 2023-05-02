@@ -29,15 +29,39 @@ The longest name that gets created adds and extra 37 characters, so truncation s
 {{- printf "%s-operator" (include "kube-prometheus-stack.fullname" .) -}}
 {{- end }}
 
-{{/* Fullname suffixed with prometheus */}}
-{{- define "kube-prometheus-stack.prometheus.fullname" -}}
-{{- printf "%s-prometheus" (include "kube-prometheus-stack.fullname" .) -}}
+{{/* Prometheus custom resource instance name */}}
+{{- define "kube-prometheus-stack.prometheus.crname" -}}
+{{- if .Values.cleanPrometheusOperatorObjectNames }}
+{{- include "kube-prometheus-stack.fullname" . }}
+{{- else }}
+{{- print (include "kube-prometheus-stack.fullname" .) "-prometheus" }}
+{{- end }}
 {{- end }}
 
-{{/* Fullname suffixed with alertmanager */}}
-{{- define "kube-prometheus-stack.alertmanager.fullname" -}}
-{{- printf "%s-alertmanager" (include "kube-prometheus-stack.fullname" .) -}}
+{{/* Prometheus apiVersion for networkpolicy */}}
+{{- define "kube-prometheus-stack.prometheus.networkPolicy.apiVersion" -}}
+{{- print "networking.k8s.io/v1" -}}
 {{- end }}
+
+{{/* Alertmanager custom resource instance name */}}
+{{- define "kube-prometheus-stack.alertmanager.crname" -}}
+{{- if .Values.cleanPrometheusOperatorObjectNames }}
+{{- include "kube-prometheus-stack.fullname" . }}
+{{- else }}
+{{- print (include "kube-prometheus-stack.fullname" .) "-alertmanager" -}}
+{{- end }}
+{{- end }}
+
+{{/* Fullname suffixed with thanos-ruler */}}
+{{- define "kube-prometheus-stack.thanosRuler.fullname" -}}
+{{- printf "%s-thanos-ruler" (include "kube-prometheus-stack.fullname" .) -}}
+{{- end }}
+
+{{/* Shortened name suffixed with thanos-ruler */}}
+{{- define "kube-prometheus-stack.thanosRuler.name" -}}
+{{- default (printf "%s-thanos-ruler" (include "kube-prometheus-stack.name" .)) .Values.thanosRuler.name -}}
+{{- end }}
+
 
 {{/* Create chart name and version as used by the chart label. */}}
 {{- define "kube-prometheus-stack.chartref" -}}
@@ -70,7 +94,7 @@ heritage: {{ $.Release.Service | quote }}
 {{/* Create the name of prometheus service account to use */}}
 {{- define "kube-prometheus-stack.prometheus.serviceAccountName" -}}
 {{- if .Values.prometheus.serviceAccount.create -}}
-    {{ default (include "kube-prometheus-stack.prometheus.fullname" .) .Values.prometheus.serviceAccount.name }}
+    {{ default (print (include "kube-prometheus-stack.fullname" .) "-prometheus") .Values.prometheus.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.prometheus.serviceAccount.name }}
 {{- end -}}
@@ -79,9 +103,18 @@ heritage: {{ $.Release.Service | quote }}
 {{/* Create the name of alertmanager service account to use */}}
 {{- define "kube-prometheus-stack.alertmanager.serviceAccountName" -}}
 {{- if .Values.alertmanager.serviceAccount.create -}}
-    {{ default (include "kube-prometheus-stack.alertmanager.fullname" .) .Values.alertmanager.serviceAccount.name }}
+    {{ default (print (include "kube-prometheus-stack.fullname" .) "-alertmanager") .Values.alertmanager.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.alertmanager.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/* Create the name of thanosRuler service account to use */}}
+{{- define "kube-prometheus-stack.thanosRuler.serviceAccountName" -}}
+{{- if .Values.thanosRuler.serviceAccount.create -}}
+    {{ default (include "kube-prometheus-stack.thanosRuler.name" .) .Values.thanosRuler.serviceAccount.name }}
+{{- else -}}
+    {{ default "default" .Values.thanosRuler.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
 
@@ -201,6 +234,25 @@ Use the prometheus-node-exporter namespace override for multi-namespace deployme
   {{- include "kube-prometheus-stack.kubeVersionDefaultValue" (list $values ">= 1.23-0" $insecure $secure $userValue) -}}
 {{- end -}}
 
+{{/* Sets default scrape limits for servicemonitor */}}
+{{- define "servicemonitor.scrapeLimits" -}}
+{{- with .sampleLimit }}
+sampleLimit: {{ . }}
+{{- end }}
+{{- with .targetLimit }}
+targetLimit: {{ . }}
+{{- end }}
+{{- with .labelLimit }}
+labelLimit: {{ . }}
+{{- end }}
+{{- with .labelNameLengthLimit }}
+labelNameLengthLimit: {{ . }}
+{{- end }}
+{{- with .labelValueLengthLimit }}
+labelValueLengthLimit: {{ . }}
+{{- end }}
+{{- end -}}
+
 {{/*
 To help compatibility with other charts which use global.imagePullSecrets.
 Allow either an array of {name: pullSecret} maps (k8s-style), or an array of strings (more common helm-style).
@@ -218,7 +270,7 @@ global:
 */}}
 {{- define "kube-prometheus-stack.imagePullSecrets" -}}
 {{- range .Values.global.imagePullSecrets }}
-  {{- if eq (typeOf .) "map[string]interface {}" }} 
+  {{- if eq (typeOf .) "map[string]interface {}" }}
 - {{ toYaml . | trim }}
   {{- else }}
 - name: {{ . }}

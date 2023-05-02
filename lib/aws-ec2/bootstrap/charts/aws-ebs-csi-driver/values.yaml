@@ -18,48 +18,88 @@ sidecars:
     env: []
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/csi-provisioner
-      tag: "v2.2.2"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-provisioner
+      tag: "v3.4.0-eks-1-26-latest"
     logLevel: 2
     resources: {}
+    # Tune leader lease election for csi-provisioner.
+    # Leader election is on by default.
+    leaderElection:
+      enabled: true
+      # Optional values to tune lease behavior.
+      # The arguments provided must be in an acceptable time.ParseDuration format.
+      # Ref: https://pkg.go.dev/flag#Duration
+      # leaseDuration: "15s"
+      # renewDeadline: "10s"
+      # retryPeriod: "5s"
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
   attacher:
     env: []
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/csi-attacher
-      tag: "v3.1.0"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-attacher
+      tag: "v4.2.0-eks-1-26-latest"
+    # Tune leader lease election for csi-attacher.
+    # Leader election is on by default.
+    leaderElection:
+      enabled: true
+      # Optional values to tune lease behavior.
+      # The arguments provided must be in an acceptable time.ParseDuration format.
+      # Ref: https://pkg.go.dev/flag#Duration
+      # leaseDuration: "15s"
+      # renewDeadline: "10s"
+      # retryPeriod: "5s"
     logLevel: 2
     resources: {}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
   snapshotter:
+    # Enables the snapshotter sidecar even if the snapshot CRDs are not installed
+    forceEnable: false
     env: []
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/csi-snapshotter
-      tag: "v3.0.3"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-snapshotter/csi-snapshotter
+      tag: "v6.2.1-eks-1-26-latest"
     logLevel: 2
     resources: {}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
   livenessProbe:
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/livenessprobe
-      tag: "v2.4.0"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/livenessprobe
+      tag: "v2.9.0-eks-1-26-latest"
     resources: {}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
   resizer:
     env: []
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/csi-resizer
-      tag: "v1.1.0"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-resizer
+      tag: "v1.7.0-eks-1-26-latest"
     logLevel: 2
     resources: {}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
   nodeDriverRegistrar:
     env: []
     image:
       pullPolicy: IfNotPresent
-      repository: k8s.gcr.io/sig-storage/csi-node-driver-registrar
-      tag: "v2.3.0"
+      repository: public.ecr.aws/eks-distro/kubernetes-csi/node-driver-registrar
+      tag: "v2.7.0-eks-1-26-latest"
     logLevel: 2
     resources: {}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
 
 proxy:
   http_proxy:
@@ -70,13 +110,36 @@ nameOverride:
 fullnameOverride:
 
 controller:
-  # If arbitrary args like "--aws-sdk-debug-log=true" need to be passed, use this value
   additionalArgs: []
-  affinity: {}
+  sdkDebugLog: false
+  loggingFormat: text
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+          - key: eks.amazonaws.com/compute-type
+            operator: NotIn
+            values:
+            - fargate
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - ebs-csi-controller
+          topologyKey: kubernetes.io/hostname
+        weight: 100
   # The default filesystem type of the volume to provision when fstype is unspecified in the StorageClass.
   # If the default is not set and fstype is unset in the StorageClass, then no fstype will be set
   defaultFsType: ext4
   env: []
+  # Use envFrom to reference ConfigMaps and Secrets across all containers in the deployment
+  envFrom: []
   # If set, add pv/pvc metadata to plugin create requests as parameters.
   extraCreateMetadata: true
   # Extra volume tags to attach to each dynamically provisioned volume.
@@ -86,6 +149,20 @@ controller:
   #   key2: value2
   extraVolumeTags: {}
   httpEndpoint:
+  # (deprecated) The TCP network address where the prometheus metrics endpoint
+  # will run (example: `:8080` which corresponds to port 8080 on local host).
+  # The default is empty string, which means metrics endpoint is disabled.
+  # ---
+  enableMetrics: false
+  serviceMonitor:
+    # Enables the ServiceMonitor resource even if the prometheus-operator CRDs are not installed
+    forceEnable: false
+    # Additional labels for ServiceMonitor object
+    labels:
+      release: prometheus
+  # If set to true, AWS API call metrics will be exported to the following
+  # TCP endpoint: "0.0.0.0:3301"
+  # ---
   # ID of the Kubernetes cluster used for tagging provisioned EBS volumes (optional).
   k8sTagClusterId:
   logLevel: 2
@@ -99,29 +176,32 @@ controller:
   # region: us-east-1
   region:
   replicaCount: 2
-  updateStrategy: {}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   # type: RollingUpdate
   # rollingUpdate:
   #   maxSurge: 0
   #   maxUnavailable: 1
-  resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # Note that you will need to set resource requests if you want the cluster autoscaler to
-  # scale your nodes when you increase/decrease the number of ebs-csi-controller replicas.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+  resources:
+    requests:
+      cpu: 10m
+      memory: 40Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
   serviceAccount:
-    create: true # A service account will be created for you if set to true. Set to false if you want to use your own.
-    name: ebs-csi-controller-sa # Name of the service-account to be used/created.
+  # A service account will be created for you if set to true. Set to false if you want to use your own.
+    create: true
+    name: ebs-csi-controller-sa
     annotations: {}
-  tolerations: []
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+      tolerationSeconds: 300
   # TSCs without the label selector stanza
   #
   # Example:
@@ -134,21 +214,58 @@ controller:
   #    topologyKey: kubernetes.io/hostname
   #    whenUnsatisfiable: ScheduleAnyway
   topologySpreadConstraints: []
-  securityContext: {}
-  #  AWS EKS /var/run/secrets/eks.amazonaws.com/serviceaccount/token FS group is nogroup (65534) - required for Kubernetes 1.18.x and below
-  #  fsGroup: 65534
+  # securityContext on the controller pod
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  volumes: []
+  volumeMounts: []
+  # securityContext on the controller container (see sidecars for securityContext on sidecar containers)
+  containerSecurityContext:
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+  initContainers: []
+  # containers to be run before the controller's container starts.
+  #
+  # Example:
+  #
+  # - name: wait
+  #   image: busybox
+  #   command: [ 'sh', '-c', "sleep 20" ]
 
 node:
   env: []
+  envFrom: []
   kubeletPath: /var/lib/kubelet
+  loggingFormat: text
   logLevel: 2
   priorityClassName:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: eks.amazonaws.com/compute-type
+            operator: NotIn
+            values:
+            - fargate
   nodeSelector: {}
   podAnnotations: {}
   podLabels: {}
-  tolerateAllTaints: false
-  tolerations: []
-  resources: {}
+  tolerateAllTaints: true
+  tolerations:
+  - operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 300
+  resources:
+    requests:
+      cpu: 10m
+      memory: 40Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
   serviceAccount:
     create: true
     name: ebs-csi-node-sa
@@ -160,6 +277,17 @@ node:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: "10%"
+  # securityContext on the node pod
+  securityContext:
+    # The node pod must be run as root to bind to the registration/driver sockets
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  # securityContext on the node container (see sidecars for securityContext on sidecar containers)
+  containerSecurityContext:
+    readOnlyRootFilesystem: true
+    privileged: true
 
 storageClasses: []
 # Add StorageClass resources like:
@@ -176,3 +304,8 @@ storageClasses: []
 #   reclaimPolicy: Retain
 #   parameters:
 #     encrypted: "true"
+
+# Use old CSIDriver without an fsGroupPolicy set
+# Intended for use with older clusters that cannot easily replace the CSIDriver object
+# This parameter should always be false for new installations
+useOldCSIDriver: false

@@ -1,65 +1,67 @@
 {{ if .Values.imageRenderer.enabled }}
+{{- $root := . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ template "grafana.fullname" . }}-image-renderer
-  namespace: {{ template "grafana.namespace" . }}
+  name: {{ include "grafana.fullname" . }}-image-renderer
+  namespace: {{ include "grafana.namespace" . }}
   labels:
     {{- include "grafana.imageRenderer.labels" . | nindent 4 }}
-{{- if .Values.imageRenderer.labels }}
-{{ toYaml .Values.imageRenderer.labels | indent 4 }}
-{{- end }}
-{{- with .Values.imageRenderer.annotations }}
+    {{- with .Values.imageRenderer.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.imageRenderer.annotations }}
   annotations:
-{{ toYaml . | indent 4 }}
-{{- end }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
+  {{- if and (not .Values.imageRenderer.autoscaling.enabled) (.Values.imageRenderer.replicas) }}
   replicas: {{ .Values.imageRenderer.replicas }}
+  {{- end }}
   revisionHistoryLimit: {{ .Values.imageRenderer.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "grafana.imageRenderer.selectorLabels" . | nindent 6 }}
-{{- with .Values.imageRenderer.deploymentStrategy }}
+
+  {{- with .Values.imageRenderer.deploymentStrategy }}
   strategy:
-{{ toYaml . | trim | indent 4 }}
-{{- end }}
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       labels:
         {{- include "grafana.imageRenderer.selectorLabels" . | nindent 8 }}
-{{- with .Values.imageRenderer.podLabels }}
-{{ toYaml . | indent 8 }}
-{{- end }}
+        {{- with .Values.imageRenderer.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-{{- with .Values.imageRenderer.podAnnotations }}
-{{ toYaml . | indent 8 }}
-{{- end }}
+        {{- with .Values.imageRenderer.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
-
-      {{- if .Values.imageRenderer.schedulerName }}
-      schedulerName: "{{ .Values.imageRenderer.schedulerName }}"
+      {{- with .Values.imageRenderer.schedulerName }}
+      schedulerName: "{{ . }}"
       {{- end }}
-      {{- if .Values.imageRenderer.serviceAccountName }}
-      serviceAccountName: "{{ .Values.imageRenderer.serviceAccountName }}"
+      {{- with .Values.imageRenderer.serviceAccountName }}
+      serviceAccountName: "{{ . }}"
       {{- end }}
-      {{- if .Values.imageRenderer.securityContext }}
+      {{- with .Values.imageRenderer.securityContext }}
       securityContext:
-        {{- toYaml .Values.imageRenderer.securityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.imageRenderer.hostAliases }}
+      {{- with .Values.imageRenderer.hostAliases }}
       hostAliases:
-        {{- toYaml .Values.imageRenderer.hostAliases | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.imageRenderer.priorityClassName }}
-      priorityClassName: {{ .Values.imageRenderer.priorityClassName }}
+      {{- with .Values.imageRenderer.priorityClassName }}
+      priorityClassName: {{ . }}
       {{- end }}
-      {{- if .Values.imageRenderer.image.pullSecrets }}
+      {{- with .Values.imageRenderer.image.pullSecrets }}
       imagePullSecrets:
-      {{- $root := . }}
-      {{- range .Values.imageRenderer.image.pullSecrets }}
+        {{- range . }}
         - name: {{ tpl . $root }}
-      {{- end}}
+        {{- end}}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}-image-renderer
@@ -69,15 +71,15 @@ spec:
           image: "{{ .Values.imageRenderer.image.repository }}:{{ .Values.imageRenderer.image.tag }}"
           {{- end }}
           imagePullPolicy: {{ .Values.imageRenderer.image.pullPolicy }}
-        {{- if .Values.imageRenderer.command }}
+          {{- if .Values.imageRenderer.command }}
           command:
-          {{- range .Values.imageRenderer.command }}
+            {{- range .Values.imageRenderer.command }}
             - {{ . }}
-          {{- end }}
-        {{- end}}
+            {{- end }}
+          {{- end}}
           ports:
             - name: {{ .Values.imageRenderer.service.portName }}
-              containerPort: {{ .Values.imageRenderer.service.port }}
+              containerPort: {{ .Values.imageRenderer.service.targetPort }}
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -85,35 +87,37 @@ spec:
               port: {{ .Values.imageRenderer.service.portName }}
           env:
             - name: HTTP_PORT
-              value: {{ .Values.imageRenderer.service.port | quote }}
+              value: {{ .Values.imageRenderer.service.targetPort | quote }}
+          {{- if .Values.imageRenderer.serviceMonitor.enabled }}
+            - name: ENABLE_METRICS
+              value: "true"
+          {{- end }}
           {{- range $key, $value := .Values.imageRenderer.env }}
             - name: {{ $key | quote }}
               value: {{ $value | quote }}
           {{- end }}
+          {{- with .Values.imageRenderer.containerSecurityContext }}
           securityContext:
-            capabilities:
-              drop: ['all']
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - mountPath: /tmp
               name: image-renderer-tmpfs
-      {{- with .Values.imageRenderer.resources }}
+          {{- with .Values.imageRenderer.resources }}
           resources:
-{{ toYaml . | indent 12 }}
-      {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- with .Values.imageRenderer.nodeSelector }}
       nodeSelector:
-{{ toYaml . | indent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- $root := . }}
       {{- with .Values.imageRenderer.affinity }}
       affinity:
-{{ tpl (toYaml .) $root | indent 8 }}
+        {{- tpl (toYaml .) $root | nindent 8 }}
       {{- end }}
       {{- with .Values.imageRenderer.tolerations }}
       tolerations:
-{{ toYaml . | indent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
         - name: image-renderer-tmpfs

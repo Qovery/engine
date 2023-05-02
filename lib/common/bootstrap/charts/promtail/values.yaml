@@ -4,20 +4,46 @@ nameOverride: null
 # -- Overrides the chart's computed fullname
 fullnameOverride: null
 
-initContainer:
-  # -- Specifies whether the init container for setting inotify max user instances is to be enabled
+daemonset:
+  # -- Deploys Promtail as a DaemonSet
+  enabled: true
+
+deployment:
+  # -- Deploys Promtail as a Deployment
   enabled: false
-  image:
-    # -- The Docker registry for the init container
-    registry: docker.io
-    # -- Docker image repository for the init container
-    repository: busybox
-    # -- Docker tag for the init container
-    tag: 1.33
-    # -- Docker image pull policy for the init container image
-    pullPolicy: IfNotPresent
-  # -- The inotify max user instances to configure
-  fsInotifyMaxUserInstances: 128
+  replicaCount: 1
+  autoscaling:
+    # -- Creates a HorizontalPodAutoscaler for the deployment
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage:
+
+secret:
+  # -- Labels for the Secret
+  labels: {}
+  # -- Annotations for the Secret
+  annotations: {}
+
+configmap:
+  # -- If enabled, promtail config will be created as a ConfigMap instead of a secret
+  enabled: false
+
+initContainer: []
+  # # -- Specifies whether the init container for setting inotify max user instances is to be enabled
+  # - name: init
+  #   # -- Docker registry, image and tag for the init container image
+  #   image: docker.io/busybox:1.33
+  #   # -- Docker image pull policy for the init container image
+  #   imagePullPolicy: IfNotPresent
+  #   # -- The inotify max user instances to configure
+  #   command:
+  #     - sh
+  #     - -c
+  #     - sysctl -w fs.inotify.max_user_instances=128
+  #   securityContext:
+  #     privileged: true
 
 image:
   # -- The Docker registry
@@ -57,7 +83,7 @@ livenessProbe: {}
 readinessProbe:
   failureThreshold: 5
   httpGet:
-    path: /ready
+    path: "{{ printf `%s/ready` .Values.httpPathPrefix }}"
     port: http-metrics
   initialDelaySeconds: 10
   periodSeconds: 10
@@ -92,6 +118,10 @@ rbac:
   # -- Specifies whether a PodSecurityPolicy is to be created
   pspEnabled: false
 
+# -- The name of the Namespace to deploy
+# If not set, `.Release.Namespace` is used
+namespace: null
+
 serviceAccount:
   # -- Specifies whether a ServiceAccount should be created
   create: true
@@ -122,6 +152,9 @@ tolerations:
 # Use `extraVolumes`/`extraVolumeMounts` for additional custom volumes.
 # @default -- See `values.yaml`
 defaultVolumes:
+  - name: run
+    hostPath:
+      path: /run/promtail
   - name: containers
     hostPath:
       path: /var/lib/docker/containers
@@ -132,6 +165,8 @@ defaultVolumes:
 # -- Default volume mounts. Corresponds to `volumes`.
 # @default -- See `values.yaml`
 defaultVolumeMounts:
+  - name: run
+    mountPath: /run/promtail
   - name: containers
     mountPath: /var/lib/docker/containers
     readOnly: true
@@ -156,6 +191,9 @@ extraEnv: []
 
 # -- Extra environment variables from secrets or configmaps
 extraEnvFrom: []
+
+# -- Configure enableServiceLinks in pod
+enableServiceLinks: true
 
 # ServiceMonitor configuration
 serviceMonitor:
@@ -182,6 +220,54 @@ serviceMonitor:
   # https://github.com/prometheus-operator/prometheus-operator/blob/master/Documentation/api.md#relabelconfig
   # (defines `metric_relabel_configs`)
   metricRelabelings: []
+  # --ServiceMonitor will add labels from the service to the Prometheus metric
+  # https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitorspec
+  targetLabels: []
+  # -- ServiceMonitor will use http by default, but you can pick https as well
+  scheme: http
+  # -- ServiceMonitor will use these tlsConfig settings to make the health check requests
+  tlsConfig: null
+  # -- Prometheus rules will be deployed for alerting purposes
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    # namespace:
+    rules: []
+    #  - alert: PromtailRequestErrors
+    #    expr: 100 * sum(rate(promtail_request_duration_seconds_count{status_code=~"5..|failed"}[1m])) by (namespace, job, route, instance) / sum(rate(promtail_request_duration_seconds_count[1m])) by (namespace, job, route, instance) > 10
+    #    for: 5m
+    #    labels:
+    #      severity: critical
+    #    annotations:
+    #      description: |
+    #        The {{ $labels.job }} {{ $labels.route }} is experiencing
+    #        {{ printf \"%.2f\" $value }} errors.
+    #        VALUE = {{ $value }}
+    #        LABELS = {{ $labels }}
+    #      summary: Promtail request errors (instance {{ $labels.instance }})
+    #  - alert: PromtailRequestLatency
+    #    expr: histogram_quantile(0.99, sum(rate(promtail_request_duration_seconds_bucket[5m])) by (le)) > 1
+    #    for: 5m
+    #    labels:
+    #      severity: critical
+    #    annotations:
+    #      summary: Promtail request latency (instance {{ $labels.instance }})
+    #      description: |
+    #        The {{ $labels.job }} {{ $labels.route }} is experiencing
+    #        {{ printf \"%.2f\" $value }}s 99th percentile latency.
+    #        VALUE = {{ $value }}
+    #        LABELS = {{ $labels }}
+
+# Extra containers created as part of a Promtail Deployment resource
+# - spec for Container:
+#   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#container-v1-core
+#
+# Note that the key is used as the `name` field, i.e. below will create a
+# container named `promtail-proxy`.
+extraContainers: {}
+  # promtail-proxy:
+  #   image: nginx
+  #   ...
 
 # -- Configure additional ports and services. For each configured port, a corresponding service is created.
 # See values.yaml for details
@@ -201,6 +287,23 @@ extraPorts: {}
 #      loadBalancerIP: null
 #      loadBalancerSourceRanges: []
 #      externalTrafficPolicy: null
+#    ingress:
+#      # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+#      # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+#      # ingressClassName: nginx
+#      # Values can be templated
+#      annotations: {}
+#        # kubernetes.io/ingress.class: nginx
+#        # kubernetes.io/tls-acme: "true"
+#      paths: "/"
+#      hosts:
+#        - chart-example.local
+#
+#      tls: []
+#      #  - secretName: chart-example-tls
+#      #    hosts:
+#      #      - chart-example.local
+
 
 # -- PodSecurityPolicy configuration.
 # @default -- See `values.yaml`
@@ -295,6 +398,14 @@ config:
     # This helps debug the Promtail config.
     addScrapeJobLabel: false
 
+    # -- You can put here any keys that will be directly added to the config file's 'limits_config' block.
+    # @default -- empty
+    extraLimitsConfig: ""
+
+    # -- You can put here any keys that will be directly added to the config file's 'server' block.
+    # @default -- empty
+    extraServerConfigs: ""
+
     # -- You can put here any additional scrape configs you want to add to the config file.
     # @default -- empty
     extraScrapeConfigs: ""
@@ -352,9 +463,13 @@ config:
     server:
       log_level: {{ .Values.config.logLevel }}
       http_listen_port: {{ .Values.config.serverPort }}
+      {{- with .Values.httpPathPrefix }}
+      http_path_prefix: {{ . }}
+      {{- end }}
+      {{- tpl .Values.config.snippets.extraServerConfigs . | nindent 2 }}
 
     clients:
-      {{- toYaml .Values.config.clients | nindent 2 }}
+      {{- tpl (toYaml .Values.config.clients) . | nindent 2 }}
 
     positions:
       filename: /run/promtail/positions.yaml
@@ -362,6 +477,9 @@ config:
     scrape_configs:
       {{- tpl .Values.config.snippets.scrapeConfigs . | nindent 2 }}
       {{- tpl .Values.config.snippets.extraScrapeConfigs . | nindent 2 }}
+
+    limits_config:
+      {{- tpl .Values.config.snippets.extraLimitsConfig . | nindent 2 }}
 
 networkPolicy:
   # -- Specifies whether Network Policies should be created
@@ -381,6 +499,52 @@ networkPolicy:
     port: 8443
     # -- Specifies specific network CIDRs you want to limit access to
     cidrs: []
+
+# -- Base path to server all API routes fro
+httpPathPrefix: ""
+
+sidecar:
+  configReloader:
+    enabled: false
+    image:
+      # -- The Docker registry for sidecar config-reloader
+      registry: docker.io
+      # -- Docker image repository for sidecar config-reloader
+      repository: jimmidyson/configmap-reload
+      # -- Docker image tag for sidecar config-reloader
+      tag: v0.8.0
+      # -- Docker image pull policy for sidecar config-reloader
+      pullPolicy: IfNotPresent
+    # Extra args for the config-reloader container.
+    extraArgs: []
+    # -- Extra environment variables for sidecar config-reloader
+    extraEnv: []
+    # -- Extra environment variables from secrets or configmaps for sidecar config-reloader
+    extraEnvFrom: []
+    # -- The security context for containers for sidecar config-reloader
+    containerSecurityContext:
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      allowPrivilegeEscalation: false
+    # -- Readiness probe for sidecar config-reloader
+    readinessProbe: {}
+    # -- Liveness probe for sidecar config-reloader
+    livenessProbe: {}
+    # -- Resource requests and limits for sidecar config-reloader
+    resources: {}
+    #  limits:
+    #    cpu: 200m
+    #    memory: 128Mi
+    #  requests:
+    #    cpu: 100m
+    #    memory: 128Mi
+    config:
+      # -- The port of the config-reloader server
+      serverPort: 9533
+    serviceMonitor:
+      enabled: true
 
 # -- Extra K8s manifests to deploy
 extraObjects: []

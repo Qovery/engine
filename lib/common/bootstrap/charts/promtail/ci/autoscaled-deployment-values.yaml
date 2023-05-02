@@ -1,0 +1,6 @@
+daemonset:
+  enabled: false
+deployment:
+  enabled: true
+  autoscaling:
+    enabled: true

@@ -8,7 +8,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ include "promtail.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "promtail.namespaceName" . }}
 roleRef:
   kind: ClusterRole
   name: {{ include "promtail.fullname" . }}

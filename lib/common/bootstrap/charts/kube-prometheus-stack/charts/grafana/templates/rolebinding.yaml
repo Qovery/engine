@@ -1,25 +1,25 @@
-{{- if .Values.rbac.create -}}
-apiVersion: {{ template "grafana.rbac.apiVersion" . }}
+{{- if .Values.rbac.create }}
+apiVersion: {{ include "grafana.rbac.apiVersion" . }}
 kind: RoleBinding
 metadata:
-  name: {{ template "grafana.fullname" . }}
-  namespace: {{ template "grafana.namespace" . }}
+  name: {{ include "grafana.fullname" . }}
+  namespace: {{ include "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
-{{- with .Values.annotations }}
+  {{- with .Values.annotations }}
   annotations:
-{{ toYaml . | indent 4 }}
-{{- end }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-{{- if (not .Values.rbac.useExistingRole) }}
-  name: {{ template "grafana.fullname" . }}
-{{- else }}
+  {{- if .Values.rbac.useExistingRole }}
   name: {{ .Values.rbac.useExistingRole }}
-{{- end }}
+  {{- else }}
+  name: {{ include "grafana.fullname" . }}
+  {{- end }}
 subjects:
 - kind: ServiceAccount
-  name: {{ template "grafana.serviceAccountName" . }}
-  namespace: {{ template "grafana.namespace" . }}
-{{- end -}}
+  name: {{ include "grafana.serviceAccountName" . }}
+  namespace: {{ include "grafana.namespace" . }}
+{{- end }}

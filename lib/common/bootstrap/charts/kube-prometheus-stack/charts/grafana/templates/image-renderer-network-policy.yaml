@@ -1,53 +1,56 @@
-{{- if and (.Values.imageRenderer.enabled) (.Values.imageRenderer.networkPolicy.limitIngress) }}
+{{- if and .Values.imageRenderer.enabled .Values.imageRenderer.networkPolicy.limitIngress }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ template "grafana.fullname" . }}-image-renderer-ingress
-  namespace: {{ template "grafana.namespace" . }}
+  name: {{ include "grafana.fullname" . }}-image-renderer-ingress
+  namespace: {{ include "grafana.namespace" . }}
   annotations:
     comment: Limit image-renderer ingress traffic from grafana
 spec:
   podSelector:
     matchLabels:
       {{- include "grafana.imageRenderer.selectorLabels" . | nindent 6 }}
-      {{- if .Values.imageRenderer.podLabels }}
-        {{ toYaml .Values.imageRenderer.podLabels | nindent 6 }}
+      {{- with .Values.imageRenderer.podLabels }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
 
   policyTypes:
     - Ingress
   ingress:
     - ports:
-        - port: {{ .Values.imageRenderer.service.port }}
+        - port: {{ .Values.imageRenderer.service.targetPort }}
           protocol: TCP
       from:
         - namespaceSelector:
             matchLabels:
-              name: {{ template "grafana.namespace" . }}
+              kubernetes.io/metadata.name: {{ include "grafana.namespace" . }}
           podSelector:
             matchLabels:
               {{- include "grafana.selectorLabels" . | nindent 14 }}
-              {{- if .Values.podLabels }}
-                {{ toYaml .Values.podLabels | nindent 14 }}
+              {{- with .Values.podLabels }}
+              {{- toYaml . | nindent 14 }}
               {{- end }}
-{{ end }}
+        {{- with .Values.imageRenderer.networkPolicy.extraIngressSelectors -}}
+        {{ toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
 
-{{- if and (.Values.imageRenderer.enabled) (.Values.imageRenderer.networkPolicy.limitEgress) }}
+{{- if and .Values.imageRenderer.enabled .Values.imageRenderer.networkPolicy.limitEgress }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ template "grafana.fullname" . }}-image-renderer-egress
-  namespace: {{ template "grafana.namespace" . }}
+  name: {{ include "grafana.fullname" . }}-image-renderer-egress
+  namespace: {{ include "grafana.namespace" . }}
   annotations:
     comment: Limit image-renderer egress traffic to grafana
 spec:
   podSelector:
     matchLabels:
       {{- include "grafana.imageRenderer.selectorLabels" . | nindent 6 }}
-      {{- if .Values.imageRenderer.podLabels }}
-        {{ toYaml .Values.imageRenderer.podLabels | nindent 6 }}
+      {{- with .Values.imageRenderer.podLabels }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
 
   policyTypes:
@@ -61,16 +64,16 @@ spec:
           protocol: TCP
     # talk only to grafana
     - ports:
-        - port: {{ .Values.service.port }}
+        - port: {{ .Values.service.targetPort }}
           protocol: TCP
       to:
         - namespaceSelector:
             matchLabels:
-              name: {{ template "grafana.namespace" . }}
+              name: {{ include "grafana.namespace" . }}
           podSelector:
             matchLabels:
               {{- include "grafana.selectorLabels" . | nindent 14 }}
-              {{- if .Values.podLabels }}
-                {{ toYaml .Values.podLabels | nindent 14 }}
+              {{- with .Values.podLabels }}
+              {{- toYaml . | nindent 14 }}
               {{- end }}
-{{ end }}
+{{- end }}

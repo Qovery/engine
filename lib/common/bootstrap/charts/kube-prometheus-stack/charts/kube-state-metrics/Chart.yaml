@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 2.4.1
+appVersion: 2.8.2
 description: Install kube-state-metrics to generate and expose cluster-level metrics
 home: https://github.com/kubernetes/kube-state-metrics/
 keywords:
@@ -12,10 +12,10 @@ maintainers:
   name: tariq1890
 - email: manuel@rueg.eu
   name: mrueg
-- email: davidcalvertfr@gmail.com
+- email: david@0xdc.me
   name: dotdc
 name: kube-state-metrics
 sources:
 - https://github.com/kubernetes/kube-state-metrics/
 type: application
-version: 4.7.0
+version: 5.4.2

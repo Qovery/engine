@@ -20,6 +20,10 @@ helm repo add grafana https://grafana.github.io/helm-charts
 
 A major chart version change indicates that there is an incompatible breaking change needing manual actions.
 
+### From Chart Versions >= 3.0.0
+
+* Customizeable initContainer added.
+
 ### From Chart Versions < 3.0.0
 
 #### Notable Changes
@@ -99,8 +103,22 @@ config:
         relabel_configs:
           - source_labels:
               - __syslog_message_hostname
-            target_label: host
+            target_label: hostname
+
+          # example label values: kernel, CRON, kubelet
+          - source_labels:
+              - __syslog_message_app_name
+            target_label: app
+
+          # example label values: debug, notice, informational, warning, error
+          - source_labels:
+              - __syslog_message_severity
+            target_label: level
 ```
+
+Find additional source labels in the Promtail's docs:
+
+https://grafana.com/docs/loki/latest/clients/promtail/configuration/#syslog
 
 ### Journald Support
 
@@ -117,27 +135,52 @@ config:
             job: systemd-journal
         relabel_configs:
           - source_labels:
-              - '__journal__systemd_unit'
-            target_label: 'unit'
-          - source_labels:
-              - '__journal__hostname'
-            target_label: 'hostname'
+              - __journal__hostname
+            target_label: hostname
 
-# Mount journal directory into promtail pods
+          # example label values: kubelet.service, containerd.service
+          - source_labels:
+              - __journal__systemd_unit
+            target_label: unit
+
+          # example label values: debug, notice, info, warning, error
+          - source_labels:
+              - __journal_priority_keyword
+            target_label: level
+
+# Mount journal directory and machine-id file into promtail pods
 extraVolumes:
   - name: journal
     hostPath:
       path: /var/log/journal
+  - name: machine-id
+    hostPath:
+      path: /etc/machine-id
 
 extraVolumeMounts:
   - name: journal
     mountPath: /var/log/journal
     readOnly: true
+  - name: machine-id
+    mountPath: /etc/machine-id
+    readOnly: true
 ```
+
+Find additional configuration options in Promtail's docs:
+
+https://grafana.com/docs/loki/latest/clients/promtail/configuration/#journal
+
+More journal source labels can be found here https://www.freedesktop.org/software/systemd/man/systemd.journal-fields.html.
+> Note that each message from the journal may have a different set of fields and software may write an arbitrary set of custom fields for their logged messages. [(related issue)](https://github.com/grafana/loki/issues/2048#issuecomment-626234611)
+
+The machine-id needs to be available in the container as it is required for scraping.
+This is described in Promtail's scraping docs:
+
+https://grafana.com/docs/loki/latest/clients/promtail/scraping/#journal-scraping-linux-only
 
 ### Push API Support
 
-```
+```yaml
 extraPorts:
   httpPush:
     name: http-push
@@ -152,8 +195,8 @@ config:
       log_level: {{"{{"}} .Values.config.logLevel {{"}}"}}
       http_listen_port: {{"{{"}} .Values.config.serverPort {{"}}"}}
 
-    client:
-      url: {{"{{"}} .Values.config.lokiAddress {{"}}"}}
+    clients:
+      - url: {{"{{"}} .Values.config.lokiAddress {{"}}"}}
 
     positions:
       filename: /run/promtail/positions.yaml

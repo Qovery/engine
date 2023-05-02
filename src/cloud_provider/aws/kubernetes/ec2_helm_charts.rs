@@ -16,7 +16,7 @@ use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
-use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
@@ -52,6 +52,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub cluster_long_id: uuid::Uuid,
     pub region: String,
     pub cluster_name: String,
+    pub cpu_architectures: CpuArchitecture,
     pub cloud_provider: String,
     pub test_cluster: bool,
     pub aws_access_key_id: String,
@@ -413,21 +414,15 @@ pub fn ec2_aws_helm_charts(
                         CommandError::new("cannot get engine version".to_string(), Some(e.to_string()), None)
                     })?,
                 },
+                // autoscaler
                 ChartSetValue {
-                    key: "autoscaler.min_replicas".to_string(),
-                    value: "1".to_string(),
+                    key: "autoscaler.enabled".to_string(),
+                    value: "false".to_string(),
                 },
-                ChartSetValue {
-                    key: "metrics.enabled".to_string(),
-                    value: "false".to_string(), // update this field if we decide to add prometheus support later on EC2
-                },
-                ChartSetValue {
-                    key: "volumes.storageClassName".to_string(),
-                    value: "aws-ebs-gp2-0".to_string(),
-                },
+                // env vars
                 ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
-                    value: chart_config_prerequisites.organization_id.clone(),
+                    value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
@@ -461,39 +456,31 @@ pub fn ec2_aws_helm_charts(
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: chart_config_prerequisites.organization_long_id.to_string(),
                 },
+                // builder
+                ChartSetValue {
+                    key: "buildContainer.enabled".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES".to_string(),
+                    value: chart_config_prerequisites.cpu_architectures.to_string(),
+                },
                 // engine resources limits
                 ChartSetValue {
                     key: "engineResources.limits.cpu".to_string(),
-                    value: "1".to_string(),
+                    value: "1000m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.limits.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "1Gi".to_string(),
                 },
                 ChartSetValue {
                     key: "engineResources.requests.memory".to_string(),
-                    value: "512Mi".to_string(),
-                },
-                // build resources limits
-                ChartSetValue {
-                    key: "buildResources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildResources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildResources.limits.memory".to_string(),
-                    value: "4Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildResources.requests.memory".to_string(),
-                    value: "4Gi".to_string(),
+                    value: "1Gi".to_string(),
                 },
             ],
             ..Default::default()

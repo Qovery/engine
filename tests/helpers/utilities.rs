@@ -530,7 +530,7 @@ pub fn generate_password(db_mode: DatabaseMode) -> String {
     let mut password = pg.generate_one().expect("error while trying to generate a password");
 
     for forbidden_char in forbidden_chars {
-        password = password.replace(forbidden_char, "-");
+        password = password.replace(forbidden_char, "z");
     }
 
     password

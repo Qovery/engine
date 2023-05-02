@@ -2,17 +2,20 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ template "grafana.fullname" . }}
-  namespace: {{ template "grafana.namespace" . }}
+  name: {{ include "grafana.fullname" . }}
+  namespace: {{ include "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
+    {{- with .Values.persistence.extraPvcLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- with .Values.persistence.annotations  }}
   annotations:
-{{ toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   {{- with .Values.persistence.finalizers  }}
   finalizers:
-{{ toYaml . | indent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   accessModes:
@@ -22,12 +25,12 @@ spec:
   resources:
     requests:
       storage: {{ .Values.persistence.size | quote }}
-  {{- if .Values.persistence.storageClassName }}
-  storageClassName: {{ .Values.persistence.storageClassName }}
-  {{- end -}}
+  {{- with .Values.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
   {{- with .Values.persistence.selectorLabels }}
   selector:
     matchLabels:
-{{ toYaml . | indent 6 }}
+    {{- toYaml . | nindent 6 }}
   {{- end }}
-{{- end -}}
+{{- end }}

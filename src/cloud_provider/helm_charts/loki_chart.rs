@@ -5,7 +5,9 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::errors::CommandError;
+
 use kube::Client;
+use semver::Version;
 
 pub enum LokiEncryptionType {
     None,
@@ -72,19 +74,32 @@ impl ToCommonHelmChart for LokiChart {
                 path: self.chart_path.to_string(),
                 namespace: self.chart_namespace,
                 timeout_in_seconds: 900,
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
-                        key: "image.repository".to_string(),
-                        value: "public.ecr.aws/r3m4q3r9/pub-mirror-loki".to_string(),
+                        key: "kubectlImage.registry".to_string(),
+                        value: "public.ecr.aws".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "kubectlImage.repository".to_string(),
+                        value: "r3m4q3r9/pub-mirror-kubectl".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.image.registry".to_string(),
+                        value: "public.ecr.aws".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.image.repository".to_string(),
+                        value: "r3m4q3r9/pub-mirror-loki".to_string(),
                     },
                     // AWS
                     ChartSetValue {
-                        key: "config.storage_config.aws.s3forcepathstyle".to_string(),
+                        key: "loki.storage_config.aws.s3forcepathstyle".to_string(),
                         value: self.loki_s3_bucket_configuration.use_path_style.to_string(),
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.s3".to_string(),
+                        key: "loki.storage_config.aws.s3".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .s3_config
@@ -93,7 +108,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.region".to_string(),
+                        key: "loki.storage_config.aws.region".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .region
@@ -102,7 +117,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.bucketnames".to_string(),
+                        key: "loki.storage_config.aws.bucketnames".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .bucketname
@@ -111,7 +126,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.endpoint".to_string(),
+                        key: "loki.storage_config.aws.endpoint".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .endpoint
@@ -120,7 +135,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.sse_encryption".to_string(),
+                        key: "loki.storage_config.aws.sse_encryption".to_string(),
                         value: match self.encryption_type {
                             LokiEncryptionType::None => "false",
                             LokiEncryptionType::ServerSideEncryption => "true",
@@ -128,11 +143,11 @@ impl ToCommonHelmChart for LokiChart {
                         .to_string(), // Qovery settings
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.insecure".to_string(),
+                        key: "loki.storage_config.aws.insecure".to_string(),
                         value: self.loki_s3_bucket_configuration.insecure.to_string(), // Qovery settings
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.access_key_id".to_string(),
+                        key: "loki.storage_config.aws.access_key_id".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .access_key_id
@@ -141,7 +156,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "config.storage_config.aws.secret_access_key".to_string(),
+                        key: "loki.storage_config.aws.secret_access_key".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .secret_access_key
@@ -149,14 +164,19 @@ impl ToCommonHelmChart for LokiChart {
                             .unwrap_or(&"".to_string())
                             .to_string(), // Qovery setting
                     },
-                    // Chunk store config
                     ChartSetValue {
-                        key: "config.chunk_store_config.max_look_back_period".to_string(),
-                        value: format!("{}w", self.loki_log_retention_in_weeks), // Qovery setting (default 12 week)
+                        key: "loki.compactor.retention_enabled".to_string(),
+                        value: "true".to_string(),
                     },
                     // Table manager
+                    // todo(pmavro): ensure there is no better options to handle retention:
+                    // https://github.com/grafana/loki/issues/9207, chart is manually overriden
                     ChartSetValue {
-                        key: "config.table_manager.retention_period".to_string(),
+                        key: "loki.table_manager.retention_deletes_enabled".to_string(),
+                        value: "true".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.table_manager.retention_period".to_string(),
                         value: format!("{}w", self.loki_log_retention_in_weeks), // Qovery setting (default 12 week)
                     },
                 ],

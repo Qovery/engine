@@ -1,11 +1,21 @@
 annotations:
   artifacthub.io/changes: |
-    - "[8587](https://github.com/kubernetes/ingress-nginx/pull/8587) Add CAP_SYS_CHROOT to DS/PSP when needed"
-    - "[8458](https://github.com/kubernetes/ingress-nginx/pull/8458) Add portNamePreffix Helm chart parameter"
-    - "[8522](https://github.com/kubernetes/ingress-nginx/pull/8522) Add documentation for controller.service.loadBalancerIP in Helm chart"
+    - "Upgrade alpine 3.17.2"
+    - "Upgrade golang 1.20"
+    - "Drop testing/support for Kubernetes 1.23"
+    - "docs(helm): fix value key in readme for enabling certManager (#9640)"
+    - "Update Ingress-Nginx version controller-v1.7.0"
+    - "feat: OpenTelemetry module integration (#9062)"
+    - "canary-weight-total annotation ignored in rule backends (#9729)"
+    - "fix controller psp's volume config (#9740)"
+    - "Fix several Helm YAML issues with extraModules and extraInitContainers (#9709)"
+    - "Chart: Drop `controller.headers`, rework DH param secret. (#9659)"
+    - "Deployment/DaemonSet: Label pods using `ingress-nginx.labels`. (#9732)"
+    - "HPA: autoscaling/v2beta1 deprecated, bump apiVersion to v2 for defaultBackend (#9731)"
+    - "Fix incorrect annotation name in upstream hashing configuration (#9617)"
   artifacthub.io/prerelease: "false"
 apiVersion: v2
-appVersion: 1.2.0
+appVersion: 1.7.0
 description: Ingress controller for Kubernetes using NGINX as a reverse proxy and
   load balancer
 home: https://github.com/kubernetes/ingress-nginx
@@ -13,7 +23,7 @@ icon: https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Nginx_logo.svg/5
 keywords:
 - ingress
 - nginx
-kubeVersion: '>=1.19.0-0'
+kubeVersion: '>=1.20.0-0'
 maintainers:
 - name: rikatz
 - name: strongjz
@@ -21,5 +31,4 @@ maintainers:
 name: ingress-nginx
 sources:
 - https://github.com/kubernetes/ingress-nginx
-type: application
-version: 4.1.2
+version: 4.6.0

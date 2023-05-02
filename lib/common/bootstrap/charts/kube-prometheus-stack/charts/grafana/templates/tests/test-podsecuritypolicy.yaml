@@ -1,8 +1,11 @@
-{{- if and .Values.testFramework.enabled .Values.rbac.pspEnabled }}
+{{- if and (.Capabilities.APIVersions.Has "policy/v1beta1/PodSecurityPolicy") .Values.testFramework.enabled .Values.rbac.pspEnabled }}
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
-  name: {{ template "grafana.fullname" . }}-test
+  name: {{ include "grafana.fullname" . }}-test
+  annotations:
+    "helm.sh/hook": test-success
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
 spec:
@@ -20,10 +23,10 @@ spec:
   runAsUser:
     rule: RunAsAny
   volumes:
-  - configMap
-  - downwardAPI
-  - emptyDir
-  - projected
-  - csi
-  - secret
+    - configMap
+    - downwardAPI
+    - emptyDir
+    - projected
+    - csi
+    - secret
 {{- end }}

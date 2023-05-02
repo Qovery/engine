@@ -1,0 +1,42 @@
+{{- if .Values.controller.enableMetrics -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ebs-csi-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: ebs-csi-controller
+spec:
+  selector:
+    app: ebs-csi-controller
+  ports:
+    - name: metrics
+      port: 3301
+      targetPort: 3301
+  type: ClusterIP
+---
+{{- if or .Values.controller.serviceMonitor.forceEnable (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ebs-csi-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: ebs-csi-controller
+    {{- if .Values.controller.serviceMonitor.labels }}
+    {{- toYaml .Values.controller.serviceMonitor.labels | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: ebs-csi-controller
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - targetPort: 3301
+      path: /metrics
+      interval: 15s
+{{- end }}
+{{- end }}

@@ -1,0 +1,329 @@
+{{- if (or (.Values.datadog.apiKeyExistingSecret) (not (eq .Values.datadog.apiKey "<DATADOG_API_KEY>"))) }}
+Datadog agents are spinning up on each node in your cluster. After a few
+minutes, you should see your agents starting in your event stream:
+    https://app.datadoghq.com/event/stream
+
+  {{- if .Values.datadog.apiKeyExistingSecret }}
+You disabled creation of Secret containing API key, therefore it is expected
+that you create Secret named '{{ .Values.datadog.apiKeyExistingSecret }}' which includes a key called 'api-key' containing the API key.
+  {{- else if not (eq .Values.datadog.apiKey "<DATADOG_API_KEY>") }}
+  {{- end }}
+
+{{- else }}
+##############################################################################
+####               ERROR: You did not set a datadog.apiKey.               ####
+##############################################################################
+
+This deployment will be incomplete until you get your API key from Datadog.
+One can sign up for a free Datadog trial at https://app.datadoghq.com/signup
+
+Once registered you can request an API key at:
+
+    https://app.datadoghq.com/account/settings#agent/kubernetes
+
+Then run:
+
+    helm upgrade {{ .Release.Name }} \
+        --set datadog.apiKey=YOUR-KEY-HERE stable/datadog
+{{- end }}
+
+{{- $healthPort := .Values.agents.containers.agent.healthPort }}
+{{- with $liveness := .Values.agents.containers.agent.livenessProbe.httpGet }}
+{{- if and $liveness.port (ne $healthPort $liveness.port) }}
+
+##############################################################################
+####               ERROR: Node Agent liveness probe misconfiguration      ####
+##############################################################################
+
+Node Agent liveness probe port ({{ $liveness.port }}) is different from the configured health port ({{ $healthPort }}).
+{{- end }}
+{{- end }}
+{{- with $readiness := .Values.agents.containers.agent.readinessProbe.httpGet }}
+{{- if and $readiness.port (ne $healthPort $readiness.port) }}
+
+##############################################################################
+####               ERROR: Node Agent readiness probe misconfiguration     ####
+##############################################################################
+
+Node Agent readiness probe port ({{ $readiness.port }}) is different from the configured health port ({{ $healthPort }}).
+{{- end }}
+{{- end }}
+{{- if eq (include "should-deploy-cluster-agent" .) "true" }}
+
+  {{- if .Values.clusterAgent.metricsProvider.enabled }}
+    {{- if .Values.datadog.appKeyExistingSecret }}
+You disabled creation of Secret containing APP key, therefore it is expected
+that you create a Secret named '{{ .Values.datadog.appKeyExistingSecret }}' which includes a key called 'app-key' containing the APP key.
+    {{- else if (.Values.datadog.appKey) }}
+    {{- else }}
+
+##############################################################################
+####               ERROR: You did not set a datadog.appKey.               ####
+##############################################################################
+
+This deployment will be incomplete until you get your APP key from Datadog.
+Create an application key at https://app.datadoghq.com/account/settings#api
+    {{- end }}
+  {{- end }}
+  {{- $healthPort := .Values.clusterAgent.healthPort }}
+  {{- with $liveness := .Values.clusterAgent.livenessProbe.httpGet }}
+  {{- if and $liveness.port (ne $healthPort $liveness.port) }}
+
+##############################################################################
+####               ERROR: Cluster Agent liveness probe misconfiguration   ####
+##############################################################################
+
+Cluster Agent liveness probe port ({{ $liveness.port }}) is different from the configured health port ({{ $healthPort }}).
+  {{- end }}
+  {{- end }}
+  {{- with $readiness := .Values.clusterAgent.readinessProbe.httpGet }}
+  {{- if and $readiness.port (ne $healthPort $readiness.port) }}
+
+##############################################################################
+####               ERROR: Cluster Agent readiness probe misconfiguration  ####
+##############################################################################
+
+Cluster Agent readiness probe port ({{ $readiness.port }}) is different from the configured health port ({{ $healthPort }}).
+  {{- end }}
+  {{- end }}
+  {{- if and .Values.datadog.clusterChecks.enabled .Values.clusterChecksRunner.enabled }}
+    {{- $healthPort := .Values.clusterChecksRunner.healthPort }}
+    {{- with $liveness := .Values.clusterChecksRunner.livenessProbe.httpGet }}
+    {{- if and $liveness.port (ne $healthPort $liveness.port) }}
+
+#####################################################################################
+####               ERROR: Cluster Checks Runner liveness probe misconfiguration  ####
+#####################################################################################
+
+Cluster Checks Runner liveness probe port ({{ $liveness.port }}) is different from the configured health port ({{ $healthPort }}).
+    {{- end }}
+    {{- end }}
+    {{- with $readiness := .Values.clusterChecksRunner.readinessProbe.httpGet }}
+    {{- if and $readiness.port (ne $healthPort $readiness.port) }}
+
+#####################################################################################
+####               ERROR: Cluster Checks Runner readiness probe misconfiguration ####
+#####################################################################################
+
+Cluster Checks Runner readiness probe port ({{ $readiness.port }}) is different from the configured health port ({{ $healthPort }}).
+    {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if or .Values.datadog.apm.enabled .Values.datadog.apm.portEnabled }}
+  {{- $apmPort := .Values.datadog.apm.port }}
+  {{- with $liveness := .Values.agents.containers.traceAgent.livenessProbe.tcpSocket }}
+  {{- if and $liveness.port (ne $apmPort $liveness.port) }}
+
+##############################################################################
+####               ERROR: Trace Agent liveness probe misconfiguration     ####
+##############################################################################
+
+Trace Agent liveness probe port ({{ $liveness.port }}) is different from the configured APM port ({{ $apmPort }}).
+  {{- end }}
+  {{- end }}
+
+The Datadog Agent is listening on port {{ $apmPort }} for APM service.
+{{- end }}
+
+{{- if .Values.datadog.apm.enabled }}
+
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+The option `datadog.apm.enabled` is deprecated, please use `datadog.apm.portEnabled` to enable TCP communication to the trace-agent.
+The option `datadog.apm.socketEnabled` is enabled by default and can be used to rely on unix socket or name-pipe communication.
+
+{{- end }}
+
+{{- if .Values.datadog.apm.useSocketVolume }}
+
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+The option `datadog.apm.useSocketVolume` is deprecated, please use `datadog.apm.socketEnabled` instead.
+
+{{- end }}
+
+{{- if .Values.datadog.autoconf }}
+
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+The autoconf value is deprecated, Autodiscovery templates can now
+be safely moved to the confd value. As a temporary measure, both
+values were merged into the {{ template "datadog.fullname" . }}-confd configmap,
+but this will be removed in a future chart release.
+Please note that duplicate file names may have conflicted during
+the merge. In that case, the confd entry will take precedence.
+{{- end }}
+
+{{- if eq .Values.agents.image.name "docker-dd-agent" }}
+
+######################################################################
+####               ERROR: Unsupported agent version               ####
+######################################################################
+
+This version of the chart does not support deploying Agent 5.x.
+If you cannot upgrade to Agent 6.x or later, you can use a previous version
+of the chart by calling helm install with `--version 0.18.0`.
+{{- end }}
+
+{{- if .Values.agents.podSecurity.securityContext }}
+
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+You are using the datadog.podSecurity.securityContext parameter, which has been renamed datadog.podSecurity.seLinuxContext.
+This version still supports datadog.podSecurity.securityContext, but it will be removed in the next major version of our Helm chart.
+More information about this change: https://github.com/DataDog/helm-charts/pull/46
+{{- end }}
+
+{{- if or .Values.agents.networkPolicy.create .Values.clusterAgent.networkPolicy.create .Values.clusterChecksRunner.networkPolicy.create }}
+
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+You are using the agents.networkPolicy.create, the clusterAgent.networkPolicy.create or the clusterChecksRunner.networkPolicy.create parameter,
+which have been replaced by datadog.networkPolicy.create.
+This version still supports agents.networkPolicy.create, clusterAgent.networkPolicy.create and clusterChecksRunner.networkPolicy.create,
+but they will be removed in the next major version of our Helm chart.
+More information about this change: https://github.com/DataDog/helm-charts/pull/99
+{{- end }}
+
+{{- if .Values.datadog.systemProbe.enabled }}
+{{- fail "You are using datadog.systemProbe.enabled which has been superseded by networkMonitoring.enabled, systemProbe.enableTCPQueueLength, systemProbe.enableOOMKill, and securityAgent.runtime.enabled. These options provide a more granular control of which features should be activated." }}
+{{- end }}
+
+{{- if and .Values.datadog.orchestratorExplorer.enabled (eq (include "cluster-agent-enabled" .) "false")}}
+
+#################################################################
+####               WARNING: Configuration notice             ####
+#################################################################
+
+You are using datadog.orchestratorExplorer.enabled but you disabled the cluster agent. This configuration is unsupported and Kubernetes resource monitoring has been turned off.
+To enable it please set clusterAgent.enabled to 'true'.
+{{- end }}
+
+{{- if .Values.providers.gke.autopilot}}
+{{- if eq (include "system-probe-feature" .) "true" }}
+
+##################################################################################
+####               WARNING: System Probe is not supported on GKE Autopilot    ####
+##################################################################################
+
+{{- end }}
+
+{{- if or .Values.datadog.securityAgent.runtime.enabled .Values.datadog.securityAgent.compliance.enabled }}
+
+###################################################################################
+####               WARNING: Security Agent is not supported on GKE Autopilot   ####
+###################################################################################
+
+{{- end }}
+
+{{- if .Values.datadog.dogstatsd.useSocketVolume }}
+
+###################################################################################
+####   WARNING: dogstatsd with Unix socket is not supported on GKE Autopilot   ####
+###################################################################################
+
+{{- end }}
+
+{{- if .Values.datadog.apm.socketEnabled }}
+
+##############################################################################
+####   WARNING: APM with Unix socket is not supported on GKE Autopilot   ####
+##############################################################################
+
+{{- end }}
+
+{{- end }}
+
+{{- if and (.Values.datadog.dogstatsd.useSocketVolume) (eq .Values.targetSystem "windows") }}
+
+###################################################################################
+####   WARNING: dogstatsd with Unix socket is not supported on Windows         ####
+###################################################################################
+
+Refer to the Dogstatsd configuration section of the documentation for more details.
+https://github.com/DataDog/helm-charts/tree/master/charts/datadog#dsd-config
+
+{{- end }}
+
+{{- if and (not (.Capabilities.APIVersions.Has "rbac.authorization.k8s.io/v1")) .Values.datadog.kubeStateMetricsEnabled }}
+
+########################################################################################
+####  WARNING: latest version of kube-state-metrics isn’t supported on your cluster ####
+########################################################################################
+
+datadog.kubeStateMetricsEnabled is true, meaning that KSM is required.
+
+The target Kubernetes cluster {{ .Capabilities.KubeVersion }} doesn’t support API "rbac.authorization.k8s.io/v1"
+which is used by KSM.
+
+The recommended way to go forward is to disable KSM deployment from the datadog chart and to manually deploy an older version of KSM.
+The last version of the KSM chart using "rbac.authorization.k8s.io/v1beta1" is 2.9.1 which can be installed with:
+
+helm install ksm https://charts.helm.sh/stable/packages/kube-state-metrics-2.9.1.tgz
+
+{{- end }}
+
+{{- if and .Values.datadog.kubeStateMetricsCore.enabled (eq (include "cluster-agent-enabled" .) "false")}}
+
+#################################################################
+####               WARNING: Configuration notice             ####
+#################################################################
+
+You are using datadog.kubeStateMetricsCore.enabled but you disabled the cluster agent. This configuration is unsupported and the kube-state-metrics core check can't be configured.
+To enable it please set clusterAgent.enabled to 'true'.
+{{- end }}
+
+
+{{- if or .Values.datadog.acInclude .Values.datadog.acExclude }}
+#################################################################
+####               WARNING: Deprecation notice               ####
+#################################################################
+
+You are using the datadog.acInclude or datadog.acExclude parameters, which have been deprecated since Datadog Agent 7.20. Please use datadog.containerInclude and datadog.containerExclude instead.
+{{- end }}
+
+
+{{- $hasContainerIncludeEnv := false }}
+{{- range $key := .Values.datadog.env }}
+  {{- if eq $key.name "DD_CONTAINER_INCLUDE" }}
+    {{- $hasContainerIncludeEnv = true }}
+  {{- end }}
+{{- end }}
+
+{{- $hasContainerInclude := false }}
+{{- if or .Values.datadog.containerInclude $hasContainerIncludeEnv }}
+  {{- $hasContainerInclude = true }}
+{{- end }}
+
+{{- $hasContainerExcludeEnv := false }}
+{{- range $key := .Values.datadog.env }}
+  {{- if eq $key.name "DD_CONTAINER_EXCLUDE" }}
+    {{- $hasContainerExcludeEnv = true }}
+  {{- end }}
+{{- end }}
+
+{{- $hasContainerExclude := false }}
+{{- if or .Values.datadog.containerExclude $hasContainerExcludeEnv }}
+  {{- $hasContainerExclude = true }}
+{{- end }}
+
+{{- if and $hasContainerInclude (not $hasContainerExclude) }}
+
+#################################################################
+####               WARNING: Configuration notice             ####
+#################################################################
+
+You are using datadog.containerInclude or DD_CONTAINER_INCLUDE but you haven't excluded any containers. The default behavior is to include everything; if the intent is to exclude all other containers, set datadog.containerExclude to '.*' .
+
+{{- end }}

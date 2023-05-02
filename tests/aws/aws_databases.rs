@@ -698,7 +698,10 @@ pub fn test_mongodb_configuration(
     })
 }
 
+//
 // development environment
+//
+
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
@@ -714,6 +717,7 @@ fn mongodb_disk_resize() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "ignored because debian packages can't be installed anymore (EOL stretch)"]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -721,7 +725,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "ignored because debian packages can't be installed anymore (EOL stretch)"]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -770,7 +774,10 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+//
 // MongoDB production environment (DocumentDB)
+//
+
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]

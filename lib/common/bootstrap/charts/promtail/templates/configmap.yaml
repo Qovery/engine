@@ -1,0 +1,12 @@
+{{- if .Values.configmap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "promtail.fullname" . }}
+  namespace: {{ include "promtail.namespaceName" . }}
+  labels:
+    {{- include "promtail.labels" . | nindent 4 }}
+data:
+  promtail.yaml: |
+    {{- tpl .Values.config.file . | nindent 4 }}
+{{- end }}

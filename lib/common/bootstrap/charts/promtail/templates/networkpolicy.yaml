@@ -4,7 +4,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ template "promtail.name" . }}-namespace-only
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" . }}
   labels:
     {{- include "promtail.labels" . | nindent 4 }}
 spec:
@@ -18,14 +18,12 @@ spec:
   ingress:
     - from:
         - podSelector: {}
-
-
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ template "promtail.name" . }}-egress-dns
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" . }}
   labels:
     {{- include "promtail.labels" . | nindent 4 }}
 spec:
@@ -40,13 +38,12 @@ spec:
           protocol: UDP
       to:
         - namespaceSelector: {}
-
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ template "promtail.name" . }}-egress-k8s-api
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" . }}
   labels:
     {{- include "promtail.labels" . | nindent 4 }}
 spec:
@@ -59,20 +56,20 @@ spec:
     - ports:
         - port: {{ .Values.networkPolicy.k8sApi.port }}
           protocol: TCP
-    {{- if len .Values.networkPolicy.k8sApi.cidrs }}
+      {{- if len .Values.networkPolicy.k8sApi.cidrs }}
       to:
-      {{- range $cidr := .Values.networkPolicy.k8sApi.cidrs }}
+        {{- range $cidr := .Values.networkPolicy.k8sApi.cidrs }}
         - ipBlock:
             cidr: {{ $cidr }}
+        {{- end }}
       {{- end }}
-    {{- end }}
 
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ template "promtail.name" . }}-ingress-metrics
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" . }}
   labels:
     {{- include "promtail.labels" . | nindent 4 }}
 spec:
@@ -85,21 +82,21 @@ spec:
     - ports:
         - port: http-metrics
           protocol: TCP
-    {{- if len .Values.networkPolicy.metrics.cidrs }}
+      {{- if len .Values.networkPolicy.metrics.cidrs }}
       from:
-      {{- range $cidr := .Values.networkPolicy.metrics.cidrs }}
+        {{- range $cidr := .Values.networkPolicy.metrics.cidrs }}
         - ipBlock:
             cidr: {{ $cidr }}
-      {{- end }}
-      {{- if .Values.networkPolicy.metrics.namespaceSelector }}
+        {{- end }}
+        {{- if .Values.networkPolicy.metrics.namespaceSelector }}
         - namespaceSelector:
-          {{- toYaml .Values.networkPolicy.metrics.namespaceSelector | nindent 12 }}
+            {{- toYaml .Values.networkPolicy.metrics.namespaceSelector | nindent 12 }}
           {{- if .Values.networkPolicy.metrics.podSelector }}
           podSelector:
-          {{- toYaml .Values.networkPolicy.metrics.podSelector | nindent 12 }}
+            {{- toYaml .Values.networkPolicy.metrics.podSelector | nindent 12 }}
           {{- end }}
+        {{- end }}
       {{- end }}
-    {{- end }}
 
 {{- if .Values.extraPorts }}
 ---
@@ -107,7 +104,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ template "promtail.name" . }}-egress-extra-ports
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "promtail.namespaceName" . }}
   labels:
     {{- include "promtail.labels" . | nindent 4 }}
 spec:
@@ -118,9 +115,9 @@ spec:
     - Egress
   egress:
     - ports:
-  {{- range $extraPortConfig := .Values.extraPorts }}
+        {{- range $extraPortConfig := .Values.extraPorts }}
         - port: {{ $extraPortConfig.containerPort }}
           protocol: {{ $extraPortConfig.protocol }}
-  {{- end }}
+        {{- end }}
 {{- end }}
 {{- end }}

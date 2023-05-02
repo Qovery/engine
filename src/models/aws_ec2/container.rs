@@ -1,7 +1,6 @@
 use crate::cloud_provider::models::StorageDataTemplate;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
-use crate::models::aws_ec2::AwsEc2StorageType;
 use crate::models::container::{Container, RegistryTeraContext};
 use crate::models::types::{AWSEc2, ToTeraContext};
 use tera::Context as TeraContext;
@@ -16,13 +15,7 @@ impl ToTeraContext for Container<AWSEc2> {
                 id: s.id.clone(),
                 long_id: self.long_id,
                 name: s.name.clone(),
-                storage_type: match s.storage_type {
-                    AwsEc2StorageType::SC1 => "aws-ebs-sc1-0",
-                    AwsEc2StorageType::ST1 => "aws-ebs-st1-0",
-                    AwsEc2StorageType::GP2 => "aws-ebs-gp2-0",
-                    AwsEc2StorageType::IO1 => "aws-ebs-io1-0",
-                }
-                .to_string(),
+                storage_type: s.storage_type.to_k8s_storage_class(),
                 size_in_gib: s.size_in_gib,
                 mount_point: s.mount_point.clone(),
                 snapshot_retention_in_days: s.snapshot_retention_in_days,

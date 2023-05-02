@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 8.5.3
+appVersion: 9.4.7
 description: The leading tool for querying and visualizing time series and metrics.
 home: https://grafana.net
 icon: https://raw.githubusercontent.com/grafana/grafana/master/public/img/logo_transparent_400x.png
@@ -19,4 +19,4 @@ name: grafana
 sources:
 - https://github.com/grafana/grafana
 type: application
-version: 6.29.5
+version: 6.52.9

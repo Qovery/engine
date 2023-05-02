@@ -10,7 +10,7 @@ spec:
   replicas: {{ .Values.controller.replicaCount }}
   {{- with .Values.controller.updateStrategy }}
   strategy:
-    {{ toYaml . | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   selector:
     matchLabels:
@@ -41,11 +41,6 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       tolerations:
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 300
         {{- with .Values.controller.tolerations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -59,12 +54,16 @@ spec:
         {{- $constraints | toYaml | nindent 8 }}
       {{- end }}
       {{- with .Values.controller.securityContext }}
-      securityContext:  
+      securityContext:
         {{- toYaml . | nindent 8 }}
-      {{- end }} 
+      {{- end }}
+      {{- with .Values.controller.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: ebs-plugin
-          image: {{ printf "%s:%s" .Values.image.repository (default (printf "v%s" .Chart.AppVersion) (.Values.image.tag | toString)) }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.image.repository (default (printf "v%s" .Chart.AppVersion) (.Values.image.tag | toString)) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             {{- if ne .Release.Name "kustomize" }}
@@ -79,10 +78,18 @@ spec:
             {{- with .Values.controller.k8sTagClusterId }}
             - --k8s-tag-cluster-id={{ . }}
             {{- end }}
+            {{- if and (.Values.controller.enableMetrics) (not .Values.controller.httpEndpoint) }}
+            - --http-endpoint=0.0.0.0:3301
+            {{- end}}
             {{- with .Values.controller.httpEndpoint }}
             - --http-endpoint={{ . }}
             {{- end }}
-            - --logtostderr
+            {{- if .Values.controller.sdkDebugLog }}
+            - --aws-sdk-debug-log=true
+            {{- end}}
+            {{- with .Values.controller.loggingFormat }}
+            - --logging-format={{ . }}
+            {{- end }}
             - --v={{ .Values.controller.logLevel }}
             {{- range .Values.controller.additionalArgs }}
             - {{ . }}
@@ -106,6 +113,12 @@ spec:
                   name: aws-secret
                   key: access_key
                   optional: true
+            - name: AWS_EC2_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: aws-meta
+                  key: endpoint
+                  optional: true
             {{- with .Values.controller.region }}
             - name: AWS_REGION
               value: {{ . }}
@@ -116,13 +129,25 @@ spec:
             {{- with .Values.controller.env }}
             {{- . | toYaml | nindent 12 }}
             {{- end }}
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
+          {{- with .Values.controller.volumeMounts }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: healthz
               containerPort: 9808
               protocol: TCP
+            {{- if .Values.controller.enableMetrics }}
+            - name: metrics
+              containerPort: 3301
+              protocol: TCP
+            {{- end}}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -143,8 +168,12 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.controller.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         - name: csi-provisioner
-          image: {{ printf "%s:%s" .Values.sidecars.provisioner.image.repository .Values.sidecars.provisioner.image.tag }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.sidecars.provisioner.image.repository .Values.sidecars.provisioner.image.tag }}
           imagePullPolicy: {{ default .Values.image.pullPolicy .Values.sidecars.provisioner.image.pullPolicy }}
           args:
             - --csi-address=$(ADDRESS)
@@ -153,7 +182,18 @@ spec:
             {{- if .Values.controller.extraCreateMetadata }}
             - --extra-create-metadata
             {{- end}}
-            - --leader-election=true
+            - --leader-election={{ .Values.sidecars.provisioner.leaderElection.enabled | required "leader election state for csi-provisioner is required, must be set to true || false." }}
+            {{- if .Values.sidecars.provisioner.leaderElection.enabled }}
+            {{- if .Values.sidecars.provisioner.leaderElection.leaseDuration }}
+            - --leader-election-lease-duration={{ .Values.sidecars.provisioner.leaderElection.leaseDuration }}
+            {{- end }}
+            {{- if .Values.sidecars.provisioner.leaderElection.renewDeadline}}
+            - --leader-election-renew-deadline={{ .Values.sidecars.provisioner.leaderElection.renewDeadline }}
+            {{- end }}
+            {{- if .Values.sidecars.provisioner.leaderElection.retryPeriod }}
+            - --leader-election-retry-period={{ .Values.sidecars.provisioner.leaderElection.retryPeriod }}
+            {{- end }}
+            {{- end }}
             - --default-fstype={{ .Values.controller.defaultFsType }}
           env:
             - name: ADDRESS
@@ -164,6 +204,10 @@ spec:
             {{- with .Values.sidecars.provisioner.env }}
             {{- . | toYaml | nindent 12 }}
             {{- end }}
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -171,13 +215,28 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.sidecars.provisioner.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         - name: csi-attacher
-          image: {{ printf "%s:%s" .Values.sidecars.attacher.image.repository .Values.sidecars.attacher.image.tag }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.sidecars.attacher.image.repository .Values.sidecars.attacher.image.tag }}
           imagePullPolicy: {{ default .Values.image.pullPolicy .Values.sidecars.attacher.image.pullPolicy }}
           args:
             - --csi-address=$(ADDRESS)
             - --v={{ .Values.sidecars.attacher.logLevel }}
-            - --leader-election=true
+            - --leader-election={{ .Values.sidecars.attacher.leaderElection.enabled | required "leader election state for csi-attacher is required, must be set to true || false." }}
+            {{- if .Values.sidecars.attacher.leaderElection.enabled }}
+            {{- if .Values.sidecars.attacher.leaderElection.leaseDuration }}
+            - --leader-election-lease-duration={{ .Values.sidecars.attacher.leaderElection.leaseDuration }}
+            {{- end }}
+            {{- if .Values.sidecars.attacher.leaderElection.renewDeadline}}
+            - --leader-election-renew-deadline={{ .Values.sidecars.attacher.leaderElection.renewDeadline }}
+            {{- end }}
+            {{- if .Values.sidecars.attacher.leaderElection.retryPeriod }}
+            - --leader-election-retry-period={{ .Values.sidecars.attacher.leaderElection.retryPeriod }}
+            {{- end }}
+            {{- end }}
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -187,6 +246,10 @@ spec:
             {{- with .Values.sidecars.attacher.env }}
             {{- . | toYaml | nindent 12 }}
             {{- end }}
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -194,9 +257,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-        {{- if or (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1beta1") (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1") }}
+          {{- with .Values.sidecars.attacher.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- if or .Values.sidecars.snapshotter.forceEnable (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1beta1") (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1") }}
         - name: csi-snapshotter
-          image: {{ printf "%s:%s" .Values.sidecars.snapshotter.image.repository .Values.sidecars.snapshotter.image.tag }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.sidecars.snapshotter.image.repository .Values.sidecars.snapshotter.image.tag }}
           imagePullPolicy: {{ default .Values.image.pullPolicy .Values.sidecars.snapshotter.image.pullPolicy }}
           args:
             - --csi-address=$(ADDRESS)
@@ -210,6 +277,10 @@ spec:
             {{- with .Values.sidecars.snapshotter.env }}
             {{- . | toYaml | nindent 12 }}
             {{- end }}
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -217,13 +288,18 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.sidecars.snapshotter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         {{- end }}
         - name: csi-resizer
-          image: {{ printf "%s:%s" .Values.sidecars.resizer.image.repository .Values.sidecars.resizer.image.tag }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.sidecars.resizer.image.repository .Values.sidecars.resizer.image.tag }}
           imagePullPolicy: {{ default .Values.image.pullPolicy .Values.sidecars.resizer.image.pullPolicy }}
           args:
             - --csi-address=$(ADDRESS)
             - --v={{ .Values.sidecars.resizer.logLevel }}
+            - --handle-volume-inuse-error=false
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -233,6 +309,10 @@ spec:
             {{- with .Values.sidecars.resizer.env }}
             {{- . | toYaml | nindent 12 }}
             {{- end }}
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -240,16 +320,28 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.sidecars.resizer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         - name: liveness-probe
-          image: {{ printf "%s:%s" .Values.sidecars.livenessProbe.image.repository .Values.sidecars.livenessProbe.image.tag }}
+          image: {{ printf "%s%s:%s" (default "" .Values.image.containerRegistry) .Values.sidecars.livenessProbe.image.repository .Values.sidecars.livenessProbe.image.tag }}
           imagePullPolicy: {{ default .Values.image.pullPolicy .Values.sidecars.livenessProbe.image.pullPolicy }}
           args:
             - --csi-address=/csi/csi.sock
+          envFrom:
+            {{- with .Values.controller.envFrom }}
+            {{- . | toYaml | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
           {{- with default .Values.controller.resources .Values.sidecars.livenessProbe.resources }}
           resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.sidecars.livenessProbe.securityContext }}
+          securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       {{- if .Values.imagePullSecrets }}
@@ -261,3 +353,6 @@ spec:
       volumes:
         - name: socket-dir
           emptyDir: {}
+        {{- with .Values.controller.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

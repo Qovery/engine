@@ -19,7 +19,7 @@ Before installing the chart, you must first install the cert-manager CustomResou
 This is performed in a separate step to allow you to easily uninstall and reinstall cert-manager without deleting your installed custom resources.
 
 ```bash
-$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.1/cert-manager.crds.yaml
 ```
 
 To install the chart with the release name `my-release`:
@@ -29,7 +29,7 @@ To install the chart with the release name `my-release`:
 $ helm repo add jetstack https://charts.jetstack.io
 
 ## Install the cert-manager helm chart
-$ helm install my-release --namespace cert-manager --version v1.11.0 jetstack/cert-manager
+$ helm install my-release --namespace cert-manager --version v1.11.1 jetstack/cert-manager
 ```
 
 In order to begin issuing certificates, you will need to set up a ClusterIssuer
@@ -65,7 +65,7 @@ If you want to completely uninstall cert-manager from your cluster, you will als
 delete the previously installed CustomResourceDefinition resources:
 
 ```console
-$ kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
+$ kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.1/cert-manager.crds.yaml
 ```
 
 ## Configuration
@@ -86,7 +86,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `global.leaderElection.retryPeriod` | The duration the clients should wait between attempting acquisition and renewal of a leadership |  |
 | `installCRDs` | If true, CRD resources will be installed as part of the Helm chart. If enabled, when uninstalling CRD resources will be deleted causing all installed custom resources to be DELETED | `false` |
 | `image.repository` | Image repository | `quay.io/jetstack/cert-manager-controller` |
-| `image.tag` | Image tag | `v1.11.0` |
+| `image.tag` | Image tag | `v1.11.1` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount`  | Number of cert-manager replicas  | `1` |
 | `clusterResourceNamespace` | Override the namespace used to store DNS provider credentials etc. for ClusterIssuer resources | Same namespace as cert-manager pod |
@@ -153,7 +153,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `webhook.tolerations` | Node tolerations for webhook pod assignment | `[]` |
 | `webhook.topologySpreadConstraints` | Topology spread constraints for webhook pod assignment | `[]` |
 | `webhook.image.repository` | Webhook image repository | `quay.io/jetstack/cert-manager-webhook` |
-| `webhook.image.tag` | Webhook image tag | `v1.11.0` |
+| `webhook.image.tag` | Webhook image tag | `v1.11.1` |
 | `webhook.image.pullPolicy` | Webhook image pull policy | `IfNotPresent` |
 | `webhook.securePort` | The port that the webhook should listen on for requests. | `10250` |
 | `webhook.securityContext` | Security context for webhook pod assignment | refer to [Default Security Contexts](#default-security-contexts) |
@@ -188,12 +188,12 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `cainjector.tolerations` | Node tolerations for cainjector pod assignment | `[]` |
 | `cainjector.topologySpreadConstraints` | Topology spread constraints for cainjector pod assignment | `[]` |
 | `cainjector.image.repository` | cainjector image repository | `quay.io/jetstack/cert-manager-cainjector` |
-| `cainjector.image.tag` | cainjector image tag | `v1.11.0` |
+| `cainjector.image.tag` | cainjector image tag | `v1.11.1` |
 | `cainjector.image.pullPolicy` | cainjector image pull policy | `IfNotPresent` |
 | `cainjector.securityContext` | Security context for cainjector pod assignment | refer to [Default Security Contexts](#default-security-contexts) |
 | `cainjector.containerSecurityContext` | Security context to be set on cainjector component container | refer to [Default Security Contexts](#default-security-contexts) |
 | `acmesolver.image.repository` | acmesolver image repository | `quay.io/jetstack/cert-manager-acmesolver` |
-| `acmesolver.image.tag` | acmesolver image tag | `v1.11.0` |
+| `acmesolver.image.tag` | acmesolver image tag | `v1.11.1` |
 | `acmesolver.image.pullPolicy` | acmesolver image pull policy | `IfNotPresent` |
 | `startupapicheck.enabled` | Toggles whether the startupapicheck Job should be installed | `true` |
 | `startupapicheck.securityContext` | Security context for startupapicheck pod assignment | refer to [Default Security Contexts](#default-security-contexts) |
@@ -209,7 +209,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `startupapicheck.tolerations` | Node tolerations for startupapicheck pod assignment | `[]` |
 | `startupapicheck.podLabels` | Optional additional labels to add to the startupapicheck Pods | `{}` |
 | `startupapicheck.image.repository` | startupapicheck image repository | `quay.io/jetstack/cert-manager-ctl` |
-| `startupapicheck.image.tag` | startupapicheck image tag | `v1.11.0` |
+| `startupapicheck.image.tag` | startupapicheck image tag | `v1.11.1` |
 | `startupapicheck.image.pullPolicy` | startupapicheck image pull policy | `IfNotPresent` |
 | `startupapicheck.serviceAccount.create` | If `true`, create a new service account for the startupapicheck component | `true` |
 | `startupapicheck.serviceAccount.name` | Service account for the startupapicheck component to be used. If not set and `startupapicheck.serviceAccount.create` is `true`, a name is generated using the fullname template |  |

@@ -57,7 +57,7 @@ impl CoreDNSConfigChart {
                 atomic: false,
                 force_upgrade: false,
                 recreate_pods: false,
-                last_breaking_version_requiring_restart: None,
+                reinstall_chart_if_installed_version_is_below_than: None,
                 timeout_in_seconds: 0,
                 dry_run: false,
                 wait: false,
