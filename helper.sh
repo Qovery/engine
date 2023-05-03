@@ -178,12 +178,12 @@ function deploy_engines_envs() { ## Release GA to prod
   --set-string \
 image.tag="$tag",\
 buildContainer.enabled="true",\
-environmentVariables.BUILDER_KUBE_ENABLED="true",\
-environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64,ARM64",\
-environmentVariables.BUILDER_CPU_REQUEST="3",\
-environmentVariables.BUILDER_CPU_LIMIT="4",\
-environmentVariables.BUILDER_MEMORY_REQUEST_GIB="6",\
-environmentVariables.BUILDER_MEMORY_LIMIT_GIB="7",\
+buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
+buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64,ARM64",\
+buildContainer.environmentVariables.BUILDER_CPU_REQUEST="3",\
+buildContainer.environmentVariables.BUILDER_CPU_LIMIT="4",\
+buildContainer.environmentVariables.BUILDER_MEMORY_REQUEST_GIB="6",\
+buildContainer.environmentVariables.BUILDER_MEMORY_LIMIT_GIB="7",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
