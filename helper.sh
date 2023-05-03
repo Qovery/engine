@@ -179,7 +179,7 @@ function deploy_engines_envs() { ## Release GA to prod
 image.tag="$tag",\
 buildContainer.enabled="true",\
 buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
-buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64,ARM64",\
+buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
 buildContainer.environmentVariables.BUILDER_CPU_REQUEST="3",\
 buildContainer.environmentVariables.BUILDER_CPU_LIMIT="4",\
 buildContainer.environmentVariables.BUILDER_MEMORY_REQUEST_GIB="6",\
