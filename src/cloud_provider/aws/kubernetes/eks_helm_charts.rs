@@ -132,9 +132,6 @@ pub fn eks_aws_helm_charts(
     )
     .to_common_helm_chart();
 
-    // AWS CNI
-    // TODO(benjaminch): Handle migration from old CNI install to AWS plugin CNI
-
     // AWS IAM EKS user mapper
     let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
         chart_prefix_path,

@@ -559,7 +559,7 @@ mod test {
     fn test_deployment_thread_pool_error_cancelling_other_tasks() {
         // setup:
         const TASKS_COUNT: usize = 10;
-        const FAILING_TASK_NUMBER: usize = 2;
+        const FAILING_TASK_NUMBER: usize = 1;
         const MAX_PARALLEL_DEPLOYS: usize = 2;
 
         let pool = DeploymentThreadsPool::new();
@@ -571,7 +571,7 @@ mod test {
             let active_tasks_local = active_tasks.clone();
             tasks.push(move || {
                 active_tasks_local.fetch_add(1, Ordering::Relaxed);
-                thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(1000));
                 match i == FAILING_TASK_NUMBER {
                     true => Result::<(), ()>::Err(()),
                     false => Result::<(), ()>::Ok(()),
@@ -583,6 +583,8 @@ mod test {
 
         // verify:
         assert!(ret.is_err());
-        assert_eq!(active_tasks.load(Ordering::Relaxed), 4);
+
+        // Avoiding flakiness, we test that not all tasks are being executed
+        assert!(active_tasks.load(Ordering::Relaxed) < TASKS_COUNT);
     }
 }

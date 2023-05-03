@@ -27,7 +27,7 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
 };
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use reqwest::header;
@@ -570,10 +570,10 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
         ],
         Kind::Scw => vec![
-            (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
-            (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
+            (SCW_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (SCW_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
             (
-                SCALEWAY_DEFAULT_PROJECT_ID,
+                SCW_DEFAULT_PROJECT_ID,
                 secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
             ),
         ],

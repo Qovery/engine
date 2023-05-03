@@ -19,6 +19,7 @@ use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::Qover
 use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::models::third_parties::LetsEncryptConfig;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -136,6 +137,7 @@ pub fn ec2_aws_helm_charts(
                 key: "controller.replicaCount".to_string(),
                 value: "1".to_string(),
             }],
+            reinstall_chart_if_installed_version_is_below_than: Some(Version::new(2, 17, 2)),
             ..Default::default()
         },
         ..Default::default()
