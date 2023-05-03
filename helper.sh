@@ -176,7 +176,7 @@ function deploy_engines_envs() { ## Release GA to prod
   helm upgrade --kubeconfig="$CI_KUBECONFIG_ENGINES_AWS" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
-  --set image.tag="$tag",\
+image.tag="$tag",\
 buildContainer.enabled="true",\
 environmentVariables.BUILDER_KUBE_ENABLED='true',\
 environmentVariables.BUILDER_CPU_ARCHITECTURES='AMD64\,ARM64',\
