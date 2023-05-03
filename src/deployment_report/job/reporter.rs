@@ -47,14 +47,16 @@ pub struct JobDeploymentReporter<T> {
     kube_client: kube::Client,
     selector: String,
     logger: EnvLogger,
+    send_final_deleted_status: bool,
     _phantom: PhantomData<T>,
 }
 
 impl<T> JobDeploymentReporter<T> {
-    pub fn new(
+    fn new_impl(
         job: &impl JobService,
         deployment_target: &DeploymentTarget,
         action: Action,
+        send_final_delete_status: bool,
     ) -> JobDeploymentReporter<T> {
         let job_type = match job.job_schedule() {
             JobSchedule::OnStart { .. } => JobType::Job(Action::Create),
@@ -75,8 +77,31 @@ impl<T> JobDeploymentReporter<T> {
             kube_client: deployment_target.kube.clone(),
             selector: job.selector().unwrap_or_default(),
             logger: deployment_target.env_logger(job, action.to_environment_step()),
+            send_final_deleted_status: send_final_delete_status,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn new(
+        job: &impl JobService,
+        deployment_target: &DeploymentTarget,
+        action: Action,
+    ) -> JobDeploymentReporter<T> {
+        Self::new_impl(job, deployment_target, action, true)
+    }
+
+    // We dont send final status when on_delete is executed because we want to keep the job in the Deleting state
+    // while we are sure we have cleaned up all the resources
+    pub fn new_without_final_deleted(
+        job: &impl JobService,
+        deployment_target: &DeploymentTarget,
+        action: Action,
+    ) -> JobDeploymentReporter<T> {
+        if action != Action::Delete {
+            panic!("This method should only be used for delete action")
+        }
+
+        Self::new_impl(job, deployment_target, action, false)
     }
 
     fn max_duration_human_str(&self) -> String {
@@ -182,6 +207,10 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     ) {
         let error = match result {
             Ok(_) => {
+                if self.action == Action::Delete && !self.send_final_deleted_status {
+                    return;
+                }
+
                 self.logger
                     .send_success(format!("✅ {} of {} succeeded", self.action, self.job_type));
                 return;
