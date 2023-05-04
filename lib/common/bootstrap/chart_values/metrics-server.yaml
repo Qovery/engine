@@ -1,6 +1,9 @@
 apiService:
   create: true
 
+updateStrategy:
+  type: set-by-engine-code
+
 resources:
   limits:
     cpu: set-by-engine-code

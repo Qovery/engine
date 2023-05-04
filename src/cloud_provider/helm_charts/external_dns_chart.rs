@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
+use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, UpdateStrategy};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -13,6 +13,7 @@ pub struct ExternalDNSChart {
     managed_dns_domains_root_helm_format: String,
     proxied: bool,
     cluster_id: String,
+    update_strategy: UpdateStrategy,
 }
 
 impl ExternalDNSChart {
@@ -22,6 +23,7 @@ impl ExternalDNSChart {
         managed_dns_domains_root_helm_format: String,
         proxied: bool,
         cluster_id: String,
+        update_strategy: UpdateStrategy,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
             chart_path: HelmChartPath::new(
@@ -38,6 +40,7 @@ impl ExternalDNSChart {
             managed_dns_domains_root_helm_format,
             proxied,
             cluster_id,
+            update_strategy,
         }
     }
 
@@ -61,6 +64,10 @@ impl ToCommonHelmChart for ExternalDNSChart {
                     ChartSetValue {
                         key: "image.repository".to_string(),
                         value: "r3m4q3r9/pub-mirror-externaldns".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "updateStrategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
                     },
                     ChartSetValue {
                         key: "provider".to_string(),
@@ -162,6 +169,7 @@ impl ChartInstallationChecker for ExternalDNSChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -184,6 +192,7 @@ mod tests {
             "whatever".to_string(),
             true,
             "whatever".to_string(),
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -216,6 +225,7 @@ mod tests {
             "whatever".to_string(),
             true,
             "whatever".to_string(),
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -252,6 +262,7 @@ mod tests {
             "whatever".to_string(),
             true,
             "whatever".to_string(),
+            UpdateStrategy::RollingUpdate,
         );
         let common_chart = chart.to_common_helm_chart();
 

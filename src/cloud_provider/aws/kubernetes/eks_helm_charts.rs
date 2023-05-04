@@ -2,6 +2,7 @@ use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
     ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
@@ -183,6 +184,7 @@ pub fn eks_aws_helm_charts(
             .to_string(),
         false,
         chart_config_prerequisites.cluster_id.to_string(),
+        UpdateStrategy::RollingUpdate,
     )
     .to_common_helm_chart();
 
@@ -256,14 +258,19 @@ pub fn eks_aws_helm_charts(
                 chart_prefix_path,
                 qovery_dns_config.clone(),
                 HelmChartResourcesConstraintType::ChartDefault,
+                UpdateStrategy::RollingUpdate,
             )
             .to_common_helm_chart(),
         );
     }
 
     // Metrics server
-    let metrics_server = MetricsServerChart::new(chart_prefix_path, HelmChartResourcesConstraintType::ChartDefault)
-        .to_common_helm_chart();
+    let metrics_server = MetricsServerChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
+    )
+    .to_common_helm_chart();
 
     // Kube state metrics
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
@@ -307,6 +314,7 @@ pub fn eks_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
     )
     .to_common_helm_chart();
 

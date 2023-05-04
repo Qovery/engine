@@ -19,6 +19,9 @@ txtPrefix: set-by-engine-code
 
 replicas: 1
 
+updateStrategy:
+  type: set-by-engine-code
+
 # TODO: Remove after chart support a version we is built for ARM64
 image:
   registry: set-by-engine-code
