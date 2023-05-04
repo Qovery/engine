@@ -338,7 +338,7 @@ impl<'a> EnvironmentDeployment<'a> {
         let event_details = self
             .deployment_target
             .environment
-            .event_details_with_step(EnvironmentStep::Pause);
+            .event_details_with_step(EnvironmentStep::Restart);
         let target = Arc::new(&self.deployment_target);
 
         let should_abort = Self::should_abort_wrapper(&target, &event_details);
