@@ -553,7 +553,22 @@ impl EventDetails {
                 InfrastructureStep::Delete | InfrastructureStep::Deleted => {
                     Stage::Infrastructure(InfrastructureStep::DeleteError)
                 }
-                _ => return,
+                InfrastructureStep::Restart | InfrastructureStep::Restarted => {
+                    Stage::Infrastructure(InfrastructureStep::RestartedError)
+                }
+                InfrastructureStep::LoadConfiguration
+                | InfrastructureStep::ValidateApiInput
+                | InfrastructureStep::ValidateSystemRequirements
+                | InfrastructureStep::RetrieveClusterConfig
+                | InfrastructureStep::RetrieveClusterResources
+                | InfrastructureStep::Start
+                | InfrastructureStep::Terminated
+                | InfrastructureStep::CreateError
+                | InfrastructureStep::PauseError
+                | InfrastructureStep::UpgradeError
+                | InfrastructureStep::DeleteError
+                | InfrastructureStep::RestartedError
+                | InfrastructureStep::CannotProcessRequest => return,
             },
             Stage::Environment(step) => match step {
                 EnvironmentStep::Build | EnvironmentStep::Built => Stage::Environment(EnvironmentStep::BuiltError),
@@ -562,7 +577,25 @@ impl EventDetails {
                 }
                 EnvironmentStep::Pause | EnvironmentStep::Paused => Stage::Environment(EnvironmentStep::PausedError),
                 EnvironmentStep::Delete | EnvironmentStep::Deleted => Stage::Environment(EnvironmentStep::DeletedError),
-                _ => return,
+                EnvironmentStep::Restart | EnvironmentStep::Restarted => {
+                    Stage::Environment(EnvironmentStep::RestartedError)
+                }
+                EnvironmentStep::LoadConfiguration
+                | EnvironmentStep::ValidateApiInput
+                | EnvironmentStep::ValidateSystemRequirements
+                | EnvironmentStep::RetrieveClusterConfig
+                | EnvironmentStep::RetrieveClusterResources
+                | EnvironmentStep::UnderMigration
+                | EnvironmentStep::Start
+                | EnvironmentStep::Terminated
+                | EnvironmentStep::BuiltError
+                | EnvironmentStep::Cancel
+                | EnvironmentStep::Cancelled
+                | EnvironmentStep::DeployedError
+                | EnvironmentStep::PausedError
+                | EnvironmentStep::DeletedError
+                | EnvironmentStep::RestartedError
+                | EnvironmentStep::JobOutput => return,
             },
         };
     }
