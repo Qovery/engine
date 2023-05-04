@@ -104,7 +104,12 @@ where
                     post_run_success: &post_run,
                 };
 
-                execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Delete), task)
+                // We dont send final status when on_delete is executed because we want to keep the job in the Deleting state
+                // while we are sure we have cleaned up all the resources
+                execute_long_deployment(
+                    JobDeploymentReporter::new_without_final_deleted(self, target, Action::Delete),
+                    task,
+                )
             }
             JobSchedule::Cron { .. } | JobSchedule::OnStart {} | JobSchedule::OnPause {} => Ok(()),
         }?;
