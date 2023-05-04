@@ -580,7 +580,10 @@ impl BuilderThreadPool {
                 // We have a slot to run a new thread, so start a new build
                 let th = thread::Builder::new().name("builder".to_string()).spawn_scoped(scope, {
                     let current_thread = &current_thread;
+                    let current_span = tracing::Span::current();
+
                     move || {
+                        let _span = current_span.enter();
                         let _guard = scopeguard::guard((), |_| current_thread.unpark());
                         task()
                     }

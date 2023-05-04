@@ -467,8 +467,11 @@ impl DeploymentThreadsPool {
                 let th = thread::Builder::new()
                     .name("deployer".to_string())
                     .spawn_scoped(scope, {
+                        let current_span = tracing::Span::current();
                         let current_thread = &current_thread;
+
                         move || {
+                            let _span = current_span.enter();
                             let _guard = scopeguard::guard((), |_| current_thread.unpark());
                             task()
                         }
