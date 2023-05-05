@@ -59,7 +59,7 @@ use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use tokio::time::Duration;
 
-use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
+use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 
 mod addons;
 pub mod ec2;
@@ -861,7 +861,7 @@ fn create(
     // aws connection
     let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
         Some(x) => x,
-        None => return Err(Box::new(EngineError::new_not_implemented_error(event_details))),
+        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
     // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
@@ -871,10 +871,11 @@ fn create(
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
-        if let Err(e) = block_on(delete_eks_failed_nodegroups(
+        if let Err(e) = block_on(delete_eks_nodegroups(
             aws_conn.clone(),
             kubernetes.cluster_name(),
             kubernetes.context().is_first_cluster_deployment(),
+            NodeGroupsDeletionType::FailedOnly,
             event_details.clone(),
         )) {
             // only return failures if the cluster is not absent, because it can be a VPC quota issue
@@ -1005,10 +1006,11 @@ fn create(
                     "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
                 ),
             ));
-            if let Err(e) = block_on(delete_eks_failed_nodegroups(
+            if let Err(e) = block_on(delete_eks_nodegroups(
                 aws_conn,
                 kubernetes.cluster_name(),
                 kubernetes.context().is_first_cluster_deployment(),
+                NodeGroupsDeletionType::FailedOnly,
                 event_details.clone(),
             )) {
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
@@ -1621,6 +1623,11 @@ fn delete(
         EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
     ));
 
+    let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
+        Some(x) => x,
+        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
+    };
+
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
@@ -2050,6 +2057,15 @@ fn delete(
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
     if kubernetes.kind() != Kind::Ec2 {
+        // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
+        block_on(delete_eks_nodegroups(
+            aws_conn,
+            kubernetes.cluster_name(),
+            kubernetes.context().is_first_cluster_deployment(),
+            NodeGroupsDeletionType::All,
+            event_details.clone(),
+        ))?;
+        // remove S3 buckets from tf state
         kubernetes.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
