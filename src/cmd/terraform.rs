@@ -153,6 +153,11 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    S3BucketAlreadyOwnedByYou {
+        bucket_name: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -498,6 +503,22 @@ impl TerraformError {
             }
         }
 
+        // Resources creation errors
+        // AWS
+        // BucketAlreadyOwnedByYou: S3 bucket cannot be created because it already exists. It might happen if Terraform lost connection before writing to the state.
+        if let Ok(bucket_name_re) = Regex::new(
+            r"Error: creating Amazon S3 \(Simple Storage\) Bucket \((?P<bucket_name>.+?)\): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it",
+        ) {
+            if let Some(cap) = bucket_name_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(bucket_name) = cap.name("bucket_name").map(|e| e.as_str()) {
+                    return TerraformError::S3BucketAlreadyOwnedByYou {
+                        bucket_name: bucket_name.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // Terraform general errors
         if raw_terraform_error_output.contains("Two interrupts received. Exiting immediately.") {
             return TerraformError::MultipleInterruptsReceived {
@@ -644,6 +665,9 @@ impl TerraformError {
             TerraformError::InvalidCIDRBlock {cidr,..} => {
                 format!("Error, the CIDR block `{cidr}` can't be used.")
             },
+            TerraformError::S3BucketAlreadyOwnedByYou {bucket_name, .. } => {
+                format!("Error, the S3 bucket `{bucket_name}` cannot be created, it already exists.")
+            }
             TerraformError::StateLocked { lock_id, .. } => {
                 format!("Error, terraform state is locked (lock_id: {lock_id})")
             },
@@ -712,6 +736,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCIDRBlock { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::S3BucketAlreadyOwnedByYou { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::StateLocked { raw_message, .. } => {
@@ -1621,6 +1648,24 @@ terraform {
             TerraformError::WrongExpectedState {
                 resource_name: "zabcd-postgresql".to_string(),
                 resource_kind: "DB".to_string(),
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_s3_bucket_already_owned_by_you_issue() {
+        // setup:
+        let raw_message = "Error: creating Amazon S3 (Simple Storage) Bucket (qovery-logs-z0bb3e862): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::S3BucketAlreadyOwnedByYou {
+                bucket_name: "qovery-logs-z0bb3e862".to_string(),
                 raw_message
             },
             result
