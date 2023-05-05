@@ -20,13 +20,15 @@ spec:
   replicas: {{ min_instances }}
   {%- endif %}
   strategy:
-    type: RollingUpdate
+    type: {{ deployment_update_strategy_type }}
+    {% if deployment_update_strategy_type == "RollingUpdate" %}
     rollingUpdate:
     {% if max_instances == 1 %}
       maxSurge: 1
     {% else %}
-      maxSurge: 25%
-      maxUnavailable: 10%
+      maxUnavailable: {{ deployment_update_strategy_rolling_update_max_unavailable_percent }}%
+      maxSurge: {{ deployment_update_strategy_rolling_update_max_surge_percent }}%
+    {% endif %}
     {% endif %}
   selector:
     matchLabels:

@@ -23,7 +23,7 @@ use qovery_engine::io_models::application::{AdvancedSettingsProbeType, Applicati
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
-use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::io_models::{QoveryIdentifier, UpdateStrategy};
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
@@ -264,6 +264,9 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             deployment_delay_start_time_sec: 0,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
+            deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
+            deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
+            deployment_update_strategy_rolling_update_max_surge_percent: 25,
             build_timeout_max_sec: 2,
             network_ingress_proxy_body_size_mb: 3,
             network_ingress_cors_enable: true,
@@ -331,6 +334,9 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         ContainerAdvancedSettings {
             deployment_custom_domain_check_enabled: true,
             deployment_termination_grace_period_seconds: 60,
+            deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
+            deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
+            deployment_update_strategy_rolling_update_max_surge_percent: 25,
             network_ingress_proxy_body_size_mb: 11,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
