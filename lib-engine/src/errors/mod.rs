@@ -783,6 +783,8 @@ pub enum Tag {
     TerraformClusterUnsupportedVersionUpdate,
     /// TerraformClusterUnsupportedVersionUpdate: represents an error due to cluster version update cannot be done.
     TerraformStateLocked,
+    /// TerraformS3BucketCreationErrorAlreadyOwnedByYou: represents an error due to Terraform not able to create the given S3 bucket because it already exists.
+    TerraformS3BucketCreationErrorAlreadyOwnedByYou,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2738,6 +2740,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("Your deployment failed because Terraform faced a state lock. Please contact Qovery team to get unlocked.".to_string()),
+            ),
+            TerraformError::S3BucketAlreadyOwnedByYou {.. } => EngineError::new(
+                event_details,
+                Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
             ),
             TerraformError::ClusterVersionUnsupportedUpdate { .. } => EngineError::new(
                 event_details,
