@@ -274,7 +274,7 @@ aws-ec2-managed-services:
   script:
     - ./helper.sh aws_ec2_managed_services
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-6gmem-0g
   dependencies:
     - build-and-lint-code
   only:

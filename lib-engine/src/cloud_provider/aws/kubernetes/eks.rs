@@ -755,10 +755,17 @@ pub enum NodeGroupToRemoveFailure {
     OneNodeGroupMustBeActiveAtLeast,
 }
 
-pub async fn delete_eks_failed_nodegroups(
+#[derive(PartialEq, Eq)]
+pub enum NodeGroupsDeletionType {
+    All,
+    FailedOnly,
+}
+
+pub async fn delete_eks_nodegroups(
     aws_conn: SdkConfig,
     cluster_name: String,
     is_first_install: bool,
+    nodegroup_delete_selection: NodeGroupsDeletionType,
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     let clusters = match aws_conn.list_clusters().await {
@@ -808,8 +815,8 @@ pub async fn delete_eks_failed_nodegroups(
 
     // If it is the first installation of the cluster, we dont want to keep any nodegroup.
     // So just delete everything
-    let nodegroups_to_delete = if is_first_install {
-        debug!("Deleting all nodegroups of this cluster as it is the first installation.");
+    let nodegroups_to_delete = if is_first_install || nodegroup_delete_selection == NodeGroupsDeletionType::All {
+        info!("Deleting all nodegroups of this cluster as it is the first installation.");
         all_cluster_nodegroups_described
     } else {
         match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described.clone()) {
