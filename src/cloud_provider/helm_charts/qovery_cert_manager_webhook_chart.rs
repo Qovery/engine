@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -15,6 +15,7 @@ pub struct QoveryCertManagerWebhookChart {
     chart_values_path: HelmChartValuesFilePath,
     qovery_dns_config: QoveryDnsConfig,
     chart_resources: HelmChartResources,
+    update_strategy: UpdateStrategy,
 }
 
 impl QoveryCertManagerWebhookChart {
@@ -22,6 +23,7 @@ impl QoveryCertManagerWebhookChart {
         chart_prefix_path: Option<&str>,
         qovery_dns_config: QoveryDnsConfig,
         chart_resources: HelmChartResourcesConstraintType,
+        update_strategy: UpdateStrategy,
     ) -> Self {
         QoveryCertManagerWebhookChart {
             chart_path: HelmChartPath::new(
@@ -44,6 +46,7 @@ impl QoveryCertManagerWebhookChart {
                 },
             },
             qovery_dns_config,
+            update_strategy,
         }
     }
 
@@ -61,6 +64,10 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "updateStrategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
+                    },
                     ChartSetValue {
                         key: "secret.apiKey".to_string(),
                         value: self.qovery_dns_config.api_key.to_string(),
@@ -126,6 +133,7 @@ impl ChartInstallationChecker for QoveryCertManagerWebhookChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -148,6 +156,7 @@ mod tests {
                 api_url_port: "whatever".to_string(),
             },
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -180,6 +189,7 @@ mod tests {
                 api_url_port: "whatever".to_string(),
             },
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -216,6 +226,7 @@ mod tests {
                 api_url_port: "whatever".to_string(),
             },
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
         let common_chart = chart.to_common_helm_chart();
 

@@ -338,7 +338,7 @@ impl<'a> EnvironmentDeployment<'a> {
         let event_details = self
             .deployment_target
             .environment
-            .event_details_with_step(EnvironmentStep::Pause);
+            .event_details_with_step(EnvironmentStep::Restart);
         let target = Arc::new(&self.deployment_target);
 
         let should_abort = Self::should_abort_wrapper(&target, &event_details);
@@ -467,8 +467,11 @@ impl DeploymentThreadsPool {
                 let th = thread::Builder::new()
                     .name("deployer".to_string())
                     .spawn_scoped(scope, {
+                        let current_span = tracing::Span::current();
                         let current_thread = &current_thread;
+
                         move || {
+                            let _span = current_span.enter();
                             let _guard = scopeguard::guard((), |_| current_thread.unpark());
                             task()
                         }

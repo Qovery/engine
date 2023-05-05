@@ -15,12 +15,13 @@ prometheus:
     enabled: set-by-engine-code
     prometheusInstance: qovery
 
-
 extraArgs:
   - --dns01-recursive-nameservers-only
   - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
 
 replicaCount: 1
+strategy:
+  type: set-by-engine-code
 
 # Chart resources limits
 resources:
@@ -32,6 +33,8 @@ resources:
     memory: set-by-engine-code
 
 webhook:
+  strategy:
+    type: set-by-engine-code
   resources:
     limits:
       cpu: set-by-engine-code
@@ -41,6 +44,8 @@ webhook:
       memory: set-by-engine-code
 
 cainjector:
+  strategy:
+    type: set-by-engine-code
   resources:
     limits:
       cpu: set-by-engine-code

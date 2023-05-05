@@ -272,10 +272,10 @@ where
                         }
                     }
                     Err(err) => {
-                        logger.warning(format!(
+                        info!(
                             "Cannot get JSON job output: {}",
                             err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
-                        ));
+                        );
                     }
                 };
 

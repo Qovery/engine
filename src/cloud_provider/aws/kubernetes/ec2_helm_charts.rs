@@ -2,6 +2,7 @@ use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
     ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
@@ -210,6 +211,7 @@ pub fn ec2_aws_helm_charts(
             .to_string(),
         false,
         chart_config_prerequisites.cluster_id.to_string(),
+        UpdateStrategy::Recreate,
     )
     .to_common_helm_chart();
 
@@ -225,6 +227,7 @@ pub fn ec2_aws_helm_charts(
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
                 }),
+                UpdateStrategy::Recreate,
             )
             .to_common_helm_chart(),
         );
@@ -239,6 +242,7 @@ pub fn ec2_aws_helm_charts(
             request_cpu: KubernetesCpuResourceUnit::MilliCpu(250),
             request_memory: KubernetesMemoryResourceUnit::MebiByte(30),
         }),
+        UpdateStrategy::Recreate,
     )
     .to_common_helm_chart();
 
@@ -264,6 +268,7 @@ pub fn ec2_aws_helm_charts(
             limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
             limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
         }),
+        UpdateStrategy::Recreate,
     )
     .to_common_helm_chart();
 
@@ -490,38 +495,37 @@ pub fn ec2_aws_helm_charts(
         ..Default::default()
     };
 
+    // deploy sequentially to avoid insufficient resources
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![
+    let mut prepare_chats_to_deploy: Vec<Box<dyn HelmChart>> = vec![
         Box::new(aws_ebs_csi_driver_secret),
         Box::new(aws_ebs_csi_driver),
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(registry_creds),
+        Box::new(cert_manager),
     ];
 
-    let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
-
-    let level_3: Vec<Box<dyn HelmChart>> = if let Some(qovery_webhook) = qovery_cert_manager_webhook {
-        vec![Box::new(qovery_webhook)]
-    } else {
-        vec![]
+    if let Some(qovery_webhook) = qovery_cert_manager_webhook {
+        prepare_chats_to_deploy.push(Box::new(qovery_webhook));
     };
 
-    let level_4: Vec<Box<dyn HelmChart>> = vec![];
-
-    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns), Box::new(metrics_server)];
-
-    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
-
-    let level_7: Vec<Box<dyn HelmChart>> = vec![
+    prepare_chats_to_deploy.append(&mut vec![
+        Box::new(external_dns),
+        Box::new(metrics_server),
+        Box::new(nginx_ingress),
         Box::new(nginx_ingress_wildcard_dns_record),
         Box::new(cert_manager_config),
         Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
         Box::new(qovery_engine),
         Box::new(cluster_agent),
         Box::new(shell_agent),
-    ];
+    ]);
 
     info!("charts configuration preparation finished");
-    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])
+    let mut charts_to_deploy = Vec::with_capacity(prepare_chats_to_deploy.len());
+    for chart in prepare_chats_to_deploy {
+        charts_to_deploy.push(vec![chart]);
+    }
+    Ok(charts_to_deploy)
 }

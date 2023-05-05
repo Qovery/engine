@@ -54,6 +54,21 @@ impl Display for HelmChartNamespaces {
     }
 }
 
+pub enum UpdateStrategy {
+    RollingUpdate,
+    Recreate,
+}
+
+impl Display for UpdateStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            UpdateStrategy::RollingUpdate => "RollingUpdate",
+            UpdateStrategy::Recreate => "Recreate",
+        };
+        f.write_str(str)
+    }
+}
+
 #[derive(Clone)]
 pub struct ChartSetValue {
     pub key: String,

@@ -9,6 +9,8 @@ metadata:
     heritage: {{ .Release.Service }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.updateStrategy.type }}
   selector:
     matchLabels:
       app: {{ include "qovery-webhook.name" . }}

@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -17,6 +17,7 @@ pub struct CertManagerChart {
     chart_resources: HelmChartResources,
     webhook_resources: HelmChartResources,
     ca_injector_resources: HelmChartResources,
+    update_strategy: UpdateStrategy,
 }
 
 impl CertManagerChart {
@@ -26,6 +27,7 @@ impl CertManagerChart {
         chart_resources: HelmChartResourcesConstraintType,
         webhook_resources: HelmChartResourcesConstraintType,
         ca_injector_resources: HelmChartResourcesConstraintType,
+        update_strategy: UpdateStrategy,
     ) -> CertManagerChart {
         CertManagerChart {
             chart_path: HelmChartPath::new(
@@ -66,6 +68,7 @@ impl CertManagerChart {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             ff_metrics_history_enabled,
+            update_strategy,
         }
     }
 
@@ -84,6 +87,10 @@ impl ToCommonHelmChart for CertManagerChart {
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(1, 4, 4)),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "strategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
+                    },
                     // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
                     ChartSetValue {
                         key: "prometheus.servicemonitor.enabled".to_string(),
@@ -106,7 +113,11 @@ impl ToCommonHelmChart for CertManagerChart {
                         key: "resources.requests.memory".to_string(),
                         value: self.chart_resources.request_memory.to_string(),
                     },
-                    // Webhooks resources limits
+                    // Webhooks
+                    ChartSetValue {
+                        key: "webhook.strategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
+                    },
                     ChartSetValue {
                         key: "webhook.resources.limits.cpu".to_string(),
                         value: self.webhook_resources.limit_cpu.to_string(),
@@ -123,7 +134,11 @@ impl ToCommonHelmChart for CertManagerChart {
                         key: "webhook.resources.requests.memory".to_string(),
                         value: self.webhook_resources.request_memory.to_string(),
                     },
-                    // Cainjector resources limits
+                    // Cainjector
+                    ChartSetValue {
+                        key: "cainjector.strategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
+                    },
                     ChartSetValue {
                         key: "cainjector.resources.limits.cpu".to_string(),
                         value: self.ca_injector_resources.limit_cpu.to_string(),
@@ -176,6 +191,7 @@ impl ChartInstallationChecker for CertManagerChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -193,6 +209,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -222,6 +239,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -255,6 +273,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
         let common_chart = chart.to_common_helm_chart();
 

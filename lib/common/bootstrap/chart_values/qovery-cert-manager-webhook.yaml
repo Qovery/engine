@@ -2,6 +2,9 @@ certManager:
   namespace: set-by-engine-code
   serviceAccountName: cert-manager
 
+updateStrategy:
+  type: set-by-engine-code
+
 secret:
   apiUrl: set-by-engine-code
   apiKey: set-by-engine-code

@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
+use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, UpdateStrategy};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart,
@@ -11,12 +11,14 @@ pub struct MetricsServerChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     chart_resources: HelmChartResources,
+    update_strategy: UpdateStrategy,
 }
 
 impl MetricsServerChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
         chart_resources: HelmChartResourcesConstraintType,
+        update_strategy: UpdateStrategy,
     ) -> MetricsServerChart {
         MetricsServerChart {
             chart_path: HelmChartPath::new(
@@ -38,6 +40,7 @@ impl MetricsServerChart {
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
                 },
             },
+            update_strategy,
         }
     }
 
@@ -54,6 +57,10 @@ impl ToCommonHelmChart for MetricsServerChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "updateStrategy.type".to_string(),
+                        value: self.update_strategy.to_string(),
+                    },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
                         value: self.chart_resources.limit_cpu.to_string(),
@@ -106,6 +113,7 @@ impl ChartInstallationChecker for MetricsServerChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -117,7 +125,8 @@ mod tests {
     #[test]
     fn metrics_server_chart_directory_exists_test() {
         // setup:
-        let chart = MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault);
+        let chart =
+            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -140,7 +149,8 @@ mod tests {
     #[test]
     fn metrics_server_chart_values_file_exists_test() {
         // setup:
-        let chart = MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault);
+        let chart =
+            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -167,7 +177,8 @@ mod tests {
     #[test]
     fn metrics_server_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault);
+        let chart =
+            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
         let common_chart = chart.to_common_helm_chart();
 
         // execute:
