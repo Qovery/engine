@@ -80,6 +80,7 @@ pub enum Tag {
     TerraformCannotRemoveEntryOut,
     TerraformErrorWhileExecutingPipeline,
     TerraformErrorWhileExecutingDestroyPipeline,
+    TerraformCannotImportResource,
     HelmChartsSetupError,
     HelmChartsDeployError,
     HelmChartsUpgradeError,
@@ -385,6 +386,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou => {
                 Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou
             }
+            errors::Tag::TerraformCannotImportResource => Tag::TerraformCannotImportResource,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,

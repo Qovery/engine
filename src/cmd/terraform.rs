@@ -91,6 +91,12 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    CannotImportResource {
+        resource_type: String,
+        resource_identifier: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     ContextUnsupportedParameterValue {
         service_type: String,
         parameter_name: String,
@@ -155,6 +161,7 @@ pub enum TerraformError {
     },
     S3BucketAlreadyOwnedByYou {
         bucket_name: String,
+        terraform_resource_name: String,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -507,12 +514,16 @@ impl TerraformError {
         // AWS
         // BucketAlreadyOwnedByYou: S3 bucket cannot be created because it already exists. It might happen if Terraform lost connection before writing to the state.
         if let Ok(bucket_name_re) = Regex::new(
-            r"Error: creating Amazon S3 \(Simple Storage\) Bucket \((?P<bucket_name>.+?)\): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it",
+            r#"Error: creating Amazon S3 \(Simple Storage\) Bucket \((?P<bucket_name>.+?)\): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it(?s:.)*in resource "aws_s3_bucket" "(?P<terraform_resource_name>.+?)":"#,
         ) {
             if let Some(cap) = bucket_name_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(bucket_name) = cap.name("bucket_name").map(|e| e.as_str()) {
+                if let (Some(bucket_name), Some(terraform_resource_name)) = (
+                    cap.name("bucket_name").map(|e| e.as_str()),
+                    cap.name("terraform_resource_name").map(|e| e.as_str()),
+                ) {
                     return TerraformError::S3BucketAlreadyOwnedByYou {
                         bucket_name: bucket_name.to_string(),
+                        terraform_resource_name: terraform_resource_name.to_string(),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
@@ -674,6 +685,9 @@ impl TerraformError {
             TerraformError::ClusterVersionUnsupportedUpdate { cluster_actual_version, cluster_target_version, .. } => {
                 format!("Error, cluster version cannot be updated from `{cluster_actual_version}` to `{cluster_target_version}`")
             },
+            TerraformError::CannotImportResource { resource_type, resource_identifier, .. } => {
+                format!("Error, cannot import Terraform resource `{resource_identifier}` type `{resource_type}`")
+            }
         }
     }
 }
@@ -745,6 +759,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::ClusterVersionUnsupportedUpdate { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CannotImportResource { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1054,30 +1071,24 @@ pub fn terraform_destroy(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<St
     }
 }
 
-// fn terraform_import(root_dir: &str, resource: &str, resource_identifier: &str) -> Result<Vec<String>, TerraformError> {
-//     let terraform_args = vec!["import", resource, resource_identifier];
-//
-//     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-//         // terraform import
-//         match terraform_exec(root_dir, terraform_args.clone()) {
-//             Ok(output) => OperationResult::Ok(output),
-//             Err(err) => {
-//                 // Error while trying to run terraform init, retrying...
-//                 OperationResult::Retry(err)
-//             }
-//         }
-//     });
-//
-//     match result {
-//         Ok(output) => Ok(output),
-//         Err(Operation { error, .. }) => Err(error),
-//         Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-//             terraform_args.iter().map(|e| e.to_string()).collect(),
-//             "".to_string(),
-//             e,
-//         )),
-//     }
-// }
+pub fn terraform_import(
+    root_dir: &str,
+    resource: &str,
+    resource_identifier: &str,
+    envs: &[(&str, &str)],
+) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["import", resource, resource_identifier];
+
+    // terraform import
+    match terraform_exec(root_dir, terraform_args.clone(), envs) {
+        Ok(output) => Ok(output),
+        Err(err) => Err(TerraformError::CannotImportResource {
+            resource_type: resource.to_string(),
+            resource_identifier: resource_identifier.to_string(),
+            raw_message: err.to_string(),
+        }),
+    }
+}
 
 // fn terraform_destroy_resource(root_dir: &str, resource: &str) -> Result<Vec<String>, TerraformError> {
 //     let terraform_args = vec!["destroy", "-target", resource];
@@ -1657,7 +1668,14 @@ terraform {
     #[test]
     fn test_terraform_error_aws_s3_bucket_already_owned_by_you_issue() {
         // setup:
-        let raw_message = "Error: creating Amazon S3 (Simple Storage) Bucket (qovery-logs-z0bb3e862): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.".to_string();
+        let raw_message = r#"Unknown error while performing Terraform command (`terraform apply -no-color -auto-approve tf_plan`), here is the error:
+
+Error: creating Amazon S3 (Simple Storage) Bucket (qovery-logs-z0bb3e862): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+	status code: 409, request id: FMD190YF8MQ35W7F, host id: YLBPFgtZPS1V1WnXBYfQN/7BfBEW0S5KiDlgLWSCYIVWWbzPM5YNKUgP6f/Sor+jGs7FTNNEurA=
+
+  with aws_s3_bucket.loki_bucket,
+  on helm-loki.tf line 55, in resource "aws_s3_bucket" "loki_bucket":
+  55: resource "aws_s3_bucket" "loki_bucket" {"#;
 
         // execute:
         let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
@@ -1666,7 +1684,8 @@ terraform {
         assert_eq!(
             TerraformError::S3BucketAlreadyOwnedByYou {
                 bucket_name: "qovery-logs-z0bb3e862".to_string(),
-                raw_message
+                terraform_resource_name: "loki_bucket".to_string(),
+                raw_message: raw_message.to_string(),
             },
             result
         );
