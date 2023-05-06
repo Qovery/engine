@@ -785,6 +785,8 @@ pub enum Tag {
     TerraformStateLocked,
     /// TerraformS3BucketCreationErrorAlreadyOwnedByYou: represents an error due to Terraform not able to create the given S3 bucket because it already exists.
     TerraformS3BucketCreationErrorAlreadyOwnedByYou,
+    /// TerraformCannotImportResource: represents an error where Terraform cannot import the given resource.
+    TerraformCannotImportResource,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2756,6 +2758,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 Some(Url::parse("https://hub.qovery.com/docs/useful-resources/faq/#how-do-you-support-new-kubernetes-version").expect("Error while trying to parse error link helper for `TerraformError::ClusterVersionUnsupportedUpdate`, URL is not valid.")),
                 Some("Deployment failed because cluster version cannot be updated. Did you updated manually your cluster provider's side? You can consult our FAQ to know more. Please reach our team to get some help.".to_string()),
+            ),
+            TerraformError::CannotImportResource { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformCannotImportResource,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
             ),
         }
     }
