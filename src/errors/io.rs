@@ -80,6 +80,7 @@ pub enum Tag {
     TerraformCannotRemoveEntryOut,
     TerraformErrorWhileExecutingPipeline,
     TerraformErrorWhileExecutingDestroyPipeline,
+    TerraformCannotImportResource,
     HelmChartsSetupError,
     HelmChartsDeployError,
     HelmChartsUpgradeError,
@@ -189,6 +190,7 @@ pub enum Tag {
     TerraformInvalidCIDRBlock,
     TerraformStateLocked,
     TerraformClusterUnsupportedVersionUpdate,
+    TerraformS3BucketCreationErrorAlreadyOwnedByYou,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -381,6 +383,10 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformInstanceTypeDoesntExist => Tag::TerraformInstanceTypeDoesntExist,
             errors::Tag::TerraformMultipleInterruptsReceived => Tag::TerraformMultipleInterruptsReceived,
             errors::Tag::TerraformInstanceVolumeCannotBeReduced => Tag::TerraformInstanceVolumeCannotBeReduced,
+            errors::Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou => {
+                Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou
+            }
+            errors::Tag::TerraformCannotImportResource => Tag::TerraformCannotImportResource,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,

@@ -42,7 +42,7 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
-    force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources,
+    force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources, terraform_import,
     terraform_init_validate_plan_apply, terraform_init_validate_state_list, TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
@@ -59,7 +59,7 @@ use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use tokio::time::Duration;
 
-use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
+use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 
 mod addons;
 pub mod ec2;
@@ -861,7 +861,7 @@ fn create(
     // aws connection
     let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
         Some(x) => x,
-        None => return Err(Box::new(EngineError::new_not_implemented_error(event_details))),
+        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
     // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
@@ -871,10 +871,11 @@ fn create(
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
-        if let Err(e) = block_on(delete_eks_failed_nodegroups(
+        if let Err(e) = block_on(delete_eks_nodegroups(
             aws_conn.clone(),
             kubernetes.cluster_name(),
             kubernetes.context().is_first_cluster_deployment(),
+            NodeGroupsDeletionType::FailedOnly,
             event_details.clone(),
         )) {
             // only return failures if the cluster is not absent, because it can be a VPC quota issue
@@ -987,54 +988,125 @@ fn create(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
     ));
-    // terraform deployment dedicated to cloud resources
-    if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.as_str(),
-        kubernetes.context().is_dry_run_deploy(),
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-    ) {
-        // on EKS, clean possible nodegroup deployment failures because of quota issues
-        // do not exit on this error to avoid masking the real Terraform issue
-        if kubernetes.kind() == Kind::Eks {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(
-                    "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
-                ),
-            ));
-            if let Err(e) = block_on(delete_eks_failed_nodegroups(
-                aws_conn,
-                kubernetes.cluster_name(),
-                kubernetes.context().is_first_cluster_deployment(),
-                event_details.clone(),
-            )) {
-                // only return failures if the cluster is not absent, because it can be a VPC quota issue
-                if e.tag() != &Tag::CannotGetCluster {
-                    return Err(e);
-                }
-            };
-        };
 
-        match kubernetes.kind() {
-            Kind::Ec2 => {
-                if let Err(err) = force_terraform_ec2_instance_type_switch(
-                    temp_dir.as_str(),
-                    e,
-                    kubernetes.logger(),
-                    &event_details,
-                    kubernetes.context().is_dry_run_deploy(),
-                    kubernetes
-                        .cloud_provider()
-                        .credentials_environment_variables()
-                        .as_slice(),
-                ) {
-                    return Err(Box::new(EngineError::new_terraform_error(event_details.clone(), err)));
+    // terraform deployment dedicated to cloud resources
+    let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
+        match terraform_init_validate_plan_apply(
+            temp_dir.as_str(),
+            kubernetes.context().is_dry_run_deploy(),
+            kubernetes
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+        ) {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => {
+                match &e {
+                    TerraformError::S3BucketAlreadyOwnedByYou {
+                        bucket_name,
+                        terraform_resource_name,
+                        ..
+                    } => {
+                        // Try to import S3 bucket and relaunch Terraform apply
+                        kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(
+                                format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
+                                Some(e.to_string()),
+                            ),
+                        ));
+                        match terraform_import(
+                            temp_dir.as_str(),
+                            format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
+                            bucket_name,
+                            kubernetes
+                                .cloud_provider()
+                                .credentials_environment_variables()
+                                .as_slice(),
+                        ) {
+                            Ok(_) => {
+                                kubernetes.logger().log(EngineEvent::Info(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!(
+                                        "S3 bucket `{bucket_name}` has been imported properly."
+                                    )),
+                                ));
+
+                                // triggering retry (applying Terraform apply)
+                                OperationResult::Retry(Box::new(EngineError::new_terraform_error(
+                                    event_details.clone(),
+                                    e.clone(),
+                                )))
+                            }
+                            Err(e) => OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                event_details.clone(),
+                                e,
+                            ))),
+                        }
+                    }
+                    _ => match kubernetes.kind() {
+                        Kind::Eks => {
+                            // on EKS, clean possible nodegroup deployment failures because of quota issues
+                            // do not exit on this error to avoid masking the real Terraform issue
+                            kubernetes.logger().log(EngineEvent::Info(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(
+                                        "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
+                                    ),
+                                ));
+                            if let Err(e) = block_on(delete_eks_nodegroups(
+                                aws_conn.clone(),
+                                kubernetes.cluster_name(),
+                                kubernetes.context().is_first_cluster_deployment(),
+                                NodeGroupsDeletionType::FailedOnly,
+                                event_details.clone(),
+                            )) {
+                                // only return failures if the cluster is not absent, because it can be a VPC quota issue
+                                if e.tag() != &Tag::CannotGetCluster {
+                                    return OperationResult::Err(e);
+                                }
+                            }
+
+                            OperationResult::Ok(())
+                        }
+                        Kind::Ec2 => {
+                            if let Err(err) = force_terraform_ec2_instance_type_switch(
+                                temp_dir.as_str(),
+                                e,
+                                kubernetes.logger(),
+                                &event_details,
+                                kubernetes.context().is_dry_run_deploy(),
+                                kubernetes
+                                    .cloud_provider()
+                                    .credentials_environment_variables()
+                                    .as_slice(),
+                            ) {
+                                return OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                    event_details.clone(),
+                                    err,
+                                )));
+                            }
+
+                            OperationResult::Ok(())
+                        }
+                        _ => OperationResult::Err(Box::new(EngineError::new_terraform_error(event_details.clone(), e))),
+                    },
                 }
             }
-            _ => return Err(Box::new(EngineError::new_terraform_error(event_details, e))),
+        }
+    });
+
+    match tf_apply_result {
+        Ok(_) => {}
+        Err(Operation { error, .. }) => return Err(error),
+        Err(Error::Internal(e)) => {
+            return Err(Box::new(EngineError::new_terraform_error(
+                event_details,
+                TerraformError::Unknown {
+                    terraform_args: vec![],
+                    raw_message: e,
+                },
+            )))
         }
     }
 
@@ -1364,7 +1436,7 @@ fn create(
         match result {
             Ok(_) => Ok(()),
             Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            Err(Error::Internal(e)) => Err(CommandError::new(
                 "Didn't manage to update Helm charts after 5 min.".to_string(),
                 Some(e),
                 None,
@@ -1620,6 +1692,11 @@ fn delete(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
     ));
+
+    let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
+        Some(x) => x,
+        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
+    };
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
     let node_groups_with_desired_states = match kubernetes.kind() {
@@ -2050,12 +2127,20 @@ fn delete(
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
     if kubernetes.kind() != Kind::Ec2 {
+        // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
+        block_on(delete_eks_nodegroups(
+            aws_conn,
+            kubernetes.cluster_name(),
+            kubernetes.context().is_first_cluster_deployment(),
+            NodeGroupsDeletionType::All,
+            event_details.clone(),
+        ))?;
+
+        // remove S3 buckets from tf state
         kubernetes.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
         ));
-
-        // Remove s3 buckets from TF state
         let resources_to_be_removed_from_tf_state: Vec<(&str, &str)> = vec![
             ("aws_s3_bucket.loki_bucket", "S3 logs bucket"),
             ("aws_s3_bucket_lifecycle_configuration.loki_lifecycle", "S3 logs lifecycle"),
