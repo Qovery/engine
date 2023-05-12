@@ -271,7 +271,7 @@ impl TerraformError {
             }
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
-            r"Error creating (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
+            r" creating EC2 (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
         ) {
             if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
@@ -285,9 +285,9 @@ impl TerraformError {
                 }
             }
         }
-        if let Ok(aws_quotas_exceeded_re) = Regex::new(
-            r"error creating EC2 (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
-        ) {
+        if let Ok(aws_quotas_exceeded_re) =
+            Regex::new(r" creating (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached")
+        {
             if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
                     return TerraformError::QuotasExceeded {
@@ -509,7 +509,6 @@ impl TerraformError {
                 }
             }
         }
-
         // Resources creation errors
         // AWS
         // BucketAlreadyOwnedByYou: S3 bucket cannot be created because it already exists. It might happen if Terraform lost connection before writing to the state.
@@ -1469,6 +1468,17 @@ terraform {
         }
 
         let test_cases = vec![
+            TestCase {
+                input_raw_message: "Error: creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "VPC".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message: "Error: creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached"
+                        .to_string(),
+                },
+            },
             TestCase {
                 input_raw_message: "error creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached.",
                 expected_terraform_error: TerraformError::QuotasExceeded {
