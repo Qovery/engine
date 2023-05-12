@@ -277,6 +277,28 @@ impl<T: CloudProvider> Application<T> {
             }
         };
 
+        context.insert(
+            "deployment_update_strategy_type",
+            &self.advanced_settings.deployment_update_strategy_type,
+        );
+        match self.advanced_settings.deployment_update_strategy_type {
+            crate::io_models::UpdateStrategy::RollingUpdate => {
+                context.insert(
+                    "deployment_update_strategy_rolling_update_max_unavailable_percent",
+                    &self
+                        .advanced_settings
+                        .deployment_update_strategy_rolling_update_max_unavailable_percent,
+                );
+                context.insert(
+                    "deployment_update_strategy_rolling_update_max_surge_percent",
+                    &self
+                        .advanced_settings
+                        .deployment_update_strategy_rolling_update_max_surge_percent,
+                );
+            }
+            crate::io_models::UpdateStrategy::Recreate => {}
+        }
+
         let environment_variables = self
             .environment_variables
             .iter()

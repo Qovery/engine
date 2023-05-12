@@ -19,6 +19,12 @@ pub mod environment;
 pub mod job;
 pub mod router;
 
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug)]
+pub enum UpdateStrategy {
+    RollingUpdate,
+    Recreate,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QoveryIdentifier {
     long_id: Uuid,

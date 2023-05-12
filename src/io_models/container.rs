@@ -20,6 +20,8 @@ use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
 
+use super::UpdateStrategy;
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Credentials {
     pub login: String,
@@ -162,6 +164,12 @@ pub struct ContainerAdvancedSettings {
     pub deployment_custom_domain_check_enabled: bool,
     #[serde(alias = "deployment.termination_grace_period_seconds")]
     pub deployment_termination_grace_period_seconds: u32,
+    #[serde(alias = "deployment.update_strategy.type")]
+    pub deployment_update_strategy_type: UpdateStrategy,
+    #[serde(alias = "deployment.update_strategy.rolling_update.max_unavailable_percent")]
+    pub deployment_update_strategy_rolling_update_max_unavailable_percent: u32,
+    #[serde(alias = "deployment.update_strategy.rolling_update.max_surge_percent")]
+    pub deployment_update_strategy_rolling_update_max_surge_percent: u32,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -240,6 +248,9 @@ impl Default for ContainerAdvancedSettings {
             security_service_account_name: "".to_string(),
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
+            deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
+            deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
+            deployment_update_strategy_rolling_update_max_surge_percent: 25,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
