@@ -153,7 +153,9 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("database_password", options.password.as_str());
         context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
-        context.insert("database_instance_type", &self.database_instance_type);
+        if let Some(i) = &self.database_instance_type {
+            context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
+        }
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
@@ -161,11 +163,12 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
-
+        context.insert("skip_final_snapshot", &false);
+        context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
+        context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
         context.insert("activate_high_availability", &options.activate_high_availability);
         context.insert("activate_backups", &options.activate_backups);
-        context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert(
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,

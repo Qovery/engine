@@ -33,6 +33,7 @@ use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
+use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
@@ -189,7 +190,7 @@ impl StorageSize {
 
 pub fn environment_3_apps_3_databases(
     context: &Context,
-    database_instance_type: &str,
+    database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
@@ -366,7 +367,7 @@ pub fn environment_3_apps_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: database_instance_type.to_string(),
+                database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
                 encrypt_disk: true,
                 activate_high_availability: false,
@@ -389,7 +390,7 @@ pub fn environment_3_apps_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: database_instance_type.to_string(),
+                database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
                 encrypt_disk: true,
                 activate_high_availability: false,
@@ -412,7 +413,7 @@ pub fn environment_3_apps_3_databases(
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
-                database_instance_type: database_instance_type.to_string(),
+                database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
                 encrypt_disk: true,
                 activate_high_availability: false,
@@ -604,7 +605,7 @@ pub fn test_db(
         total_cpus: "250m".to_string(),
         total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
         disk_size_in_gib: disk_size,
-        database_instance_type: db_instance_type,
+        database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
         encrypt_disk: true,
         activate_high_availability: false,
@@ -918,7 +919,7 @@ pub fn test_pause_managed_db(
         total_cpus: "250m".to_string(),
         total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
         disk_size_in_gib: storage_size,
-        database_instance_type: db_instance_type,
+        database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
         encrypt_disk: true,
         activate_high_availability: false,
@@ -1183,7 +1184,7 @@ pub fn test_db_on_upgrade(
         total_cpus: "50m".to_string(),
         total_ram_in_mib: 256,
         disk_size_in_gib: storage_size,
-        database_instance_type: db_instance_type,
+        database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
         encrypt_disk: true,
         activate_high_availability: false,

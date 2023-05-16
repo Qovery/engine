@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_derive;
 
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
@@ -29,7 +30,7 @@ pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23 {
     patch: None,
     suffix: None,
 };
-pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
+pub const AWS_DATABASE_INSTANCE_TYPE: AwsDatabaseInstanceType = AwsDatabaseInstanceType::DB_T3_MICRO;
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
 

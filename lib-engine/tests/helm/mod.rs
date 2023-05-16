@@ -3,6 +3,7 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::{
     kubernetes::eks::EKS,
     regions::{AwsRegion, AwsZones},
@@ -389,7 +390,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
         "my_managed_db_total_cpus".to_string(),
         1,
         42,
-        "my_managed_db_total_instance_type",
+        Some(Box::new(AwsDatabaseInstanceType::DB_T3_MICRO)),
         true,
         2,
         DatabaseOptions {
@@ -423,7 +424,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
         "my_container_db_total_cpus".to_string(),
         1,
         42,
-        "my_container_db_instance_type",
+        None,
         false,
         1234,
         DatabaseOptions {
@@ -431,7 +432,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             password: "my_container_db_password".to_string(),
             host: "my_container_db_host".to_string(),
             port: 11,
-            mode: DatabaseMode::MANAGED,
+            mode: DatabaseMode::CONTAINER,
             disk_size_in_gib: 12,
             database_disk_type: "my_container_db_disk_type".to_string(),
             encrypt_disk: true,
