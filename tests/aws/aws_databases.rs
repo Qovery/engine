@@ -55,7 +55,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
-            AWS_DATABASE_INSTANCE_TYPE,
+            Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
             AWS_DATABASE_DISK_TYPE,
             Kind::Aws,
         );
@@ -107,7 +107,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            AWS_DATABASE_INSTANCE_TYPE,
+            Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
             AWS_DATABASE_DISK_TYPE,
             Kind::Aws,
         );
@@ -170,7 +170,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
-            AWS_DATABASE_INSTANCE_TYPE,
+            Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
             AWS_DATABASE_DISK_TYPE,
             Kind::Aws,
         );
@@ -178,7 +178,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let mut environment_delete = helpers::environment::environment_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
-            AWS_DATABASE_INSTANCE_TYPE,
+            Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
             AWS_DATABASE_DISK_TYPE,
             Kind::Aws,
         );
@@ -266,13 +266,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: "db.t2.micro".to_string(),
             database_disk_type: "gp2".to_string(),
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
             mode: CONTAINER,
+            database_instance_type: None,
         }];
         environment.applications = environment
             .applications

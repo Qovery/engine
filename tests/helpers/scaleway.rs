@@ -10,6 +10,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
@@ -34,9 +35,8 @@ pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23 {
     patch: None,
     suffix: None,
 };
-pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
+pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: ScwDatabaseInstanceType = ScwDatabaseInstanceType::DB_DEV_S;
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
-pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
 pub const SCW_BUCKET_TTL_IN_SECONDS: i32 = 3600;
 

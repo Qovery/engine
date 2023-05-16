@@ -5,6 +5,7 @@ mod database_utils;
 mod job;
 mod router;
 
+use crate::cloud_provider::Kind;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -20,6 +21,10 @@ impl CloudProvider for AWS {
     type DbExtraSettings = AwsDbExtraSettings;
     type RouterExtraSettings = AwsRouterExtraSettings;
     type StorageTypes = AwsStorageType;
+
+    fn cloud_provider() -> Kind {
+        Kind::Aws
+    }
 
     fn short_name() -> &'static str {
         "AWS"

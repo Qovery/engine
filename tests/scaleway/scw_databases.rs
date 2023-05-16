@@ -16,13 +16,14 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::database::{database_test_environment, test_db, StorageSize};
 use crate::helpers::scaleway::{
     clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+    SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
 };
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
@@ -69,7 +70,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            None,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
         );
@@ -135,7 +136,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            None,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
         );
@@ -210,14 +211,14 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            None,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
         );
         let mut environment_delete = helpers::environment::environment_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            None,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
         );
@@ -321,11 +322,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             disk_size_in_gib: 10,
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
-                SCW_MANAGED_DATABASE_INSTANCE_TYPE
+                Some(SCW_MANAGED_DATABASE_INSTANCE_TYPE.to_cloud_provider_format())
             } else {
-                SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE
-            }
-            .to_string(),
+                None
+            },
             database_disk_type: if database_mode == MANAGED {
                 SCW_MANAGED_DATABASE_DISK_TYPE
             } else {
