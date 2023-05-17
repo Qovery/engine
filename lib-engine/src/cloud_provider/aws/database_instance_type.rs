@@ -11,8 +11,13 @@ use strum_macros::EnumIter;
 #[allow(non_camel_case_types)]
 pub enum AwsDatabaseInstanceType {
     DB_T3_MICRO,
+    DB_T3_SMALL,
     DB_T3_MEDIUM,
+    DB_T3_LARGE,
     CACHE_T3_MICRO,
+    CACHE_T3_SMALL,
+    CACHE_T3_MEDIUM,
+    CACHE_T3_LARGE,
 }
 
 impl DatabaseInstanceType for AwsDatabaseInstanceType {
@@ -23,8 +28,13 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
             AwsDatabaseInstanceType::DB_T3_MICRO => "db.t3.micro",
+            AwsDatabaseInstanceType::DB_T3_SMALL => "db.t3.small",
             AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
+            AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
             AwsDatabaseInstanceType::CACHE_T3_MICRO => "cache.t3.micro",
+            AwsDatabaseInstanceType::CACHE_T3_SMALL => "cache.t3.small",
+            AwsDatabaseInstanceType::CACHE_T3_MEDIUM => "cache.t3.medium",
+            AwsDatabaseInstanceType::CACHE_T3_LARGE => "cache.t3.large",
         }
         .to_string()
     }
@@ -33,21 +43,32 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
         match self {
             AwsDatabaseInstanceType::DB_T3_MICRO => true,
             AwsDatabaseInstanceType::DB_T3_MEDIUM => true,
+            AwsDatabaseInstanceType::DB_T3_SMALL => true,
+            AwsDatabaseInstanceType::DB_T3_LARGE => true,
             AwsDatabaseInstanceType::CACHE_T3_MICRO => true,
+            AwsDatabaseInstanceType::CACHE_T3_SMALL => true,
+            AwsDatabaseInstanceType::CACHE_T3_MEDIUM => true,
+            AwsDatabaseInstanceType::CACHE_T3_LARGE => true,
         }
     }
 
     fn is_instance_compatible_with(&self, database_type: DatabaseType) -> bool {
         match self {
             // DB
-            AwsDatabaseInstanceType::DB_T3_MICRO | AwsDatabaseInstanceType::DB_T3_MEDIUM => match database_type {
+            AwsDatabaseInstanceType::DB_T3_MICRO
+            | AwsDatabaseInstanceType::DB_T3_SMALL
+            | AwsDatabaseInstanceType::DB_T3_MEDIUM
+            | AwsDatabaseInstanceType::DB_T3_LARGE => match database_type {
                 DatabaseType::PostgreSQL => true,
                 DatabaseType::MongoDB => true,
                 DatabaseType::MySQL => true,
                 DatabaseType::Redis => false,
             },
             // CACHE
-            AwsDatabaseInstanceType::CACHE_T3_MICRO => match database_type {
+            AwsDatabaseInstanceType::CACHE_T3_MICRO
+            | AwsDatabaseInstanceType::CACHE_T3_SMALL
+            | AwsDatabaseInstanceType::CACHE_T3_MEDIUM
+            | AwsDatabaseInstanceType::CACHE_T3_LARGE => match database_type {
                 DatabaseType::PostgreSQL => false,
                 DatabaseType::MongoDB => false,
                 DatabaseType::MySQL => false,
@@ -69,8 +90,13 @@ impl FromStr for AwsDatabaseInstanceType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "db.t3.micro" => Ok(AwsDatabaseInstanceType::DB_T3_MICRO),
+            "db.t3.small" => Ok(AwsDatabaseInstanceType::DB_T3_SMALL),
             "db.t3.medium" => Ok(AwsDatabaseInstanceType::DB_T3_MEDIUM),
+            "db.t3.large" => Ok(AwsDatabaseInstanceType::DB_T3_LARGE),
             "cache.t3.micro" => Ok(AwsDatabaseInstanceType::CACHE_T3_MICRO),
+            "cache.t3.small" => Ok(AwsDatabaseInstanceType::CACHE_T3_SMALL),
+            "cache.t3.medium" => Ok(AwsDatabaseInstanceType::CACHE_T3_MEDIUM),
+            "cache.t3.large" => Ok(AwsDatabaseInstanceType::CACHE_T3_LARGE),
             _ => Err(DatabaseError::InvalidDatabaseInstance {
                 database_cloud_provider: Kind::Aws,
                 requested_database_instance_type: s.to_string(),
@@ -104,8 +130,13 @@ mod tests {
             assert_eq!(
                 match instance_type {
                     AwsDatabaseInstanceType::DB_T3_MICRO => "db.t3.micro",
+                    AwsDatabaseInstanceType::DB_T3_SMALL => "db.t3.small",
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
+                    AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
                     AwsDatabaseInstanceType::CACHE_T3_MICRO => "cache.t3.micro",
+                    AwsDatabaseInstanceType::CACHE_T3_SMALL => "cache.t3.small",
+                    AwsDatabaseInstanceType::CACHE_T3_MEDIUM => "cache.t3.medium",
+                    AwsDatabaseInstanceType::CACHE_T3_LARGE => "cache.t3.large",
                 }
                 .to_string(),
                 instance_type.to_cloud_provider_format()
@@ -120,8 +151,13 @@ mod tests {
             assert_eq!(
                 match instance_type {
                     AwsDatabaseInstanceType::DB_T3_MICRO => "db.t3.micro",
+                    AwsDatabaseInstanceType::DB_T3_SMALL => "db.t3.small",
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
+                    AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
                     AwsDatabaseInstanceType::CACHE_T3_MICRO => "cache.t3.micro",
+                    AwsDatabaseInstanceType::CACHE_T3_SMALL => "cache.t3.small",
+                    AwsDatabaseInstanceType::CACHE_T3_MEDIUM => "cache.t3.medium",
+                    AwsDatabaseInstanceType::CACHE_T3_LARGE => "cache.t3.large",
                 }
                 .to_string(),
                 instance_type.to_string()
@@ -161,7 +197,12 @@ mod tests {
                 match instance_type {
                     AwsDatabaseInstanceType::DB_T3_MICRO => true,
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => true,
+                    AwsDatabaseInstanceType::DB_T3_SMALL => true,
+                    AwsDatabaseInstanceType::DB_T3_LARGE => true,
                     AwsDatabaseInstanceType::CACHE_T3_MICRO => true,
+                    AwsDatabaseInstanceType::CACHE_T3_SMALL => true,
+                    AwsDatabaseInstanceType::CACHE_T3_MEDIUM => true,
+                    AwsDatabaseInstanceType::CACHE_T3_LARGE => true,
                 },
                 instance_type.is_instance_allowed(),
             )
@@ -182,7 +223,19 @@ mod tests {
                             DatabaseType::MySQL => true,
                             DatabaseType::Redis => false,
                         },
+                        AwsDatabaseInstanceType::DB_T3_SMALL => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        }
                         AwsDatabaseInstanceType::DB_T3_MEDIUM => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        },
+                        AwsDatabaseInstanceType::DB_T3_LARGE => match db_type {
                             DatabaseType::PostgreSQL => true,
                             DatabaseType::MongoDB => true,
                             DatabaseType::MySQL => true,
@@ -190,6 +243,24 @@ mod tests {
                         },
                         // CACHE
                         AwsDatabaseInstanceType::CACHE_T3_MICRO => match db_type {
+                            DatabaseType::PostgreSQL => false,
+                            DatabaseType::MongoDB => false,
+                            DatabaseType::MySQL => false,
+                            DatabaseType::Redis => true,
+                        },
+                        AwsDatabaseInstanceType::CACHE_T3_SMALL => match db_type {
+                            DatabaseType::PostgreSQL => false,
+                            DatabaseType::MongoDB => false,
+                            DatabaseType::MySQL => false,
+                            DatabaseType::Redis => true,
+                        },
+                        AwsDatabaseInstanceType::CACHE_T3_MEDIUM => match db_type {
+                            DatabaseType::PostgreSQL => false,
+                            DatabaseType::MongoDB => false,
+                            DatabaseType::MySQL => false,
+                            DatabaseType::Redis => true,
+                        },
+                        AwsDatabaseInstanceType::CACHE_T3_LARGE => match db_type {
                             DatabaseType::PostgreSQL => false,
                             DatabaseType::MongoDB => false,
                             DatabaseType::MySQL => false,
