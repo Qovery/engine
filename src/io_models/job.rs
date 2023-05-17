@@ -46,6 +46,10 @@ pub struct JobAdvancedSettings {
     // Build
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
+    #[serde(alias = "build.cpu_max_in_milli")]
+    pub build_cpu_max_in_milli: u32,
+    #[serde(alias = "build.ram_max_in_gib")]
+    pub build_ram_max_in_gib: u32,
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
@@ -92,6 +96,8 @@ impl Default for JobAdvancedSettings {
             cronjob_failed_jobs_history_limit: 1,
             cronjob_success_jobs_history_limit: 1,
             build_timeout_max_sec: 30 * 60, // 30 minutes
+            build_cpu_max_in_milli: 4000,
+            build_ram_max_in_gib: 8,
             security_service_account_name: "".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::None,
             readiness_probe_http_get_path: "".to_string(),
@@ -238,6 +244,8 @@ impl Job {
             disable_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
             architectures,
+            max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
+            max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
         };
 
         build.compute_image_tag();
