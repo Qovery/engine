@@ -11,6 +11,10 @@ use strum_macros::EnumIter;
 #[allow(non_camel_case_types)]
 pub enum ScwDatabaseInstanceType {
     DB_DEV_S,
+    DB_DEV_M,
+    DB_GP_XS,
+    DB_GP_S,
+    DB_GP_M,
     RED1_MICRO,
 }
 
@@ -22,6 +26,10 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
             ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+            ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
+            ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+            ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+            ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
             ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
         }
         .to_string()
@@ -30,13 +38,21 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
     fn is_instance_allowed(&self) -> bool {
         match self {
             ScwDatabaseInstanceType::DB_DEV_S => true,
+            ScwDatabaseInstanceType::DB_DEV_M => true,
+            ScwDatabaseInstanceType::DB_GP_XS => true,
+            ScwDatabaseInstanceType::DB_GP_S => true,
+            ScwDatabaseInstanceType::DB_GP_M => true,
             ScwDatabaseInstanceType::RED1_MICRO => true,
         }
     }
 
     fn is_instance_compatible_with(&self, database_type: DatabaseType) -> bool {
         match self {
-            ScwDatabaseInstanceType::DB_DEV_S => match database_type {
+            ScwDatabaseInstanceType::DB_DEV_S
+            | ScwDatabaseInstanceType::DB_DEV_M
+            | ScwDatabaseInstanceType::DB_GP_XS
+            | ScwDatabaseInstanceType::DB_GP_S
+            | ScwDatabaseInstanceType::DB_GP_M => match database_type {
                 DatabaseType::PostgreSQL => true,
                 DatabaseType::MongoDB => true,
                 DatabaseType::MySQL => true,
@@ -64,6 +80,10 @@ impl FromStr for ScwDatabaseInstanceType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "db-dev-s" => Ok(ScwDatabaseInstanceType::DB_DEV_S),
+            "db-dev-m" => Ok(ScwDatabaseInstanceType::DB_DEV_M),
+            "db-gp-xs" => Ok(ScwDatabaseInstanceType::DB_GP_XS),
+            "db-gp-s" => Ok(ScwDatabaseInstanceType::DB_GP_S),
+            "db-gp-m" => Ok(ScwDatabaseInstanceType::DB_GP_M),
             "red1-micro" => Ok(ScwDatabaseInstanceType::RED1_MICRO),
             _ => Err(DatabaseError::InvalidDatabaseInstance {
                 database_cloud_provider: Kind::Aws,
@@ -98,6 +118,10 @@ mod tests {
             assert_eq!(
                 match instance_type {
                     ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
+                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
                     ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
                 }
                     .to_string(),
@@ -113,6 +137,10 @@ mod tests {
             assert_eq!(
                 match instance_type {
                     ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
+                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
                     ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
                 }
                     .to_string(),
@@ -152,7 +180,11 @@ mod tests {
             assert_eq!(
                 match instance_type {
                     ScwDatabaseInstanceType::DB_DEV_S => true,
-                    ScwDatabaseInstanceType::RED1_MICRO => true,
+                    ScwDatabaseInstanceType::DB_DEV_M => true,
+                    ScwDatabaseInstanceType::DB_GP_XS => true,
+                    ScwDatabaseInstanceType::DB_GP_S => true,
+                    ScwDatabaseInstanceType::DB_GP_M => true,
+                    ScwDatabaseInstanceType::RED1_MICRO => true
                 },
                 instance_type.is_instance_allowed(),
             )
@@ -168,6 +200,30 @@ mod tests {
                     match instance_type {
                         // DB
                         ScwDatabaseInstanceType::DB_DEV_S => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        },
+                        ScwDatabaseInstanceType::DB_DEV_M => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        },
+                        ScwDatabaseInstanceType::DB_GP_XS => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        },
+                        ScwDatabaseInstanceType::DB_GP_S => match db_type {
+                            DatabaseType::PostgreSQL => true,
+                            DatabaseType::MongoDB => true,
+                            DatabaseType::MySQL => true,
+                            DatabaseType::Redis => false,
+                        },
+                        ScwDatabaseInstanceType::DB_GP_M => match db_type {
                             DatabaseType::PostgreSQL => true,
                             DatabaseType::MongoDB => true,
                             DatabaseType::MySQL => true,
