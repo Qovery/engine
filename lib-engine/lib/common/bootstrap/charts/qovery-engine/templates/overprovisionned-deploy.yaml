@@ -24,7 +24,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
-        {{- toYaml .Values.buildResources | nindent 10 }}
+        {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -51,5 +51,5 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
-        {{- toYaml .Values.buildResources | nindent 10 }}
+        {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
 {{- end }}

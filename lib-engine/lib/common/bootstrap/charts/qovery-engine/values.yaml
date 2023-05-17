@@ -26,6 +26,13 @@ overprovisionning:
   # specify the number of over provisioned engine pods
   # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
   replicas: 2
+  resources:
+    requests:
+      cpu: 1
+      memory: 3Gi
+    limits:
+      cpu: 1
+      memory: 3Gi
 
 labels:
   app: qovery-engine
