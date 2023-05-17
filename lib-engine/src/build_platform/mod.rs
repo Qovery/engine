@@ -96,6 +96,8 @@ pub struct Build {
     pub disable_cache: bool,
     pub timeout: Duration,
     pub architectures: Vec<CpuArchitecture>,
+    pub max_cpu_in_milli: u32,
+    pub max_ram_in_gib: u32,
 }
 
 impl Build {

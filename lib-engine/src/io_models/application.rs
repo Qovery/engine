@@ -90,8 +90,14 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_update_strategy_rolling_update_max_unavailable_percent: u32,
     #[serde(alias = "deployment.update_strategy.rolling_update.max_surge_percent")]
     pub deployment_update_strategy_rolling_update_max_surge_percent: u32,
+
+    // Build
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
+    #[serde(alias = "build.cpu_max_in_milli")]
+    pub build_cpu_max_in_milli: u32,
+    #[serde(alias = "build.ram_max_in_gib")]
+    pub build_ram_max_in_gib: u32,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -175,6 +181,8 @@ impl Default for ApplicationAdvancedSettings {
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             build_timeout_max_sec: 30 * 60,
+            build_cpu_max_in_milli: 4000,
+            build_ram_max_in_gib: 8,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
@@ -402,6 +410,8 @@ impl Application {
             disable_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
             architectures,
+            max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
+            max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
         };
 
         build.compute_image_tag();

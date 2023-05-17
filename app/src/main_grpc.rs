@@ -156,22 +156,6 @@ struct Cli {
     #[arg(long, default_value = "qovery", env = "BUILDER_NAMESPACE")]
     builder_namespace: String,
 
-    /// If kube builder enabled, cpu request of the pod's remote builder
-    #[arg(long, default_value_t = 3, env = "BUILDER_CPU_REQUEST")]
-    builder_cpu_request: u32,
-
-    /// If kube builder enabled, cpu limit of the pod's remote builder
-    #[arg(long, default_value_t = 4, env = "BUILDER_CPU_LIMIT")]
-    builder_cpu_limit: u32,
-
-    /// If kube builder enabled, memory request in Gib of the pod's remote builder
-    #[arg(long, default_value_t = 4, env = "BUILDER_MEMORY_REQUEST_GIB")]
-    builder_memory_request_gib: u32,
-
-    /// If kube builder enabled, memory limit in Gib of the pod's remote builder
-    #[arg(long, default_value_t = 4, env = "BUILDER_MEMORY_LIMIT_GIB")]
-    builder_memory_limit_gib: u32,
-
     /// Listening address:port of the http server (used for healthcheck, metrics)
     #[arg(long, default_value = "[::]:8080", env = "HTTP_LISTEN_ON")]
     http_listen_on: String,
@@ -354,8 +338,6 @@ pub fn main() -> io::Result<()> {
             &cli.builder_cpu_architectures,
             &cli.builder_namespace,
             &builder_id,
-            (cli.builder_cpu_request, cli.builder_cpu_limit),
-            (cli.builder_memory_request_gib, cli.builder_memory_limit_gib),
             vec![],
         )
         .expect("Can't init docker builder")

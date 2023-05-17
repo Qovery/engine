@@ -143,10 +143,6 @@ enum BuilderLocation {
         namespace: String,
         builder_id: String,
         builder_name: String,
-        cpu_request: u32,
-        cpu_limit: u32,
-        memory_request_gib: u32,
-        memory_limit_gib: u32,
         supported_architectures: BTreeSet<Architecture>,
     },
 }
@@ -242,8 +238,6 @@ impl Docker {
         supported_architectures: &[Architecture],
         namespace: &str,
         builder_id: &str,
-        (cpu_request, cpu_limit): (u32, u32),
-        (memory_request_gib, memory_limit_gib): (u32, u32),
         args: Vec<(String, String)>,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
@@ -253,10 +247,6 @@ impl Docker {
             namespace: namespace.to_string(),
             builder_id: builder_id.to_string(),
             builder_name: builder_name.to_string(),
-            cpu_request,
-            cpu_limit,
-            memory_request_gib,
-            memory_limit_gib,
             supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
         };
         docker.common_envs.extend(args);
@@ -268,6 +258,8 @@ impl Docker {
         &self,
         nb_builder: NonZeroUsize,
         requested_architectures: &[Architecture],
+        (cpu_request_milli, cpu_limit_milli): (u32, u32),
+        (memory_request_gib, memory_limit_gib): (u32, u32),
         should_abort: &CommandKiller,
     ) -> Result<BuilderHandle, DockerError> {
         match &self.builder_location {
@@ -280,10 +272,6 @@ impl Docker {
                 namespace,
                 builder_id,
                 builder_name,
-                cpu_request,
-                cpu_limit,
-                memory_request_gib,
-                memory_limit_gib,
                 supported_architectures,
             } => {
                 let available_architectures = requested_architectures
@@ -314,11 +302,11 @@ impl Docker {
                     "\"replicas={}\",",
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
-                    "\"requests.cpu={}\",",
-                    "\"limits.cpu={}\",",
-                    "\"requests.memory={}G\",",
-                    "\"limits.memory={}G\""
-                    ), namespace, nb_builder, arch, cpu_request, cpu_limit, memory_request_gib, memory_limit_gib);
+                    "\"requests.cpu={}m\",",
+                    "\"limits.cpu={}m\",",
+                    "\"requests.memory={}Gi\",",
+                    "\"limits.memory={}Gi\""
+                    ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
                     let args = vec![
                         "buildx",
                         "create",
@@ -917,13 +905,17 @@ mod tests {
             &[Architecture::ARM64, Architecture::AMD64],
             "default",
             &format!("b{}", Uuid::new_v4()),
-            (0, 1),
-            (0, 1),
             args,
         )
         .unwrap();
         let _builder = docker
-            .spawn_builder(NonZeroUsize::new(1).unwrap(), &[Architecture::AMD64], &CommandKiller::never())
+            .spawn_builder(
+                NonZeroUsize::new(1).unwrap(),
+                &[Architecture::AMD64],
+                (0, 1000),
+                (0, 1),
+                &CommandKiller::never(),
+            )
             .unwrap();
 
         let image_to_build = ContainerImage::new(
