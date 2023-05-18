@@ -1,9 +1,13 @@
+use crate::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::{service, CloudProvider, Kind as CPKind};
+use crate::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
+use crate::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
 use crate::io_models::context::Context;
 use crate::io_models::Action;
 use crate::models;
-use crate::models::database::{Container, DatabaseError, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis};
+use crate::models::database::{
+    Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
+};
 use crate::models::types::CloudProvider as CloudProviderTrait;
 use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
 use chrono::{DateTime, Utc};
@@ -35,7 +39,7 @@ pub struct Database {
     pub total_cpus: String,
     pub total_ram_in_mib: u32,
     pub disk_size_in_gib: u32,
-    pub database_instance_type: String,
+    pub database_instance_type: Option<String>,
     pub database_disk_type: String,
     pub encrypt_disk: bool,
     #[serde(default)] // => false if not present in input
@@ -69,6 +73,22 @@ impl Database {
         let version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
 
+        // Trying to pick database instance type for managed DB building based on cloud provider
+        // Container DB instance type to be set to None as it's not needed
+        let database_instance_type: Option<Box<dyn DatabaseInstanceType>> = match &self.database_instance_type {
+            None => None,
+            Some(database_instance_type_raw_str) => match cloud_provider.kind() {
+                Kind::Aws => match AwsDatabaseInstanceType::from_str(database_instance_type_raw_str) {
+                    Ok(t) => Some(Box::new(t)),
+                    Err(e) => return Err(e),
+                },
+                Kind::Scw => match ScwDatabaseInstanceType::from_str(database_instance_type_raw_str) {
+                    Ok(t) => Some(Box::new(t)),
+                    Err(e) => return Err(e),
+                },
+            },
+        };
+
         match (cloud_provider.kind(), &self.kind, &self.mode) {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 // Note: we check if kubernetes is EC2 to map to the proper implementation
@@ -87,7 +107,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -106,7 +126,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -131,7 +151,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -150,7 +170,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -176,7 +196,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -195,7 +215,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -220,7 +240,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -239,7 +259,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -264,7 +284,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -283,7 +303,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -308,7 +328,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -327,7 +347,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -352,7 +372,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -371,7 +391,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -396,7 +416,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -415,7 +435,7 @@ impl Database {
                         self.total_cpus.clone(),
                         self.total_ram_in_mib,
                         database_options.disk_size_in_gib,
-                        self.database_instance_type.as_str(),
+                        None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
@@ -437,7 +457,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    database_instance_type,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
@@ -459,7 +479,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
@@ -481,7 +501,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    database_instance_type,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
@@ -503,7 +523,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
@@ -525,7 +545,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
@@ -547,7 +567,7 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     database_options.disk_size_in_gib,
-                    self.database_instance_type.as_str(),
+                    None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,

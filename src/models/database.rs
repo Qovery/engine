@@ -5,7 +5,7 @@ use crate::cloud_provider::service::{
     ServiceType, ServiceVersionCheckResult,
 };
 use crate::cloud_provider::utilities::managed_db_name_sanitizer;
-use crate::cloud_provider::{service, DeploymentTarget};
+use crate::cloud_provider::{service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
@@ -28,6 +28,13 @@ use uuid::Uuid;
 
 /////////////////////////////////////////////////////////////////
 // Database mode
+pub trait DatabaseInstanceType: Send + Sync {
+    fn cloud_provider(&self) -> Kind;
+    fn to_cloud_provider_format(&self) -> String;
+    fn is_instance_allowed(&self) -> bool;
+    fn is_instance_compatible_with(&self, database_type: service::DatabaseType) -> bool;
+}
+
 pub struct Managed {}
 pub struct Container {}
 pub trait DatabaseMode: Send {
@@ -62,19 +69,23 @@ pub trait DatabaseType<T: CloudProvider, M: DatabaseMode>: Send + Sync {
     fn short_name() -> &'static str;
     fn lib_directory_name() -> &'static str;
     fn db_type() -> service::DatabaseType;
+
     // autocorrect resources if needed
     fn cpu_validate(desired_cpu: String) -> String {
+        // TODO: cpu to use KubernetesCpuResourceUnit
         desired_cpu
     }
     fn cpu_burst_value(desired_cpu: String) -> String {
+        // TODO: cpu to use KubernetesCpuResourceUnit
         desired_cpu
     }
     fn memory_validate(desired_memory: u32) -> u32 {
+        // TODO: cpu to use KubernetesMemoryResourceUnit
         desired_memory
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum DatabaseError {
     #[error("Database invalid configuration: {0}")]
     InvalidConfig(String),
@@ -86,6 +97,24 @@ pub enum DatabaseError {
     DatabaseNotFound {
         database_type: service::DatabaseType,
         database_id: String,
+    },
+
+    #[error("Database instance type `{requested_database_instance_type}` is invalid for cloud provider `{database_cloud_provider}`.")]
+    InvalidDatabaseInstance {
+        requested_database_instance_type: String,
+        database_cloud_provider: Kind,
+    },
+
+    #[error("Database instance type `{database_instance_type_str}` doesn't belong to the database cloud provider `{database_cloud_provider:?}`")]
+    DatabaseInstanceTypeMismatchCloudProvider {
+        database_instance_type_str: String,
+        database_cloud_provider: Kind,
+    },
+
+    #[error("Database instance type `{database_instance_type_str}` is not compatible with database type `{database_type:?}`")]
+    DatabaseInstanceTypeMismatchDatabaseType {
+        database_instance_type_str: String,
+        database_type: service::DatabaseType,
     },
 
     #[error("Unknown Database error: {0}")]
@@ -106,7 +135,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) total_cpus: String,
     pub(crate) total_ram_in_mib: u32,
     pub(crate) total_disk_size_in_gb: u32,
-    pub(crate) database_instance_type: String,
+    pub(crate) database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
     pub(crate) options: T::DatabaseOptions,
@@ -127,13 +156,18 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         total_cpus: String,
         total_ram_in_mib: u32,
         total_disk_size_in_gb: u32,
-        database_instance_type: &str,
+        database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
         publicly_accessible: bool,
         private_port: u16,
         options: T::DatabaseOptions,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
+
+        // check instance type is matching database cloud provider
+        database_instance_type
+            .as_ref()
+            .map_or(Ok(()), |i| Self::check_instance_type_validity(i.as_ref(), C::cloud_provider()))?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -158,7 +192,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             total_cpus: T::cpu_validate(total_cpus),
             total_ram_in_mib: T::memory_validate(total_ram_in_mib),
             total_disk_size_in_gb,
-            database_instance_type: database_instance_type.to_string(),
+            database_instance_type,
             publicly_accessible,
             private_port,
             options,
@@ -183,6 +217,26 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
                 false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
             },
         }
+    }
+
+    fn _cloud_provider(&self) -> Kind {
+        C::cloud_provider()
+    }
+
+    fn check_instance_type_validity(
+        database_instance_type: &dyn DatabaseInstanceType,
+        database_cloud_provider_kind: Kind,
+    ) -> Result<(), DatabaseError> {
+        // instance type should belongs to database cloud provider
+        if database_instance_type.cloud_provider() != database_cloud_provider_kind {
+            // database instance type doesn't belong to database cloud provider
+            return Err(DatabaseError::DatabaseInstanceTypeMismatchCloudProvider {
+                database_cloud_provider: database_cloud_provider_kind,
+                database_instance_type_str: database_instance_type.to_cloud_provider_format(),
+            });
+        }
+
+        Ok(())
     }
 }
 
@@ -316,7 +370,9 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("database_password", options.password.as_str());
         context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
-        context.insert("database_instance_type", &self.database_instance_type);
+        if let Some(i) = &self.database_instance_type {
+            context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
+        }
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
@@ -370,6 +426,8 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Send {
 
     fn db_type(&self) -> service::DatabaseType;
 
+    fn db_instance_type(&self) -> Option<&dyn DatabaseInstanceType>;
+
     fn version(&self) -> String;
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
@@ -387,6 +445,13 @@ where
 
     fn db_type(&self) -> service::DatabaseType {
         T::db_type()
+    }
+
+    fn db_instance_type(&self) -> Option<&dyn DatabaseInstanceType> {
+        match &self.database_instance_type {
+            None => None,
+            Some(t) => Some(t.as_ref()),
+        }
     }
 
     fn version(&self) -> String {

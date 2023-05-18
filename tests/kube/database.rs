@@ -63,7 +63,7 @@ fn should_increase_db_storage_size() {
             resized_db.total_cpus.to_string(),
             resized_db.total_ram_in_mib,
             resized_db.disk_size_in_gib,
-            &resized_db.database_instance_type,
+            None,
             resized_db.publicly_accessible,
             resized_db.port,
             DatabaseOptions {

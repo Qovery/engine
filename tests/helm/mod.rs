@@ -3,6 +3,7 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::{
     kubernetes::eks::EKS,
     regions::{AwsRegion, AwsZones},
@@ -253,6 +254,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             disable_cache: false,
             timeout: Duration::from_secs(42),
             architectures: test_kube.cpu_architectures(),
+            max_cpu_in_milli: 2000,
+            max_ram_in_gib: 4,
         },
         vec![],
         None,
@@ -268,6 +271,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             build_timeout_max_sec: 2,
+            build_cpu_max_in_milli: 2000,
+            build_ram_max_in_gib: 4,
             network_ingress_proxy_body_size_mb: 3,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
@@ -389,7 +394,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
         "my_managed_db_total_cpus".to_string(),
         1,
         42,
-        "my_managed_db_total_instance_type",
+        Some(Box::new(AwsDatabaseInstanceType::DB_T3_MICRO)),
         true,
         2,
         DatabaseOptions {
@@ -423,7 +428,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
         "my_container_db_total_cpus".to_string(),
         1,
         42,
-        "my_container_db_instance_type",
+        None,
         false,
         1234,
         DatabaseOptions {
@@ -431,7 +436,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             password: "my_container_db_password".to_string(),
             host: "my_container_db_host".to_string(),
             port: 11,
-            mode: DatabaseMode::MANAGED,
+            mode: DatabaseMode::CONTAINER,
             disk_size_in_gib: 12,
             database_disk_type: "my_container_db_disk_type".to_string(),
             encrypt_disk: true,
@@ -505,6 +510,8 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             cronjob_failed_jobs_history_limit: 9,
             cronjob_success_jobs_history_limit: 10,
             build_timeout_max_sec: 30 * 60,
+            build_cpu_max_in_milli: 2000,
+            build_ram_max_in_gib: 4,
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 11,

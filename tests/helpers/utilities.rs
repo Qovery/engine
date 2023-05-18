@@ -20,7 +20,6 @@ use tracing::{info, warn};
 
 use crate::helpers::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-    SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
@@ -34,6 +33,7 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
@@ -46,6 +46,7 @@ use qovery_engine::io_models::database::DatabaseMode::MANAGED;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
+use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
@@ -864,20 +865,23 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
     .to_string()
 }
 
-pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mode: DatabaseMode) -> String {
+pub fn db_instance_type(
+    provider_kind: Kind,
+    db_kind: DatabaseKind,
+    database_mode: DatabaseMode,
+) -> Option<Box<dyn DatabaseInstanceType>> {
     match provider_kind {
         Kind::Aws => match db_kind {
-            DatabaseKind::Mongodb => "db.t3.medium",
-            DatabaseKind::Mysql => "db.t3.micro",
-            DatabaseKind::Postgresql => "db.t3.micro",
-            DatabaseKind::Redis => "cache.t3.micro",
+            DatabaseKind::Mongodb => Some(Box::new(AwsDatabaseInstanceType::DB_T3_MEDIUM)),
+            DatabaseKind::Mysql => Some(Box::new(AwsDatabaseInstanceType::DB_T3_MICRO)),
+            DatabaseKind::Postgresql => Some(Box::new(AwsDatabaseInstanceType::DB_T3_MICRO)),
+            DatabaseKind::Redis => Some(Box::new(AwsDatabaseInstanceType::CACHE_T3_MICRO)),
         },
         Kind::Scw => match database_mode {
-            MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-            DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
+            DatabaseMode::CONTAINER => None,
         },
     }
-    .to_string()
 }
 
 pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str {

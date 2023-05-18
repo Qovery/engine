@@ -114,7 +114,7 @@ impl EnvironmentTask {
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_builpacks = false;
-        let services_to_build = services
+        let services = services
             .into_iter()
             .filter(|srv| {
                 if let Some(build) = srv.build() {
@@ -127,7 +127,7 @@ impl EnvironmentTask {
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        let first_service = match services_to_build.first() {
+        let first_service = match services.first() {
             None => return Ok(()),
             Some(srv) => srv,
         };
@@ -140,11 +140,18 @@ impl EnvironmentTask {
                 env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
                 NonZeroUsize::new(1).unwrap()
             } else {
-                NonZeroUsize::new(max(min(max_build_in_parallel, services_to_build.len()), 1)).unwrap()
+                NonZeroUsize::new(max(min(max_build_in_parallel, services.len()), 1)).unwrap()
             };
 
+            // Compute max resources needed for the builders
+            let (max_cpu, max_ram) = services.iter().fold((2000u32, 2u32), |(cpu, ram), s| {
+                s.build()
+                    .map(|b| (max(cpu, b.max_cpu_in_milli), max(ram, b.max_ram_in_gib)))
+                    .unwrap_or((cpu, ram))
+            });
+
             env_logger(format!(
-                "🧑‍🏭 Provisioning {nb_builder} docker builder for parallel build. This can take some time"
+                "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
             ));
             match infra_ctx.context().docker.spawn_builder(
                 nb_builder,
@@ -155,6 +162,8 @@ impl EnvironmentTask {
                     .map(docker::Architecture::from)
                     .collect_vec()
                     .as_slice(),
+                (max_cpu - 1000, max_cpu),
+                (max_ram - 1, max_ram),
                 &CommandKiller::from_cancelable(should_abort),
             ) {
                 Ok(build_handle) => build_handle,
@@ -191,7 +200,7 @@ impl EnvironmentTask {
             .registry_image_retention_time_sec;
         let cr_registry = infra_ctx.container_registry();
         let build_platform = infra_ctx.build_platform();
-        let build_tasks = services_to_build
+        let build_tasks = services
             .into_iter()
             .map(|service| {
                 || {

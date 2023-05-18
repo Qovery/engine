@@ -5,6 +5,7 @@ mod database_utils;
 mod job;
 mod router;
 
+use crate::cloud_provider::Kind;
 use std::fmt::{Display, Formatter};
 
 use crate::models::types::{AWSEc2, CloudProvider};
@@ -18,6 +19,10 @@ impl CloudProvider for AWSEc2 {
     type DbExtraSettings = AwsEc2DbExtraSettings;
     type RouterExtraSettings = AwsEc2RouterExtraSettings;
     type StorageTypes = AwsEc2StorageType;
+
+    fn cloud_provider() -> Kind {
+        Kind::Aws
+    }
 
     fn short_name() -> &'static str {
         "AWS"

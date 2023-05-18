@@ -307,7 +307,9 @@ where
         context.insert("database_password", options.password.as_str());
         context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
-        context.insert("database_instance_type", &self.database_instance_type);
+        if let Some(i) = &self.database_instance_type {
+            context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
+        }
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("encrypt_disk", &options.encrypt_disk);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);

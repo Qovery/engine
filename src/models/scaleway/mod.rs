@@ -5,6 +5,7 @@ mod database_utils;
 mod job;
 mod router;
 
+use crate::cloud_provider::Kind;
 use crate::errors::CommandError;
 use crate::models::types::CloudProvider;
 use crate::models::types::SCW;
@@ -20,6 +21,10 @@ impl CloudProvider for SCW {
     type DbExtraSettings = ScwDbExtraSettings;
     type RouterExtraSettings = ScwRouterExtraSettings;
     type StorageTypes = ScwStorageType;
+
+    fn cloud_provider() -> Kind {
+        Kind::Scw
+    }
 
     fn short_name() -> &'static str {
         "SCW"

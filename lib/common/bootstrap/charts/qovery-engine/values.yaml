@@ -26,6 +26,13 @@ overprovisionning:
   # specify the number of over provisioned engine pods
   # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
   replicas: 2
+  resources:
+    requests:
+      cpu: 1
+      memory: 3Gi
+    limits:
+      cpu: 1
+      memory: 3Gi
 
 labels:
   app: qovery-engine
@@ -45,10 +52,6 @@ buildContainer:
   environmentVariables:
     BUILDER_KUBE_ENABLED: "true"
     BUILDER_CPU_ARCHITECTURES: "ARM64"
-    BUILDER_CPU_REQUEST: "1"
-    BUILDER_CPU_LIMIT: "1"
-    BUILDER_MEMORY_REQUEST_GIB: "3"
-    BUILDER_MEMORY_LIMIT_GIB: "3"
 
 serviceAccount:
   # Specifies whether a service account should be created

@@ -24,7 +24,6 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
-use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
@@ -68,7 +67,6 @@ pub mod eks;
 pub mod eks_helm_charts;
 pub mod helm_charts;
 pub mod node;
-pub mod roles;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,9 +109,6 @@ pub struct Options {
     pub elasticache_zone_a_subnet_blocks: Vec<String>,
     pub elasticache_zone_b_subnet_blocks: Vec<String>,
     pub elasticache_zone_c_subnet_blocks: Vec<String>,
-    pub elasticsearch_zone_a_subnet_blocks: Vec<String>,
-    pub elasticsearch_zone_b_subnet_blocks: Vec<String>,
-    pub elasticsearch_zone_c_subnet_blocks: Vec<String>,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
@@ -126,7 +121,6 @@ pub struct Options {
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
-    pub elasticsearch_cidr_subnet: String,
     // Qovery
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
@@ -160,10 +154,6 @@ pub struct UserNetworkConfig {
     pub elasticache_subnets_zone_a_ids: Vec<String>,
     pub elasticache_subnets_zone_b_ids: Vec<String>,
     pub elasticache_subnets_zone_c_ids: Vec<String>,
-
-    pub elasticsearch_subnets_zone_a_ids: Vec<String>,
-    pub elasticsearch_subnets_zone_b_ids: Vec<String>,
-    pub elasticsearch_subnets_zone_c_ids: Vec<String>,
 
     pub rds_subnets_zone_a_ids: Vec<String>,
     pub rds_subnets_zone_b_ids: Vec<String>,
@@ -278,19 +268,6 @@ fn tera_context(
             &user_network_cfg.elasticache_subnets_zone_c_ids,
         );
 
-        context.insert(
-            "elasticsearch_subnets_zone_a_ids",
-            &user_network_cfg.elasticsearch_subnets_zone_a_ids,
-        );
-        context.insert(
-            "elasticsearch_subnets_zone_b_ids",
-            &user_network_cfg.elasticsearch_subnets_zone_b_ids,
-        );
-        context.insert(
-            "elasticsearch_subnets_zone_c_ids",
-            &user_network_cfg.elasticsearch_subnets_zone_c_ids,
-        );
-
         context.insert("rds_subnets_zone_a_ids", &user_network_cfg.rds_subnets_zone_a_ids);
         context.insert("rds_subnets_zone_b_ids", &user_network_cfg.rds_subnets_zone_b_ids);
         context.insert("rds_subnets_zone_c_ids", &user_network_cfg.rds_subnets_zone_c_ids);
@@ -385,10 +362,6 @@ fn tera_context(
     let elasticache_zone_b_subnet_blocks = format_ips(&options.elasticache_zone_b_subnet_blocks);
     let elasticache_zone_c_subnet_blocks = format_ips(&options.elasticache_zone_c_subnet_blocks);
 
-    let elasticsearch_zone_a_subnet_blocks = format_ips(&options.elasticsearch_zone_a_subnet_blocks);
-    let elasticsearch_zone_b_subnet_blocks = format_ips(&options.elasticsearch_zone_b_subnet_blocks);
-    let elasticsearch_zone_c_subnet_blocks = format_ips(&options.elasticsearch_zone_c_subnet_blocks);
-
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
     let cloudwatch_eks_log_group = format!("/aws/eks/{}/cluster", kubernetes.cluster_name());
@@ -402,7 +375,6 @@ fn tera_context(
     let rds_cidr_subnet = options.rds_cidr_subnet.clone();
     let documentdb_cidr_subnet = options.documentdb_cidr_subnet.clone();
     let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
-    let elasticsearch_cidr_subnet = options.elasticsearch_cidr_subnet.clone();
 
     // Qovery
     context.insert("organization_id", kubernetes.cloud_provider().organization_id());
@@ -604,12 +576,6 @@ fn tera_context(
         "database_redis_allowed_cidrs",
         &format_ips(&kubernetes.advanced_settings().database_redis_allowed_cidrs),
     );
-
-    // AWS - Elasticsearch
-    context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
-    context.insert("elasticsearch_zone_a_subnet_blocks", &elasticsearch_zone_a_subnet_blocks);
-    context.insert("elasticsearch_zone_b_subnet_blocks", &elasticsearch_zone_b_subnet_blocks);
-    context.insert("elasticsearch_zone_c_subnet_blocks", &elasticsearch_zone_c_subnet_blocks);
 
     // grafana credentials
     context.insert("grafana_admin_user", options.grafana_admin_user.as_str());
@@ -919,24 +885,6 @@ fn create(
             Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
         };
     };
-
-    // create AWS IAM roles
-    let already_created_roles = get_default_roles_to_create();
-    for role in already_created_roles {
-        match role.create_service_linked_role(
-            kubernetes.cloud_provider().access_key_id().as_str(),
-            kubernetes.cloud_provider().secret_access_key().as_str(),
-        ) {
-            Ok(_) => kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!("Role {} is already present, no need to create", role.role_name)),
-            )),
-            Err(e) => kubernetes.logger().log(EngineEvent::Error(
-                EngineError::new_cannot_get_or_create_iam_role(event_details.clone(), role.role_name, e),
-                None,
-            )),
-        }
-    }
 
     let node_groups_with_desired_states = should_update_desired_nodes(
         event_details.clone(),

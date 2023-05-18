@@ -80,13 +80,13 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 total_cpus: "250m".to_string(),
                 total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
                 disk_size_in_gib: NormalSize.size(),
-                database_instance_type: "db.t2.micro".to_string(),
                 database_disk_type: "gp2".to_string(),
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                database_instance_type: None,
             };
             environment.databases = vec![db];
         }

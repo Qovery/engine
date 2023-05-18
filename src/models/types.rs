@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Write;
 use std::str::FromStr;
 
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::errors::{CommandError, EngineError};
 use tera::Context as TeraContext;
 
@@ -21,6 +21,7 @@ pub trait CloudProvider: Send + Sync {
     type RouterExtraSettings: Send + Sync;
     type StorageTypes: Send + Sync;
 
+    fn cloud_provider() -> Kind;
     fn short_name() -> &'static str;
     fn full_name() -> &'static str;
     fn registry_short_name() -> &'static str;

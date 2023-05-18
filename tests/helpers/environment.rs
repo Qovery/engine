@@ -9,6 +9,7 @@ use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::models::database::DatabaseInstanceType;
 use std::collections::BTreeMap;
 use tracing::error;
 use url::Url;
@@ -163,7 +164,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
 pub fn environment_2_app_2_routers_1_psql(
     context: &Context,
     test_domain: &str,
-    database_instance_type: &str,
+    database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
@@ -200,7 +201,7 @@ pub fn environment_2_app_2_routers_1_psql(
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
-            database_instance_type: database_instance_type.to_string(),
+            database_instance_type: database_instance_type.map(|i| i.to_cloud_provider_format()),
             database_disk_type: database_disk_type.to_string(),
             encrypt_disk: true,
             activate_high_availability: false,

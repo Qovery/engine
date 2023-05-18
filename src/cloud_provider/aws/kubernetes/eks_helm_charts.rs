@@ -558,25 +558,6 @@ pub fn eks_aws_helm_charts(
                     value: "2Gi".to_string(),
                 },
             ],
-            values_string: vec![
-                // builder int as string
-                ChartSetValue {
-                    key: "buildContainer.environmentVariables.BUILDER_CPU_REQUEST".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildContainer.environmentVariables.BUILDER_CPU_LIMIT".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_REQUEST_GIB".to_string(),
-                    value: "3".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildContainer.environmentVariables.BUILDER_MEMORY_LIMIT_GIB".to_string(),
-                    value: "3".to_string(),
-                },
-            ],
             ..Default::default()
         },
         ..Default::default()

@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use crate::build_platform::Build;
+use strum_macros::EnumIter;
 use tera::Context as TeraContext;
 use tokio::time::{sleep, Instant};
 use uuid::Uuid;
@@ -81,7 +82,7 @@ impl Display for Action {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, EnumIter)]
 pub enum DatabaseType {
     PostgreSQL,
     MongoDB,

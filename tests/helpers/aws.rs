@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_derive;
 
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
@@ -29,7 +30,7 @@ pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_23 {
     patch: None,
     suffix: None,
 };
-pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
+pub const AWS_DATABASE_INSTANCE_TYPE: AwsDatabaseInstanceType = AwsDatabaseInstanceType::DB_T3_MICRO;
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
 
@@ -254,9 +255,6 @@ impl Cluster<AWS, Options> for AWS {
             elasticache_zone_a_subnet_blocks: vec!["10.0.172.0/23".to_string(), "10.0.174.0/23".to_string()],
             elasticache_zone_b_subnet_blocks: vec!["10.0.176.0/23".to_string(), "10.0.178.0/23".to_string()],
             elasticache_zone_c_subnet_blocks: vec!["10.0.180.0/23".to_string(), "10.0.182.0/23".to_string()],
-            elasticsearch_zone_a_subnet_blocks: vec!["10.0.184.0/23".to_string(), "10.0.186.0/23".to_string()],
-            elasticsearch_zone_b_subnet_blocks: vec!["10.0.188.0/23".to_string(), "10.0.190.0/23".to_string()],
-            elasticsearch_zone_c_subnet_blocks: vec!["10.0.192.0/23".to_string(), "10.0.194.0/23".to_string()],
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
@@ -280,7 +278,6 @@ impl Cluster<AWS, Options> for AWS {
             rds_cidr_subnet: "23".to_string(),
             documentdb_cidr_subnet: "23".to_string(),
             elasticache_cidr_subnet: "23".to_string(),
-            elasticsearch_cidr_subnet: "23".to_string(),
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
             qovery_engine_location: engine_location,
             grafana_admin_user: "admin".to_string(),

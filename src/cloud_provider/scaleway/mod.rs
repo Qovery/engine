@@ -10,6 +10,7 @@ use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
 
+pub mod database_instance_type;
 pub mod kubernetes;
 
 pub struct Scaleway {

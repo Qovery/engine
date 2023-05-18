@@ -286,32 +286,6 @@ variable "database_redis_allowed_cidrs" {
   type = list(string)
 }
 
-# Elasticsearch
-
-variable "elasticsearch_subnets_zone_a" {
-  description = "Elasticsearch subnets Zone A"
-  default = {{ elasticsearch_zone_a_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticsearch_subnets_zone_b" {
-  description = "Elasticsearch subnets Zone B"
-  default = {{ elasticsearch_zone_b_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticsearch_subnets_zone_c" {
-  description = "Elasticsearch subnets Zone C"
-  default = {{ elasticsearch_zone_c_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticsearch_cidr_subnet" {
-  description = "Elasticsearch CIDR (x.x.x.x/CIDR)"
-  default     = {{ elasticsearch_cidr_subnet }}
-  type        = number
-}
-
 {%- if resource_expiration_in_seconds > -1 %}
 # Pleco ttl
 variable "resource_expiration_in_seconds" {
