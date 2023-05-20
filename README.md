@@ -32,7 +32,7 @@
 - **Multi Cloud:** Qovery Engine is built to work on AWS, GCP, Azure and any Cloud provider.
 - **On top of Kubernetes:** Qovery Engine takes advantage of the power of Kubernetes at a higher level of abstraction.
 - **Terraform and Helm:** Qovery Engine uses Terraform and Helm files to manage the infrastructure and app deployment.
-- **Powerful CLI:** Use the provided Qovery Engine CLI to deploy your app on your Cloud account seamlessly.  
+- **Powerful CLI:** Use the provided Qovery Engine CLI to deploy your app on your Cloud account seamlessly.
 - **Web Interface:** Qovery provides a web interface through [qovery.com](https://www.qovery.com)
 
 ### 🔌 Plugins
@@ -41,7 +41,7 @@
 </p>
 
 Qovery engine supports a number of different plugins to compose your own deployment flow:
-- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Scaleway ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/))
+- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Scaleway ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/microsoft-azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/))
 - **Build platforms:** [Qovery CI](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/qovery-ci/), Circle CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/circle-ci/)), Gitlab CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/gitlab-ci/)), GitHub Actions ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/github-actions/))
 - **Container registries:** AWS ECR, DockerHub, ACR, Scaleway Container Registry
 - **DNS providers:** Cloudflare
@@ -51,7 +51,7 @@ Qovery engine supports a number of different plugins to compose your own deploym
 
 ## Demo
 
-Here is a demo from [Qovery CLI](https://docs.qovery.com/docs/using-qovery/interface/cli/) from where we use the Qovery Engine. 
+Here is a demo from [Qovery CLI](https://docs.qovery.com/docs/using-qovery/interface/cli/) from where we use the Qovery Engine.
 
 [![Qovery CLI](https://asciinema.org/a/370072.svg)](https://asciinema.org/a/370072)
 
@@ -65,7 +65,7 @@ qovery-engine = { git = "https://github.com/Qovery/engine", branch="main" }
 ### Usage
 
 #### Rust lib
-Initialize EKS (AWS Kubernetes) and ECR (AWS container registry) on AWS 
+Initialize EKS (AWS Kubernetes) and ECR (AWS container registry) on AWS
 ```rust
 let engine = Engine::new(
     context, // parameters
@@ -86,9 +86,9 @@ let mut tx = session.transaction();
 tx.create_kubernetes(&eks);
 
 // create the infrastructure and wait for the result
-match tx.commit() { 
+match tx.commit() {
     TransactionResult::Ok => println!("OK"),
-    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"), 
+    TransactionResult::Rollback(commit_err) => println!("ERROR but rollback OK"),
     TransactionResult::UnrecoverableError(commit_err, rollback_err) => println!("FATAL ERROR")
 };
 ```
@@ -159,7 +159,7 @@ Check out our [roadmap](https://roadmap.qovery.com) to get informed of the lates
 At Qovery, we believe that the Cloud must be simpler than what it is today. Our goal is to consolidate the Cloud ecosystem and makes it accessible to any developer, DevOps, and company. Qovery helps people to focus on what they build instead of wasting time doing plumbing stuff.
 
 ### What is the difference between `Qovery` and `Qovery Engine`?
-[Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications. 
+[Qovery](https://www.qovery.com) is a Container as a Service platform for developers. It combines the simplicity of Heroku, the reliability of AWS, and the power of Kubernetes. It makes the developer and DevOps life easier to deploy complex applications.
 
 **Qovery Engine** is the Open Source abstraction layer used by Qovery to abstract the deployment of containers and databases on any Cloud provider.
 
