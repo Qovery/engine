@@ -9,6 +9,7 @@ use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
@@ -180,6 +181,24 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 },
             ],
             storages: vec![],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
@@ -297,6 +316,24 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             environment_vars: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();

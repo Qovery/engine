@@ -7,6 +7,7 @@ use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
@@ -69,6 +70,27 @@ pub fn working_environment(
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Http {
+                    path: "/".to_string(),
+                    scheme: "HTTP".to_string(),
+                },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             advanced_settings: settings,
         }],
         containers: vec![],
@@ -131,6 +153,8 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     application.commit_id = "44b889f36c81cce7dee678993bb7986c86899e5d".to_string();
     application.ports = vec![];
     application.mounted_files = vec![mounted_file.clone()];
+    application.liveness_probe = None;
+    application.readiness_probe = None;
     application.environment_vars = BTreeMap::from([
         (
             "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
@@ -144,6 +168,8 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let statefulset_id = QoveryIdentifier::new_random();
     statefulset.name = statefulset_id.short().to_string();
     statefulset.long_id = statefulset_id.to_uuid();
+    statefulset.liveness_probe = None;
+    statefulset.readiness_probe = None;
     let storage_id = QoveryIdentifier::new_random();
     statefulset.storage = vec![qovery_engine::io_models::application::Storage {
         id: storage_id.short().to_string(),
@@ -247,6 +273,27 @@ pub fn environment_2_app_2_routers_1_psql(
                 max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
             },
             Application {
                 long_id: application_id2,
@@ -285,6 +332,27 @@ pub fn environment_2_app_2_routers_1_psql(
                 max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
             },
         ],
         containers: vec![],
@@ -384,6 +452,27 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             max_instances: 1,
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Http {
+                    path: "/".to_string(),
+                    scheme: "HTTP".to_string(),
+                },
+                port: 5678,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 5678,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }],
         containers: vec![],
         jobs: vec![],
@@ -460,6 +549,27 @@ pub fn environment_only_http_server(
             max_instances: 1,
             cpu_burst: "100m".to_string(),
             advanced_settings: settings,
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Http {
+                    path: "/".to_string(),
+                    scheme: "HTTP".to_string(),
+                },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }],
         containers: vec![],
         jobs: vec![],

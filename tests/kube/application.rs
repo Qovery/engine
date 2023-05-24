@@ -88,6 +88,8 @@ fn should_increase_app_storage_size() {
             storages,
             envs,
             BTreeSet::default(),
+            resized_app.readiness_probe.clone().map(|p| p.to_domain()),
+            resized_app.liveness_probe.clone().map(|p| p.to_domain()),
             resized_app.advanced_settings.clone(),
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
@@ -218,6 +220,8 @@ fn should_have_mounted_files_as_volume() {
         application.commit_id = "44b889f36c81cce7dee678993bb7986c86899e5d".to_string();
         application.ports = vec![];
         application.mounted_files = vec![mounted_file];
+        application.readiness_probe = None;
+        application.liveness_probe = None;
         application.environment_vars = BTreeMap::from([
             (
                 "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
@@ -232,6 +236,8 @@ fn should_have_mounted_files_as_volume() {
         statefulset.name = statefulset_id.short().to_string();
         statefulset.long_id = statefulset_id.to_uuid();
         let storage_id = QoveryIdentifier::new_random();
+        statefulset.readiness_probe = None;
+        statefulset.liveness_probe = None;
         statefulset.storage = vec![qovery_engine::io_models::application::Storage {
             id: storage_id.short().to_string(),
             long_id: storage_id.to_uuid(),

@@ -6,6 +6,7 @@ use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::context::Context;
+use crate::io_models::probe::Probe;
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
 };
@@ -133,38 +134,6 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
 
-    // Readiness Probe
-    #[serde(alias = "readiness_probe.type")]
-    pub readiness_probe_type: AdvancedSettingsProbeType,
-    #[serde(alias = "readiness_probe.http_get.path")]
-    pub readiness_probe_http_get_path: String,
-    #[serde(alias = "readiness_probe.initial_delay_seconds")]
-    pub readiness_probe_initial_delay_seconds: u32,
-    #[serde(alias = "readiness_probe.period_seconds")]
-    pub readiness_probe_period_seconds: u32,
-    #[serde(alias = "readiness_probe.timeout_seconds")]
-    pub readiness_probe_timeout_seconds: u32,
-    #[serde(alias = "readiness_probe.success_threshold")]
-    pub readiness_probe_success_threshold: u32,
-    #[serde(alias = "readiness_probe.failure_threshold")]
-    pub readiness_probe_failure_threshold: u32,
-
-    // Liveness Probe
-    #[serde(alias = "liveness_probe.type")]
-    pub liveness_probe_type: AdvancedSettingsProbeType,
-    #[serde(alias = "liveness_probe.http_get.path")]
-    pub liveness_probe_http_get_path: String,
-    #[serde(alias = "liveness_probe.initial_delay_seconds")]
-    pub liveness_probe_initial_delay_seconds: u32,
-    #[serde(alias = "liveness_probe.period_seconds")]
-    pub liveness_probe_period_seconds: u32,
-    #[serde(alias = "liveness_probe.timeout_seconds")]
-    pub liveness_probe_timeout_seconds: u32,
-    #[serde(alias = "liveness_probe.success_threshold")]
-    pub liveness_probe_success_threshold: u32,
-    #[serde(alias = "liveness_probe.failure_threshold")]
-    pub liveness_probe_failure_threshold: u32,
-
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: i8,
@@ -199,20 +168,6 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
-            readiness_probe_type: AdvancedSettingsProbeType::Tcp,
-            readiness_probe_http_get_path: "/".to_string(),
-            readiness_probe_initial_delay_seconds: 30,
-            readiness_probe_period_seconds: 10,
-            readiness_probe_timeout_seconds: 1,
-            readiness_probe_success_threshold: 1,
-            readiness_probe_failure_threshold: 9,
-            liveness_probe_type: AdvancedSettingsProbeType::Tcp,
-            liveness_probe_http_get_path: "/".to_string(),
-            liveness_probe_initial_delay_seconds: 30,
-            liveness_probe_period_seconds: 10,
-            liveness_probe_timeout_seconds: 5,
-            liveness_probe_success_threshold: 1,
-            liveness_probe_failure_threshold: 9,
             hpa_cpu_average_utilization_percent: 60,
         }
     }
@@ -245,6 +200,8 @@ pub struct Application {
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
     pub mounted_files: Vec<MountedFile>,
+    pub readiness_probe: Option<Probe>,
+    pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: ApplicationAdvancedSettings,
 }
@@ -288,6 +245,8 @@ impl Application {
                             .iter()
                             .map(|e| e.to_domain())
                             .collect::<BTreeSet<_>>(),
+                        self.readiness_probe.map(|p| p.to_domain()),
+                        self.liveness_probe.map(|p| p.to_domain()),
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -313,6 +272,8 @@ impl Application {
                             .iter()
                             .map(|e| e.to_domain())
                             .collect::<BTreeSet<_>>(),
+                        self.readiness_probe.map(|p| p.to_domain()),
+                        self.liveness_probe.map(|p| p.to_domain()),
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
@@ -339,6 +300,8 @@ impl Application {
                     .iter()
                     .map(|e| e.to_domain())
                     .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),

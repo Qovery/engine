@@ -6,6 +6,7 @@ pub mod database;
 pub(crate) mod database_utils;
 pub mod domain;
 pub mod job;
+pub mod probe;
 pub mod router;
 pub mod scaleway;
 pub mod third_parties;

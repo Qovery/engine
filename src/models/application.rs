@@ -9,12 +9,13 @@ use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, A
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port};
+use crate::io_models::application::{ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
 use std::collections::BTreeSet;
 
 use crate::errors::EngineError;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
@@ -22,6 +23,7 @@ use crate::utilities::to_short_id;
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
+use std::time::Duration;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -50,6 +52,8 @@ pub struct Application<T: CloudProvider> {
     pub(super) storage: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
+    pub(super) readiness_probe: Option<Probe>,
+    pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ApplicationAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -75,6 +79,8 @@ impl<T: CloudProvider> Application<T> {
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
+        readiness_probe: Option<Probe>,
+        liveness_probe: Option<Probe>,
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -109,6 +115,8 @@ impl<T: CloudProvider> Application<T> {
             storage,
             environment_variables,
             mounted_files,
+            readiness_probe,
+            liveness_probe,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -184,98 +192,8 @@ impl<T: CloudProvider> Application<T> {
             &self.advanced_settings.deployment_termination_grace_period_seconds,
         );
 
-        let mut liveness_probe_initial_delay_seconds = self.advanced_settings.liveness_probe_initial_delay_seconds;
-        let mut readiness_probe_initial_delay_seconds = self.advanced_settings.readiness_probe_initial_delay_seconds;
-
-        if self.advanced_settings.deployment_delay_start_time_sec
-            > self.advanced_settings.liveness_probe_initial_delay_seconds
-            || self.advanced_settings.deployment_delay_start_time_sec
-                > self.advanced_settings.readiness_probe_initial_delay_seconds
-        {
-            // note deployment_delay_start_time_sec is deprecated but we can keep using it to avoid breaking users apps
-            // if the value is greater than `liveness_probe_initial_delay_seconds` or `readiness_probe_initial_delay_seconds` then we use it
-            liveness_probe_initial_delay_seconds = self.advanced_settings.deployment_delay_start_time_sec;
-            readiness_probe_initial_delay_seconds = self.advanced_settings.deployment_delay_start_time_sec;
-        }
-
-        context.insert("liveness_probe_initial_delay_seconds", &liveness_probe_initial_delay_seconds);
-        context.insert("readiness_probe_initial_delay_seconds", &readiness_probe_initial_delay_seconds);
-        context.insert(
-            "liveness_probe_http_get_path",
-            &self.advanced_settings.liveness_probe_http_get_path,
-        );
-        context.insert(
-            "readiness_probe_http_get_path",
-            &self.advanced_settings.readiness_probe_http_get_path,
-        );
-        context.insert(
-            "liveness_probe_period_seconds",
-            &self.advanced_settings.liveness_probe_period_seconds,
-        );
-        context.insert(
-            "readiness_probe_period_seconds",
-            &self.advanced_settings.readiness_probe_period_seconds,
-        );
-        context.insert(
-            "liveness_probe_timeout_seconds",
-            &self.advanced_settings.liveness_probe_timeout_seconds,
-        );
-        context.insert(
-            "readiness_probe_timeout_seconds",
-            &self.advanced_settings.readiness_probe_timeout_seconds,
-        );
-        context.insert(
-            "liveness_probe_success_threshold",
-            &self.advanced_settings.liveness_probe_success_threshold,
-        );
-        context.insert(
-            "readiness_probe_success_threshold",
-            &self.advanced_settings.readiness_probe_success_threshold,
-        );
-        context.insert(
-            "liveness_probe_failure_threshold",
-            &self.advanced_settings.liveness_probe_failure_threshold,
-        );
-        context.insert(
-            "readiness_probe_failure_threshold",
-            &self.advanced_settings.readiness_probe_failure_threshold,
-        );
-
-        match self.advanced_settings.readiness_probe_type {
-            AdvancedSettingsProbeType::None => {
-                context.insert("readiness_probe_enabled", &false);
-                context.insert("readiness_probe_tcp_enabled", &false);
-                context.insert("readiness_probe_http_enabled", &false);
-            }
-            AdvancedSettingsProbeType::Tcp => {
-                context.insert("readiness_probe_enabled", &true);
-                context.insert("readiness_probe_tcp_enabled", &true);
-                context.insert("readiness_probe_http_enabled", &false);
-            }
-            AdvancedSettingsProbeType::Http => {
-                context.insert("readiness_probe_enabled", &true);
-                context.insert("readiness_probe_tcp_enabled", &false);
-                context.insert("readiness_probe_http_enabled", &true);
-            }
-        };
-
-        match self.advanced_settings.liveness_probe_type {
-            AdvancedSettingsProbeType::None => {
-                context.insert("liveness_probe_enabled", &false);
-                context.insert("liveness_probe_tcp_enabled", &false);
-                context.insert("liveness_probe_http_enabled", &false);
-            }
-            AdvancedSettingsProbeType::Tcp => {
-                context.insert("liveness_probe_enabled", &true);
-                context.insert("liveness_probe_tcp_enabled", &true);
-                context.insert("liveness_probe_http_enabled", &false);
-            }
-            AdvancedSettingsProbeType::Http => {
-                context.insert("liveness_probe_enabled", &true);
-                context.insert("liveness_probe_tcp_enabled", &false);
-                context.insert("liveness_probe_http_enabled", &true);
-            }
-        };
+        context.insert("readiness_probe", &self.readiness_probe);
+        context.insert("liveness_probe", &self.liveness_probe);
 
         context.insert(
             "deployment_update_strategy_type",
@@ -462,19 +380,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn get_build_mut(&mut self) -> &mut Build;
     fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
-    fn startup_timeout(&self) -> std::time::Duration {
-        let settings = self.advanced_settings();
-        let readiness_probe_timeout = settings.readiness_probe_initial_delay_seconds
-            + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
-                * settings.readiness_probe_failure_threshold);
-        let liveness_probe_timeout = settings.liveness_probe_initial_delay_seconds
-            + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
-                * settings.liveness_probe_failure_threshold);
-        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
-        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
-        std::time::Duration::from_secs(startup_timeout as u64)
-    }
-
+    fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
@@ -496,6 +402,24 @@ where
 
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn startup_timeout(&self) -> Duration {
+        let readiness_probe_timeout = if let Some(p) = &self.readiness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let liveness_probe_timeout = if let Some(p) = &self.liveness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
+        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
+        Duration::from_secs(startup_timeout as u64)
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {

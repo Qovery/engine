@@ -14,6 +14,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::scaleway::ScwZone;
@@ -1135,6 +1136,24 @@ fn deploy_container_with_no_router_on_scw() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![],
@@ -1235,6 +1254,24 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1349,6 +1386,24 @@ fn deploy_container_with_router_on_scw() {
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         environment.routers = vec![Router {
@@ -1436,6 +1491,24 @@ fn deploy_job_on_scw_kapsule() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1508,6 +1581,24 @@ fn deploy_cronjob_on_scw_kapsule() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1580,6 +1671,24 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1652,6 +1761,24 @@ fn build_and_deploy_job_on_scw_kapsule() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1736,6 +1863,24 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             environment_vars: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();

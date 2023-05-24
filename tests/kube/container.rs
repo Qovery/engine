@@ -87,6 +87,8 @@ fn should_increase_container_storage_size() {
             storages,
             envs,
             BTreeSet::default(),
+            resized_container.readiness_probe.clone().map(|p| p.to_domain()),
+            resized_container.liveness_probe.clone().map(|p| p.to_domain()),
             resized_container.advanced_settings.clone(),
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),

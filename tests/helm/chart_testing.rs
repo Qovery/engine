@@ -168,6 +168,7 @@ fn q_container_test() {
 #[cfg(feature = "test-local-kube")]
 #[test]
 fn q_application_test() {
+    dotenv::dotenv().ok();
     let test_info = application_context();
     let chart_name = "q-application";
     let uuid = test_info.service_id;

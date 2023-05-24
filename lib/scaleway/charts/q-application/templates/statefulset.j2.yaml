@@ -88,40 +88,62 @@ spec:
               name: "p{{ port.port }}"
               protocol: TCP
             {%- endfor %}
-          {%- if readiness_probe_enabled %}
+            {%- endif %}
+          {%- if readiness_probe %}
           readinessProbe:
-            {%- if readiness_probe_tcp_enabled %}
+            {%- if readiness_probe.type.tcp %}
             tcpSocket:
-              port: {{ private_port }}
+              port: {{ readiness_probe.port }}
+              host: {{ readiness_probe.type.tcp.host }}
             {%- endif %}
-            {%- if readiness_probe_http_enabled %}
+            {%- if readiness_probe.type.http %}
             httpGet:
-              port: {{ private_port }}
-              path: {{ readiness_probe_http_get_path }}
+              port: {{ readiness_probe.port }}
+              path: {{ readiness_probe.type.http.path }}
+              scheme: {{ readiness_probe.type.http.scheme }}
             {%- endif %}
-            initialDelaySeconds: {{ readiness_probe_initial_delay_seconds }}
-            periodSeconds: {{ readiness_probe_period_seconds }}
-            timeoutSeconds: {{ readiness_probe_timeout_seconds }}
-            successThreshold: {{ readiness_probe_success_threshold }}
-            failureThreshold: {{ readiness_probe_failure_threshold }}
+            {%- if readiness_probe.type.exec %}
+            exec:
+              command: {{ readiness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if readiness_probe.type.grpc %}
+            grpc:
+              port: {{ readiness_probe.port }}
+              service: {{ readiness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ readiness_probe.initial_delay_seconds }}
+            periodSeconds: {{ readiness_probe.period_seconds }}
+            timeoutSeconds: {{ readiness_probe.timeout_seconds }}
+            successThreshold: {{ readiness_probe.success_threshold }}
+            failureThreshold: {{ readiness_probe.failure_threshold }}
           {%- endif %}
-          {%- if liveness_probe_enabled %}
+          {%- if liveness_probe %}
           livenessProbe:
-            {%- if liveness_probe_tcp_enabled %}
+            {%- if liveness_probe.type.tcp %}
             tcpSocket:
-              port: {{ private_port }}
+              port: {{ liveness_probe.port }}
+              host: {{ liveness_probe.type.tcp.host }}
             {%- endif %}
-            {%- if liveness_probe_http_enabled %}
+            {%- if liveness_probe.type.http %}
             httpGet:
-              port: {{ private_port }}
-              path: {{ liveness_probe_http_get_path }}
+              port: {{ liveness_probe.port }}
+              path: {{ liveness_probe.type.http.path }}
+              scheme: {{ liveness_probe.type.http.scheme }}
             {%- endif %}
-            initialDelaySeconds: {{ liveness_probe_initial_delay_seconds }}
-            periodSeconds: {{ liveness_probe_period_seconds }}
-            timeoutSeconds: {{ liveness_probe_timeout_seconds }}
-            successThreshold: {{ liveness_probe_success_threshold }}
-            failureThreshold: {{ liveness_probe_failure_threshold }}
-          {%- endif %}
+            {%- if liveness_probe.type.exec %}
+            exec:
+              command: {{ liveness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if liveness_probe.type.grpc %}
+            grpc:
+              port: {{ liveness_probe.port }}
+              service: {{ liveness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ liveness_probe.initial_delay_seconds }}
+            periodSeconds: {{ liveness_probe.period_seconds }}
+            timeoutSeconds: {{ liveness_probe.timeout_seconds }}
+            successThreshold: {{ liveness_probe.success_threshold }}
+            failureThreshold: {{ liveness_probe.failure_threshold }}
           {%- endif %}
           resources:
             limits:
