@@ -5,9 +5,10 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::engine_task::qovery_api::QoveryApi;
-use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
+use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
+use crate::io_models::probe::Probe;
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
 };
@@ -53,38 +54,6 @@ pub struct JobAdvancedSettings {
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
-
-    // Readiness Probes
-    #[serde(alias = "readiness_probe.type")]
-    pub readiness_probe_type: AdvancedSettingsProbeType,
-    #[serde(alias = "readiness_probe.http_get.path")]
-    pub readiness_probe_http_get_path: String,
-    #[serde(alias = "readiness_probe.initial_delay_seconds")]
-    pub readiness_probe_initial_delay_seconds: u32,
-    #[serde(alias = "readiness_probe.period_seconds")]
-    pub readiness_probe_period_seconds: u32,
-    #[serde(alias = "readiness_probe.timeout_seconds")]
-    pub readiness_probe_timeout_seconds: u32,
-    #[serde(alias = "readiness_probe.success_threshold")]
-    pub readiness_probe_success_threshold: u32,
-    #[serde(alias = "readiness_probe.failure_threshold")]
-    pub readiness_probe_failure_threshold: u32,
-
-    // Liveness Probes
-    #[serde(alias = "liveness_probe.type")]
-    pub liveness_probe_type: AdvancedSettingsProbeType,
-    #[serde(alias = "liveness_probe.http_get.path")]
-    pub liveness_probe_http_get_path: String,
-    #[serde(alias = "liveness_probe.initial_delay_seconds")]
-    pub liveness_probe_initial_delay_seconds: u32,
-    #[serde(alias = "liveness_probe.period_seconds")]
-    pub liveness_probe_period_seconds: u32,
-    #[serde(alias = "liveness_probe.timeout_seconds")]
-    pub liveness_probe_timeout_seconds: u32,
-    #[serde(alias = "liveness_probe.success_threshold")]
-    pub liveness_probe_success_threshold: u32,
-    #[serde(alias = "liveness_probe.failure_threshold")]
-    pub liveness_probe_failure_threshold: u32,
 }
 
 impl Default for JobAdvancedSettings {
@@ -99,20 +68,6 @@ impl Default for JobAdvancedSettings {
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             security_service_account_name: "".to_string(),
-            readiness_probe_type: AdvancedSettingsProbeType::None,
-            readiness_probe_http_get_path: "".to_string(),
-            readiness_probe_initial_delay_seconds: 0,
-            readiness_probe_period_seconds: 0,
-            readiness_probe_timeout_seconds: 0,
-            readiness_probe_success_threshold: 0,
-            readiness_probe_failure_threshold: 0,
-            liveness_probe_type: AdvancedSettingsProbeType::None,
-            liveness_probe_http_get_path: "".to_string(),
-            liveness_probe_initial_delay_seconds: 0,
-            liveness_probe_period_seconds: 0,
-            liveness_probe_timeout_seconds: 0,
-            liveness_probe_success_threshold: 0,
-            liveness_probe_failure_threshold: 0,
         }
     }
 }
@@ -175,6 +130,8 @@ pub struct Job {
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
     pub mounted_files: Vec<MountedFile>,
+    pub readiness_probe: Option<Probe>,
+    pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
 }
@@ -334,6 +291,8 @@ impl Job {
                             .map(|e| e.to_domain())
                             .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
+                        self.readiness_probe.map(|p| p.to_domain()),
+                        self.liveness_probe.map(|p| p.to_domain()),
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                     )?)
@@ -361,6 +320,8 @@ impl Job {
                             .map(|e| e.to_domain())
                             .collect::<BTreeSet<_>>(),
                         self.advanced_settings,
+                        self.readiness_probe.map(|p| p.to_domain()),
+                        self.liveness_probe.map(|p| p.to_domain()),
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                     )?)
@@ -389,6 +350,8 @@ impl Job {
                     .map(|e| e.to_domain())
                     .collect::<BTreeSet<_>>(),
                 self.advanced_settings,
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),

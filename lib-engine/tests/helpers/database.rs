@@ -31,6 +31,7 @@ use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::database::DatabaseInstanceType;
@@ -268,6 +269,27 @@ pub fn environment_3_apps_3_databases(
                 max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -306,6 +328,27 @@ pub fn environment_3_apps_3_databases(
                 max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -346,6 +389,27 @@ pub fn environment_3_apps_3_databases(
                 max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
             },
         ],
         containers: vec![],
@@ -461,6 +525,8 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             max_instances: 1,
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
+            readiness_probe: None,
+            liveness_probe: None,
         }],
         containers: vec![],
         jobs: vec![],
@@ -505,6 +571,8 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             max_instances: 1,
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
+            readiness_probe: None,
+            liveness_probe: None,
         }],
         containers: vec![],
         jobs: vec![],

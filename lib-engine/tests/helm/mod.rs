@@ -20,7 +20,7 @@ use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::DeploymentTarget;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
-use qovery_engine::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port, Protocol};
+use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
@@ -30,6 +30,7 @@ use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, Aw
 use qovery_engine::models::container::Container;
 use qovery_engine::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
 use qovery_engine::models::job::{ImageSource, Job, RegistryImageSource};
+use qovery_engine::models::probe::{Probe, ProbeType};
 use qovery_engine::models::router::{Router, RouterAdvancedSettings};
 use qovery_engine::models::types::{VersionsNumber, AWS as AWSType};
 use qovery_engine::utilities::to_short_id;
@@ -262,6 +263,27 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         vec![test_storage()],
         vec![test_env_var()],
         btreeset![test_mounted_file()],
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
             deployment_delay_start_time_sec: 0,
@@ -289,20 +311,6 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
-            readiness_probe_type: AdvancedSettingsProbeType::Tcp,
-            readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
-            readiness_probe_initial_delay_seconds: 11,
-            readiness_probe_period_seconds: 12,
-            readiness_probe_timeout_seconds: 13,
-            readiness_probe_success_threshold: 14,
-            readiness_probe_failure_threshold: 15,
-            liveness_probe_type: AdvancedSettingsProbeType::Http,
-            liveness_probe_http_get_path: "my_liveness_probe_http_get_path".to_string(),
-            liveness_probe_initial_delay_seconds: 21,
-            liveness_probe_period_seconds: 22,
-            liveness_probe_timeout_seconds: 23,
-            liveness_probe_success_threshold: 24,
-            liveness_probe_failure_threshold: 25,
             hpa_cpu_average_utilization_percent: 31,
         },
         AwsAppExtraSettings {},
@@ -336,6 +344,27 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         vec![test_storage()],
         vec![test_env_var()],
         btreeset![test_mounted_file()],
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
         ContainerAdvancedSettings {
             deployment_custom_domain_check_enabled: true,
             deployment_termination_grace_period_seconds: 60,
@@ -358,20 +387,6 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
-            readiness_probe_type: AdvancedSettingsProbeType::Http,
-            readiness_probe_http_get_path: "my_readiness_probe_http_get_path".to_string(),
-            readiness_probe_initial_delay_seconds: 21,
-            readiness_probe_period_seconds: 22,
-            readiness_probe_timeout_seconds: 23,
-            readiness_probe_success_threshold: 24,
-            readiness_probe_failure_threshold: 25,
-            liveness_probe_type: AdvancedSettingsProbeType::Tcp,
-            liveness_probe_http_get_path: "my_useless_liveness_probe_http_get_path".to_string(),
-            liveness_probe_initial_delay_seconds: 31,
-            liveness_probe_period_seconds: 32,
-            liveness_probe_timeout_seconds: 33,
-            liveness_probe_success_threshold: 34,
-            liveness_probe_failure_threshold: 35,
             hpa_cpu_average_utilization_percent: 41,
             security_service_account_name: "".to_string(),
         },
@@ -512,22 +527,29 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
-            readiness_probe_type: AdvancedSettingsProbeType::Tcp,
-            readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
-            readiness_probe_initial_delay_seconds: 11,
-            readiness_probe_period_seconds: 12,
-            readiness_probe_timeout_seconds: 13,
-            readiness_probe_success_threshold: 14,
-            readiness_probe_failure_threshold: 15,
-            liveness_probe_type: AdvancedSettingsProbeType::Http,
-            liveness_probe_http_get_path: "my_liveness_probe_http_get_path".to_string(),
-            liveness_probe_initial_delay_seconds: 21,
-            liveness_probe_period_seconds: 22,
-            liveness_probe_timeout_seconds: 23,
-            liveness_probe_success_threshold: 24,
-            liveness_probe_failure_threshold: 25,
             security_service_account_name: "".to_string(),
         },
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: 3,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: 3,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
     )
