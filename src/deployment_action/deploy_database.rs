@@ -22,6 +22,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use semver::Version;
 use serde::Deserialize;
 
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
@@ -727,6 +728,11 @@ where
                 custom_namespace: Some(target.environment.namespace().to_string()),
                 k8s_selector: Some(self.selector()),
                 values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
+                // need to perform reinstall (but keep PVC) to update the statefulset
+                reinstall_chart_if_installed_version_is_below_than: match T::db_type() {
+                    service::DatabaseType::PostgreSQL => Some(Version::new(12, 5, 1)),
+                    _ => None,
+                },
                 ..Default::default()
             };
             let helm = HelmDeployment::new(

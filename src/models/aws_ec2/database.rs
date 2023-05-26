@@ -290,6 +290,7 @@ where
             };
 
             context.insert("database_elasticache_parameter_group_name", parameter_group_name);
+            context.insert("database_elasticache_instances_number", &1);
         }
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {

@@ -1,6 +1,7 @@
-use crate::cloud_provider::helm::ChartInfo;
+use crate::cloud_provider::helm::{ChartInfo, CommonChart, HelmChart};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
+use crate::cmd::helm::HelmError;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
@@ -92,14 +93,33 @@ impl DeploymentAction for HelmDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_helm_chart()?;
 
-        // print diff in logs
-        let _ = target.helm.upgrade_diff(&self.helm_chart, &[]);
+        let common_chart = CommonChart::new(self.helm_chart.clone(), None);
+        let chart: Box<dyn HelmChart> = Box::new(common_chart);
+        let kubeconfig_string = target.kubernetes.get_kubeconfig_file_path()?;
+        let kubeconfig = Path::new(kubeconfig_string.as_str());
 
-        //upgrade
-        target
-            .helm
-            .upgrade(&self.helm_chart, &[], &CommandKiller::from_cancelable(target.should_abort))
-            .map_err(|e| Box::new(EngineError::new_helm_error(self.event_details.clone(), e)))
+        chart
+            .run(
+                &target.kube,
+                kubeconfig,
+                // &[],
+                &target
+                    .cloud_provider
+                    .credentials_environment_variables()
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<Vec<(String, String)>>(),
+                &CommandKiller::from_cancelable(target.should_abort),
+            )
+            .map_err(|e| {
+                let helm_error = HelmError::CmdError(
+                    format!("Error on {} helm upgrade", self.helm_chart.name),
+                    crate::cmd::helm::HelmCommand::UPGRADE,
+                    e,
+                );
+                Box::new(EngineError::new_helm_error(self.event_details.clone(), helm_error))
+            })?;
+        Ok(())
     }
 
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {

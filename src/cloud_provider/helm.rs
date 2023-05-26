@@ -1,5 +1,4 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
-use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cmd::helm::{to_command_error, Helm};
 use crate::cmd::helm_utils::{
@@ -42,7 +41,7 @@ impl Display for HelmChartNamespaces {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             HelmChartNamespaces::Custom => "custom",
-            KubeSystem => "kube-system",
+            HelmChartNamespaces::KubeSystem => "kube-system",
             HelmChartNamespaces::Prometheus => "prometheus",
             HelmChartNamespaces::Logging => "logging",
             HelmChartNamespaces::CertManager => "cert-manager",
@@ -158,7 +157,7 @@ impl Default for ChartInfo {
         ChartInfo {
             name: "undefined".to_string(),
             path: "undefined".to_string(),
-            namespace: KubeSystem,
+            namespace: HelmChartNamespaces::KubeSystem,
             custom_namespace: None,
             action: Deploy,
             atomic: true,
@@ -231,11 +230,12 @@ pub trait HelmChart: Send {
         kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(String, String)],
+        cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
         let payload = self.pre_exec(kubernetes_config, envs, payload)?;
-        let payload = match self.exec(kubernetes_config, envs, payload.clone()) {
+        let payload = match self.exec(kubernetes_config, envs, payload.clone(), cmd_killer) {
             Ok(payload) => payload,
             Err(e) => {
                 error!("Error while deploying chart: {}", e.message(ErrorMessageVerbosity::FullDetails));
@@ -252,6 +252,7 @@ pub trait HelmChart: Send {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
+        cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
         let chart_info = self.get_chart_info();
@@ -301,10 +302,7 @@ pub trait HelmChart: Send {
                 update_crds_on_upgrade(kubernetes_config, chart_info.clone(), environment_variables.as_slice(), &helm)
                     .map_err(to_command_error)?;
 
-                match helm
-                    .upgrade(chart_info, &[], &CommandKiller::never())
-                    .map_err(to_command_error)
-                {
+                match helm.upgrade(chart_info, &[], cmd_killer).map_err(to_command_error) {
                     Ok(_) => {
                         if upgrade_status.is_backupable {
                             if let Err(e) = apply_chart_backup(
@@ -406,7 +404,7 @@ fn deploy_parallel_charts(
             let handle = s.spawn(move || {
                 // making sure to pass the current span to the new thread not to lose any tracing info
                 let _ = current_span.enter();
-                chart.run(kube_client, path.as_path(), &environment_variables)
+                chart.run(kube_client, path.as_path(), &environment_variables, &CommandKiller::never())
             });
 
             handles.push(handle);
@@ -498,6 +496,15 @@ impl Clone for Box<dyn ChartInstallationChecker> {
 pub struct CommonChart {
     pub chart_info: ChartInfo,
     pub chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
+}
+
+impl CommonChart {
+    pub fn new(chart_info: ChartInfo, chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>) -> Self {
+        CommonChart {
+            chart_info,
+            chart_installation_checker,
+        }
+    }
 }
 
 /// using ChartPayload to pass random kind of data between each deployment steps against a chart deployment
