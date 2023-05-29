@@ -17,6 +17,7 @@ pub mod database;
 pub mod engine_request;
 pub mod environment;
 pub mod job;
+pub mod probe;
 pub mod router;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug)]

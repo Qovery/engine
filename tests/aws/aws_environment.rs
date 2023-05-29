@@ -17,6 +17,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::runtime::block_on;
@@ -303,6 +304,16 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
+                app.readiness_probe = Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 3000,
+                    failure_threshold: 9,
+                    success_threshold: 1,
+                    initial_delay_seconds: 15,
+                    period_seconds: 10,
+                    timeout_seconds: 10,
+                });
+                app.liveness_probe = None;
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -364,6 +375,16 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
+                app.readiness_probe = Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 3000,
+                    failure_threshold: 9,
+                    success_threshold: 1,
+                    initial_delay_seconds: 15,
+                    period_seconds: 10,
+                    timeout_seconds: 10,
+                });
+                app.liveness_probe = None;
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -1108,6 +1129,24 @@ fn deploy_container_with_no_router_on_aws_eks() {
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             advanced_settings: Default::default(),
         }];
 
@@ -1186,6 +1225,24 @@ fn deploy_container_with_storages_on_aws_eks() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             storages: vec![
                 Storage {
                 id: to_short_id(&storage_id_1),
@@ -1299,6 +1356,24 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![mounted_file.clone()],
@@ -1413,6 +1488,27 @@ fn deploy_container_with_router_on_aws_eks() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Http {
+                    path: "/".to_string(),
+                    scheme: "HTTP".to_string(),
+                },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 80,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             storages: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![],
@@ -1504,6 +1600,24 @@ fn deploy_job_on_aws_eks() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1576,6 +1690,24 @@ fn deploy_cronjob_on_aws_eks() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1650,6 +1782,24 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1748,6 +1898,24 @@ fn build_and_deploy_job_on_aws_eks() {
             environment_vars: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1831,6 +1999,24 @@ fn test_restart_deployment() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             storages: vec![],
             mounted_files: vec![],
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
@@ -1935,6 +2121,24 @@ fn test_restart_statefulset() {
                     protocol: Protocol::HTTP,
                 },
             ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp{host: None},
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             advanced_settings: Default::default(),
         }];
@@ -2026,6 +2230,24 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             environment_vars: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
         }];
 
         let mut environment_for_delete = environment.clone();

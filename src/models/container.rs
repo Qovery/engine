@@ -11,6 +11,7 @@ use crate::io_models::application::Port;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use crate::string::cut;
@@ -21,6 +22,7 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
@@ -51,6 +53,8 @@ pub struct Container<T: CloudProvider> {
     pub(super) storages: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
+    pub(super) readiness_probe: Option<Probe>,
+    pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -83,6 +87,8 @@ impl<T: CloudProvider> Container<T> {
         storages: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
+        readiness_probe: Option<Probe>,
+        liveness_probe: Option<Probe>,
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -154,6 +160,8 @@ impl<T: CloudProvider> Container<T> {
             storages,
             environment_variables,
             mounted_files,
+            readiness_probe,
+            liveness_probe,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -226,6 +234,8 @@ impl<T: CloudProvider> Container<T> {
                 ports: self.ports.clone(),
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
                 storages: vec![],
+                readiness_probe: self.readiness_probe.clone(),
+                liveness_probe: self.liveness_probe.clone(),
                 advanced_settings: self.advanced_settings.clone(),
             },
             registry: registry_info
@@ -341,19 +351,7 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;
-    fn startup_timeout(&self) -> std::time::Duration {
-        let settings = self.advanced_settings();
-        let readiness_probe_timeout = settings.readiness_probe_initial_delay_seconds
-            + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
-                * settings.readiness_probe_failure_threshold);
-        let liveness_probe_timeout = settings.liveness_probe_initial_delay_seconds
-            + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
-                * settings.liveness_probe_failure_threshold);
-        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
-        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
-        std::time::Duration::from_secs(startup_timeout as u64)
-    }
-
+    fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
@@ -380,6 +378,24 @@ where
 
     fn kube_service_name(&self) -> String {
         self.kube_service_name()
+    }
+
+    fn startup_timeout(&self) -> Duration {
+        let readiness_probe_timeout = if let Some(p) = &self.readiness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let liveness_probe_timeout = if let Some(p) = &self.liveness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
+        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
+        Duration::from_secs(startup_timeout as u64)
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
@@ -414,6 +430,8 @@ pub(super) struct ServiceTeraContext {
     pub(super) ports: Vec<Port>,
     pub(super) default_port: Option<Port>,
     pub(super) storages: Vec<StorageDataTemplate>,
+    pub(super) readiness_probe: Option<Probe>,
+    pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
 }
 

@@ -10,6 +10,7 @@ use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
@@ -128,6 +129,24 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         protocol: Protocol::HTTP,
                     },
                 ],
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp{host: None},
+                    port: 8080,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp{host: None},
+                    port: 8080,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
                 storages: vec![
                     Storage {
                     id: to_short_id(&storage_1_id),
@@ -202,6 +221,27 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
                 }],
+                readiness_probe: Some(Probe {
+                    r#type: ProbeType::Http {
+                        path: "/".to_string(),
+                        scheme: "HTTP".to_string(),
+                    },
+                    port: 80,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
+                liveness_probe: Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 80,
+                    initial_delay_seconds: 1,
+                    timeout_seconds: 2,
+                    period_seconds: 3,
+                    success_threshold: 1,
+                    failure_threshold: 5,
+                }),
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
                 min_instances: 1,
@@ -248,6 +288,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 default_port: None,
+                readiness_probe: None,
+                liveness_probe: None,
             };
             environment.jobs = vec![job];
         }

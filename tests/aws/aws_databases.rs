@@ -13,6 +13,7 @@ use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
+use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
@@ -296,6 +297,16 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 };
+                app.readiness_probe = Some(Probe {
+                    r#type: ProbeType::Tcp { host: None },
+                    port: 1234,
+                    failure_threshold: 9,
+                    success_threshold: 1,
+                    initial_delay_seconds: 15,
+                    period_seconds: 10,
+                    timeout_seconds: 10,
+                });
+                app.liveness_probe = None;
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();

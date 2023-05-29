@@ -9,6 +9,7 @@ use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::models;
 use crate::models::container::RegistryTeraContext;
+use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::string::cut;
 use crate::utilities::to_short_id;
@@ -49,6 +50,8 @@ pub struct Job<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
     pub(super) lib_root_directory: String,
+    pub(super) readiness_probe: Option<Probe>,
+    pub(super) liveness_probe: Option<Probe>,
 }
 
 // Here we define the common behavior among all providers
@@ -73,6 +76,8 @@ impl<T: CloudProvider> Job<T> {
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
         advanced_settings: JobAdvancedSettings,
+        readiness_probe: Option<Probe>,
+        liveness_probe: Option<Probe>,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, JobError> {
@@ -130,6 +135,8 @@ impl<T: CloudProvider> Job<T> {
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
+            readiness_probe,
+            liveness_probe,
             lib_root_directory: context.lib_root_dir().to_string(),
             default_port,
         })
@@ -215,6 +222,8 @@ impl<T: CloudProvider> Job<T> {
                     JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
                     JobSchedule::Cron { schedule } => Some(schedule.to_string()),
                 },
+                readiness_probe: self.readiness_probe.clone(),
+                liveness_probe: self.liveness_probe.clone(),
                 advanced_settings: self.advanced_settings.clone(),
             },
             registry: registry_info
@@ -347,18 +356,7 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
     fn advanced_settings(&self) -> &JobAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;
-    fn startup_timeout(&self) -> Duration {
-        let settings = self.advanced_settings();
-        let readiness_probe_timeout = settings.readiness_probe_initial_delay_seconds
-            + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
-                * settings.readiness_probe_failure_threshold);
-        let liveness_probe_timeout = settings.liveness_probe_initial_delay_seconds
-            + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
-                * settings.liveness_probe_failure_threshold);
-        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
-        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
-        Duration::from_secs(startup_timeout as u64)
-    }
+    fn startup_timeout(&self) -> Duration;
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_schedule(&self) -> &JobSchedule;
@@ -391,6 +389,24 @@ where
 
     fn kube_service_name(&self) -> String {
         self.kube_service_name()
+    }
+
+    fn startup_timeout(&self) -> Duration {
+        let readiness_probe_timeout = if let Some(p) = &self.readiness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let liveness_probe_timeout = if let Some(p) = &self.liveness_probe {
+            p.initial_delay_seconds + ((p.timeout_seconds + p.period_seconds) * p.failure_threshold)
+        } else {
+            60 * 5
+        };
+
+        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
+        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
+        Duration::from_secs(startup_timeout as u64)
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
@@ -459,6 +475,8 @@ pub(super) struct ServiceTeraContext {
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: u64,
     pub(super) cronjob_schedule: Option<String>,
+    pub(super) readiness_probe: Option<Probe>,
+    pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: JobAdvancedSettings,
 }
 

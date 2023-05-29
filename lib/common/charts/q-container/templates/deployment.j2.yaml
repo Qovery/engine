@@ -92,41 +92,61 @@ spec:
               name: "p{{ port.port }}"
               protocol: TCP
             {%- endfor %}
-          {%- if service.default_port %}
-          {%- if service.advanced_settings.readiness_probe_type != "NONE" %}
+          {%- if service.readiness_probe %}
           readinessProbe:
-            {%- if service.advanced_settings.readiness_probe_type == "TCP" %}
+            {%- if service.readiness_probe.type.tcp %}
             tcpSocket:
-              port: {{ service.default_port.port }}
+              port: {{ service.readiness_probe.port }}
+              host: {{ service.readiness_probe.type.tcp.host }}
             {%- endif %}
-            {%- if service.advanced_settings.readiness_probe_type == "HTTP" %}
+            {%- if service.readiness_probe.type.http %}
             httpGet:
-              port: {{ service.default_port.port }}
-              path: {{ service.advanced_settings.readiness_probe_http_get_path }}
+              port: {{ service.readiness_probe.port }}
+              path: {{ service.readiness_probe.type.http.path }}
+              scheme: {{ service.readiness_probe.type.http.scheme }}
             {%- endif %}
-            initialDelaySeconds: {{ service.advanced_settings.readiness_probe_initial_delay_seconds }}
-            periodSeconds: {{ service.advanced_settings.readiness_probe_period_seconds }}
-            timeoutSeconds: {{ service.advanced_settings.readiness_probe_timeout_seconds }}
-            successThreshold: {{ service.advanced_settings.readiness_probe_success_threshold }}
-            failureThreshold: {{ service.advanced_settings.readiness_probe_failure_threshold }}
-          {%- if service.advanced_settings.liveness_probe_type != "NONE" %}
+            {%- if service.readiness_probe.type.exec %}
+            exec:
+              command: {{ service.readiness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if service.readiness_probe.type.grpc %}
+            grpc:
+              port: {{ service.readiness_probe.port }}
+              service: {{ service.readiness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.readiness_probe.initial_delay_seconds }}
+            periodSeconds: {{ service.readiness_probe.period_seconds }}
+            timeoutSeconds: {{ service.readiness_probe.timeout_seconds }}
+            successThreshold: {{ service.readiness_probe.success_threshold }}
+            failureThreshold: {{ service.readiness_probe.failure_threshold }}
+          {%- endif %}
+          {%- if service.liveness_probe %}
           livenessProbe:
-            {%- if service.advanced_settings.liveness_probe_type == "TCP" %}
+            {%- if service.liveness_probe.type.tcp %}
             tcpSocket:
-              port: {{ service.default_port.port }}
+              port: {{ service.liveness_probe.port }}
+              host: {{ service.liveness_probe.type.tcp.host }}
             {%- endif %}
-            {%- if service.advanced_settings.liveness_probe_type == "HTTP" %}
+            {%- if service.liveness_probe.type.http %}
             httpGet:
-              port: {{ service.default_port.port }}
-              path: {{ service.advanced_settings.liveness_probe_http_get_path }}
+              port: {{ service.liveness_probe.port }}
+              path: {{ service.liveness_probe.type.http.path }}
+              scheme: {{ service.liveness_probe.type.http.scheme }}
             {%- endif %}
-            initialDelaySeconds: {{ service.advanced_settings.liveness_probe_initial_delay_seconds }}
-            periodSeconds: {{ service.advanced_settings.liveness_probe_period_seconds }}
-            timeoutSeconds: {{ service.advanced_settings.liveness_probe_timeout_seconds }}
-            successThreshold: {{ service.advanced_settings.liveness_probe_success_threshold }}
-            failureThreshold: {{ service.advanced_settings.liveness_probe_failure_threshold }}
-          {%- endif %}
-          {%- endif %}
+            {%- if service.liveness_probe.type.exec %}
+            exec:
+              command: {{ service.liveness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if service.liveness_probe.type.grpc %}
+            grpc:
+              port: {{ service.liveness_probe.port }}
+              service: {{ service.liveness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.liveness_probe.initial_delay_seconds }}
+            periodSeconds: {{ service.liveness_probe.period_seconds }}
+            timeoutSeconds: {{ service.liveness_probe.timeout_seconds }}
+            successThreshold: {{ service.liveness_probe.success_threshold }}
+            failureThreshold: {{ service.liveness_probe.failure_threshold }}
           {%- endif %}
           resources:
             limits:
