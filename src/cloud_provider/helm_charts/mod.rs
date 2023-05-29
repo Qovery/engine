@@ -185,7 +185,20 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
                 .chars()
                 .take_while(|&ch| ch != '[')
                 .collect::<String>();
-            let fields = fields_raw.split('.').collect::<Vec<&str>>();
+            let mut fields = fields_raw.split('.').map(|s| s.to_string()).collect::<Vec<String>>();
+
+            // Since 'annotations' and 'labels' are objects with unpredictable and weird keys we only check if object is set but not what's in it.
+            let mut index = 0;
+            while index < fields.len() {
+                if fields[index].to_lowercase().ends_with("annotations")
+                    || fields[index].to_lowercase().ends_with("labels")
+                {
+                    fields = fields[..index + 1].to_vec();
+                    break;
+                }
+                index += 1;
+            }
+
             let fields_len = fields.len();
 
             let mut current_value = m;
