@@ -732,6 +732,7 @@ where
                 reinstall_chart_if_installed_version_is_below_than: match T::db_type() {
                     service::DatabaseType::PostgreSQL => Some(Version::new(12, 5, 1)),
                     service::DatabaseType::MongoDB => Some(Version::new(13, 13, 1)),
+                    service::DatabaseType::MySQL => Some(Version::new(9, 10, 1)),
                     _ => None,
                 },
                 ..Default::default()
