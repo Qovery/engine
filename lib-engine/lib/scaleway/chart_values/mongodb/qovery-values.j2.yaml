@@ -1,20 +1,68 @@
+
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
 image:
   registry: {{ registry_name}}
   repository: {{ repository_name}}
   tag: "{{ version }}"
 
-nameOverride: "{{ sanitized_name }}"
-fullnameOverride: "{{ sanitized_name }}"
+useStatefulSet: true
 
-mongodbRootPassword: "{{ database_password }}"
-mongodbUsername: "{{ database_login }}"
-mongodbPassword: "{{ database_password }}"
-mongodbDatabase: "{{ database_db_name }}"
+auth:
+  rootPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
+
+resources:
+  requests:
+    memory: "{{ database_ram_size_in_mib }}Mi"
+    cpu: "{{ database_total_cpus }}"
+  limits:
+    memory: "{{ database_ram_size_in_mib }}Mi"
+    cpu: "{{ database_total_cpus }}"
+
+# need to use custom liveness/readniess probes to avoid over-using resources usage
+# https://github.com/bitnami/charts/issues/10264
+customLivenessProbe:
+  exec:
+    command:
+      - mongo
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
+customReadinessProbe:
+  exec:
+    command:
+      - mongo
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
 
 service:
-  qovery_name: {{ service_name }}
+  nameOverride: {{ service_name }}
+  ports:
+    mongodb: "{{ database_port }}"
   type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
-  port: {{ database_port }}
   {% if publicly_accessible -%}
   annotations:
     service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
@@ -27,53 +75,40 @@ service:
     external-dns.alpha.kubernetes.io/ttl: "300"
   {% endif %}
 
-useStatefulSet: true
-
-# Additional labels to apply to the deployment or statefulsets
-labels:
-  envId: "{{ environment_id }}"
-  databaseId: "{{ id }}"
-  databaseLongId: "{{ long_id }}"
-  envLongId: "{{ environment_long_id }}"
-  projectLongId: "{{ project_long_id }}"
-  qovery.com/service-id: "{{ long_id }}"
-  qovery.com/service-type: "database"
-  qovery.com/environment-id: "{{ environment_long_id }}"
-  qovery.com/project-id: "{{ project_long_id }}"
-
-# Additional pod labels to apply
-podLabels:
-  envId: "{{ environment_id }}"
-  databaseId: "{{ id }}"
-  databaseLongId: "{{ long_id }}"
-  envLongId: "{{ environment_long_id }}"
-  projectLongId: "{{ project_long_id }}"
-  qovery.com/service-id: "{{ long_id }}"
-  qovery.com/service-type: "database"
-  qovery.com/environment-id: "{{ environment_long_id }}"
-  qovery.com/project-id: "{{ project_long_id }}"
-
 persistence:
-  enabled: true
   storageClass: "{{ database_disk_type }}"
-  accessModes:
-    - ReadWriteOnce
   size: "{{ database_disk_size_in_gib }}Gi"
-  annotations:
-    ownerId: "{{ owner_id }}"
+  labels:
+    # app label required for legacy cahrt (installed before 01/06/23)
+    app: "{{ sanitized_name }}" 
     envId: "{{ environment_id }}"
     databaseId: "{{ id }}"
-    databaseName: "{{ sanitized_name }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  annotations:
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+
+serviceAccount:
+  create: true
+  name: "{{ sanitized_name }}"
+
+rbac:
+  create: true
 
 volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_minideb }}
-
-resources:
-  requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
-  limits:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
