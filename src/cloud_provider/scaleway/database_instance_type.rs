@@ -10,12 +10,23 @@ use strum_macros::EnumIter;
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter)]
 #[allow(non_camel_case_types)]
 pub enum ScwDatabaseInstanceType {
-    DB_DEV_S,
-    DB_DEV_M,
-    DB_GP_XS,
-    DB_GP_S,
-    DB_GP_M,
+    RED1_2XS,
+    RED1_L,
+    RED1_M,
+    RED1_S,
+    RED1_XL,
+    RED1_XS,
     RED1_MICRO,
+    DB_DEV_L,
+    DB_DEV_M,
+    DB_DEV_S,
+    DB_DEV_XL,
+    DB_GP_L,
+    DB_GP_M,
+    DB_GP_S,
+    DB_GP_XL,
+    DB_GP_XS,
+    DB_PLAY_BETA,
 }
 
 impl DatabaseInstanceType for ScwDatabaseInstanceType {
@@ -25,46 +36,132 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
 
     fn to_cloud_provider_format(&self) -> String {
         match self {
-            ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+            ScwDatabaseInstanceType::RED1_2XS => "RED1-2XS",
+            ScwDatabaseInstanceType::RED1_L => "RED1-L",
+            ScwDatabaseInstanceType::RED1_M => "RED1-M",
+            ScwDatabaseInstanceType::RED1_S => "RED1-S",
+            ScwDatabaseInstanceType::RED1_XL => "RED1-XL",
+            ScwDatabaseInstanceType::RED1_XS => "RED1-XS",
+            ScwDatabaseInstanceType::RED1_MICRO => "RED1-micro",
+            ScwDatabaseInstanceType::DB_DEV_L => "db-dev-l",
             ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
-            ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
-            ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+            ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+            ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+            ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
             ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
-            ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
+            ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+            ScwDatabaseInstanceType::DB_GP_XL => "db-gp-xl",
+            ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+            ScwDatabaseInstanceType::DB_PLAY_BETA => "db-play-beta",
         }
         .to_string()
     }
 
     fn is_instance_allowed(&self) -> bool {
         match self {
-            ScwDatabaseInstanceType::DB_DEV_S => true,
-            ScwDatabaseInstanceType::DB_DEV_M => true,
-            ScwDatabaseInstanceType::DB_GP_XS => true,
-            ScwDatabaseInstanceType::DB_GP_S => true,
-            ScwDatabaseInstanceType::DB_GP_M => true,
+            ScwDatabaseInstanceType::RED1_2XS => true,
+            ScwDatabaseInstanceType::RED1_L => true,
+            ScwDatabaseInstanceType::RED1_M => true,
+            ScwDatabaseInstanceType::RED1_S => true,
+            ScwDatabaseInstanceType::RED1_XL => true,
+            ScwDatabaseInstanceType::RED1_XS => true,
             ScwDatabaseInstanceType::RED1_MICRO => true,
+            ScwDatabaseInstanceType::DB_DEV_L => true,
+            ScwDatabaseInstanceType::DB_DEV_M => true,
+            ScwDatabaseInstanceType::DB_DEV_S => true,
+            ScwDatabaseInstanceType::DB_DEV_XL => true,
+            ScwDatabaseInstanceType::DB_GP_L => true,
+            ScwDatabaseInstanceType::DB_GP_M => true,
+            ScwDatabaseInstanceType::DB_GP_S => true,
+            ScwDatabaseInstanceType::DB_GP_XL => true,
+            ScwDatabaseInstanceType::DB_GP_XS => true,
+            ScwDatabaseInstanceType::DB_PLAY_BETA => true,
         }
     }
 
     fn is_instance_compatible_with(&self, database_type: DatabaseType) -> bool {
-        match self {
-            ScwDatabaseInstanceType::DB_DEV_S
-            | ScwDatabaseInstanceType::DB_DEV_M
-            | ScwDatabaseInstanceType::DB_GP_XS
-            | ScwDatabaseInstanceType::DB_GP_S
-            | ScwDatabaseInstanceType::DB_GP_M => match database_type {
-                DatabaseType::PostgreSQL => true,
-                DatabaseType::MongoDB => true,
-                DatabaseType::MySQL => true,
-                DatabaseType::Redis => false,
-            },
-            ScwDatabaseInstanceType::RED1_MICRO => match database_type {
-                DatabaseType::PostgreSQL => false,
-                DatabaseType::MongoDB => false,
-                DatabaseType::MySQL => false,
-                DatabaseType::Redis => true,
-            },
-        }
+        matches!((self, database_type), |(
+            ScwDatabaseInstanceType::RED1_2XS,
+            DatabaseType::Redis,
+        )| (
+            ScwDatabaseInstanceType::RED1_L,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::RED1_M,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::RED1_S,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::RED1_XL,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::RED1_XS,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::RED1_MICRO,
+            DatabaseType::Redis
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_L,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_L,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_M,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_M,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_S,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_S,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_XL,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_DEV_XL,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_L,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_L,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_M,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_M,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_S,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_S,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_XL,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_XL,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_XS,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_XS,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PLAY_BETA,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PLAY_BETA,
+            DatabaseType::PostgreSQL
+        ))
     }
 }
 
@@ -79,14 +176,25 @@ impl FromStr for ScwDatabaseInstanceType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
-            "db-dev-s" => Ok(ScwDatabaseInstanceType::DB_DEV_S),
-            "db-dev-m" => Ok(ScwDatabaseInstanceType::DB_DEV_M),
-            "db-gp-xs" => Ok(ScwDatabaseInstanceType::DB_GP_XS),
-            "db-gp-s" => Ok(ScwDatabaseInstanceType::DB_GP_S),
-            "db-gp-m" => Ok(ScwDatabaseInstanceType::DB_GP_M),
+            "red1-2xs" => Ok(ScwDatabaseInstanceType::RED1_2XS),
+            "red1-l" => Ok(ScwDatabaseInstanceType::RED1_L),
+            "red1-m" => Ok(ScwDatabaseInstanceType::RED1_M),
+            "red1-s" => Ok(ScwDatabaseInstanceType::RED1_S),
+            "red1-xl" => Ok(ScwDatabaseInstanceType::RED1_XL),
+            "red1-xs" => Ok(ScwDatabaseInstanceType::RED1_XS),
             "red1-micro" => Ok(ScwDatabaseInstanceType::RED1_MICRO),
+            "db-dev-l" => Ok(ScwDatabaseInstanceType::DB_DEV_L),
+            "db-dev-m" => Ok(ScwDatabaseInstanceType::DB_DEV_M),
+            "db-dev-s" => Ok(ScwDatabaseInstanceType::DB_DEV_S),
+            "db-dev-xl" => Ok(ScwDatabaseInstanceType::DB_DEV_XL),
+            "db-gp-l" => Ok(ScwDatabaseInstanceType::DB_GP_L),
+            "db-gp-m" => Ok(ScwDatabaseInstanceType::DB_GP_M),
+            "db-gp-s" => Ok(ScwDatabaseInstanceType::DB_GP_S),
+            "db-gp-xl" => Ok(ScwDatabaseInstanceType::DB_GP_XL),
+            "db-gp-xs" => Ok(ScwDatabaseInstanceType::DB_GP_XS),
+            "db-play-beta" => Ok(ScwDatabaseInstanceType::DB_PLAY_BETA),
             _ => Err(DatabaseError::InvalidDatabaseInstance {
-                database_cloud_provider: Kind::Aws,
+                database_cloud_provider: Kind::Scw,
                 requested_database_instance_type: s.to_string(),
             }),
         }
@@ -117,12 +225,23 @@ mod tests {
             // execute & verify:
             assert_eq!(
                 match instance_type {
-                    ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::RED1_2XS => "RED1-2XS",
+                    ScwDatabaseInstanceType::RED1_L => "RED1-L",
+                    ScwDatabaseInstanceType::RED1_M => "RED1-M",
+                    ScwDatabaseInstanceType::RED1_S => "RED1-S",
+                    ScwDatabaseInstanceType::RED1_XL => "RED1-XL",
+                    ScwDatabaseInstanceType::RED1_XS => "RED1-XS",
+                    ScwDatabaseInstanceType::RED1_MICRO => "RED1-micro",
+                    ScwDatabaseInstanceType::DB_DEV_L => "db-dev-l",
                     ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
-                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
-                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+                    ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
                     ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
-                    ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
+                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_GP_XL => "db-gp-xl",
+                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+                    ScwDatabaseInstanceType::DB_PLAY_BETA => "db-play-beta",
                 }
                     .to_string(),
                 instance_type.to_cloud_provider_format()
@@ -136,12 +255,23 @@ mod tests {
             // execute & verify:
             assert_eq!(
                 match instance_type {
-                    ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::RED1_2XS => "RED1-2XS",
+                    ScwDatabaseInstanceType::RED1_L => "RED1-L",
+                    ScwDatabaseInstanceType::RED1_M => "RED1-M",
+                    ScwDatabaseInstanceType::RED1_S => "RED1-S",
+                    ScwDatabaseInstanceType::RED1_XL => "RED1-XL",
+                    ScwDatabaseInstanceType::RED1_XS => "RED1-XS",
+                    ScwDatabaseInstanceType::RED1_MICRO => "RED1-micro",
+                    ScwDatabaseInstanceType::DB_DEV_L => "db-dev-l",
                     ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
-                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
-                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
+                    ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+                    ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
                     ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
-                    ScwDatabaseInstanceType::RED1_MICRO => "red1-micro",
+                    ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
+                    ScwDatabaseInstanceType::DB_GP_XL => "db-gp-xl",
+                    ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
+                    ScwDatabaseInstanceType::DB_PLAY_BETA => "db-play-beta",
                 }
                     .to_string(),
                 instance_type.to_string()
@@ -179,12 +309,23 @@ mod tests {
             // execute & verify:
             assert_eq!(
                 match instance_type {
-                    ScwDatabaseInstanceType::DB_DEV_S => true,
+                    ScwDatabaseInstanceType::RED1_2XS => true,
+                    ScwDatabaseInstanceType::RED1_L => true,
+                    ScwDatabaseInstanceType::RED1_M => true,
+                    ScwDatabaseInstanceType::RED1_S => true,
+                    ScwDatabaseInstanceType::RED1_XL => true,
+                    ScwDatabaseInstanceType::RED1_XS => true,
+                    ScwDatabaseInstanceType::RED1_MICRO => true,
+                    ScwDatabaseInstanceType::DB_DEV_L => true,
                     ScwDatabaseInstanceType::DB_DEV_M => true,
-                    ScwDatabaseInstanceType::DB_GP_XS => true,
-                    ScwDatabaseInstanceType::DB_GP_S => true,
+                    ScwDatabaseInstanceType::DB_DEV_S => true,
+                    ScwDatabaseInstanceType::DB_DEV_XL => true,
+                    ScwDatabaseInstanceType::DB_GP_L => true,
                     ScwDatabaseInstanceType::DB_GP_M => true,
-                    ScwDatabaseInstanceType::RED1_MICRO => true
+                    ScwDatabaseInstanceType::DB_GP_S => true,
+                    ScwDatabaseInstanceType::DB_GP_XL => true,
+                    ScwDatabaseInstanceType::DB_GP_XS => true,
+                    ScwDatabaseInstanceType::DB_PLAY_BETA => true,
                 },
                 instance_type.is_instance_allowed(),
             )
@@ -197,46 +338,36 @@ mod tests {
             for instance_type in ScwDatabaseInstanceType::iter() {
                 // execute & verify:
                 assert_eq!(
-                    match instance_type {
-                        // DB
-                        ScwDatabaseInstanceType::DB_DEV_S => match db_type {
-                            DatabaseType::PostgreSQL => true,
-                            DatabaseType::MongoDB => true,
-                            DatabaseType::MySQL => true,
-                            DatabaseType::Redis => false,
-                        },
-                        ScwDatabaseInstanceType::DB_DEV_M => match db_type {
-                            DatabaseType::PostgreSQL => true,
-                            DatabaseType::MongoDB => true,
-                            DatabaseType::MySQL => true,
-                            DatabaseType::Redis => false,
-                        },
-                        ScwDatabaseInstanceType::DB_GP_XS => match db_type {
-                            DatabaseType::PostgreSQL => true,
-                            DatabaseType::MongoDB => true,
-                            DatabaseType::MySQL => true,
-                            DatabaseType::Redis => false,
-                        },
-                        ScwDatabaseInstanceType::DB_GP_S => match db_type {
-                            DatabaseType::PostgreSQL => true,
-                            DatabaseType::MongoDB => true,
-                            DatabaseType::MySQL => true,
-                            DatabaseType::Redis => false,
-                        },
-                        ScwDatabaseInstanceType::DB_GP_M => match db_type {
-                            DatabaseType::PostgreSQL => true,
-                            DatabaseType::MongoDB => true,
-                            DatabaseType::MySQL => true,
-                            DatabaseType::Redis => false,
-                        },
-                        // CACHE
-                        ScwDatabaseInstanceType::RED1_MICRO => match db_type {
-                            DatabaseType::PostgreSQL => false,
-                            DatabaseType::MongoDB => false,
-                            DatabaseType::MySQL => false,
-                            DatabaseType::Redis => true,
-                        },
-                    },
+                    matches!(
+                        (instance_type.clone(), db_type),
+                        | (ScwDatabaseInstanceType::RED1_2XS, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_L, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_M, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_S, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_XL, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_XS, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::RED1_MICRO, DatabaseType::Redis)
+                        | (ScwDatabaseInstanceType::DB_DEV_L, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_L, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_M, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_M, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_S, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_S, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_XL, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_DEV_XL, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_L, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_L, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_M, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_M, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_S, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_S, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_XL, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_XL, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_XS, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_XS, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_PLAY_BETA, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_PLAY_BETA, DatabaseType::PostgreSQL)
+                    ),
                     instance_type.is_instance_compatible_with(db_type),
                 )
             }
