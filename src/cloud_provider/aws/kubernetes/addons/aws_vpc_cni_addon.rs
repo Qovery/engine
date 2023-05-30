@@ -63,6 +63,16 @@ mod tests {
                     version: "v1.12.1-eksbuild.1".to_string(),
                 },
             },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_24 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsVpcCniAddon {
+                    version: "v1.12.2-eksbuild.1".to_string(),
+                },
+            },
         ];
 
         for tc in tests_cases {

@@ -23,6 +23,7 @@ use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
+use crate::secret_manager::vault::QVaultClient;
 use async_trait::async_trait;
 use aws_sdk_eks::error::{
     DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
@@ -35,6 +36,7 @@ use aws_sdk_eks::output::{
 use aws_smithy_client::SdkError;
 use function_name::named;
 use std::borrow::Borrow;
+use std::fs;
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -601,6 +603,49 @@ impl Kubernetes for EKS {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        _qovery_terraform_config_file: String,
+        cluster_secrets: crate::cloud_provider::vault::ClusterSecrets,
+        kubeconfig_file_path: Option<String>,
+    ) -> Result<(), Box<EngineError>> {
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            // encode base64 kubeconfig
+            let kubeconfig = match kubeconfig_file_path {
+                Some(x) => fs::read_to_string(x.clone())
+                    .map_err(|e| {
+                        EngineError::new_cannot_retrieve_cluster_config_file(
+                            event_details.clone(),
+                            CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                        )
+                    })
+                    .expect("kubeconfig was not found while it should be present"),
+                None => {
+                    let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
+                    kubeconfig_path
+                }
+            };
+            let kubeconfig_b64 = base64::encode(kubeconfig);
+
+            let mut cluster_secrets_update = cluster_secrets;
+            cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
+
+            // update info without taking care of the kubeconfig because we don't have it yet
+            let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details.clone());
+        };
+
+        self.logger().log(EngineEvent::Info(
+            event_details,
+            EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
+        ));
+        Ok(())
     }
 }
 

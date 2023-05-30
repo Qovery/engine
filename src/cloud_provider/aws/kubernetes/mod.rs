@@ -7,8 +7,6 @@ use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
 
-use std::fs;
-
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
@@ -817,8 +815,24 @@ fn create(
         EventMessage::new_from_safe(format!("Preparing {} cluster deployment.", kubernetes.kind())),
     ));
 
-    // old method with rusoto
+    let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+        kubernetes.cloud_provider().access_key_id(),
+        kubernetes.region().to_string(),
+        kubernetes.cloud_provider().secret_access_key(),
+        None,
+        None,
+        kubernetes.kind(),
+        kubernetes.cluster_name(),
+        kubernetes_long_id.to_string(),
+        options.grafana_admin_user.clone(),
+        options.grafana_admin_password.clone(),
+        kubernetes.cloud_provider().organization_long_id().to_string(),
+        kubernetes.context().is_test_cluster(),
+    ));
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+
+    // old method with rusoto
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
         Ok(value) => Some(value),
         Err(_) => None,
@@ -861,9 +875,14 @@ fn create(
                 event_details.clone(),
                 kubernetes.logger(),
             ) {
-                Ok(x) => {
+                Ok(x) =>  {
                     if x.required_upgrade_on.is_some() {
-                        return kubernetes.upgrade_with_status(x);
+                        // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
+                        let res =  kubernetes.upgrade_with_status(x);
+                        // don't block deployment if vault is not accessible
+                        let (kubeconfig, _) = kubernetes.get_kubeconfig_file()?;
+                        let _ = kubernetes.update_vault_config(event_details, qovery_terraform_config_file, cluster_secrets, Some(kubeconfig));
+                        return res;
                     }
 
                     kubernetes_action = KubernetesClusterAction::Update(None);
@@ -872,7 +891,7 @@ fn create(
                         event_details.clone(),
                         EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
                     ))
-                }
+                },
                 Err(e) => {
                     // Log a warning, this error is not blocking
                     kubernetes.logger().log(EngineEvent::Warning(
@@ -1064,121 +1083,11 @@ fn create(
         }
     }
 
-    let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-        kubernetes.cloud_provider().access_key_id(),
-        kubernetes.region().to_string(),
-        kubernetes.cloud_provider().secret_access_key(),
-        None,
-        None,
-        kubernetes.kind(),
-        kubernetes.cluster_name(),
-        kubernetes_long_id.to_string(),
-        options.grafana_admin_user.clone(),
-        options.grafana_admin_password.clone(),
-        kubernetes.cloud_provider().organization_long_id().to_string(),
-        kubernetes.context().is_test_cluster(),
-    ));
-
     let kubeconfig_path = match kubernetes.kind() {
-        Kind::Eks => {
+        Kind::Eks | Kind::Ec2 => {
             let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
             kubernetes.put_kubeconfig_file_to_object_storage(current_kubeconfig_path.as_str())?;
             current_kubeconfig_path
-        }
-        Kind::Ec2 => {
-            let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
-
-            // read config generated after terraform infra bootstrap/update
-            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
-            // send cluster info to vault if info mismatch
-            // create vault connection (Vault connectivity should not be on the critical deployment path,
-            // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-            let vault_conn = match QVaultClient::new(event_details.clone()) {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            };
-            if let Some(vault) = vault_conn {
-                cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
-                // update info without taking care of the kubeconfig because we don't have it yet
-                let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
-            };
-
-            let port = match qovery_terraform_config.kubernetes_port_to_u16() {
-                Ok(p) => p,
-                Err(e) => {
-                    return Err(Box::new(EngineError::new_terraform_error(
-                        event_details,
-                        TerraformError::ConfigFileInvalidContent {
-                            path: qovery_terraform_config_file,
-                            raw_message: e,
-                        },
-                    )))
-                }
-            };
-
-            // wait for k3s port to be open
-            // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
-            wait_until_port_is_open(
-                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
-                port,
-                600,
-                kubernetes.logger(),
-                event_details.clone(),
-            )
-            .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
-
-            // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
-            // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
-            let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
-                // force s3 kubeconfig retrieve
-                if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
-                    return OperationResult::Err(e);
-                };
-                let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
-                    Ok(x) => x,
-                    Err(e) => return OperationResult::Retry(e),
-                };
-
-                // ensure the kubeconfig content address match with the current instance dns
-                let mut buffer = String::new();
-                let _ = kubeconfig_file.read_to_string(&mut buffer);
-                match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
-                    true => {
-                        kubernetes.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do correspond with the actual host {}",
-                                &qovery_terraform_config.aws_ec2_public_hostname
-                            )),
-                        ));
-                        OperationResult::Ok(current_kubeconfig_path)
-                    }
-                    false => {
-                        kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_config.aws_ec2_public_hostname
-                            )),
-                        ));
-                        OperationResult::Retry(Box::new(
-                            EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
-                        ))
-                    }
-                }
-            });
-
-            match result {
-                Ok(x) => x,
-                Err(Operation { error, .. }) => return Err(error),
-                Err(Error::Internal(_)) => {
-                    return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                        event_details,
-                    )))
-                }
-            }
         }
         _ => {
             return Err(Box::new(EngineError::new_unsupported_cluster_kind(
@@ -1191,6 +1100,16 @@ fn create(
             )))
         }
     };
+
+    // send cluster info with kubeconfig
+    // create vault connection (Vault connectivity should not be on the critical deployment path,
+    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+    let _ = kubernetes.update_vault_config(
+        event_details.clone(),
+        qovery_terraform_config_file.clone(),
+        cluster_secrets,
+        Some(kubeconfig_path.clone()),
+    );
 
     // kubernetes helm deployments on the cluster
     let kubeconfig_path = Path::new(&kubeconfig_path);
@@ -1208,29 +1127,6 @@ fn create(
             EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
         ));
     }
-
-    // send cluster info with kubeconfig
-    // create vault connection (Vault connectivity should not be on the critical deployment path,
-    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-    let vault_conn = match QVaultClient::new(event_details.clone()) {
-        Ok(x) => Some(x),
-        Err(_) => None,
-    };
-    if let Some(vault) = vault_conn {
-        // encode base64 kubeconfig
-        let kubeconfig_content =
-            fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
-        let kubeconfig_b64 = base64::encode(kubeconfig_content);
-        cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
-
-        // update info without taking care of the kubeconfig because we don't have it yet
-        let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
-    };
-
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
-    ));
 
     // When the user control the network/vpc configuration, we may hit a bug of the in tree aws load balancer controller
     // were if there is a custom dns server set for the VPC, kube-proxy nodes are not correctly configured and load balancer healthcheck are failing
@@ -1298,7 +1194,7 @@ fn create(
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             eks_aws_helm_charts(
-                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                qovery_terraform_config_file.clone().as_str(),
                 &charts_prerequisites,
                 Some(&temp_dir),
                 kubeconfig_path,
@@ -1345,7 +1241,7 @@ fn create(
                 disable_pleco: kubernetes.context().disable_pleco(),
             };
             ec2_aws_helm_charts(
-                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                qovery_terraform_config_file.as_str(),
                 &charts_prerequisites,
                 Some(&temp_dir),
                 kubeconfig_path,
@@ -1653,6 +1549,7 @@ fn delete(
     };
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
             let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
@@ -1769,8 +1666,6 @@ fn delete(
             }
         },
         Kind::Ec2 => {
-            let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
-
             // read config generated after terraform infra bootstrap/update
             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
                 .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;

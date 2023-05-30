@@ -210,6 +210,7 @@ pub enum Tag {
     AwsSdkDetachEC2Volumes,
     AwsSdkListEC2Instances,
     Base64DecodeIssue,
+    CannotReadFile,
 }
 
 impl From<errors::Tag> for Tag {
@@ -423,6 +424,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::AwsSdkDetachEC2Volumes => Tag::AwsSdkDetachEC2Volumes,
             errors::Tag::AwsSdkListEC2Instances => Tag::AwsSdkListEC2Instances,
             errors::Tag::Base64DecodeIssue => Tag::Base64DecodeIssue,
+            errors::Tag::CannotReadFile => Tag::CannotReadFile,
         }
     }
 }
