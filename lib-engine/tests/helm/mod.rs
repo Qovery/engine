@@ -158,7 +158,7 @@ fn test_port() -> Port {
         long_id: Uuid::new_v4(),
         port: 1234,
         is_default: true,
-        name: Some("my_port_name".to_string()),
+        name: "my_port_name".to_string(),
         publicly_accessible: true,
         protocol: Protocol::HTTP,
     }
