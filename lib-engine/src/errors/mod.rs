@@ -957,6 +957,8 @@ pub enum Tag {
     AwsSdkDetachEC2Volumes,
     /// Base64DecodeIssue: represents an error while trying to decode a base64 string
     Base64DecodeIssue,
+    /// CannotReadFile: Cannot read file
+    CannotReadFile,
 }
 
 impl Tag {
@@ -1482,6 +1484,24 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotCreateFile,
+            message.to_string(),
+            Some(error_message),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for read file
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error_message`: Raw error message.
+    pub fn new_cannot_read_file(event_details: EventDetails, error_message: CommandError) -> EngineError {
+        let message = "Cannot read file";
+        EngineError::new(
+            event_details,
+            Tag::CannotReadFile,
             message.to_string(),
             Some(error_message),
             None,

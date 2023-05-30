@@ -48,6 +48,7 @@ use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 use crate::utilities::create_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
+use super::vault::ClusterSecrets;
 
 pub trait ProviderOptions {}
 
@@ -230,6 +231,11 @@ impl FromStr for KubernetesVersion {
             "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
                 prefix: Some('v'.to_string()),
                 patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            }),
+            "v1.24.14+k3s1" => Ok(KubernetesVersion::V1_24 {
+                prefix: Some('v'.to_string()),
+                patch: Some(14),
                 suffix: Some("+k3s1".to_string()),
             }),
             _ => Err(()),
@@ -685,6 +691,14 @@ pub trait Kubernetes: Send + Sync {
 
         Ok(())
     }
+
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        qovery_terraform_config_file: String,
+        cluster_secrets: ClusterSecrets,
+        kubeconfig_file_path: Option<String>,
+    ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
 }
@@ -2162,6 +2176,14 @@ mod tests {
             Ok(K8sVersion::V1_23 {
                 prefix: Some("v".to_string()),
                 patch: Some(16),
+                suffix: Some("+k3s1".to_string()),
+            })
+        );
+        assert_eq!(
+            K8sVersion::from_str("v1.24.14+k3s1"),
+            Ok(K8sVersion::V1_24 {
+                prefix: Some("v".to_string()),
+                patch: Some(14),
                 suffix: Some("+k3s1".to_string()),
             })
         );
