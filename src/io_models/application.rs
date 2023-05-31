@@ -31,8 +31,7 @@ use super::UpdateStrategy;
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Protocol {
     HTTP,
-    TCP,
-    UDP,
+    GRPC,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -41,7 +40,7 @@ pub struct Port {
     pub long_id: Uuid,
     pub port: u16,
     pub is_default: bool,
-    pub name: Option<String>,
+    pub name: String,
     pub publicly_accessible: bool,
     pub protocol: Protocol,
 }

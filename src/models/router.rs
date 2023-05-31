@@ -96,7 +96,7 @@ impl<T: CloudProvider> Router<T> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
             context.execution_id(),
-            format!("databases/{long_id}"),
+            format!("routers/{long_id}"),
         )
         .map_err(|_| RouterError::InvalidConfig("Can't create workspace directory".to_string()))?;
 
@@ -181,7 +181,7 @@ impl<T: CloudProvider> Router<T> {
         let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((self.custom_domains.len() + 1) * (ports.len() + 1));
         for port in ports {
             hosts.push(HostDataTemplate {
-                domain_name: format!("p{}-{}", port.port, self.default_domain),
+                domain_name: format!("{}-{}", port.name, self.default_domain),
                 service_name: service_name.clone(),
                 service_port: port.port,
             });
@@ -196,7 +196,7 @@ impl<T: CloudProvider> Router<T> {
 
             for custom_domain in &self.custom_domains {
                 hosts.push(HostDataTemplate {
-                    domain_name: format!("p{}.{}", port.port, custom_domain.domain),
+                    domain_name: format!("{}.{}", port.name, custom_domain.domain),
                     service_name: service_name.clone(),
                     service_port: port.port,
                 });

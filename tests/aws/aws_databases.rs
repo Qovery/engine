@@ -285,7 +285,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
-                    name: None,
+                    name: "p1234".to_string(),
                     is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
