@@ -255,7 +255,6 @@ pub fn environment_3_apps_3_databases(
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -314,7 +313,6 @@ pub fn environment_3_apps_3_databases(
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -375,7 +373,6 @@ pub fn environment_3_apps_3_databases(
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -694,7 +691,6 @@ pub fn test_db(
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
             app.ports = vec![Port {
-                id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
                 port: 1234,
                 is_default: true,
@@ -1273,7 +1269,6 @@ pub fn test_db_on_upgrade(
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
             app.ports = vec![Port {
-                id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
                 port: 1234,
                 is_default: true,

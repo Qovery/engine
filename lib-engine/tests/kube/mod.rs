@@ -121,7 +121,6 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ports: vec![
                     Port {
                         long_id: Uuid::new_v4(),
-                        id: Uuid::new_v4().to_string(),
                         port: 8080,
                         is_default: true,
                         name: "http".to_string(),
@@ -213,7 +212,6 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 environment_vars: BTreeMap::default(),
                 branch: "basic-app-deploy".to_string(),
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 80,
                     is_default: true,

@@ -6,9 +6,6 @@ metadata:
   name: {{ id }}
   namespace: {{ namespace }}
   labels:
-    routerLongId: {{ long_id }}
-    envLongId: {{ environment_long_id }}
-    projectLongId: {{ project_long_id }}
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
     qovery.com/environment-id: {{ environment_long_id }}

@@ -57,7 +57,6 @@ pub fn working_environment(
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
                 port: 80,
                 is_default: true,
@@ -259,7 +258,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -318,7 +316,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -438,7 +435,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             mounted_files: vec![],
             branch: "echo-app".to_string(),
             ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
                 port: 5678,
                 is_default: true,
@@ -535,7 +531,6 @@ pub fn environment_only_http_server(
             mounted_files: vec![],
             branch: "main".to_string(),
             ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
                 port: 80,
                 is_default: true,
