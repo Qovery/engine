@@ -55,9 +55,9 @@ metadata:
       grpc_socket_keepalive on;
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
-      grpc_read_timeout {{ advanced_settings.network_ingress_grpc_read_timeout_seconds }}s
-      grpc_send_timeout {{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s;
-      client_body_timeout {{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s;
+      grpc_read_timeout "{{ advanced_settings.network_ingress_grpc_read_timeout_seconds }}s";
+      grpc_send_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+      client_body_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
 spec:
   tls:
     {%- if client_custom_domains|length > 0 %}
