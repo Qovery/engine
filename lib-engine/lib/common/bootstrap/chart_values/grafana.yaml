@@ -13,6 +13,7 @@ serviceAccount:
   create: true
   name:
   nameTest:
+  annotations: {}
 
 podDisruptionBudget: {}
 
@@ -89,3 +90,18 @@ grafana.ini:
     mode: console
   grafana_net:
     url: https://grafana.net
+
+env:
+  AWS_WEB_IDENTITY_TOKEN_FILE: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
+
+extraSecretMounts:
+   - name: aws-iam-token
+     mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+     readOnly: true
+     projected:
+       defaultMode: 420
+       sources:
+         - serviceAccountToken:
+             audience: sts.amazonaws.com
+             expirationSeconds: 86400
+             path: token

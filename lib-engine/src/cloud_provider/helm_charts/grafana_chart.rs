@@ -48,7 +48,7 @@ impl GrafanaChart {
 
 impl ToCommonHelmChart for GrafanaChart {
     fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+        let mut chart = CommonChart {
             chart_info: ChartInfo {
                 name: GrafanaChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -79,7 +79,25 @@ impl ToCommonHelmChart for GrafanaChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(GrafanaChartChecker::new())),
+        };
+
+        if let Some(conf) = &self.grafana_datasources.cloudwatch_config {
+            chart.chart_info.values.push(ChartSetValue {
+                // we use string templating (r"...") to escape dot in annotation's key
+                key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                value: conf.aws_iam_cloudwatch_role_arn.to_string(),
+            });
+            chart.chart_info.values.push(ChartSetValue {
+                key: "env.AWS_ROLE_ARN".to_string(),
+                value: conf.aws_iam_cloudwatch_role_arn.to_string(),
+            });
+            chart.chart_info.values.push(ChartSetValue {
+                key: "env.AWS_REGION".to_string(),
+                value: conf.region.to_string(),
+            });
         }
+
+        chart
     }
 }
 
@@ -97,16 +115,14 @@ impl GrafanaAdminUser {
 
 pub struct CloudWatchConfig {
     region: String,
-    aws_iam_cloudwatch_key: String,
-    aws_iam_cloudwatch_secret: String,
+    aws_iam_cloudwatch_role_arn: String,
 }
 
 impl CloudWatchConfig {
-    pub fn new(region: String, aws_iam_cloudwatch_key: String, aws_iam_cloudwatch_secret: String) -> Self {
+    pub fn new(region: String, aws_iam_cloudwatch_role_arn: String) -> Self {
         CloudWatchConfig {
             region,
-            aws_iam_cloudwatch_key,
-            aws_iam_cloudwatch_secret,
+            aws_iam_cloudwatch_role_arn,
         }
     }
 }
@@ -152,15 +168,10 @@ datasources:
       - name: Cloudwatch
         type: cloudwatch
         jsonData:
-          authType: keys
+          authType: default
           defaultRegion: {region}
-        secureJsonData:
-          accessKey: '{aws_iam_cloudwatch_key}'
-          secretKey: '{aws_iam_cloudwatch_secret}'
       ",
                     region = cloudwatch_config.region,
-                    aws_iam_cloudwatch_key = cloudwatch_config.aws_iam_cloudwatch_key,
-                    aws_iam_cloudwatch_secret = cloudwatch_config.aws_iam_cloudwatch_secret,
                 )
                 .as_str(),
             );
