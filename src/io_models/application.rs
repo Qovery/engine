@@ -36,7 +36,6 @@ pub enum Protocol {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Port {
-    pub id: String,
     pub long_id: Uuid,
     pub port: u16,
     pub is_default: bool,
@@ -133,6 +132,11 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
 
+    #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
+    pub network_ingress_grpc_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.grpc_read_timeout_seconds")]
+    pub network_ingress_grpc_read_timeout_seconds: u32,
+
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: i8,
@@ -167,6 +171,8 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
+            network_ingress_grpc_send_timeout_seconds: 60,
+            network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
         }
     }

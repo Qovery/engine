@@ -163,7 +163,6 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "http".to_string(),
@@ -172,7 +171,6 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),

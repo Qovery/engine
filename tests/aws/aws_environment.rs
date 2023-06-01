@@ -293,7 +293,6 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
             .into_iter()
             .map(|mut app| {
                 app.ports = vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
                     name: "p3000".to_string(),
@@ -364,7 +363,6 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
             .into_iter()
             .map(|mut app| {
                 app.ports = vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
                     is_default: true,
@@ -478,26 +476,41 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let infra_ctx = aws_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
-        let mut environment = helpers::environment::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment_with_router(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let mut modified_environment = environment.clone();
         modified_environment.applications.clear();
+        modified_environment.routers.clear();
 
-        for (idx, mut router) in environment.routers.into_iter().enumerate() {
+        for (idx, router) in environment.routers.into_iter().enumerate() {
             // add custom domain
-            let mut _router = router.clone();
-            _router.routes.clear();
-
+            let mut router = router.clone();
             let cd = CustomDomain {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
             };
 
             router.custom_domains = vec![cd];
+            modified_environment.routers.push(router);
         }
 
         for mut application in environment.applications.into_iter() {
             let mut advanced_settings = application.advanced_settings.borrow_mut();
+            application.ports.push(Port {
+                long_id: Uuid::new_v4(),
+                port: 5050,
+                is_default: false,
+                name: "grpc".to_string(),
+                publicly_accessible: true,
+                protocol: Protocol::GRPC,
+            });
             // disable custom domain check
             advanced_settings.deployment_custom_domain_check_enabled = false;
             modified_environment.applications.push(application);
@@ -1109,7 +1122,6 @@ fn deploy_container_with_no_router_on_aws_eks() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "p8080".to_string(),
@@ -1118,7 +1130,6 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),
@@ -1217,7 +1228,6 @@ fn deploy_container_with_storages_on_aws_eks() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "http".to_string(),
@@ -1339,7 +1349,6 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "http".to_string(),
@@ -1348,7 +1357,6 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),
@@ -1471,7 +1479,6 @@ fn deploy_container_with_router_on_aws_eks() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 80,
                     is_default: true,
                     name: "http".to_string(),
@@ -1480,7 +1487,6 @@ fn deploy_container_with_router_on_aws_eks() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),
@@ -1982,7 +1988,6 @@ fn test_restart_deployment() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "http".to_string(),
@@ -1991,7 +1996,6 @@ fn test_restart_deployment() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),
@@ -2104,7 +2108,6 @@ fn test_restart_statefulset() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     is_default: true,
                     name: "http".to_string(),
@@ -2113,7 +2116,6 @@ fn test_restart_statefulset() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     is_default: false,
                     name: "grpc".to_string(),

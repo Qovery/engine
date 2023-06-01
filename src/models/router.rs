@@ -6,6 +6,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::application::{Port, Protocol};
 use crate::io_models::context::Context;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
@@ -127,6 +128,48 @@ impl<T: CloudProvider> Router<T> {
         &self.workspace_directory
     }
 
+    fn to_host_data_template(
+        service_name: &str,
+        ports: &[&Port],
+        default_domain: &str,
+        custom_domains: &[CustomDomain],
+    ) -> Vec<HostDataTemplate> {
+        let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
+        for port in ports {
+            hosts.push(HostDataTemplate {
+                domain_name: format!("{}-{}", port.name, default_domain),
+                service_name: service_name.to_string(),
+                service_port: port.port,
+            });
+
+            if port.is_default {
+                hosts.push(HostDataTemplate {
+                    domain_name: default_domain.to_string(),
+                    service_name: service_name.to_string(),
+                    service_port: port.port,
+                });
+            }
+
+            for custom_domain in custom_domains {
+                hosts.push(HostDataTemplate {
+                    domain_name: format!("{}.{}", port.name, custom_domain.domain),
+                    service_name: service_name.to_string(),
+                    service_port: port.port,
+                });
+
+                if port.is_default {
+                    hosts.push(HostDataTemplate {
+                        domain_name: custom_domain.domain.clone(),
+                        service_name: service_name.to_string(),
+                        service_port: port.port,
+                    });
+                }
+            }
+        }
+
+        hosts
+    }
+
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>>
     where
         Self: Service,
@@ -177,39 +220,20 @@ impl<T: CloudProvider> Router<T> {
                 )
             };
 
-        // (custom_domain + default_domain) * (ports + default_port)
-        let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((self.custom_domains.len() + 1) * (ports.len() + 1));
-        for port in ports {
-            hosts.push(HostDataTemplate {
-                domain_name: format!("{}-{}", port.name, self.default_domain),
-                service_name: service_name.clone(),
-                service_port: port.port,
-            });
-
-            if port.is_default {
-                hosts.push(HostDataTemplate {
-                    domain_name: self.default_domain.clone(),
-                    service_name: service_name.clone(),
-                    service_port: port.port,
-                });
-            }
-
-            for custom_domain in &self.custom_domains {
-                hosts.push(HostDataTemplate {
-                    domain_name: format!("{}.{}", port.name, custom_domain.domain),
-                    service_name: service_name.clone(),
-                    service_port: port.port,
-                });
-
-                if port.is_default {
-                    hosts.push(HostDataTemplate {
-                        domain_name: custom_domain.domain.clone(),
-                        service_name: service_name.clone(),
-                        service_port: port.port,
-                    });
-                }
-            }
-        }
+        let http_ports: Vec<&Port> = ports
+            .iter()
+            .filter(|port| port.protocol == Protocol::HTTP)
+            .cloned()
+            .collect();
+        let grpc_ports: Vec<&Port> = ports
+            .iter()
+            .filter(|port| port.protocol == Protocol::GRPC)
+            .cloned()
+            .collect();
+        let http_hosts =
+            Self::to_host_data_template(&service_name, &http_ports, &self.default_domain, &self.custom_domains);
+        let grpc_hosts =
+            Self::to_host_data_template(&service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
 
         // whitelist source ranges
         context.insert(
@@ -241,7 +265,8 @@ impl<T: CloudProvider> Router<T> {
             &router_should_declare_domain_to_external_dns,
         );
         context.insert("client_custom_domains", &client_custom_domains);
-        context.insert("hosts", &hosts);
+        context.insert("http_hosts", &http_hosts);
+        context.insert("grpc_hosts", &grpc_hosts);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 

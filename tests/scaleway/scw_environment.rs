@@ -15,7 +15,7 @@ use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
-use qovery_engine::io_models::router::{Route, Router};
+use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::TransactionResult;
@@ -295,7 +295,6 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             .into_iter()
             .map(|mut app| {
                 app.ports = vec![Port {
-                    id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
                     name: "p3000".to_string(),
@@ -351,35 +350,61 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let region = ScwZone::from_str(
-            secrets
-                .SCALEWAY_TEST_CLUSTER_REGION
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
-                .to_string()
-                .as_str(),
-        )
-        .expect("Unknown SCW region");
         let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
-        let environment = helpers::environment::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment_with_router(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut modified_environment = environment.clone();
+        modified_environment.applications.clear();
+        modified_environment.routers.clear();
+
+        for (idx, router) in environment.routers.into_iter().enumerate() {
+            // add custom domain
+            let mut router = router.clone();
+            let cd = CustomDomain {
+                domain: format!("fake-custom-domain-{idx}.qovery.io"),
+                target_domain: format!("validation-domain-{idx}"),
+            };
+
+            router.custom_domains = vec![cd];
+            modified_environment.routers.push(router);
+        }
+
+        for mut application in environment.applications.into_iter() {
+            application.ports.push(Port {
+                long_id: Uuid::new_v4(),
+                port: 5050,
+                is_default: false,
+                name: "grpc".to_string(),
+                publicly_accessible: true,
+                protocol: Protocol::GRPC,
+            });
+            // disable custom domain check
+            application.advanced_settings.deployment_custom_domain_check_enabled = false;
+            modified_environment.applications.push(application);
+        }
+
+        environment = modified_environment;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = environment.clone();
-        let env_action_for_delete = environment_delete.clone();
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
-
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
-            warn!("cannot clean environments, error: {:?}", e);
-        }
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     })
@@ -1119,7 +1144,6 @@ fn deploy_container_with_no_router_on_scw() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     name: "http".to_string(),
                     is_default: true,
@@ -1128,7 +1152,6 @@ fn deploy_container_with_no_router_on_scw() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     name: "grpc".to_string(),
                     is_default: false,
@@ -1233,7 +1256,6 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8080,
                     name: "http".to_string(),
                     is_default: true,
@@ -1242,7 +1264,6 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     name: "grpc".to_string(),
                     is_default: false,
@@ -1365,7 +1386,6 @@ fn deploy_container_with_router_on_scw() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 80,
                     name: "http".to_string(),
                     is_default: true,
@@ -1374,7 +1394,6 @@ fn deploy_container_with_router_on_scw() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    id: Uuid::new_v4().to_string(),
                     port: 8081,
                     name: "grpc".to_string(),
                     is_default: false,

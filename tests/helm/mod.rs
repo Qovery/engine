@@ -154,7 +154,6 @@ fn test_environment(kube: &dyn Kubernetes) -> Environment {
 
 fn test_port() -> Port {
     Port {
-        id: "my_port_id".to_string(),
         long_id: Uuid::new_v4(),
         port: 1234,
         is_default: true,
@@ -311,6 +310,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
+            network_ingress_grpc_send_timeout_seconds: 60,
+            network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 31,
         },
         AwsAppExtraSettings {},
@@ -387,6 +388,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
+            network_ingress_grpc_send_timeout_seconds: 60,
+            network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 41,
             security_service_account_name: "".to_string(),
         },
