@@ -47,9 +47,9 @@ pub struct AwsEksQoveryTerraformConfig {
     pub aws_iam_eks_user_mapper_secret: String,
     pub aws_iam_cluster_autoscaler_role_arn: String,
     pub aws_iam_cloudwatch_role_arn: String,
+    pub aws_iam_loki_role_arn: String,
+    pub aws_s3_loki_bucket_name: String,
     pub loki_storage_config_aws_s3: String,
-    pub aws_iam_loki_storage_key: String,
-    pub aws_iam_loki_storage_secret: String,
 }
 
 pub struct EksChartsConfigPrerequisites {
@@ -203,10 +203,10 @@ pub fn eks_aws_helm_charts(
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
                 LokiS3BucketConfiguration {
-                    s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
                     region: Some(chart_config_prerequisites.region.to_string()),
-                    access_key_id: Some(qovery_terraform_config.aws_iam_loki_storage_key),
-                    secret_access_key: Some(qovery_terraform_config.aws_iam_loki_storage_secret),
+                    bucketname: Some(qovery_terraform_config.aws_s3_loki_bucket_name),
+                    s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
+                    aws_iam_loki_role_arn: Some(qovery_terraform_config.aws_iam_loki_role_arn),
                     ..Default::default()
                 },
             )
