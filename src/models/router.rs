@@ -11,6 +11,7 @@ use crate::io_models::context::Context;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
 use crate::utilities::to_short_id;
+use std::iter;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -128,48 +129,6 @@ impl<T: CloudProvider> Router<T> {
         &self.workspace_directory
     }
 
-    fn to_host_data_template(
-        service_name: &str,
-        ports: &[&Port],
-        default_domain: &str,
-        custom_domains: &[CustomDomain],
-    ) -> Vec<HostDataTemplate> {
-        let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
-        for port in ports {
-            hosts.push(HostDataTemplate {
-                domain_name: format!("{}-{}", port.name, default_domain),
-                service_name: service_name.to_string(),
-                service_port: port.port,
-            });
-
-            if port.is_default {
-                hosts.push(HostDataTemplate {
-                    domain_name: default_domain.to_string(),
-                    service_name: service_name.to_string(),
-                    service_port: port.port,
-                });
-            }
-
-            for custom_domain in custom_domains {
-                hosts.push(HostDataTemplate {
-                    domain_name: format!("{}.{}", port.name, custom_domain.domain),
-                    service_name: service_name.to_string(),
-                    service_port: port.port,
-                });
-
-                if port.is_default {
-                    hosts.push(HostDataTemplate {
-                        domain_name: custom_domain.domain.clone(),
-                        service_name: service_name.to_string(),
-                        service_port: port.port,
-                    });
-                }
-            }
-        }
-
-        hosts
-    }
-
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>>
     where
         Self: Service,
@@ -178,17 +137,6 @@ impl<T: CloudProvider> Router<T> {
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
-
-        let cluster_domain = kubernetes.dns_provider().domain().to_string();
-        let client_custom_domains = self
-            .custom_domains
-            .iter()
-            // we filter out domain that belongs to our cluster, we dont need to create certificate for them
-            .filter(|domain| !domain.domain.ends_with(&cluster_domain))
-            .map(|cd| CustomDomainDataTemplate {
-                domain: cd.domain.clone(),
-            })
-            .collect::<Vec<_>>();
 
         // We can only have 1 router per application/container.
         // Core never mix multiple services inside one router
@@ -220,6 +168,14 @@ impl<T: CloudProvider> Router<T> {
                 )
             };
 
+        // Get the alternative names we need to generate for the certificate
+        // For custom domain, we need to generate a subdomain for each port. p80.mydomain.com, p443.mydomain.com
+        let cluster_domain = kubernetes.dns_provider().domain().to_string();
+        context.insert(
+            "certificate_alternative_names",
+            &generate_certificate_alternative_names(&self.custom_domains, &cluster_domain, &ports),
+        );
+
         let http_ports: Vec<&Port> = ports
             .iter()
             .filter(|port| port.protocol == Protocol::HTTP)
@@ -230,10 +186,8 @@ impl<T: CloudProvider> Router<T> {
             .filter(|port| port.protocol == Protocol::GRPC)
             .cloned()
             .collect();
-        let http_hosts =
-            Self::to_host_data_template(&service_name, &http_ports, &self.default_domain, &self.custom_domains);
-        let grpc_hosts =
-            Self::to_host_data_template(&service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
+        let http_hosts = to_host_data_template(&service_name, &http_ports, &self.default_domain, &self.custom_domains);
+        let grpc_hosts = to_host_data_template(&service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
 
         // whitelist source ranges
         context.insert(
@@ -264,7 +218,6 @@ impl<T: CloudProvider> Router<T> {
             "router_should_declare_domain_to_external_dns",
             &router_should_declare_domain_to_external_dns,
         );
-        context.insert("client_custom_domains", &client_custom_domains);
         context.insert("http_hosts", &http_hosts);
         context.insert("grpc_hosts", &grpc_hosts);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
@@ -314,6 +267,82 @@ impl<T: CloudProvider> Router<T> {
     pub fn helm_chart_dir(&self) -> String {
         format!("{}/common/charts/q-ingress-tls", self.lib_root_directory,)
     }
+}
+
+fn to_host_data_template(
+    service_name: &str,
+    ports: &[&Port],
+    default_domain: &str,
+    custom_domains: &[CustomDomain],
+) -> Vec<HostDataTemplate> {
+    let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
+    for port in ports {
+        hosts.push(HostDataTemplate {
+            domain_name: format!("{}-{}", port.name, default_domain),
+            service_name: service_name.to_string(),
+            service_port: port.port,
+        });
+
+        if port.is_default {
+            hosts.push(HostDataTemplate {
+                domain_name: default_domain.to_string(),
+                service_name: service_name.to_string(),
+                service_port: port.port,
+            });
+        }
+
+        for custom_domain in custom_domains {
+            hosts.push(HostDataTemplate {
+                domain_name: format!("{}.{}", port.name, custom_domain.domain),
+                service_name: service_name.to_string(),
+                service_port: port.port,
+            });
+
+            if port.is_default {
+                hosts.push(HostDataTemplate {
+                    domain_name: custom_domain.domain.clone(),
+                    service_name: service_name.to_string(),
+                    service_port: port.port,
+                });
+            }
+        }
+    }
+
+    hosts
+}
+
+fn generate_certificate_alternative_names(
+    custom_domains: &[CustomDomain],
+    cluster_domain: &str,
+    ports: &[&Port],
+) -> Vec<CustomDomainDataTemplate> {
+    if ports.is_empty() || custom_domains.is_empty() {
+        return vec![];
+    }
+
+    custom_domains
+        .iter()
+        // we filter out domain that belongs to our cluster, we dont need to create certificate for them
+        .filter(|domain| !domain.domain.ends_with(&cluster_domain))
+        .flat_map(|cd| {
+            let default_domain = CustomDomainDataTemplate {
+                domain: cd.domain.clone(),
+            };
+
+            // if there is a single public port, we can use only the default domain and
+            // don't generate subdomains for each port. (to avoid migration for clients)
+            iter::once(default_domain).chain(if ports.len() == 1 {
+                vec![]
+            } else {
+                ports
+                    .iter()
+                    .map(|port| CustomDomainDataTemplate {
+                        domain: format!("{}.{}", port.name, cd.domain),
+                    })
+                    .collect()
+            })
+        })
+        .collect::<Vec<_>>()
 }
 
 impl<T: CloudProvider> Service for Router<T> {
@@ -389,11 +418,70 @@ where
 #[cfg(test)]
 mod tests {
     use super::RouterAdvancedSettings;
+    use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate};
+    use crate::io_models::application::{Port, Protocol};
+    use crate::models::router::generate_certificate_alternative_names;
 
     #[test]
     pub fn test_router_advanced_settings() {
         // this should be true by default
         let router_advanced_settings_defaults = RouterAdvancedSettings::default();
         assert!(router_advanced_settings_defaults.custom_domain_check_enabled);
+    }
+
+    #[test]
+    pub fn test_certificate_alternative_names() {
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "toto.com".to_string(),
+                target_domain: "".to_string(),
+            },
+            CustomDomain {
+                domain: "cluster.com".to_string(),
+                target_domain: "".to_string(),
+            },
+        ];
+
+        let ports: Vec<&Port> = vec![];
+
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
+        assert_eq!(certificate_names.len(), 0);
+
+        let port = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            publicly_accessible: true,
+            port: 80,
+            is_default: false,
+            protocol: Protocol::HTTP,
+        };
+        let ports = vec![&port];
+
+        // We don't generate subdomains when there is a singe public port
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
+        assert_eq!(certificate_names.len(), 1);
+        assert_eq!(certificate_names[0].domain, "toto.com");
+
+        let port2 = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            publicly_accessible: true,
+            port: 8080,
+            is_default: false,
+            protocol: Protocol::GRPC,
+        };
+        let ports = vec![&port, &port2];
+
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
+        assert_eq!(certificate_names.len(), 3);
+        assert!(certificate_names.contains(&CustomDomainDataTemplate {
+            domain: "toto.com".to_string()
+        }));
+        assert!(certificate_names.contains(&CustomDomainDataTemplate {
+            domain: "http.toto.com".to_string()
+        }));
+        assert!(certificate_names.contains(&CustomDomainDataTemplate {
+            domain: "grpc.toto.com".to_string()
+        }));
     }
 }
