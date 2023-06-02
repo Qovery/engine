@@ -1,14 +1,30 @@
-resource "aws_iam_user" "iam_eks_loki" {
-  name = "qovery-logs-${var.kubernetes_cluster_id}"
-  tags = local.tags_eks
-}
+resource "aws_iam_role" "iam_eks_loki" {
+  name        = "qovery-logs-${var.kubernetes_cluster_id}"
+  tags        = local.tags_eks
 
-resource "aws_iam_access_key" "iam_eks_loki" {
-  user    = aws_iam_user.iam_eks_loki.name
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "${aws_iam_openid_connect_provider.oidc.arn}"
+      },
+      "Action": ["sts:AssumeRoleWithWebIdentity"],
+      "Condition": {
+        "StringEquals": {
+          "${replace(aws_iam_openid_connect_provider.oidc.url, "https://", "")}:sub": "system:serviceaccount:logging:loki"
+        }
+      }
+    }
+  ]
+}
+POLICY
 }
 
 resource "aws_iam_policy" "loki_s3_policy" {
-  name = aws_iam_user.iam_eks_loki.name
+  name = aws_iam_role.iam_eks_loki.name
   description = "Policy for logs storage"
 
   policy = <<POLICY
@@ -17,7 +33,9 @@ resource "aws_iam_policy" "loki_s3_policy" {
     "Statement": [
         {
             "Effect": "Allow",
-            "Action": "s3:*",
+            "Action": [
+                "s3:*"
+            ],
             "Resource": "*"
         }
     ]
@@ -25,10 +43,21 @@ resource "aws_iam_policy" "loki_s3_policy" {
 POLICY
 }
 
-resource "aws_iam_user_policy_attachment" "s3_loki_attachment" {
-  user       = aws_iam_user.iam_eks_loki.name
+resource "aws_iam_role_policy_attachment" "s3_loki_attachment" {
+  role       = aws_iam_role.iam_eks_loki.name
   policy_arn = aws_iam_policy.loki_s3_policy.arn
 }
+
+# remove this block after migration
+resource "aws_iam_user" "iam_eks_loki" {
+  name = "qovery-logs-${var.kubernetes_cluster_id}"
+  tags = local.tags_eks
+}
+
+resource "aws_iam_access_key" "iam_eks_loki" {
+  user    = aws_iam_user.iam_eks_loki.name
+}
+# end of removal
 
 resource "aws_kms_key" "s3_logs_kms_encryption" {
   description             = "s3 logs encryption"
@@ -52,44 +81,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "lok_bucket_enrypt
 }
 
 // S3 bucket to store indexes and logs
-resource "aws_s3_bucket" "loki_bucket" {
-  bucket = aws_iam_user.iam_eks_loki.name
-  force_destroy = true
-
-  tags = merge(
-    local.tags_eks,
-    {
-      {% if is_deletion_step %}
-      "can_be_deleted_by_owner" = "true"
-      {% endif %}
-      "Name" = "Applications logs"
-    }
-  )
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
-  bucket = aws_s3_bucket.loki_bucket.id
-  rule {
-    id = "on_delete_rule"
-
-    expiration {
-      days = 1
-      expired_object_delete_marker = true
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 1
-    }
-
-    {% if is_deletion_step %}
-    status = "Enabled"
-    {% else %}
-    status = "Disabled"
-    {% endif %}
-  }
-
-}
-
 resource "aws_s3_bucket_versioning" "loki_bucket_versioning" {
   bucket = aws_s3_bucket.loki_bucket.id
   versioning_configuration {
@@ -122,3 +113,42 @@ resource "aws_s3_bucket_public_access_block" "loki_access" {
   block_public_policy = true
   block_public_acls = true
 }
+
+resource "aws_s3_bucket" "loki_bucket" {
+  bucket = aws_iam_role.iam_eks_loki.name
+  force_destroy = true
+
+  tags = merge(
+    local.tags_eks,
+    {
+    {% if is_deletion_step %}
+    "can_be_deleted_by_owner" = "true"
+    {% endif %}
+    "Name" = "Applications logs"
+    }
+  )
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  rule {
+    id = "on_delete_rule"
+
+    expiration {
+      days = 1
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+  {% if is_deletion_step %}
+  status = "Enabled"
+  {% else %}
+  status = "Disabled"
+  {% endif %}
+  }
+
+}
+

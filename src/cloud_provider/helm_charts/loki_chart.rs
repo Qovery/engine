@@ -19,11 +19,9 @@ pub struct LokiS3BucketConfiguration {
     pub region: Option<String>,
     pub s3_config: Option<String>,
     pub bucketname: Option<String>,
-    pub endpoint: Option<String>,
-    pub access_key_id: Option<String>,
-    pub secret_access_key: Option<String>,
     pub insecure: bool,
     pub use_path_style: bool,
+    pub aws_iam_loki_role_arn: Option<String>,
 }
 
 pub struct LokiChart {
@@ -126,15 +124,6 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.endpoint".to_string(),
-                        value: self
-                            .loki_s3_bucket_configuration
-                            .endpoint
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
-                            .to_string(), // Qovery setting
-                    },
-                    ChartSetValue {
                         key: "loki.storage_config.aws.sse_encryption".to_string(),
                         value: match self.encryption_type {
                             LokiEncryptionType::None => "false",
@@ -147,19 +136,11 @@ impl ToCommonHelmChart for LokiChart {
                         value: self.loki_s3_bucket_configuration.insecure.to_string(), // Qovery settings
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.access_key_id".to_string(),
+                        // we use string templating (r"...") to escape dot in annotation's key
+                        key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
-                            .access_key_id
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
-                            .to_string(), // Qovery setting
-                    },
-                    ChartSetValue {
-                        key: "loki.storage_config.aws.secret_access_key".to_string(),
-                        value: self
-                            .loki_s3_bucket_configuration
-                            .secret_access_key
+                            .aws_iam_loki_role_arn
                             .as_ref()
                             .unwrap_or(&"".to_string())
                             .to_string(), // Qovery setting
