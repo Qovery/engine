@@ -701,37 +701,6 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-#[ignore = "No database deployed in this version"]
-fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-#[ignore = "No database deployed in this version"]
-fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-#[ignore]
-fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, false);
 }

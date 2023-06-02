@@ -33,8 +33,11 @@ resources:
     memory: "{{ database_ram_size_in_mib }}Mi"
     cpu: "{{ database_total_cpus }}"
 
-# need to use custom liveness/readniess probes to avoid over-using resources usage
+# on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
+# otherwise customize the default probes timers, because with minimal resources it taskes time to start
 # https://github.com/bitnami/charts/issues/10264
+{% set version_number = version | int -%}
+{% if version_number >= 6 -%}
 customLivenessProbe:
   exec:
     command:
@@ -57,6 +60,22 @@ customReadinessProbe:
   timeoutSeconds: 10
   successThreshold: 1
   failureThreshold: 6
+{% else -%}
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+{% endif %}
 
 service:
   nameOverride: {{ service_name }}
