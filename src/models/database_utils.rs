@@ -13,20 +13,24 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     supported_postgres_versions.extend(v10);
 
     // v11
-    let v11 = generate_supported_version(11, 1, 19, Some(0), Some(0), None);
+    let v11 = generate_supported_version(11, 1, 20, Some(0), Some(0), None);
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 14, Some(0), Some(0), None);
+    let v12 = generate_supported_version(12, 2, 15, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
     // v13
-    let v13 = generate_supported_version(13, 1, 10, Some(0), Some(0), None);
+    let v13 = generate_supported_version(13, 1, 11, Some(0), Some(0), None);
     supported_postgres_versions.extend(v13);
 
     // v14
-    let v14 = generate_supported_version(14, 4, 7, Some(0), Some(0), None);
+    let v14 = generate_supported_version(14, 4, 8, Some(0), Some(0), None);
     supported_postgres_versions.extend(v14);
+
+    // v15
+    let v15 = generate_supported_version(15, 1, 3, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v15);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
@@ -36,11 +40,11 @@ pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
     // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(41), None);
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(42), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(32), None);
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(33), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
@@ -50,21 +54,20 @@ pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<Stri
     let mut supported_mongodb_versions = HashMap::new();
 
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
-
-    // v3.6
-    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(23), None);
-    supported_mongodb_versions.extend(mongo_version);
-
-    // v4.0
-    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(27), None);
-    supported_mongodb_versions.extend(mongo_version);
-
     // v4.2
     let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(21), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.4
     let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(15), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v5.0
+    let mongo_version = generate_supported_version(5, 0, 0, Some(2), Some(18), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v6.0
+    let mongo_version = generate_supported_version(6, 0, 0, Some(0), Some(6), None);
     supported_mongodb_versions.extend(mongo_version);
 
     get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
@@ -74,11 +77,11 @@ pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String
     let mut supported_redis_versions = HashMap::with_capacity(6);
     // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
 
-    supported_redis_versions.insert("7".to_string(), "7.0.9".to_string());
-    supported_redis_versions.insert("7.0".to_string(), "7.0.9".to_string());
-    supported_redis_versions.insert("6".to_string(), "6.2.11".to_string());
-    supported_redis_versions.insert("6.2".to_string(), "6.2.11".to_string());
-    supported_redis_versions.insert("6.0".to_string(), "6.2.11".to_string());
+    supported_redis_versions.insert("7".to_string(), "7.0.11".to_string());
+    supported_redis_versions.insert("7.0".to_string(), "7.0.11".to_string());
+    supported_redis_versions.insert("6".to_string(), "6.2.12".to_string());
+    supported_redis_versions.insert("6.2".to_string(), "6.2.12".to_string());
+    supported_redis_versions.insert("6.0".to_string(), "6.2.12".to_string());
     supported_redis_versions.insert("5".to_string(), "5.0.14".to_string());
     supported_redis_versions.insert("5.0".to_string(), "5.0.14".to_string());
 
