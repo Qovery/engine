@@ -1,14 +1,30 @@
-resource "aws_iam_user" "iam_grafana_cloudwatch" {
-  name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
-  tags = local.tags_eks
-}
+resource "aws_iam_role" "iam_grafana_cloudwatch" {
+  name        = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
+  tags        = local.tags_eks
 
-resource "aws_iam_access_key" "iam_grafana_cloudwatch" {
-  user    = aws_iam_user.iam_grafana_cloudwatch.name
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "${aws_iam_openid_connect_provider.oidc.arn}"
+      },
+      "Action": ["sts:AssumeRoleWithWebIdentity"],
+      "Condition": {
+        "StringEquals": {
+          "${replace(aws_iam_openid_connect_provider.oidc.url, "https://", "")}:sub": "system:serviceaccount:prometheus:grafana"
+        }
+      }
+    }
+  ]
+}
+POLICY
 }
 
 resource "aws_iam_policy" "grafana_cloudwatch_policy" {
-  name = aws_iam_user.iam_grafana_cloudwatch.name
+  name = aws_iam_role.iam_grafana_cloudwatch.name
   description = "Policy for K8s API/Scheduler logs visualisation from Cloudwatch"
 
   policy = <<POLICY
@@ -58,7 +74,18 @@ resource "aws_iam_policy" "grafana_cloudwatch_policy" {
 POLICY
 }
 
-resource "aws_iam_user_policy_attachment" "grafana_cloudwatch_attachment" {
-  user       = aws_iam_user.iam_grafana_cloudwatch.name
+# remove this block after migration
+resource "aws_iam_user" "iam_grafana_cloudwatch" {
+  name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
+  tags = local.tags_eks
+}
+
+resource "aws_iam_access_key" "iam_grafana_cloudwatch" {
+  user    = aws_iam_user.iam_grafana_cloudwatch.name
+}
+# end of removal
+
+resource "aws_iam_role_policy_attachment" "grafana_cloudwatch_attachment" {
+  role       = aws_iam_role.iam_grafana_cloudwatch.name
   policy_arn = aws_iam_policy.grafana_cloudwatch_policy.arn
 }

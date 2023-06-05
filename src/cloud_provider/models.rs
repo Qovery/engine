@@ -51,7 +51,7 @@ pub struct CustomDomain {
     pub target_domain: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct CustomDomainDataTemplate {
     pub domain: String,
 }

@@ -23,6 +23,7 @@ use crate::helpers::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
@@ -81,7 +82,7 @@ pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineSe
     Ok(services_version)
 }
 
-fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
+fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind>) -> Context {
     let execution_id = execution_id();
     let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
@@ -104,7 +105,12 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
         disable_pleco: Some(true),
         is_first_cluster_deployment: None,
     };
-    let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    if let Some(kkind) = kind {
+        if kkind == KKind::Eks {
+            enabled_features.push(Features::Grafana)
+        }
+    }
     let secrets = FuncTestsSecrets::new();
     let versions = get_qovery_app_version(&secrets.QOVERY_API_URL.unwrap()).unwrap();
 
@@ -130,16 +136,16 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
     )
 }
 
-pub fn context_for_cluster(organization_id: Uuid, cluster_id: Uuid) -> Context {
-    context(organization_id, cluster_id, 14400)
+pub fn context_for_cluster(organization_id: Uuid, cluster_id: Uuid, kind: Option<KKind>) -> Context {
+    context(organization_id, cluster_id, 14400, kind)
 }
 
 pub fn context_for_ec2(organization_id: Uuid, cluster_id: Uuid) -> Context {
-    context(organization_id, cluster_id, 7200)
+    context(organization_id, cluster_id, 7200, None)
 }
 
 pub fn context_for_resource(organization_id: Uuid, cluster_id: Uuid) -> Context {
-    context(organization_id, cluster_id, 3600)
+    context(organization_id, cluster_id, 3600, None)
 }
 
 pub fn logger() -> Box<dyn Logger> {

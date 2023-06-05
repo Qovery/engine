@@ -13,8 +13,7 @@ pub struct ClusterAutoscalerChart {
     cloud_provider: String, // TODO(benjaminch): Pass cloud provider type here instead of string
     chart_image_region: String,
     cluster_name: String,
-    aws_iam_cluster_autoscaler_key: String,
-    aws_iam_cluster_autoscaler_secret: String,
+    aws_iam_cluster_autoscaler_role_arn: String,
     prometheus_namespace: HelmChartNamespaces,
     ff_metrics_history_enabled: bool,
 }
@@ -25,8 +24,7 @@ impl ClusterAutoscalerChart {
         cloud_provider: String,
         chart_image_region: String,
         cluster_name: String,
-        aws_iam_cluster_autoscaler_key: String,
-        aws_iam_cluster_autoscaler_secret: String,
+        aws_iam_cluster_autoscaler_role_arn: String,
         prometheus_namespace: HelmChartNamespaces,
         ff_metrics_history_enabled: bool,
     ) -> Self {
@@ -44,8 +42,7 @@ impl ClusterAutoscalerChart {
             cloud_provider,
             chart_image_region,
             cluster_name,
-            aws_iam_cluster_autoscaler_key,
-            aws_iam_cluster_autoscaler_secret,
+            aws_iam_cluster_autoscaler_role_arn,
             prometheus_namespace,
             ff_metrics_history_enabled,
         }
@@ -77,12 +74,9 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                         value: self.cluster_name.to_string(),
                     },
                     ChartSetValue {
-                        key: "awsAccessKeyID".to_string(),
-                        value: self.aws_iam_cluster_autoscaler_key.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "awsSecretAccessKey".to_string(),
-                        value: self.aws_iam_cluster_autoscaler_secret.to_string(),
+                        // we use string templating (r"...") to escape dot in annotation's key
+                        key: r"rbac.serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                        value: self.aws_iam_cluster_autoscaler_role_arn.to_string(),
                     },
                     // observability
                     ChartSetValue {
@@ -148,7 +142,6 @@ mod tests {
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
         );
@@ -179,7 +172,6 @@ mod tests {
         // setup:
         let chart = ClusterAutoscalerChart::new(
             None,
-            "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
@@ -215,7 +207,6 @@ mod tests {
         // setup:
         let chart = ClusterAutoscalerChart::new(
             None,
-            "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),

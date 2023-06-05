@@ -26,7 +26,7 @@ fn create_and_destroy_kapsule_cluster(
             test_name,
             Kind::Scw,
             KKind::ScwKapsule,
-            context_for_cluster(organization_id, cluster_id),
+            context_for_cluster(organization_id, cluster_id, None),
             logger(),
             zone.as_str(),
             None,

@@ -30,7 +30,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context_for_cluster(organization_id, cluster_id);
+        let context = context_for_cluster(organization_id, cluster_id, None);
         let engine = scw_default_infra_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 
@@ -70,7 +70,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context_for_cluster(organization_id, cluster_id);
+        let context = context_for_cluster(organization_id, cluster_id, None);
         let engine = scw_default_infra_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 

@@ -10,17 +10,6 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
   tags                     = local.tags_eks
 }
 
-data "tls_certificate" "cluster_cert" {
-  url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-}
-
-resource "aws_iam_openid_connect_provider" "oidc" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.cluster_cert.certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-  tags            = local.tags_eks
-}
-
 resource "aws_iam_role" "ebs_csi_irsa_role" {
   name        = "eks-ebs-csi-plugin-${var.kubernetes_cluster_id}"
   description = "EBS CSI plugin role for EKS cluster ${var.kubernetes_cluster_id}"

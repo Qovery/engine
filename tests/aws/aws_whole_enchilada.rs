@@ -28,7 +28,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context_for_cluster(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id, Some(KKind::Eks));
 
     let cluster_domain = format!(
         "{}.{}",
@@ -76,7 +76,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context_for_cluster(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id, Some(KKind::Eks));
 
     let cluster_domain = format!(
         "{}.{}",
@@ -119,7 +119,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context_for_cluster(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id, Some(KKind::Eks));
 
     let cluster_domain = format!(
         "{}.{}",
@@ -165,7 +165,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context_for_cluster(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id, Some(KKind::Eks));
 
     let cluster_domain = format!(
         "{}.{}",

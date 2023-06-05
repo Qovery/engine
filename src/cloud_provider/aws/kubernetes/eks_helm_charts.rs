@@ -45,10 +45,8 @@ use std::path::Path;
 pub struct AwsEksQoveryTerraformConfig {
     pub aws_iam_eks_user_mapper_key: String,
     pub aws_iam_eks_user_mapper_secret: String,
-    pub aws_iam_cluster_autoscaler_key: String,
-    pub aws_iam_cluster_autoscaler_secret: String,
-    pub aws_iam_cloudwatch_key: String,
-    pub aws_iam_cloudwatch_secret: String,
+    pub aws_iam_cluster_autoscaler_role_arn: String,
+    pub aws_iam_cloudwatch_role_arn: String,
     pub loki_storage_config_aws_s3: String,
     pub aws_iam_loki_storage_key: String,
     pub aws_iam_loki_storage_secret: String,
@@ -158,8 +156,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.cloud_provider.to_string(),
         chart_config_prerequisites.region.to_string(),
         chart_config_prerequisites.cluster_name.to_string(),
-        qovery_terraform_config.aws_iam_cluster_autoscaler_key.to_string(),
-        qovery_terraform_config.aws_iam_cluster_autoscaler_secret.to_string(),
+        qovery_terraform_config.aws_iam_cluster_autoscaler_role_arn.to_string(),
         prometheus_namespace,
         chart_config_prerequisites.ff_metrics_history_enabled,
     )
@@ -297,8 +294,7 @@ pub fn eks_aws_helm_charts(
                     loki_namespace: loki_namespace.to_string(),
                     cloudwatch_config: Some(CloudWatchConfig::new(
                         chart_config_prerequisites.region.to_string(),
-                        qovery_terraform_config.aws_iam_cloudwatch_key.to_string(),
-                        qovery_terraform_config.aws_iam_cloudwatch_secret,
+                        qovery_terraform_config.aws_iam_cloudwatch_role_arn,
                     )),
                 },
                 AwsStorageType::GP2.to_k8s_storage_class(),

@@ -1,8 +1,6 @@
 cloudProvider: set-by-engine-code
 
-awsAccessKeyID: set-by-engine-code
 awsRegion: set-by-engine-code
-awsSecretAccessKey: set-by-engine-code
 
 autoDiscovery:
   clusterName: set-by-engine-code
@@ -27,3 +25,11 @@ resources:
   requests:
     cpu: 100m
     memory: 640Mi
+
+rbac:
+  serviceAccount:
+    annotations: {}
+
+additionalLabels:
+  k8s-addon: "cluster-autoscaler.addons.k8s.io"
+  k8s-app: "cluster-autoscaler"

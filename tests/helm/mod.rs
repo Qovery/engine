@@ -71,7 +71,7 @@ pub struct TestInfo {
 
 fn test_kubernetes() -> Box<dyn Kubernetes> {
     let cluster_id = Uuid::new_v4();
-    let context = context_for_cluster(Uuid::new_v4(), cluster_id);
+    let context = context_for_cluster(Uuid::new_v4(), cluster_id, None);
     Box::new(
         EKS::new(
             context.clone(),

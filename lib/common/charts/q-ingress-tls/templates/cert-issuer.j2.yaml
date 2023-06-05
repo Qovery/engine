@@ -1,4 +1,4 @@
-{%- if client_custom_domains|length > 0 %}
+{%- if certificate_alternative_names|length > 0 %}
 ---
 apiVersion: cert-manager.io/v1
 kind: Issuer
