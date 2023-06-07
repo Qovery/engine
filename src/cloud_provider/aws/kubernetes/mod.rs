@@ -1015,12 +1015,15 @@ fn create(
                                 }
                             }
 
-                            OperationResult::Ok(())
+                            OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                event_details.clone(),
+                                e.clone(),
+                            )))
                         }
                         Kind::Ec2 => {
                             if let Err(err) = force_terraform_ec2_instance_type_switch(
                                 temp_dir.as_str(),
-                                e,
+                                e.clone(),
                                 kubernetes.logger(),
                                 &event_details,
                                 kubernetes.context().is_dry_run_deploy(),
@@ -1035,7 +1038,10 @@ fn create(
                                 )));
                             }
 
-                            OperationResult::Ok(())
+                            OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                event_details.clone(),
+                                e.clone(),
+                            )))
                         }
                         _ => OperationResult::Err(Box::new(EngineError::new_terraform_error(event_details.clone(), e))),
                     },

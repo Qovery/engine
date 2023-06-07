@@ -64,15 +64,12 @@ loki:
           period: 24h
   storage_config:
     aws:
-      s3: set-by-engine-code # qovery setting
-      endpoint: set-by-engine-code # qovery setting
-      region: set-by-engine-code # qovery setting
-      access_key_id: set-by-engine-code # qovery setting
-      secret_access_key: set-by-engine-code # qovery setting
-      s3forcepathstyle: set-by-engine-code # qovery setting
-      bucketnames: set-by-engine-code # qovery setting
-      sse_encryption: set-by-engine-code # qovery setting
-      insecure: set-by-engine-code # qovery setting
+      s3: # qovery setting
+      region: # qovery setting
+      s3forcepathstyle: # qovery setting
+      bucketnames: # qovery setting
+      sse_encryption: # qovery setting
+      insecure: # qovery setting
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3
@@ -127,3 +124,6 @@ singleBinary:
       mountPath: /var/loki
   # persistence:
   #   storageClass: set-by-engine-code # qovery setting
+
+serviceAccount:
+  annotations: {}

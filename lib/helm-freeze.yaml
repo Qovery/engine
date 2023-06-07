@@ -67,12 +67,16 @@ charts:
     repo_name: grafana
     version: 6.10.0
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mongodb
     repo_name: bitnami
-    version: 7.14.5
+    version: 13.13.1
     dest: services
     no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/mongodb
+      Overriden chart:
+      * service name: we use our own naming convention (for the Core)
+      * persistence: bitnami legacy naming was data, not datadir
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mysql
     repo_name: bitnami

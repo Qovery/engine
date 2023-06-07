@@ -354,6 +354,7 @@ pub async fn increase_storage_size(
             EngineError::new_k8s_cannot_edit_pvc(event_details.clone(), invalid_pvc.pvc_name.to_string(), e)
         })?;
 
+        // todo(pmavro): find a way to get the name of the volume claim template
         let persistent_volume_claim_template_name = match invalid_statefulset.service_type {
             ServiceType::Database(type_) => match type_ {
                 DatabaseType::Redis => "redis-data",
