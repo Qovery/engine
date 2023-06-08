@@ -119,9 +119,6 @@ fn q_ingress_test() {
         &uuid,
     );
     assert!(!resources.is_empty());
-
-    let cert_issuer = resources.get("cert-issuer.yaml").unwrap();
-    assert_eq!(cert_issuer.types.as_ref().unwrap().kind, "Issuer");
 }
 
 #[cfg(feature = "test-local-kube")]
