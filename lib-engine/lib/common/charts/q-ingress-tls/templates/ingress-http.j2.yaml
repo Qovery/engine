@@ -12,16 +12,12 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
   annotations:
     kubernetes.io/tls-acme: "true"
-    {%- if router_should_declare_domain_to_external_dns == true %}
+    {%- if has_wildcard_domain == true %}
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- else %}
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
-    {%- if certificate_alternative_names|length > 0 %}
-    cert-manager.io/issuer: {{ id }}
-    {%- else %}
-    cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
-    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     kubernetes.io/ingress.class: "nginx-qovery"
     ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
@@ -32,7 +28,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-methods: "{{ advanced_settings.network_ingress_cors_allow_methods }}"
     nginx.ingress.kubernetes.io/cors-allow-headers: "{{ advanced_settings.network_ingress_cors_allow_headers }}"
     {%- endif %}
-    {%- if sticky_sessions_enabled == true %}
+    {%- if advanced_settings.network_ingress_sticky_session_enable == true %}
     # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
     nginx.ingress.kubernetes.io/affinity: "cookie"
     nginx.ingress.kubernetes.io/affinity-mode: "persistent"
@@ -45,13 +41,13 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "{{ advanced_settings.network_ingress_proxy_connect_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "{{ advanced_settings.network_ingress_proxy_send_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "{{ advanced_settings.network_ingress_proxy_read_timeout_seconds }}"
-    {%- if whitelist_source_range_enabled == true %}
+    {%- if advanced_settings.network_ingress_whitelist_source_range %}
     nginx.ingress.kubernetes.io/whitelist-source-range: "{{ advanced_settings.network_ingress_whitelist_source_range }}"
     {%- endif %}
     {%- if advanced_settings.network_ingress_denylist_source_range %}
     nginx.ingress.kubernetes.io/denylist-source-range: "{{ advanced_settings.network_ingress_denylist_source_range }}"
     {%- endif %}
-    {%- if basic_auth_htaccess %}
+    {%- if advanced_settings.basic_auth %}
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ sanitized_name }}
     nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
