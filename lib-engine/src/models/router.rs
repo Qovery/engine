@@ -226,6 +226,14 @@ fn to_host_data_template(
     let (wildcards_domains, custom_domains): (Vec<&CustomDomain>, Vec<&CustomDomain>) =
         custom_domains.iter().partition(|cd| cd.is_wildcard());
     for wildcard_domain in &wildcards_domains {
+        for port in ports {
+            hosts.push(HostDataTemplate {
+                domain_name: format!("{}.{}", port.name, wildcard_domain.domain_without_wildcard()),
+                service_name: service_name.to_string(),
+                service_port: port.port,
+            });
+        }
+
         let Some(port) = ports.iter().find(|p| p.is_default) else {
             continue;
         };
@@ -398,9 +406,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::RouterAdvancedSettings;
-    use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate};
+    use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate};
     use crate::io_models::application::{Port, Protocol};
-    use crate::models::router::generate_certificate_alternative_names;
+    use crate::models::router::{generate_certificate_alternative_names, to_host_data_template};
 
     #[test]
     pub fn test_router_advanced_settings() {
@@ -486,6 +494,136 @@ mod tests {
         }));
         assert!(certificate_names.contains(&CustomDomainDataTemplate {
             domain: "*.toto.cluster.com".to_string()
+        }));
+    }
+
+    #[test]
+    pub fn test_ingress_host_template_with_wildcard() {
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            publicly_accessible: true,
+            port: 80,
+            is_default: true,
+            protocol: Protocol::HTTP,
+        };
+        let port_grpc = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            publicly_accessible: true,
+            port: 8080,
+            is_default: false,
+            protocol: Protocol::GRPC,
+        };
+        let custom_domains = vec![CustomDomain {
+            domain: "*.toto.mydomain.com".to_string(),
+            target_domain: "".to_string(),
+        }];
+
+        let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains);
+        assert_eq!(ret.len(), 5);
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "*.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+
+        // If the port is not the default one, there should not be  default and wildcard route/host
+        let ret = to_host_data_template("srv", &[&port_grpc], "cluster.com", &custom_domains);
+        assert_eq!(ret.len(), 2);
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "grpc-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "grpc.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+        }));
+
+        // we mix both wildcard and non wildcard domains
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "super.mydomain.com".to_string(),
+                target_domain: "".to_string(),
+            },
+            CustomDomain {
+                domain: "*.toto.mydomain.com".to_string(),
+                target_domain: "".to_string(),
+            },
+        ];
+        let ret = to_host_data_template("srv", &[&port_http, &port_grpc], "cluster.com", &custom_domains);
+        assert_eq!(ret.len(), 10);
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "grpc-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "grpc.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "*.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http.toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "toto.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "super.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http.super.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "grpc.super.mydomain.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
         }));
     }
 }
