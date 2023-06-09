@@ -147,13 +147,11 @@ impl<T: CloudProvider> Router<T> {
             .service_long_id;
 
         // Check if the service is an application
-        let (service_name, ports, sticky_session_enabled) =
+        let (service_name, ports) =
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
-                (
-                    application.sanitized_name(),
-                    application.public_ports(),
-                    application.advanced_settings().network_ingress_sticky_session_enable,
-                )
+                // advanced settings
+                context.insert("advanced_settings", &application.advanced_settings());
+                (application.sanitized_name(), application.public_ports())
             } else {
                 let container = environment
                     .containers
@@ -161,11 +159,10 @@ impl<T: CloudProvider> Router<T> {
                     .find(|container| container.long_id() == &service_id)
                     .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
 
-                (
-                    container.kube_service_name(),
-                    container.public_ports(),
-                    container.advanced_settings().network_ingress_sticky_session_enable,
-                )
+                // advanced settings
+                context.insert("advanced_settings", &container.advanced_settings());
+
+                (container.kube_service_name(), container.public_ports())
             };
 
         // Get the alternative names we need to generate for the certificate
@@ -189,73 +186,15 @@ impl<T: CloudProvider> Router<T> {
         let http_hosts = to_host_data_template(&service_name, &http_ports, &self.default_domain, &self.custom_domains);
         let grpc_hosts = to_host_data_template(&service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
 
-        // whitelist source ranges
-        context.insert(
-            "whitelist_source_range_enabled",
-            &self.advanced_settings.whitelist_source_range.is_some(),
-        );
-
-        // autoscaler
-        context.insert("nginx_enable_horizontal_autoscaler", "false");
-        context.insert("nginx_minimum_replicas", "1");
-        context.insert("nginx_maximum_replicas", "10");
-        // resources
-        context.insert("nginx_requests_cpu", "200m");
-        context.insert("nginx_requests_memory", "128Mi");
-        context.insert("nginx_limit_cpu", "200m");
-        context.insert("nginx_limit_memory", "128Mi");
-
-        // TODO(benjaminch): remove this one once subdomain migration has been done, CF ENG-1302
-        // If domain contains cluster id in it, it means cluster has already declared wildcard and there is no need to declare app domain since it can use the cluster wildcard.
-        let router_should_declare_domain_to_external_dns = !self
-            .default_domain
-            .contains(format!(".{}.", target.kubernetes.id()).as_str());
-
-        let tls_domain = kubernetes.dns_provider().domain().wildcarded();
-        context.insert("router_tls_domain", tls_domain.to_string().as_str());
-        context.insert("router_default_domain", self.default_domain.as_str());
-        context.insert(
-            "router_should_declare_domain_to_external_dns",
-            &router_should_declare_domain_to_external_dns,
-        );
+        context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts", &http_hosts);
         context.insert("grpc_hosts", &grpc_hosts);
-        context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
-        context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
         let lets_encrypt_url = match target.is_test_cluster {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("spec_acme_server", lets_encrypt_url);
-
-        // Nginx
-        context.insert("sticky_sessions_enabled", &sticky_session_enabled);
-
-        // basic auth
-        context.insert("basic_auth_htaccess", &self.advanced_settings.basic_auth);
-
-        // ingress advanced settings + basic auth
-        // 1 app == 1 ingress, we filter only on the app to retrieve advanced settings
-        if let Some(route) = self.routes.first() {
-            if let Some(application) = environment
-                .applications
-                .iter()
-                .find(|app| app.long_id() == &route.service_long_id)
-            {
-                // advanced settings
-                context.insert("advanced_settings", &application.advanced_settings());
-            }
-
-            if let Some(container) = environment
-                .containers
-                .iter()
-                .find(|app| app.long_id() == &route.service_long_id)
-            {
-                // advanced settings
-                context.insert("advanced_settings", &container.advanced_settings());
-            }
-        };
 
         Ok(context)
     }
@@ -275,7 +214,36 @@ fn to_host_data_template(
     default_domain: &str,
     custom_domains: &[CustomDomain],
 ) -> Vec<HostDataTemplate> {
+    if ports.is_empty() {
+        return vec![];
+    }
+
     let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
+
+    // Special case for wildcard domains, were we want to create only 2 routes
+    // 1 for the wildcard domain and 1 for the default domain (*.mydomain.com and mydomain.com)
+    // It impose that there is only 1 public port, as else we cant route to the correct service
+    let (wildcards_domains, custom_domains): (Vec<&CustomDomain>, Vec<&CustomDomain>) =
+        custom_domains.iter().partition(|cd| cd.is_wildcard());
+    for wildcard_domain in &wildcards_domains {
+        let Some(port) = ports.iter().find(|p| p.is_default) else {
+            continue;
+        };
+
+        hosts.push(HostDataTemplate {
+            domain_name: wildcard_domain.domain.clone(),
+            service_name: service_name.to_string(),
+            service_port: port.port,
+        });
+        hosts.push(HostDataTemplate {
+            domain_name: wildcard_domain.domain_without_wildcard().to_string(),
+            service_name: service_name.to_string(),
+            service_port: port.port,
+        });
+    }
+
+    // Normal case
+    // We create 1 route per port and per custom domain
     for port in ports {
         hosts.push(HostDataTemplate {
             domain_name: format!("{}-{}", port.name, default_domain),
@@ -291,7 +259,7 @@ fn to_host_data_template(
             });
         }
 
-        for custom_domain in custom_domains {
+        for custom_domain in &custom_domains {
             hosts.push(HostDataTemplate {
                 domain_name: format!("{}.{}", port.name, custom_domain.domain),
                 service_name: service_name.to_string(),
@@ -311,6 +279,12 @@ fn to_host_data_template(
     hosts
 }
 
+// Generating certificates correctly is tricky
+// Ideally we would like to always generate a certificate for the root domain (I.e: example.com) and all the subdomains (I.e: *.example.com)
+// But we have limited access to the dns of the clients. So we can't always generate a wildcard certificate for the domain.
+// LetsEncrypt has a limit that wildcard certificates can only be generated with DNS01 challenge, which requires us to have access to the dns of the client.
+// So we must use HTTP01 challenge, by specifing each ASN domain we want to generate a certificate for. (and hopping client have correctly set their DNS records)
+// Wildcard domains if for now a special case, were clients give us access to their cloudflare DNS, so we can generate wildcard certificates for them.
 fn generate_certificate_alternative_names(
     custom_domains: &[CustomDomain],
     cluster_domain: &str,
@@ -323,15 +297,21 @@ fn generate_certificate_alternative_names(
     custom_domains
         .iter()
         // we filter out domain that belongs to our cluster, we dont need to create certificate for them
-        .filter(|domain| !domain.domain.ends_with(&cluster_domain))
+        // we keep wildcard domains, as we will need to create certificate for them
+        .filter(|domain| domain.is_wildcard() || !domain.domain.ends_with(&cluster_domain))
         .flat_map(|cd| {
+            // We always want the root domain to be in the certificate (I.e: example.com, or if *.example.com -> example.com)
             let default_domain = CustomDomainDataTemplate {
-                domain: cd.domain.clone(),
+                domain: cd.domain_without_wildcard().to_string(),
             };
 
-            // if there is a single public port, we can use only the default domain and
-            // don't generate subdomains for each port. (to avoid migration for clients)
-            iter::once(default_domain).chain(if ports.len() == 1 {
+            // If it is a wildcard domain, we want to generate the wildcard certificate (*.example.com)
+            // if there is a single public port, we can use only the default domain and don't generate subdomains for each port. (to avoid migration for clients)
+            iter::once(default_domain).chain(if cd.is_wildcard() {
+                vec![CustomDomainDataTemplate {
+                    domain: cd.domain.to_string(),
+                }]
+            } else if ports.len() == 1 {
                 vec![]
             } else {
                 ports
@@ -482,6 +462,30 @@ mod tests {
         }));
         assert!(certificate_names.contains(&CustomDomainDataTemplate {
             domain: "grpc.toto.com".to_string()
+        }));
+
+        // We generate wildcard certificate when there is a wildcard domain
+        let custom_domains = vec![CustomDomain {
+            domain: "*.toto.cluster.com".to_string(),
+            target_domain: "".to_string(),
+        }];
+        let port2 = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            publicly_accessible: true,
+            port: 8080,
+            is_default: false,
+            protocol: Protocol::GRPC,
+        };
+        let ports = vec![&port, &port2];
+
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
+        assert_eq!(certificate_names.len(), 2);
+        assert!(certificate_names.contains(&CustomDomainDataTemplate {
+            domain: "toto.cluster.com".to_string()
+        }));
+        assert!(certificate_names.contains(&CustomDomainDataTemplate {
+            domain: "*.toto.cluster.com".to_string()
         }));
     }
 }

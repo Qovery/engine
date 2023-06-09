@@ -50,6 +50,17 @@ pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
 }
+impl CustomDomain {
+    const WILDCARD_PREFIX: &'static str = "*.";
+
+    pub fn is_wildcard(&self) -> bool {
+        self.domain.starts_with(Self::WILDCARD_PREFIX)
+    }
+
+    pub fn domain_without_wildcard(&self) -> &str {
+        self.domain.strip_prefix(Self::WILDCARD_PREFIX).unwrap_or(&self.domain)
+    }
+}
 
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct CustomDomainDataTemplate {

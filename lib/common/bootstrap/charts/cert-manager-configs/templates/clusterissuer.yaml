@@ -12,16 +12,20 @@ spec:
     privateKeySecretRef:
       name: letsencrypt-acme-priv-key
 
+    # https://cert-manager.io/docs/configuration/acme/
     solvers:
+      - http01:
+          ingress:
+            class: nginx-qovery
       - dns01:
-{{ if eq .Values.externalDnsProvider "cloudflare" }}
+          {{ if eq .Values.externalDnsProvider "cloudflare" }}
           cloudflare:
             email: {{ .Values.provider.cloudflare.email }}
             apiTokenSecretRef:
               name: {{ .Values.externalDnsProvider }}-api-token-secret
               key: apiToken
-{{ end }}
-{{ if eq .Values.externalDnsProvider "pdns" }}
+          {{ end }}
+          {{ if eq .Values.externalDnsProvider "pdns" }}
           webhook:
             groupName: acme.qovery.com
             solverName: qovery
@@ -36,4 +40,9 @@ spec:
               apiPortSecretRef:
                 key: apiPort
                 name: {{ .Values.externalDnsProvider }}-api-token-secret
-{{ end }}
+          {{ end }}
+        selector:
+          dnsZones:
+            {{- range .Values.managedDns }}
+            - "{{ . }}"
+            {{- end }}
