@@ -67,7 +67,7 @@ pub struct CustomDomainDataTemplate {
     pub domain: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Eq, PartialEq)]
 pub struct HostDataTemplate {
     pub domain_name: String,
     pub service_name: String,

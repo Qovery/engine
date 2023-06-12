@@ -52,10 +52,10 @@ pub(super) fn get_managed_postgres_version(requested_version: String) -> Result<
     supported_postgres_versions.extend(v12);
 
     // v13
-    let v13 = generate_supported_version(13, 3, 7, None, None, None);
+    let v13 = generate_supported_version(13, 3, 10, None, None, None);
     supported_postgres_versions.extend(v13);
 
-    let v14 = generate_supported_version(14, 1, 3, None, None, None);
+    let v14 = generate_supported_version(14, 1, 7, None, None, None);
     supported_postgres_versions.extend(v14);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
@@ -88,9 +88,9 @@ mod tests {
         // managed version
         assert_eq!(get_managed_postgres_version("12".to_string()).unwrap(), "12.11");
         assert_eq!(get_managed_postgres_version("12.7".to_string()).unwrap(), "12.7");
-        assert_eq!(get_managed_postgres_version("13".to_string()).unwrap(), "13.7");
+        assert_eq!(get_managed_postgres_version("13".to_string()).unwrap(), "13.10");
         assert_eq!(get_managed_postgres_version("13.5".to_string()).unwrap(), "13.5");
-        assert_eq!(get_managed_postgres_version("14".to_string()).unwrap(), "14.3");
+        assert_eq!(get_managed_postgres_version("14".to_string()).unwrap(), "14.7");
         assert_eq!(get_managed_postgres_version("14.2".to_string()).unwrap(), "14.2");
         assert_eq!(
             get_managed_postgres_version("12.3.0".to_string())
