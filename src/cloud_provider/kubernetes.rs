@@ -1,12 +1,14 @@
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
-use kube::api::{ListParams, ObjectMeta, PostParams};
+use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
@@ -1546,13 +1548,13 @@ pub fn filter_svc_loadbalancers(load_balancers: ObjectList<Service>) -> Vec<Serv
 pub async fn kube_create_namespace_if_not_exists(
     kube: &kube::Client,
     namespace_name: &str,
-    labels: Option<std::collections::BTreeMap<String, String>>,
+    labels: BTreeMap<String, String>,
 ) -> Result<(), Error> {
-    let namespace = Api::all(kube.clone());
-    let namespace_labels = Namespace {
+    let ns_api = Api::all(kube.clone());
+    let namespace = Namespace {
         metadata: ObjectMeta {
             name: Some(namespace_name.to_string()),
-            labels,
+            labels: Some(labels.clone()),
             ..Default::default()
         },
         spec: None,
@@ -1560,13 +1562,23 @@ pub async fn kube_create_namespace_if_not_exists(
     };
 
     // create namespace
-    if let Err(e) = namespace.create(&PostParams::default(), &namespace_labels).await {
+    if let Err(e) = ns_api.create(&PostParams::default(), &namespace).await {
         match e {
             // namespace already exists
             Error::Api(api_err) if api_err.code == 409 => {}
             _ => return Err(e),
         }
     };
+
+    // We patch the labels to make sure they are up to date
+    let patch_labels = json!({
+        "metadata": {
+            "labels": labels
+        }
+    });
+    ns_api
+        .patch(namespace_name, &PatchParams::default(), &Patch::Merge(patch_labels))
+        .await?;
 
     Ok(())
 }
@@ -1598,9 +1610,9 @@ pub async fn kube_copy_secret_to_another_namespace(
 
 #[cfg(test)]
 mod tests {
-
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
+    use std::collections::BTreeMap;
 
     use crate::cloud_provider::kubernetes::KubernetesVersion as K8sVersion;
     use crate::cloud_provider::kubernetes::{
@@ -1680,7 +1692,12 @@ mod tests {
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_create_namespace() {
         let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
-        assert!(block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).is_ok(),);
+        assert!(block_on(kube_create_namespace_if_not_exists(
+            &kube_client,
+            "qovery-test-ns",
+            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())])
+        ))
+        .is_ok());
     }
 
     #[test]
