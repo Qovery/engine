@@ -97,9 +97,11 @@ charts:
       * service name: we use our own naming convention (for the Core)
   - name: redis
     repo_name: bitnami
-    version: 12.0.1
+    version: 17.11.4
     dest: services
     no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/redis
   - name: pleco
     version: 0.11.1
     repo_name: pleco
