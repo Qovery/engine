@@ -793,7 +793,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "c5da00d2463061787e5fc2e31e7cd67877fd9881".to_string(),
+                app_commit: "0ce035590a117ff0683c273a359c7a452f639dd1".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn),
@@ -831,7 +831,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "71990e977a60c87034530614607494a96dee2254".to_string(),
+                app_commit: "1dec771b8bfdeeb71df0d56ebea9d4f6c2be5705".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name),
                      "PG_HOST".to_string() => base64::encode(db_fqdn),

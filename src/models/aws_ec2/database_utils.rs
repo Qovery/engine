@@ -5,16 +5,14 @@ use std::collections::HashMap;
 pub(super) fn get_managed_mysql_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
+    // aws rds describe-db-engine-versions --engine mysql --query "*[].{Engine:Engine,EngineVersion:EngineVersion}" --output text
 
     // v5.7
-    let mut v57 = generate_supported_version(5, 7, 7, Some(33), Some(38), None);
-    v57.remove("5.7.35");
-    v57.remove("5.7.36");
+    let v57 = generate_supported_version(5, 7, 7, Some(42), Some(42), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let mut v8 = generate_supported_version(8, 0, 0, Some(23), Some(28), None);
-    v8.remove("8.0.24");
+    let v8 = generate_supported_version(8, 0, 0, Some(32), Some(32), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
@@ -23,12 +21,12 @@ pub(super) fn get_managed_mysql_version(requested_version: String) -> Result<Str
 pub(super) fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mongodb_versions = HashMap::new();
 
-    // v3.6.0
-    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(0), None);
-    supported_mongodb_versions.extend(mongo_version);
-
     // v4.0.0
     let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
+    supported_mongodb_versions.extend(mongo_version);
+
+    // v5.0.0
+    let mongo_version = generate_supported_version(5, 0, 0, Some(0), Some(0), None);
     supported_mongodb_versions.extend(mongo_version);
 
     get_supported_version_to_use("DocumentDB", supported_mongodb_versions, requested_version)
@@ -38,25 +36,27 @@ pub(super) fn get_managed_postgres_version(requested_version: String) -> Result<
     let mut supported_postgres_versions = HashMap::new();
 
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
-
-    // v10
-    let v10 = generate_supported_version(10, 17, 21, None, None, None);
-    supported_postgres_versions.extend(v10);
+    // aws rds describe-db-engine-versions --engine postgres --query "*[].{Engine:Engine,EngineVersion:EngineVersion}" --output text
 
     // v11
-    let v11 = generate_supported_version(11, 12, 16, None, None, None);
+    let v11 = generate_supported_version(11, 12, 20, None, None, None);
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 7, 11, None, None, None);
+    let v12 = generate_supported_version(12, 7, 15, None, None, None);
     supported_postgres_versions.extend(v12);
 
     // v13
-    let v13 = generate_supported_version(13, 3, 7, None, None, None);
+    let v13 = generate_supported_version(13, 3, 11, None, None, None);
     supported_postgres_versions.extend(v13);
 
-    let v14 = generate_supported_version(14, 1, 3, None, None, None);
+    // v14
+    let v14 = generate_supported_version(14, 1, 8, None, None, None);
     supported_postgres_versions.extend(v14);
+
+    // v15
+    let v15 = generate_supported_version(15, 2, 3, None, None, None);
+    supported_postgres_versions.extend(v15);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
@@ -86,8 +86,8 @@ mod tests {
     #[test]
     fn check_postgres_version() {
         // managed version
-        assert_eq!(get_managed_postgres_version("12".to_string()).unwrap(), "12.11");
-        assert_eq!(get_managed_postgres_version("12.11".to_string()).unwrap(), "12.11");
+        assert_eq!(get_managed_postgres_version("12".to_string()).unwrap(), "12.15");
+        assert_eq!(get_managed_postgres_version("12.15".to_string()).unwrap(), "12.15");
         assert_eq!(
             get_managed_postgres_version("12.3.0".to_string())
                 .unwrap_err()
@@ -103,7 +103,7 @@ mod tests {
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_self_hosted_postgres_version("12".to_string()).unwrap(), "12.14.0");
+        assert_eq!(get_self_hosted_postgres_version("12".to_string()).unwrap(), "12.15.0");
         assert_eq!(get_self_hosted_postgres_version("12.11".to_string()).unwrap(), "12.11.0");
         assert_eq!(get_self_hosted_postgres_version("12.10.0".to_string()).unwrap(), "12.10.0");
         assert_eq!(
@@ -130,9 +130,9 @@ mod tests {
         );
 
         // self-hosted version
-        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.9");
-        assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.11");
-        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.2.11");
+        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.11");
+        assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.12");
+        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.2.12");
         assert_eq!(
             get_self_hosted_redis_version("1.0".to_string())
                 .unwrap_err()
@@ -145,20 +145,20 @@ mod tests {
     #[test]
     fn check_mysql_version() {
         // managed version
-        assert_eq!(get_managed_mysql_version("8".to_string()).unwrap(), "8.0.28");
-        assert_eq!(get_managed_mysql_version("8.0".to_string()).unwrap(), "8.0.28");
-        assert_eq!(get_managed_mysql_version("8.0.27".to_string()).unwrap(), "8.0.27");
+        assert_eq!(get_managed_mysql_version("8".to_string()).unwrap(), "8.0.32");
+        assert_eq!(get_managed_mysql_version("8.0".to_string()).unwrap(), "8.0.32");
+        assert_eq!(get_managed_mysql_version("8.0.32".to_string()).unwrap(), "8.0.32");
         assert_eq!(
-            get_managed_mysql_version("8.0.31".to_string())
+            get_managed_mysql_version("8.0.99".to_string())
                 .unwrap_err()
                 .message(SafeOnly)
                 .as_str(),
-            "RDS MySQL 8.0.31 version is not supported"
+            "RDS MySQL 8.0.99 version is not supported"
         );
         // self-hosted version
-        assert_eq!(get_self_hosted_mysql_version("5".to_string()).unwrap(), "5.7.41");
-        assert_eq!(get_self_hosted_mysql_version("5.7".to_string()).unwrap(), "5.7.41");
-        assert_eq!(get_self_hosted_mysql_version("5.7.31".to_string()).unwrap(), "5.7.31");
+        assert_eq!(get_self_hosted_mysql_version("5".to_string()).unwrap(), "5.7.42");
+        assert_eq!(get_self_hosted_mysql_version("5.7".to_string()).unwrap(), "5.7.42");
+        assert_eq!(get_self_hosted_mysql_version("5.7.42".to_string()).unwrap(), "5.7.42");
         assert_eq!(
             get_self_hosted_mysql_version("1.0".to_string())
                 .unwrap_err()

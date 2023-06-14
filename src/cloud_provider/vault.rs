@@ -227,6 +227,9 @@ impl ClusterSecrets {
         }
     }
 
+    /// Create or update a secret in vault
+    /// If the secret already exists and has the same content, no update will be made
+    /// ignore_kubeconfig_compare is used to avoid to compare kubeconfig_b64. Useful for EC2 when k3s is not ready yet but EC2 instance is
     pub fn create_or_update_secret(
         &self,
         qvault_client: &QVaultClient,

@@ -631,6 +631,7 @@ impl Kapsule {
         };
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
@@ -730,7 +731,7 @@ impl Kapsule {
             Some(x) => x.cluster_url,
             None => None,
         };
-        let mut cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
+        let cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
             self.cloud_provider.access_key_id(),
             self.cloud_provider.secret_access_key(),
             self.options.scaleway_project_id.to_string(),
@@ -750,20 +751,12 @@ impl Kapsule {
         // send cluster info with kubeconfig
         // create vault connection (Vault connectivity should not be on the critical deployment path,
         // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-        let vault_conn = match QVaultClient::new(event_details.clone()) {
-            Ok(x) => Some(x),
-            Err(_) => None,
-        };
-        if let Some(vault) = vault_conn {
-            // encode base64 kubeconfig
-            let kubeconfig_content =
-                fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
-            let kubeconfig_b64 = base64::encode(kubeconfig_content);
-            cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
-
-            // update info without taking care of the kubeconfig because we don't have it yet
-            let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
-        };
+        let _ = self.update_vault_config(
+            event_details.clone(),
+            qovery_terraform_config_file,
+            cluster_secrets,
+            Some(kubeconfig_path.to_string_lossy().to_string()),
+        );
 
         let current_nodegroups = match self
             .get_existing_sanitized_node_groups(cluster_info.expect("A cluster should be present at this create stage"))
@@ -1788,5 +1781,42 @@ impl Kubernetes for Kapsule {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        _qovery_terraform_config_file: String,
+        cluster_secrets: ClusterSecrets,
+        kubeconfig_file_path: Option<String>,
+    ) -> Result<(), Box<EngineError>> {
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            // encode base64 kubeconfig
+            let kubeconfig = match kubeconfig_file_path {
+                Some(x) => fs::read_to_string(x.clone())
+                    .map_err(|e| {
+                        EngineError::new_cannot_retrieve_cluster_config_file(
+                            event_details.clone(),
+                            CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                        )
+                    })
+                    .expect("kubeconfig was not found while it should be present"),
+                None => {
+                    let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
+                    kubeconfig_path
+                }
+            };
+            let kubeconfig_b64 = base64::encode(kubeconfig);
+            let mut cluster_secrets_update = cluster_secrets;
+            cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
+
+            // update info without taking care of the kubeconfig because we don't have it yet
+            let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details);
+        };
+        Ok(())
     }
 }

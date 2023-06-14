@@ -19,12 +19,16 @@ pub struct NamespaceDeployment {
 
 impl DeploymentAction for NamespaceDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let mut namespace_labels: Option<BTreeMap<String, String>> = None;
+        let mut namespace_labels: BTreeMap<String, String> = BTreeMap::from([
+            ("qovery.com/environment-id".to_string(), target.environment.long_id.to_string()),
+            (
+                "qovery.com/project-id".to_string(),
+                target.environment.project_long_id.to_string(),
+            ),
+        ]);
+
         if let Some(resource_expiration) = &self.resource_expiration {
-            namespace_labels = Some(BTreeMap::from([(
-                "ttl".to_string(),
-                format!("{}", resource_expiration.as_secs()),
-            )]));
+            namespace_labels.insert("ttl".to_string(), format!("{}", resource_expiration.as_secs()));
         };
 
         // create a namespace with labels if it does not exist

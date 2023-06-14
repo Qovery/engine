@@ -64,9 +64,9 @@ fn test_ec2_database(
             logger.clone(),
             &localisation,
             Kind::Ec2,
-            KubernetesVersion::V1_23 {
+            KubernetesVersion::V1_24 {
                 prefix: Some('v'.to_string()),
-                patch: Some(16),
+                patch: Some(14),
                 suffix: Some("+k3s1".to_string()),
             },
             &cluster_domain,
