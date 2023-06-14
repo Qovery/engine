@@ -56,6 +56,7 @@ use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use tokio::time::Duration;
 
+use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 
 mod addons;
@@ -1084,10 +1085,17 @@ fn create(
     }
 
     let kubeconfig_path = match kubernetes.kind() {
-        Kind::Eks | Kind::Ec2 => {
+        Kind::Eks => {
             let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
             kubernetes.put_kubeconfig_file_to_object_storage(current_kubeconfig_path.as_str())?;
             current_kubeconfig_path
+        }
+        Kind::Ec2 => {
+            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+            // wait for EC2 k3S kubeconfig to be ready and valid
+            // no need to push it to object storage, it's already done by the EC2 instance itself
+            EC2::get_and_check_if_kubeconfig_is_valid(kubernetes, event_details.clone(), qovery_terraform_config)?
         }
         _ => {
             return Err(Box::new(EngineError::new_unsupported_cluster_kind(

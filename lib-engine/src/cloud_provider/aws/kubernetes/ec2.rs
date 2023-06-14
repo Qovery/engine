@@ -13,9 +13,9 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::{print_action, wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::terraform::{terraform_init_validate_plan_apply, TerraformError};
+use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::dns_provider::DnsProvider;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
@@ -36,7 +36,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::ec2_helm_charts::get_aws_ec2_qovery_terraform_config;
+use super::ec2_helm_charts::{get_aws_ec2_qovery_terraform_config, AwsEc2QoveryTerraformConfig};
 
 /// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
 pub struct EC2 {
@@ -136,6 +136,95 @@ impl EC2 {
 
     pub fn is_instance_allowed(instance_type: AwsInstancesType) -> bool {
         instance_type.is_instance_allowed()
+    }
+
+    // EC2 instances push themselves the kubeconfig to S3 storage
+    // We need to be sure the content of the kubeconfig is the correct one (matching the EC2 instance FQDN)
+    pub fn get_and_check_if_kubeconfig_is_valid(
+        kubernetes: &dyn Kubernetes,
+        event_details: EventDetails,
+        qovery_terraform_config: AwsEc2QoveryTerraformConfig,
+    ) -> Result<String, Box<EngineError>> {
+        let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+            Ok(p) => p,
+            Err(e) => {
+                let msg = format!(
+                    "Couldn't get the kubernetes port from Terraform config (convertion issue): {}",
+                    &qovery_terraform_config.aws_ec2_public_hostname
+                );
+                kubernetes.logger().log(EngineEvent::Error(
+                    EngineError::new_error_on_cloud_provider_information(
+                        event_details.clone(),
+                        CommandError::new(msg.clone(), Some(e), None),
+                    ),
+                    None,
+                ));
+                return Err(Box::new(EngineError::new_error_on_cloud_provider_information(
+                    event_details,
+                    CommandError::new_from_safe_message(msg),
+                )));
+            }
+        };
+
+        // wait for k3s port to be open
+        // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
+        wait_until_port_is_open(
+            &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+            port,
+            600,
+            kubernetes.logger(),
+            event_details.clone(),
+        )
+        .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
+
+        // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
+        // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
+        let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
+            // force s3 kubeconfig retrieve
+            if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
+                return OperationResult::Err(e);
+            };
+            let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
+                Ok(x) => x,
+                Err(e) => return OperationResult::Retry(e),
+            };
+
+            // ensure the kubeconfig content address match with the current instance dns
+            let mut buffer = String::new();
+            let _ = kubeconfig_file.read_to_string(&mut buffer);
+            match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
+                true => {
+                    kubernetes.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do correspond with the actual host {}",
+                            &qovery_terraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
+                    OperationResult::Ok(current_kubeconfig_path)
+                }
+                false => {
+                    kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                &qovery_terraform_config.aws_ec2_public_hostname
+                            )),
+                        ));
+                    OperationResult::Retry(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                        event_details.clone(),
+                    )))
+                }
+            }
+        });
+
+        match result {
+            Ok(x) => Ok(x),
+            Err(Operation { error, .. }) => Err(error),
+            Err(Error::Internal(_)) => Err(Box::new(
+                EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details),
+            )),
+        }
     }
 }
 
@@ -445,7 +534,7 @@ impl Kubernetes for EC2 {
         event_details: EventDetails,
         qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
-        _kubeconfig_file_path: Option<String>,
+        kubeconfig_file_path: Option<String>,
     ) -> Result<(), Box<EngineError>> {
         // read config generated after terraform infra bootstrap/update
         let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
@@ -460,94 +549,20 @@ impl Kubernetes for EC2 {
         };
         if let Some(vault) = &vault_conn {
             let mut cluster_secrets_update = cluster_secrets.clone();
-            cluster_secrets_update.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
-            // update info without taking care of the kubeconfig because we don't have it yet
-            let _ = cluster_secrets_update.create_or_update_secret(vault, true, event_details.clone())?;
-        };
-
-        let port = match qovery_terraform_config.kubernetes_port_to_u16() {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(Box::new(EngineError::new_terraform_error(
-                    event_details,
-                    TerraformError::ConfigFileInvalidContent {
-                        path: qovery_terraform_config_file,
-                        raw_message: e,
-                    },
-                )))
-            }
-        };
-
-        // wait for k3s port to be open
-        // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
-        wait_until_port_is_open(
-            &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
-            port,
-            600,
-            self.logger(),
-            event_details.clone(),
-        )
-        .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
-
-        // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
-        // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
-        let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
-            // force s3 kubeconfig retrieve
-            if let Err(e) = self.delete_local_kubeconfig_object_storage_folder() {
-                return OperationResult::Err(e);
-            };
-            let (current_kubeconfig_path, mut kubeconfig_file) = match self.get_kubeconfig_file() {
-                Ok(x) => x,
-                Err(e) => return OperationResult::Retry(e),
-            };
-
-            // ensure the kubeconfig content address match with the current instance dns
-            let mut buffer = String::new();
-            let _ = kubeconfig_file.read_to_string(&mut buffer);
-            match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
-                true => {
-                    self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!(
-                            "kubeconfig stored on s3 do correspond with the actual host {}",
-                            &qovery_terraform_config.aws_ec2_public_hostname
-                        )),
-                    ));
-                    OperationResult::Ok(current_kubeconfig_path)
-                }
-                false => {
-                    self.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_config.aws_ec2_public_hostname
-                            )),
-                        ));
-                    OperationResult::Retry(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                        event_details.clone(),
-                    )))
-                }
-            }
-        });
-
-        match result {
-            Ok(x) => {
-                // update to store the correct kubeconfig
-                if let Some(vault) = &vault_conn {
+            cluster_secrets_update.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
+            match kubeconfig_file_path {
+                Some(x) => {
                     let new_kubeconfig_b64 = base64::encode(x);
                     let mut cluster_secrets_update = cluster_secrets;
-                    cluster_secrets_update.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
                     cluster_secrets_update.set_kubeconfig_b64(new_kubeconfig_b64);
-                    // update info without taking care of the kubeconfig because we don't have it yet
-                    let _ = cluster_secrets_update.create_or_update_secret(vault, true, event_details);
-                };
-                Ok(())
+                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
+                }
+                None => {
+                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
+                }
             }
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(_)) => Err(Box::new(
-                EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details),
-            )),
-        }
+        };
+        Ok(())
     }
 }
 
