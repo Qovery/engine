@@ -22,7 +22,7 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
+        let run = |logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -39,10 +39,8 @@ where
                 chart,
             );
 
-            helm.on_create(target)
-        };
+            helm.on_create(target)?;
 
-        let post_run = |logger: &EnvSuccessLogger, _: ()| {
             // check non custom domains
             let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
                 self.custom_domains.clone()
@@ -53,18 +51,21 @@ where
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.default_domain.clone()],
                 resolve_to_cname: custom_domains_to_check,
-                log: Box::new(move |msg| logger.send_success(msg)),
+                log: Box::new(move |msg| logger.info(msg)),
             };
-
             let _ = domain_checker.on_create(target);
+
+            Ok(())
         };
+
+        let empty_post_run = |_logger: &EnvSuccessLogger, _: ()| {};
 
         execute_long_deployment(
             RouterDeploymentReporter::new(self, target, Action::Create),
             DeploymentTaskImpl {
                 pre_run: &pre_run,
                 run: &run,
-                post_run_success: &post_run,
+                post_run_success: &empty_post_run,
             },
         )
     }
