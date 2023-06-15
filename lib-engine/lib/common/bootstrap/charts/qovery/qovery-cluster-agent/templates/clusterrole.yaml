@@ -14,7 +14,7 @@ rules:
       - pods/log
       - jobs
       - nodes
-      - namespace
+      - namespaces
       - events
       - nodes/stats
       - nodes/proxy

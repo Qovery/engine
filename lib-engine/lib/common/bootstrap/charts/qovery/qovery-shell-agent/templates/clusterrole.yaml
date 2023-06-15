@@ -11,15 +11,21 @@ rules:
     resources:
       - pods
       - pods/log
+      - namespaces
     verbs:
       - get
       - list
+      - watch
   - apiGroups:
       - ""
     resources:
       - pods/exec
+      - pods/portforward
+      - pods/proxy
+      - pods/attach
     verbs:
       - get
       - list
+      - watch
       - create
 {{- end }}
