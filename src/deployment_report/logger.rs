@@ -97,9 +97,8 @@ impl EnvLogger {
             self.state.store(LoggerState::Error as usize, Ordering::Release);
         }
 
-        let msg = err.user_log_message().to_string();
         self.logger
-            .log(EngineEvent::Error(err, Some(EventMessage::new_from_safe(msg))));
+            .log(EngineEvent::Error(err.clone(), Some(EventMessage::new_from_engine_error(err))));
     }
 
     pub fn send_core_configuration(&self, safe_message: String, json: String) {

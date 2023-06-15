@@ -3,6 +3,7 @@ use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
+use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::utils::{get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_action::DeploymentAction;
@@ -20,7 +21,6 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
-use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
@@ -539,7 +539,8 @@ fn get_active_job_pod_by_selector(
     event_details: &EventDetails,
     set_of_pods_already_processed: &HashSet<String>,
 ) -> Result<String, Box<EngineError>> {
-    let list_job_pods_result = retry::retry(Fibonacci::from_millis(1000).take(10), || {
+    // Trying to get the pod name, letting it up to 5 minutes to be scheduled
+    let list_job_pods_result = retry::retry(retry::delay::Fixed::from_millis(10_000).take(30), || {
         // List pods according to job label selector
         let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
             Ok(pods_list) => {
@@ -559,6 +560,26 @@ fn get_active_job_pod_by_selector(
                 ))
             }
         };
+
+        // If pod is pending for some reason (cluster scaling, etc.) let's move on to the next retry.
+        if pods.items.iter().any(|pod| {
+            if let Some(pod_status) = &pod.status {
+                if let Some(phase) = &pod_status.phase {
+                    // Pod has been scheduled but is Pending (e.q. in case of cluster node scale-up required)
+                    return phase.to_lowercase() == KubernetesPodStatusPhase::Pending.to_string().to_lowercase();
+                }
+            }
+            false
+        }) {
+            return OperationResult::Retry(EngineError::new_job_error(
+                event_details.clone(),
+                format!(
+                    "Error pods having label {} are still pending to be scheduled",
+                    &job_pod_selector
+                ),
+            ));
+        }
+
         // Retrieve active pods
         let active_job_pods: Vec<String> = pods
             .items
@@ -566,6 +587,7 @@ fn get_active_job_pod_by_selector(
             .filter_map(|pod| {
                 if let Some(pod_status) = &pod.status {
                     if let Some(pod_container_statuses) = &pod_status.container_statuses {
+                        // Pod is running, checking container statuses
                         let job_container_is_active = &pod_container_statuses
                             .iter()
                             .filter_map(|container_status| container_status.borrow().clone().state)
