@@ -240,8 +240,7 @@ impl From<String> for KubernetesPodStatusReason {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodCondition {
     pub status: String,
-    #[serde(rename = "type")]
-    pub typee: String,
+    pub r#type: String,
     pub message: Option<String>,
     #[serde(default)]
     pub reason: KubernetesPodStatusReason,
@@ -603,7 +602,9 @@ pub struct KubernetesStatefulSet {
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, MetricsServer, PDB, PVC, SVC};
+    use crate::cmd::structs::{
+        KubernetesList, KubernetesPod, KubernetesPodCondition, KubernetesPodStatusReason, MetricsServer, PDB, PVC, SVC,
+    };
 
     #[test]
     fn test_svc_deserialize() {
@@ -2758,6 +2759,32 @@ mod tests {
 
         // verify:
         match metrics_server {
+            Ok(_) => {
+                // OK
+            }
+            Err(e) => {
+                panic!("Panic ! Error: {e}")
+            }
+        }
+    }
+
+    #[test]
+    fn test_pod_() {
+        // setup:
+        let payload = r#"{
+            "lastProbeTime": null,
+            "lastTransitionTime": "2021-03-15T15:41:56Z",
+            "message": "0/5 nodes are available: 5 Insufficient memory.",
+            "reason": "Unschedulable",
+            "status": "False",
+            "type": "PodScheduled"
+          }"#;
+
+        // execute:
+        let kubernetes_pod_condition = serde_json::from_str::<KubernetesPodCondition>(payload);
+
+        // verify:
+        match kubernetes_pod_condition {
             Ok(_) => {
                 // OK
             }
