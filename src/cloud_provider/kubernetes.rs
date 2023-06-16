@@ -732,7 +732,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Eks => "EKS",
-            Kind::Ec2 => "KS3",
+            Kind::Ec2 => "K3S",
             Kind::ScwKapsule => "ScwKapsule",
         })
     }

@@ -103,7 +103,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
-        is_first_cluster_deployment: None,
+        is_first_cluster_deployment: Some(true),
     };
     let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
     if let Some(kkind) = kind {

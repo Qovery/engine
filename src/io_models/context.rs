@@ -127,6 +127,12 @@ impl Context {
         }
     }
 
+    pub fn update_is_first_cluster_deployment(&mut self, is_first_cluster_deployment: bool) {
+        if let Some(meta) = self.metadata.as_mut() {
+            meta.update_is_first_cluster_deployment(is_first_cluster_deployment);
+        }
+    }
+
     // Qovery features
     pub fn is_feature_enabled(&self, name: &Features) -> bool {
         for feature in &self.features {
@@ -168,6 +174,9 @@ impl Metadata {
             disable_pleco,
             is_first_cluster_deployment,
         }
+    }
+    pub fn update_is_first_cluster_deployment(&mut self, is_first_cluster_deployment: bool) {
+        self.is_first_cluster_deployment = Some(is_first_cluster_deployment)
     }
 }
 
