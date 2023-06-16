@@ -26,7 +26,7 @@ use crate::cloud_provider::helm_charts::grafana_chart::{
 };
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
-use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
@@ -197,7 +197,7 @@ pub fn eks_aws_helm_charts(
         true => Some(
             LokiChart::new(
                 chart_prefix_path,
-                LokiEncryptionType::ServerSideEncryption,
+                // LokiEncryptionType::ServerSideEncryption,
                 loki_namespace,
                 chart_config_prerequisites
                     .cluster_advanced_settings
