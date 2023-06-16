@@ -34,7 +34,8 @@ resource "aws_iam_policy" "loki_s3_policy" {
         {
             "Effect": "Allow",
             "Action": [
-                "s3:*"
+                "s3:*",
+                "kms:*"
             ],
             "Resource": "*"
         }
