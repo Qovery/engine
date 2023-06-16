@@ -959,6 +959,8 @@ pub enum Tag {
     Base64DecodeIssue,
     /// CannotReadFile: Cannot read file
     CannotReadFile,
+    /// InvalidJobOutputCannotBeSerialized: represents an error where Job output is not valid and cannot be serialized.
+    InvalidJobOutputCannotBeSerialized,
 }
 
 impl Tag {
@@ -4383,6 +4385,27 @@ impl EngineError {
     pub fn new_cannot_restart_kubernetes_cluster(event_details: EventDetails) -> EngineError {
         let message = "Restarting a cluster is not allowed";
         EngineError::new(event_details, Tag::NotImplementedError, message.to_string(), None, None, None)
+    }
+
+    /// Creates new error for Job output cannot be serialized.
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw serde message.
+    /// * `output_json`: The job output json that failed to be serialized
+    pub fn new_invalid_job_output_cannot_be_serialized(
+        event_details: EventDetails,
+        raw_error: serde_json::Error,
+        output_json: &str,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEngineApiInputCannotBeDeserialized,
+            "Invalid job output format".to_string(),
+            Some(CommandError::new("Invalid job output format".to_string(), Some(format!("Invalid job output format: {raw_error} / Job output json: {output_json}")), None)),
+            None,
+            Some("Check that your job output json follows these rules: https://hub.qovery.com/docs/using-qovery/configuration/lifecycle-job/#job-output".to_string()),
+        )
     }
 }
 impl Display for EngineError {

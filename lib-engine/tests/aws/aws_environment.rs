@@ -1571,7 +1571,7 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
@@ -1871,7 +1871,7 @@ fn build_and_deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
+        let json_output = r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
@@ -2191,7 +2191,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist.json".to_string(),
             file_content_b64: base64::encode(
-                "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}",
+                r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#,
             ),
         };
 
