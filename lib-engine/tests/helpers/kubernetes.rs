@@ -172,7 +172,14 @@ pub fn cluster_test(
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
     };
 
-    let engine = match provider_kind {
+    let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
+    if let Some(aws_zones) = aws_zones {
+        for zone in aws_zones {
+            aws_zones_string.push(zone.to_string())
+        }
+    };
+
+    let mut engine = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
@@ -200,21 +207,20 @@ pub fn cluster_test(
             EngineLocation::ClientSide,
         ),
     };
-    let mut deploy_tx = Transaction::new(&engine).unwrap();
-    let mut delete_tx = Transaction::new(&engine).unwrap();
-
-    let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
-    if let Some(aws_zones) = aws_zones {
-        for zone in aws_zones {
-            aws_zones_string.push(zone.to_string())
-        }
-    };
-
-    // Deploy
-    if let Err(err) = deploy_tx.create_kubernetes() {
+    // Bootstrap
+    let mut bootstrap_tx = Transaction::new(&engine).unwrap();
+    if let Err(err) = bootstrap_tx.create_kubernetes() {
         panic!("{err:?}")
     }
-    assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+    assert!(matches!(bootstrap_tx.commit(), TransactionResult::Ok));
+
+    // update
+    engine.context_mut().update_is_first_cluster_deployment(false);
+    let mut update_tx = Transaction::new(&engine).unwrap();
+    if let Err(err) = update_tx.create_kubernetes() {
+        panic!("{err:?}")
+    }
+    assert!(matches!(update_tx.commit(), TransactionResult::Ok));
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -368,6 +374,7 @@ pub fn cluster_test(
     }
 
     // Delete
+    let mut delete_tx = Transaction::new(&engine).unwrap();
     if let Err(err) = delete_tx.delete_kubernetes() {
         panic!("{err:?}")
     }

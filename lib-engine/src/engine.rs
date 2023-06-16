@@ -69,6 +69,10 @@ impl InfrastructureContext {
         &self.context
     }
 
+    pub fn context_mut(&mut self) -> &mut Context {
+        &mut self.context
+    }
+
     pub fn build_platform(&self) -> &dyn BuildPlatform {
         self.build_platform.borrow()
     }
