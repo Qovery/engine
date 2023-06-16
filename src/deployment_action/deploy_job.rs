@@ -11,7 +11,8 @@ use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::events::EngineEvent;
+use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -24,6 +25,7 @@ use kube::Api;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -253,8 +255,8 @@ where
                 );
                 match result_json_output {
                     Ok(json) => {
-                        let result_serde_json: serde_json::Result<HashMap<String, JobOutputVariable>> =
-                            serde_json::from_str(&json);
+                        let result_serde_json: Result<HashMap<String, JobOutputVariable>, serde_json::Error> =
+                            serialize_job_output(&json);
                         match result_serde_json {
                             Ok(deserialized_json_hashmap) => {
                                 let deserialized_json_hashmap_with_uppercase_keys: HashMap<String, JobOutputVariable> =
@@ -268,7 +270,18 @@ where
                                         .unwrap_or_else(|_| "{}".to_string()),
                                 )
                             }
-                            Err(_) => logger.warning("Cannot parse JSON output".to_string()),
+                            Err(err) => {
+                                logger.log(EngineEvent::Warning(
+                                    event_details.clone(),
+                                    EventMessage::new_from_engine_error(
+                                        EngineError::new_invalid_job_output_cannot_be_serialized(
+                                            event_details.clone(),
+                                            err,
+                                            &json,
+                                        ),
+                                    ),
+                                ));
+                            }
                         }
                     }
                     Err(err) => {
@@ -671,5 +684,106 @@ impl Default for JobOutputVariable {
             value: String::new(),
             sensitive: true,
         }
+    }
+}
+
+fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
+    let serde_hash_map: HashMap<&str, Value> = serde_json::from_str(json)?;
+    let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
+
+    for (key, value) in serde_hash_map {
+        let job_output_variable_object = value.as_object();
+        let job_output_variable_hashmap = match job_output_variable_object {
+            None => continue,
+            Some(hashmap) => hashmap,
+        };
+
+        let serde_value_default = &Value::default();
+        let value = job_output_variable_hashmap.get("value").unwrap_or(serde_value_default);
+
+        // Get job output 'value' as string or any other type
+        let job_output_value = if value.is_string() {
+            match value.as_str() {
+                None => "",
+                Some(value_as_str) => value_as_str,
+            }
+            .to_string()
+        } else {
+            value.to_string()
+        };
+
+        job_output_variables.insert(
+            key.to_string(),
+            JobOutputVariable {
+                value: job_output_value,
+                sensitive: job_output_variable_hashmap
+                    .get("sensitive")
+                    .unwrap_or(serde_value_default)
+                    .as_bool()
+                    .unwrap_or(false),
+            },
+        );
+    }
+    Ok(job_output_variables)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::deployment_action::deploy_job::{serialize_job_output, JobOutputVariable};
+
+    #[test]
+    fn should_serialize_json_to_job_output_variable_with_string_value() {
+        // given
+        let json_output_with_string_values = r#"
+        {"foo": { "value": "bar", "sensitive": true }, "foo_2": {"value": "bar_2"} }
+        "#;
+
+        // when
+        let hashmap = serialize_job_output(json_output_with_string_values).unwrap();
+
+        // then
+        assert_eq!(
+            hashmap.get("foo").unwrap(),
+            &JobOutputVariable {
+                value: "bar".to_string(),
+                sensitive: true
+            }
+        );
+        assert_eq!(
+            hashmap.get("foo_2").unwrap(),
+            &JobOutputVariable {
+                value: "bar_2".to_string(),
+                sensitive: false
+            }
+        );
+    }
+
+    #[test]
+    fn should_serialize_json_to_job_output_variable_with_numeric_value() {
+        // given
+        let json_output_with_numeric_values = r#"
+        {"foo": { "value": 123, "sensitive": true }, "foo_2": {"value": 123.456} }
+        "#;
+
+        // when
+        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+
+        // then
+        assert_eq!(
+            hashmap.get("foo").unwrap(),
+            &JobOutputVariable {
+                value: "123".to_string(),
+                sensitive: true
+            }
+        );
+        assert_eq!(
+            hashmap.get("foo_2").unwrap(),
+            &JobOutputVariable {
+                value: "123.456".to_string(),
+                sensitive: false
+            }
+        );
+        let json_final = serde_json::to_string(&hashmap).unwrap();
+        println!("{json_final}");
     }
 }

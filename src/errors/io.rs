@@ -211,6 +211,7 @@ pub enum Tag {
     AwsSdkListEC2Instances,
     Base64DecodeIssue,
     CannotReadFile,
+    InvalidJobOutputCannotBeSerialized,
 }
 
 impl From<errors::Tag> for Tag {
@@ -425,6 +426,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::AwsSdkListEC2Instances => Tag::AwsSdkListEC2Instances,
             errors::Tag::Base64DecodeIssue => Tag::Base64DecodeIssue,
             errors::Tag::CannotReadFile => Tag::CannotReadFile,
+            errors::Tag::InvalidJobOutputCannotBeSerialized => Tag::InvalidJobOutputCannotBeSerialized,
         }
     }
 }
