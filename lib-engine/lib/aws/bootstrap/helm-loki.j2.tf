@@ -49,17 +49,6 @@ resource "aws_iam_role_policy_attachment" "s3_loki_attachment" {
   policy_arn = aws_iam_policy.loki_s3_policy.arn
 }
 
-# remove this block after migration
-resource "aws_iam_user" "iam_eks_loki" {
-  name = "qovery-logs-${var.kubernetes_cluster_id}"
-  tags = local.tags_eks
-}
-
-resource "aws_iam_access_key" "iam_eks_loki" {
-  user    = aws_iam_user.iam_eks_loki.name
-}
-# end of removal
-
 resource "aws_kms_key" "s3_logs_kms_encryption" {
   description             = "s3 logs encryption"
   tags = merge(
