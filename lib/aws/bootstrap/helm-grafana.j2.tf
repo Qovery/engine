@@ -74,17 +74,6 @@ resource "aws_iam_policy" "grafana_cloudwatch_policy" {
 POLICY
 }
 
-# remove this block after migration
-resource "aws_iam_user" "iam_grafana_cloudwatch" {
-  name = "qovery-cloudwatch-${var.kubernetes_cluster_id}"
-  tags = local.tags_eks
-}
-
-resource "aws_iam_access_key" "iam_grafana_cloudwatch" {
-  user    = aws_iam_user.iam_grafana_cloudwatch.name
-}
-# end of removal
-
 resource "aws_iam_role_policy_attachment" "grafana_cloudwatch_attachment" {
   role       = aws_iam_role.iam_grafana_cloudwatch.name
   policy_arn = aws_iam_policy.grafana_cloudwatch_policy.arn
