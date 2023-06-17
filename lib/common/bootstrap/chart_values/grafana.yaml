@@ -3,7 +3,7 @@ image:
 
 rbac:
   create: true
-  pspEnabled: true
+  pspEnabled: false
   pspUseAppArmor: true
   namespaced: false
   extraRoleRules: []
@@ -95,13 +95,13 @@ env:
   AWS_WEB_IDENTITY_TOKEN_FILE: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
 
 extraSecretMounts:
-   - name: aws-iam-token
-     mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
-     readOnly: true
-     projected:
-       defaultMode: 420
-       sources:
-         - serviceAccountToken:
-             audience: sts.amazonaws.com
-             expirationSeconds: 86400
-             path: token
+  - name: aws-iam-token
+    mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+    readOnly: true
+    projected:
+      defaultMode: 420
+      sources:
+        - serviceAccountToken:
+            audience: sts.amazonaws.com
+            expirationSeconds: 86400
+            path: token
