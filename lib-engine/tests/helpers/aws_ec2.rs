@@ -50,9 +50,9 @@ pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) 
             .expect("AWS_EC2_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::Ec2,
-        KubernetesVersion::V1_24 {
+        KubernetesVersion::V1_25 {
             prefix: Some('v'.to_string()),
-            patch: Some(14),
+            patch: Some(11),
             suffix: Some("+k3s1".to_string()),
         },
         &ClusterDomain::Default {

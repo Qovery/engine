@@ -17,6 +17,7 @@ impl AwsEbsCsiAddon {
                 KubernetesVersion::V1_22 { .. } => "v1.14.0-eksbuild.1",
                 KubernetesVersion::V1_23 { .. } => "v1.15.0-eksbuild.1",
                 KubernetesVersion::V1_24 { .. } => "v1.19.0-eksbuild.1",
+                KubernetesVersion::V1_25 { .. } => "v1.19.0-eksbuild.2",
             }
             .to_string(),
         }

@@ -270,7 +270,7 @@ function test_local_stack() {
 
     # We can't use our ECR public repo yet :/
     k3d cluster create -a 0 \
-        --image rancher/k3s:v1.24.14-k3s1 \
+        --image rancher/k3s:v1.25.10-k3s1 \
         --no-lb \
         --k3s-arg "--disable=traefik" \
         --wait $kube_cluster_name || k3d cluster start --wait $kube_cluster_name
