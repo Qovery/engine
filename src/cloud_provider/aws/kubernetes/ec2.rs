@@ -409,17 +409,22 @@ impl Kubernetes for EC2 {
         ));
 
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
-        if let Err(e) =
-            self.update_vault_config(event_details.clone(), qovery_terraform_config_file, cluster_secrets, None)
-        {
-            self.logger().log(EngineEvent::Warning(
+        if let Ok((k3s_kubeconfig, _)) = self.get_kubeconfig_file() {
+            if let Err(e) = self.update_vault_config(
                 event_details.clone(),
-                EventMessage::new(
-                    "Wasn't able to update Vault information for this EC2 instance".to_string(),
-                    Some(e.to_string()),
-                ),
-            ));
-        };
+                qovery_terraform_config_file,
+                cluster_secrets,
+                Some(k3s_kubeconfig),
+            ) {
+                self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        "Wasn't able to update Vault information for this EC2 instance".to_string(),
+                        Some(e.to_string()),
+                    ),
+                ));
+            };
+        }
 
         self.logger().log(EngineEvent::Info(
             event_details,

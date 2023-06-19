@@ -2,6 +2,8 @@ use crate::cmd::structs::KubernetesPodStatusReason::Unknown;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use strum_macros::EnumIter;
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -240,20 +242,31 @@ impl From<String> for KubernetesPodStatusReason {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodCondition {
     pub status: String,
-    #[serde(rename = "type")]
-    pub typee: String,
+    pub r#type: String,
     pub message: Option<String>,
     #[serde(default)]
     pub reason: KubernetesPodStatusReason,
 }
 
-#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug, EnumIter)]
 pub enum KubernetesPodStatusPhase {
     Pending,
     Running,
     Succeeded,
     Failed,
     Unknown,
+}
+
+impl Display for KubernetesPodStatusPhase {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            KubernetesPodStatusPhase::Pending => "Pending",
+            KubernetesPodStatusPhase::Running => "Running",
+            KubernetesPodStatusPhase::Succeeded => "Succeeded",
+            KubernetesPodStatusPhase::Failed => "Failed",
+            KubernetesPodStatusPhase::Unknown => "Unknown",
+        })
+    }
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
@@ -603,7 +616,11 @@ pub struct KubernetesStatefulSet {
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, MetricsServer, PDB, PVC, SVC};
+    use crate::cmd::structs::{
+        KubernetesList, KubernetesPod, KubernetesPodCondition, KubernetesPodStatusPhase, KubernetesPodStatusReason,
+        MetricsServer, PDB, PVC, SVC,
+    };
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_svc_deserialize() {
@@ -2758,6 +2775,50 @@ mod tests {
 
         // verify:
         match metrics_server {
+            Ok(_) => {
+                // OK
+            }
+            Err(e) => {
+                panic!("Panic ! Error: {e}")
+            }
+        }
+    }
+
+    #[test]
+    fn test_kubernetes_pod_status_reason_to_string() {
+        for e in KubernetesPodStatusPhase::iter() {
+            // execute & verify:
+            assert_eq!(
+                match e {
+                    KubernetesPodStatusPhase::Pending => "Pending",
+                    KubernetesPodStatusPhase::Running => "Running",
+                    KubernetesPodStatusPhase::Succeeded => "Succeeded",
+                    KubernetesPodStatusPhase::Failed => "Failed",
+                    KubernetesPodStatusPhase::Unknown => "Unknown",
+                }
+                .to_string(),
+                e.to_string()
+            )
+        }
+    }
+
+    #[test]
+    fn test_pod_() {
+        // setup:
+        let payload = r#"{
+            "lastProbeTime": null,
+            "lastTransitionTime": "2021-03-15T15:41:56Z",
+            "message": "0/5 nodes are available: 5 Insufficient memory.",
+            "reason": "Unschedulable",
+            "status": "False",
+            "type": "PodScheduled"
+          }"#;
+
+        // execute:
+        let kubernetes_pod_condition = serde_json::from_str::<KubernetesPodCondition>(payload);
+
+        // verify:
+        match kubernetes_pod_condition {
             Ok(_) => {
                 // OK
             }
