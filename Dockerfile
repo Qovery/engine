@@ -1,14 +1,14 @@
 # To find the version do an `apt list -a xxxx` helm inside the CI image
-ARG HELM_VERSION="3.7.2-1"
-ARG KUBECTL_VERSION="1.22.17-00"
+ARG HELM_VERSION="3.12.1-1"
+ARG KUBECTL_VERSION="1.24.15-00"
 ARG TERRAFORM_VERSION="1.3.3"
 ARG VAULT_VERSION="1.13.0-1"
-ARG HELM_DIFF_VERSION="v3.6.0"
+ARG HELM_DIFF_VERSION="v3.8.1"
 ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
-ARG DOCKER_VERSION="5:23.0.1-1~debian.11~bullseye"
-ARG CONTAINERD_VERSION="1.6.18-1"
+ARG DOCKER_VERSION="5:24.0.1-1~debian.12~bookworm"
+ARG CONTAINERD_VERSION="1.6.21-1"
 
 ARG BIN_DEST_FOLDER="/binaries"
 
@@ -18,7 +18,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.68-2023-03-24T13-48-55 as engine_ci
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.70-2023-06-13T13-32-30 as engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -107,7 +107,7 @@ RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-fr
 #  ENGINE FINAL IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 as run
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm as run
 
 ARG BIN_DEST_FOLDER
 
