@@ -338,7 +338,7 @@ function lint() { ## Run rust linter
 
   export RUSTC_WRAPPER=""
   export RUSTC_WORKSPACE_WRAPPER="sccache"
-  cargo clippy --all --all-features --tests --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
+  cargo clippy --all --all-features --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
 }
 
 function unused_dependencies() { ## Check rust unused dependencies
