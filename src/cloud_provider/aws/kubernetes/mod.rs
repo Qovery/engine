@@ -809,14 +809,14 @@ fn create(
     options: &Options,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-    let mut kubernetes_action = KubernetesClusterAction::Bootstrap;
+    let kubernetes_action = KubernetesClusterAction::Bootstrap;
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Preparing {} cluster deployment.", kubernetes.kind())),
     ));
 
-    let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+    let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
         kubernetes.cloud_provider().access_key_id(),
         kubernetes.region().to_string(),
         kubernetes.cloud_provider().secret_access_key(),
@@ -845,29 +845,210 @@ fn create(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
-    if kubernetes.kind() == Kind::Eks {
+    // upgrade cluster instead if required
+    if kubernetes.context().is_first_cluster_deployment() {
+        let node_groups_with_desired_states = should_update_desired_nodes(
+            event_details.clone(),
+            kubernetes,
+            kubernetes_action,
+            node_groups,
+            aws_eks_client,
+        )?;
+
+        // generate terraform files and copy them into temp dir
+        let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
+        {
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details,
+                template_directory.to_string(),
+                temp_dir,
+                e,
+            )));
+        }
+
+        let dirs_to_be_copied_to = vec![
+            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+            // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+            (
+                format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
+                format!("{}/common/charts", temp_dir.as_str()),
+            ),
+            // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/aws/bootstrap/common/chart_values directory.
+            (
+                format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
+                format!("{}/common/chart_values", temp_dir.as_str()),
+            ),
+        ];
+        for (source_dir, target_dir) in dirs_to_be_copied_to {
+            if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
+                return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    event_details,
+                    source_dir,
+                    target_dir,
+                    e,
+                )));
+            }
+        }
+
         kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
+        ));
+
+        // terraform deployment dedicated to cloud resources
+        let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
+            match terraform_init_validate_plan_apply(
+                temp_dir.as_str(),
+                kubernetes.context().is_dry_run_deploy(),
+                kubernetes
+                    .cloud_provider()
+                    .credentials_environment_variables()
+                    .as_slice(),
+            ) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    match &e {
+                        TerraformError::S3BucketAlreadyOwnedByYou {
+                            bucket_name,
+                            terraform_resource_name,
+                            ..
+                        } => {
+                            // Try to import S3 bucket and relaunch Terraform apply
+                            kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(
+                                format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
+                                Some(e.to_string()),
+                            ),
+                        ));
+                            match terraform_import(
+                                temp_dir.as_str(),
+                                format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
+                                bucket_name,
+                                kubernetes
+                                    .cloud_provider()
+                                    .credentials_environment_variables()
+                                    .as_slice(),
+                            ) {
+                                Ok(_) => {
+                                    kubernetes.logger().log(EngineEvent::Info(
+                                        event_details.clone(),
+                                        EventMessage::new_from_safe(format!(
+                                            "S3 bucket `{bucket_name}` has been imported properly."
+                                        )),
+                                    ));
+
+                                    // triggering retry (applying Terraform apply)
+                                    OperationResult::Retry(Box::new(EngineError::new_terraform_error(
+                                        event_details.clone(),
+                                        e.clone(),
+                                    )))
+                                }
+                                Err(e) => OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                    event_details.clone(),
+                                    e,
+                                ))),
+                            }
+                        }
+                        _ => match kubernetes.kind() {
+                            Kind::Eks => {
+                                // on EKS, clean possible nodegroup deployment failures because of quota issues
+                                // do not exit on this error to avoid masking the real Terraform issue
+                                kubernetes.logger().log(EngineEvent::Info(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(
+                                        "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
+                                    ),
+                                ));
+                                if let Err(e) = block_on(delete_eks_nodegroups(
+                                    aws_conn.clone(),
+                                    kubernetes.cluster_name(),
+                                    kubernetes.context().is_first_cluster_deployment(),
+                                    NodeGroupsDeletionType::FailedOnly,
+                                    event_details.clone(),
+                                )) {
+                                    // only return failures if the cluster is not absent, because it can be a VPC quota issue
+                                    if e.tag() != &Tag::CannotGetCluster {
+                                        return OperationResult::Err(e);
+                                    }
+                                }
+
+                                OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                    event_details.clone(),
+                                    e.clone(),
+                                )))
+                            }
+                            Kind::Ec2 => {
+                                if let Err(err) = force_terraform_ec2_instance_type_switch(
+                                    temp_dir.as_str(),
+                                    e.clone(),
+                                    kubernetes.logger(),
+                                    &event_details,
+                                    kubernetes.context().is_dry_run_deploy(),
+                                    kubernetes
+                                        .cloud_provider()
+                                        .credentials_environment_variables()
+                                        .as_slice(),
+                                ) {
+                                    return OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                        event_details.clone(),
+                                        err,
+                                    )));
+                                }
+
+                                OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                    event_details.clone(),
+                                    e.clone(),
+                                )))
+                            }
+                            _ => OperationResult::Err(Box::new(EngineError::new_terraform_error(
+                                event_details.clone(),
+                                e,
+                            ))),
+                        },
+                    }
+                }
+            }
+        });
+
+        match tf_apply_result {
+            Ok(_) => {}
+            Err(Operation { error, .. }) => return Err(error),
+            Err(Error::Internal(e)) => {
+                return Err(Box::new(EngineError::new_terraform_error(
+                    event_details,
+                    TerraformError::Unknown {
+                        terraform_args: vec![],
+                        raw_message: e,
+                    },
+                )))
+            }
+        }
+    } else {
+        // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
+        if kubernetes.kind() == Kind::Eks {
+            kubernetes.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
-        if let Err(e) = block_on(delete_eks_nodegroups(
-            aws_conn.clone(),
-            kubernetes.cluster_name(),
-            kubernetes.context().is_first_cluster_deployment(),
-            NodeGroupsDeletionType::FailedOnly,
-            event_details.clone(),
-        )) {
-            // only return failures if the cluster is not absent, because it can be a VPC quota issue
-            if e.tag() != &Tag::CannotGetCluster {
-                return Err(e);
+            if let Err(e) = block_on(delete_eks_nodegroups(
+                aws_conn,
+                kubernetes.cluster_name(),
+                kubernetes.context().is_first_cluster_deployment(),
+                NodeGroupsDeletionType::FailedOnly,
+                event_details.clone(),
+            )) {
+                // only return failures if the cluster is not absent, because it can be a VPC quota issue
+                if e.tag() != &Tag::CannotGetCluster {
+                    return Err(e);
+                }
             }
-        }
-    };
+        };
 
-    // upgrade cluster instead if required
-    if !kubernetes.context().is_first_cluster_deployment() {
         match kubernetes.get_kubeconfig_file() {
             Ok((path, _)) => match is_kubernetes_upgrade_required(
                 path,
@@ -880,18 +1061,19 @@ fn create(
                     if x.required_upgrade_on.is_some() {
                         // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
                         let res =  kubernetes.upgrade_with_status(x);
-                        // don't block deployment if vault is not accessible
-                        let (kubeconfig, _) = kubernetes.get_kubeconfig_file()?;
-                        let _ = kubernetes.update_vault_config(event_details, qovery_terraform_config_file, cluster_secrets, Some(kubeconfig));
-                        return res;
+                        // push endpoint to Vault
+                        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+                        cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
+                        let _ = kubernetes.update_vault_config(event_details.clone(), qovery_terraform_config_file.clone(), cluster_secrets.clone(), None);
+                        // return error on upgrade failure
+                        res?;
+                    } else {
+                        kubernetes.logger().log(EngineEvent::Info(
+                            event_details.clone(),
+                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                        ))
                     }
-
-                    kubernetes_action = KubernetesClusterAction::Update(None);
-
-                    kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
                 },
                 Err(e) => {
                     // Log a warning, this error is not blocking
@@ -904,184 +1086,6 @@ fn create(
             },
             Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
         };
-    };
-
-    let node_groups_with_desired_states = should_update_desired_nodes(
-        event_details.clone(),
-        kubernetes,
-        kubernetes_action,
-        node_groups,
-        aws_eks_client,
-    )?;
-
-    // generate terraform files and copy them into temp dir
-    let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
-
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            template_directory.to_string(),
-            temp_dir,
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
-            format!("{}/common/charts", temp_dir.as_str()),
-        ),
-        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/aws/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.as_str()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
-    ));
-
-    // terraform deployment dedicated to cloud resources
-    let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        match terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
-            kubernetes.context().is_dry_run_deploy(),
-            kubernetes
-                .cloud_provider()
-                .credentials_environment_variables()
-                .as_slice(),
-        ) {
-            Ok(_) => OperationResult::Ok(()),
-            Err(e) => {
-                match &e {
-                    TerraformError::S3BucketAlreadyOwnedByYou {
-                        bucket_name,
-                        terraform_resource_name,
-                        ..
-                    } => {
-                        // Try to import S3 bucket and relaunch Terraform apply
-                        kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(
-                                format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
-                                Some(e.to_string()),
-                            ),
-                        ));
-                        match terraform_import(
-                            temp_dir.as_str(),
-                            format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
-                            bucket_name,
-                            kubernetes
-                                .cloud_provider()
-                                .credentials_environment_variables()
-                                .as_slice(),
-                        ) {
-                            Ok(_) => {
-                                kubernetes.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!(
-                                        "S3 bucket `{bucket_name}` has been imported properly."
-                                    )),
-                                ));
-
-                                // triggering retry (applying Terraform apply)
-                                OperationResult::Retry(Box::new(EngineError::new_terraform_error(
-                                    event_details.clone(),
-                                    e.clone(),
-                                )))
-                            }
-                            Err(e) => OperationResult::Err(Box::new(EngineError::new_terraform_error(
-                                event_details.clone(),
-                                e,
-                            ))),
-                        }
-                    }
-                    _ => match kubernetes.kind() {
-                        Kind::Eks => {
-                            // on EKS, clean possible nodegroup deployment failures because of quota issues
-                            // do not exit on this error to avoid masking the real Terraform issue
-                            kubernetes.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(
-                                        "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
-                                    ),
-                                ));
-                            if let Err(e) = block_on(delete_eks_nodegroups(
-                                aws_conn.clone(),
-                                kubernetes.cluster_name(),
-                                kubernetes.context().is_first_cluster_deployment(),
-                                NodeGroupsDeletionType::FailedOnly,
-                                event_details.clone(),
-                            )) {
-                                // only return failures if the cluster is not absent, because it can be a VPC quota issue
-                                if e.tag() != &Tag::CannotGetCluster {
-                                    return OperationResult::Err(e);
-                                }
-                            }
-
-                            OperationResult::Err(Box::new(EngineError::new_terraform_error(
-                                event_details.clone(),
-                                e.clone(),
-                            )))
-                        }
-                        Kind::Ec2 => {
-                            if let Err(err) = force_terraform_ec2_instance_type_switch(
-                                temp_dir.as_str(),
-                                e.clone(),
-                                kubernetes.logger(),
-                                &event_details,
-                                kubernetes.context().is_dry_run_deploy(),
-                                kubernetes
-                                    .cloud_provider()
-                                    .credentials_environment_variables()
-                                    .as_slice(),
-                            ) {
-                                return OperationResult::Err(Box::new(EngineError::new_terraform_error(
-                                    event_details.clone(),
-                                    err,
-                                )));
-                            }
-
-                            OperationResult::Err(Box::new(EngineError::new_terraform_error(
-                                event_details.clone(),
-                                e.clone(),
-                            )))
-                        }
-                        _ => OperationResult::Err(Box::new(EngineError::new_terraform_error(event_details.clone(), e))),
-                    },
-                }
-            }
-        }
-    });
-
-    match tf_apply_result {
-        Ok(_) => {}
-        Err(Operation { error, .. }) => return Err(error),
-        Err(Error::Internal(e)) => {
-            return Err(Box::new(EngineError::new_terraform_error(
-                event_details,
-                TerraformError::Unknown {
-                    terraform_args: vec![],
-                    raw_message: e,
-                },
-            )))
-        }
     }
 
     let kubeconfig_path = match kubernetes.kind() {
@@ -1091,10 +1095,10 @@ fn create(
             current_kubeconfig_path
         }
         Kind::Ec2 => {
-            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
             // wait for EC2 k3S kubeconfig to be ready and valid
             // no need to push it to object storage, it's already done by the EC2 instance itself
+            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
             EC2::get_and_check_if_kubeconfig_is_valid(kubernetes, event_details.clone(), qovery_terraform_config)?
         }
         _ => {

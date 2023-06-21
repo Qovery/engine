@@ -77,12 +77,15 @@ charts:
       Overriden chart:
       * service name: we use our own naming convention (for the Core)
       * persistence: bitnami legacy naming was data, not datadir
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mysql
     repo_name: bitnami
-    version: 6.14.2
+    version: 9.10.1
     dest: services
     no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/mysql
+      Overriden chart:
+      * service name: we use our own naming convention (for the Core)
   - name: postgresql
     repo_name: bitnami
     version: 12.5.1

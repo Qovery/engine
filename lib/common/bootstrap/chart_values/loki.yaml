@@ -62,14 +62,18 @@ loki:
         index:
           prefix: index_
           period: 24h
-  storage_config:
-    aws:
+  storage:
+    bucketNames:
+      chunks: # qovery setting
+      ruler: # qovery setting
+      admin: # qovery setting
+    type: s3
+    s3:
       s3: # qovery setting
       region: # qovery setting
-      s3forcepathstyle: # qovery setting
-      bucketnames: # qovery setting
-      sse_encryption: # qovery setting
+      s3ForcePathStyle: # qovery setting
       insecure: # qovery setting
+  storage_config:
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3

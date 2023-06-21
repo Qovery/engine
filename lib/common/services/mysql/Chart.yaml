@@ -1,19 +1,28 @@
-apiVersion: v1
-appVersion: 8.0.20
-description: Chart to create a Highly available MySQL cluster
-engine: gotpl
-home: https://mysql.com
+annotations:
+  category: Database
+  licenses: Apache-2.0
+apiVersion: v2
+appVersion: 8.0.33
+dependencies:
+- name: common
+  repository: oci://registry-1.docker.io/bitnamicharts
+  tags:
+  - bitnami-common
+  version: 2.x.x
+description: MySQL is a fast, reliable, scalable, and easy to use open source relational
+  database system. Designed to handle mission-critical, heavy-load production applications.
+home: https://bitnami.com
 icon: https://bitnami.com/assets/stacks/mysql/img/mysql-stack-220x234.png
 keywords:
 - mysql
 - database
 - sql
 - cluster
-- high availablity
+- high availability
 maintainers:
-- email: containers@bitnami.com
-  name: Bitnami
+- name: VMware, Inc.
+  url: https://github.com/bitnami/charts
 name: mysql
 sources:
-- https://github.com/bitnami/bitnami-docker-mysql
-version: 6.14.2
+- https://github.com/bitnami/charts/tree/main/bitnami/mysql
+version: 9.10.1

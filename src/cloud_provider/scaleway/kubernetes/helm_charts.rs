@@ -20,7 +20,7 @@ use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
-use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
@@ -206,7 +206,7 @@ pub fn scw_helm_charts(
         true => Some(
             LokiChart::new(
                 chart_prefix_path,
-                LokiEncryptionType::None, // Scaleway does not support encryption yet.
+                // LokiEncryptionType::None, // Scaleway does not support encryption yet.
                 loki_namespace,
                 chart_config_prerequisites
                     .cluster_advanced_settings

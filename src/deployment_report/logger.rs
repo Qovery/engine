@@ -70,6 +70,18 @@ impl EnvLogger {
         ));
     }
 
+    pub fn log(&self, engine_event: EngineEvent) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) == LoggerState::Progress,
+                "cannot log while a final state has been reached"
+            );
+        }
+
+        self.logger.log(engine_event);
+    }
+
     pub fn send_success(&self, msg: String) {
         #[cfg(feature = "env-logger-check")]
         {
@@ -132,6 +144,10 @@ impl<'a> EnvProgressLogger<'a> {
 
     pub fn warning(&self, msg: String) {
         self.logger.send_warning(msg);
+    }
+
+    pub fn log(&self, engine_event: EngineEvent) {
+        self.logger.log(engine_event);
     }
 
     pub fn core_configuration(&self, msg: String, json: String) {

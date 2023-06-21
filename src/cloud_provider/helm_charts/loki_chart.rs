@@ -9,6 +9,8 @@ use crate::errors::CommandError;
 use kube::Client;
 use semver::Version;
 
+// TODO: reintroduce encryption type when chart is fixed. Can't be set ATM: https://github.com/grafana/loki/issues/9018
+
 pub enum LokiEncryptionType {
     None,
     ServerSideEncryption,
@@ -27,7 +29,7 @@ pub struct LokiS3BucketConfiguration {
 pub struct LokiChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
-    encryption_type: LokiEncryptionType,
+    // encryption_type: LokiEncryptionType,
     chart_namespace: HelmChartNamespaces,
     loki_log_retention_in_weeks: u32,
     loki_s3_bucket_configuration: LokiS3BucketConfiguration,
@@ -36,7 +38,7 @@ pub struct LokiChart {
 impl LokiChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
-        encryption_type: LokiEncryptionType,
+        // encryption_type: LokiEncryptionType,
         chart_namespace: HelmChartNamespaces,
         loki_log_retention_in_weeks: u32,
         loki_s3_bucket_configuration: LokiS3BucketConfiguration,
@@ -52,7 +54,7 @@ impl LokiChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 LokiChart::chart_name(),
             ),
-            encryption_type,
+            // encryption_type,
             chart_namespace,
             loki_log_retention_in_weeks,
             loki_s3_bucket_configuration,
@@ -93,11 +95,11 @@ impl ToCommonHelmChart for LokiChart {
                     },
                     // AWS
                     ChartSetValue {
-                        key: "loki.storage_config.aws.s3forcepathstyle".to_string(),
+                        key: "loki.storage.s3.s3ForcePathStyle".to_string(),
                         value: self.loki_s3_bucket_configuration.use_path_style.to_string(),
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.s3".to_string(),
+                        key: "loki.storage.s3.s3".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .s3_config
@@ -106,7 +108,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.region".to_string(),
+                        key: "loki.storage.s3.region".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .region
@@ -115,7 +117,7 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.bucketnames".to_string(),
+                        key: "loki.storage.bucketNames.chunks".to_string(),
                         value: self
                             .loki_s3_bucket_configuration
                             .bucketname
@@ -124,15 +126,34 @@ impl ToCommonHelmChart for LokiChart {
                             .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.sse_encryption".to_string(),
-                        value: match self.encryption_type {
-                            LokiEncryptionType::None => "false",
-                            LokiEncryptionType::ServerSideEncryption => "true",
-                        }
-                        .to_string(), // Qovery settings
+                        key: "loki.storage.bucketNames.ruler".to_string(),
+                        value: self
+                            .loki_s3_bucket_configuration
+                            .bucketname
+                            .as_ref()
+                            .unwrap_or(&"".to_string())
+                            .to_string(), // Qovery setting
                     },
                     ChartSetValue {
-                        key: "loki.storage_config.aws.insecure".to_string(),
+                        key: "loki.storage.bucketNames.admin".to_string(),
+                        value: self
+                            .loki_s3_bucket_configuration
+                            .bucketname
+                            .as_ref()
+                            .unwrap_or(&"".to_string())
+                            .to_string(), // Qovery setting
+                    },
+                    // Can't be set ATM: https://github.com/grafana/loki/issues/9018
+                    // ChartSetValue {
+                    //     key: "loki.storage.s3.sse-encryption".to_string(),
+                    //     value: match self.encryption_type {
+                    //         LokiEncryptionType::None => "false",
+                    //         LokiEncryptionType::ServerSideEncryption => "true",
+                    //     }
+                    //     .to_string(), // Qovery settings
+                    // },
+                    ChartSetValue {
+                        key: "loki.storage.s3.insecure".to_string(),
                         value: self.loki_s3_bucket_configuration.insecure.to_string(), // Qovery settings
                     },
                     ChartSetValue {
@@ -197,7 +218,7 @@ impl ChartInstallationChecker for LokiChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::HelmChartNamespaces;
-    use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+    use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
@@ -210,7 +231,7 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            LokiEncryptionType::None,
+            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
             12,
             LokiS3BucketConfiguration::default(),
@@ -239,7 +260,7 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            LokiEncryptionType::None,
+            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
             12,
             LokiS3BucketConfiguration::default(),
@@ -272,7 +293,7 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            LokiEncryptionType::None,
+            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
             12,
             LokiS3BucketConfiguration::default(),

@@ -32,6 +32,7 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 ];
 
 /// use Docker in local
+#[derive(Clone)]
 pub struct LocalDocker {
     context: Context,
     id: String,
