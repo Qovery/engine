@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-06-20T16-29-13
+image:  public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-06-21T09-43-47
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
@@ -464,12 +464,12 @@ scw-self-hosted:
   stage: tests
   retry: 1
   timeout: 3 hours
+  dependencies:
+    - build-and-lint-code
   script:
     - ./helper.sh scw_self_hosted
   tags:
     - vm-2cpu-12gmem-0g
-  dependencies:
-    - build-and-lint-code
   only:
     refs:
       - merge_requests
