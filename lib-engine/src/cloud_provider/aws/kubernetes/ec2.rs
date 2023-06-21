@@ -560,10 +560,10 @@ impl Kubernetes for EC2 {
                     let new_kubeconfig_b64 = base64::encode(x);
                     let mut cluster_secrets_update = cluster_secrets;
                     cluster_secrets_update.set_kubeconfig_b64(new_kubeconfig_b64);
-                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
+                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
                 }
                 None => {
-                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
+                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
                 }
             }
         };
