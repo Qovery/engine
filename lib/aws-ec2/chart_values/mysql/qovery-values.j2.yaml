@@ -1,6 +1,6 @@
 image:
-  registry: { { registry_name } }
-  repository: { { repository_name } }
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
   tag: "{{ version }}"
 
 # -master is required to keep compatibility with previous installed versions
