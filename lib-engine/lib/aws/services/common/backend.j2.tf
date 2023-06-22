@@ -5,7 +5,7 @@ terraform {
     config_path      = "{{ kubeconfig_path }}"
     namespace        = "{{ namespace }}"
     exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
+      api_version = "client.authentication.k8s.io/v1"
       command     = "aws"
       args = [
         "eks",
