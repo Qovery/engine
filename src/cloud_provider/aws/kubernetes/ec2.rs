@@ -31,6 +31,7 @@ use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use std::borrow::Borrow;
+use std::fs;
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -557,13 +558,22 @@ impl Kubernetes for EC2 {
             cluster_secrets_update.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
             match kubeconfig_file_path {
                 Some(x) => {
-                    let new_kubeconfig_b64 = base64::encode(x);
+                    // encode base64 kubeconfig
+                    let kubeconfig = fs::read_to_string(x.clone())
+                        .map_err(|e| {
+                            EngineError::new_cannot_retrieve_cluster_config_file(
+                                event_details.clone(),
+                                CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                            )
+                        })
+                        .expect("kubeconfig was not found while it should be present");
+                    let kubeconfig_b64 = base64::encode(kubeconfig);
                     let mut cluster_secrets_update = cluster_secrets;
-                    cluster_secrets_update.set_kubeconfig_b64(new_kubeconfig_b64);
-                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
+                    cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
+                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
                 }
                 None => {
-                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
+                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
                 }
             }
         };

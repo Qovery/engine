@@ -845,14 +845,13 @@ fn create(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    // upgrade cluster instead if required
-    if kubernetes.context().is_first_cluster_deployment() {
+    let terraform_apply = || {
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
             kubernetes_action,
             node_groups,
-            aws_eks_client,
+            aws_eks_client.clone(),
         )?;
 
         // generate terraform files and copy them into temp dir
@@ -862,9 +861,9 @@ fn create(
             crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
+                event_details.clone(),
                 template_directory.to_string(),
-                temp_dir,
+                temp_dir.clone(),
                 e,
             )));
         }
@@ -885,7 +884,7 @@ fn create(
         for (source_dir, target_dir) in dirs_to_be_copied_to {
             if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
                 return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                    event_details,
+                    event_details.clone(),
                     source_dir,
                     target_dir,
                     e,
@@ -898,7 +897,6 @@ fn create(
             EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
         ));
 
-        // terraform deployment dedicated to cloud resources
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
             match terraform_init_validate_plan_apply(
                 temp_dir.as_str(),
@@ -1015,18 +1013,22 @@ fn create(
         });
 
         match tf_apply_result {
-            Ok(_) => {}
-            Err(Operation { error, .. }) => return Err(error),
-            Err(Error::Internal(e)) => {
-                return Err(Box::new(EngineError::new_terraform_error(
-                    event_details,
-                    TerraformError::Unknown {
-                        terraform_args: vec![],
-                        raw_message: e,
-                    },
-                )))
-            }
+            Ok(_) => Ok(()),
+            Err(Operation { error, .. }) => Err(error),
+            Err(Error::Internal(e)) => Err(Box::new(EngineError::new_terraform_error(
+                event_details.clone(),
+                TerraformError::Unknown {
+                    terraform_args: vec![],
+                    raw_message: e,
+                },
+            ))),
         }
+    };
+
+    // upgrade cluster instead if required
+    if kubernetes.context().is_first_cluster_deployment() {
+        // terraform deployment dedicated to cloud resources
+        terraform_apply()?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
@@ -1036,7 +1038,7 @@ fn create(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
             if let Err(e) = block_on(delete_eks_nodegroups(
-                aws_conn,
+                aws_conn.clone(),
                 kubernetes.cluster_name(),
                 kubernetes.context().is_first_cluster_deployment(),
                 NodeGroupsDeletionType::FailedOnly,
@@ -1072,7 +1074,9 @@ fn create(
                         kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                        ))
+                        ));
+                        // apply to generate tf_qovery_config.json
+                        terraform_apply()?;
                     }
                 },
                 Err(e) => {

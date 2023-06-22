@@ -204,7 +204,7 @@ mod tests {
 
         let dest_folder = PathBuf::from(format!("/tmp/{namespace}"));
         let chart = ChartInfo::new_from_custom_namespace(
-            "test_app_helm_deployment".to_string(),
+            "test-app-helm-deployment".to_string(),
             dest_folder.to_string_lossy().to_string(),
             namespace,
             default_helm_timeout().as_secs() as i64,

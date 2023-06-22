@@ -565,7 +565,7 @@ impl Helm {
                 HelmError::ReleaseLocked(chart.name.clone())
             } else if stderr_msg.contains("has been rolled back") {
                 HelmError::Rollbacked(chart.name.clone(), UPGRADE)
-            } else if stderr_msg.contains("timed out waiting") {
+            } else if stderr_msg.contains("timed out waiting") || stderr_msg.contains("deadline exceeded") {
                 HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
             } else {
                 CmdError(

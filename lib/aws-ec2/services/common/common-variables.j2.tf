@@ -52,7 +52,7 @@ variable "database_tags" {
     {% if resource_expiration_in_seconds > -1 %}
     "ttl"                                                                            = "{{ resource_expiration_in_seconds }}"
     {% endif %}
-    {% if snapshot is defined and snapshot["snapshot_id"] %} meta_last_restored_from = { { snapshot['snapshot_id'] } }
+    {% if snapshot is defined and snapshot["snapshot_id"] %} meta_last_restored_from = {{ snapshot['snapshot_id'] }}
     {% endif %}
   }
   type        = map
