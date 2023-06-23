@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image:  public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-06-21T09-43-47
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-06-22T14-55-54
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
