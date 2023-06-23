@@ -19,6 +19,7 @@ users:
   user:
     exec:
       apiVersion: client.authentication.k8s.io/v1
+      interactiveMode: IfAvailable
       command: aws
       args:
         - "eks"
