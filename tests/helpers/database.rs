@@ -471,7 +471,7 @@ pub fn environment_3_apps_3_databases(
                 port: database_port_mongo,
                 username: database_username_mongo,
                 password: database_password_mongo,
-                total_cpus: "100m".to_string(),
+                total_cpus: "500m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
@@ -667,7 +667,7 @@ pub fn test_db(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "250m".to_string(),
+        total_cpus: "500m".to_string(),
         total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
         disk_size_in_gib: disk_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
