@@ -18,7 +18,7 @@ users:
 - name: aws_${replace(var.kubernetes_cluster_id, "-", "_")}
   user:
     exec:
-      apiVersion: client.authentication.k8s.io/v1beta1
+      apiVersion: client.authentication.k8s.io/v1
       command: aws
       args:
         - "eks"
