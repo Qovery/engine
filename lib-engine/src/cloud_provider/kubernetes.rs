@@ -46,6 +46,7 @@ use crate::models::domain::StringPath;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
+use crate::services::kube_client::QubeClient;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 use crate::utilities::create_kube_client;
 
@@ -267,6 +268,24 @@ pub trait Kubernetes: Send + Sync {
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
+    // this method should replace kube_client
+    fn q_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
+        // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
+        let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
+        let kube_credentials: Vec<(String, String)> = self
+            .cloud_provider()
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        QubeClient::new(
+            self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
+            kubeconfig_path,
+            kube_credentials,
+        )
+    }
+    // AVOID USE: to be replaced by q_kube_client
     fn kube_client(&self) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
