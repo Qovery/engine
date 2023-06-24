@@ -49,6 +49,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::{Context, Features};
 use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::third_parties::LetsEncryptConfig;
+
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
@@ -1050,7 +1051,6 @@ fn create(
                 }
             }
         };
-
         match kubernetes.get_kubeconfig_file() {
             Ok((path, _)) => match is_kubernetes_upgrade_required(
                 path,
