@@ -714,6 +714,14 @@ pub enum Tag {
     K8sCannotGetStatefulset,
     // K8sAddonVersionNotSupported: represents an error while the given kubernetes addon has no support for the given kubernetes version.
     K8sAddonVersionNotSupported,
+    /// K8sGetDeploymentError: Kubernetes get deployment error
+    K8sGetDeploymentError,
+    /// K8sDeleteDeploymentError: Kubernetes delete deployment error
+    K8sDeleteDeploymentError,
+    /// K8sGetStatefulsetError: Kubernetes get statefulset error
+    K8sGetStatefulsetError,
+    /// K8sDeleteStatefulsetError: Kubernetes delete statefulset error
+    K8sDeleteStatefulsetError,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -3057,6 +3065,74 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_k8s_enable_to_get_pvc(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(event_details, Tag::K8sCannotGetPVCs, error.to_string(), Some(error), None, None)
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_deployment_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sGetDeploymentError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_delete_deployment_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sDeleteDeploymentError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_statefulset_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sGetStatefulsetError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_delete_statefulset_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sDeleteStatefulsetError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
     }
 
     /// Creates new error from a command error

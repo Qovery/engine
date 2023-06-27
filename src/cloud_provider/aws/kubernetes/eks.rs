@@ -23,7 +23,9 @@ use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::kube_client::SelectK8sResourceBy;
 use async_trait::async_trait;
 use aws_sdk_eks::error::{
     DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
@@ -455,8 +457,89 @@ impl Kubernetes for EKS {
 
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Upgrading Kubernetes worker nodes.".to_string()),
+            EventMessage::new_from_safe("Starting Kubernetes worker nodes upgrade".to_string()),
         ));
+
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Checking clusters content health".to_string()),
+        ));
+
+        // disable all replicas with issues to avoid upgrade failures
+        let kube_client = self.q_kube_client()?;
+        let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
+        for deploy in deployments {
+            let status = match deploy.status {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let replicas = status.replicas.unwrap_or(0);
+            let ready_replicas = status.ready_replicas.unwrap_or(0);
+
+            // if number of replicas > 0: it is not already disabled
+            // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
+            if replicas > 0 && ready_replicas == 0 {
+                self.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                        deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
+                    )),
+                ));
+                block_on(kube_client.set_deployment_replicas_number(
+                    event_details.clone(),
+                    deploy.metadata.name.as_str(),
+                    deploy.metadata.namespace.as_str(),
+                    0,
+                ))?;
+            } else {
+                self.logger().log(EngineEvent::Debug(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Deployment {}/{} has {}/{} replicas ready. No action needed.",
+                        deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
+                    )),
+                ));
+            }
+        }
+        // same with statefulsets
+        let statefulsets =
+            block_on(kube_client.get_statefulsets(event_details.clone(), None, SelectK8sResourceBy::All))?;
+        for sts in statefulsets {
+            let status = match sts.status {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let ready_replicas = status.ready_replicas.unwrap_or(0);
+
+            // if number of replicas > 0: it is not already disabled
+            // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
+            if status.replicas > 0 && ready_replicas == 0 {
+                self.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                        sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
+                    )),
+                ));
+                block_on(kube_client.set_statefulset_replicas_number(
+                    event_details.clone(),
+                    sts.metadata.name.as_str(),
+                    sts.metadata.namespace.as_str(),
+                    0,
+                ))?;
+            } else {
+                self.logger().log(EngineEvent::Debug(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
+                        sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
+                    )),
+                ));
+            }
+        }
 
         if let Err(e) = self.delete_crashlooping_pods(
             None,

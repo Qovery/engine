@@ -49,6 +49,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::{Context, Features};
 use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::third_parties::LetsEncryptConfig;
+
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
@@ -1050,7 +1051,6 @@ fn create(
                 }
             }
         };
-
         match kubernetes.get_kubeconfig_file() {
             Ok((path, _)) => match is_kubernetes_upgrade_required(
                 path,
@@ -1063,11 +1063,13 @@ fn create(
                     if x.required_upgrade_on.is_some() {
                         // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
                         let res =  kubernetes.upgrade_with_status(x);
-                        // push endpoint to Vault
-                        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-                        cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
-                        let _ = kubernetes.update_vault_config(event_details.clone(), qovery_terraform_config_file.clone(), cluster_secrets.clone(), None);
+                        // push endpoint to Vault for EC2
+                        if kubernetes.kind() == Kind::Ec2 {
+                            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+                            cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
+                            let _ = kubernetes.update_vault_config(event_details.clone(), qovery_terraform_config_file.clone(), cluster_secrets.clone(), None);
+                        };
                         // return error on upgrade failure
                         res?;
                     } else {
