@@ -494,13 +494,10 @@ impl Kubernetes for EKS {
                     0,
                 ))?;
             } else {
-                self.logger().log(EngineEvent::Debug(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "Deployment {}/{} has {}/{} replicas ready. No action needed.",
-                        deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-                    )),
-                ));
+                info!(
+                    "Deployment {}/{} has {}/{} replicas ready. No action needed.",
+                    deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
+                );
             }
         }
         // same with statefulsets
@@ -531,13 +528,10 @@ impl Kubernetes for EKS {
                     0,
                 ))?;
             } else {
-                self.logger().log(EngineEvent::Debug(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
-                        sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-                    )),
-                ));
+                info!(
+                    "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
+                    sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
+                );
             }
         }
 
