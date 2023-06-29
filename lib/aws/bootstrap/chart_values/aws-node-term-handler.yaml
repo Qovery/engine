@@ -8,6 +8,9 @@ ignoreDaemonSets: true
 podTerminationGracePeriod: 300
 nodeTerminationGracePeriod: 120
 
+rbac:
+  pspEnabled: false
+
 resources:
   requests:
     cpu: 50m
