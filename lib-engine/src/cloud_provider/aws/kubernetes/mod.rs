@@ -1077,8 +1077,6 @@ fn create(
                             event_details.clone(),
                             EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
                         ));
-                        // apply to generate tf_qovery_config.json
-                        terraform_apply()?;
                     }
                 },
                 Err(e) => {
@@ -1093,6 +1091,9 @@ fn create(
             Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
         };
     }
+
+    // apply to generate tf_qovery_config.json
+    terraform_apply()?;
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
