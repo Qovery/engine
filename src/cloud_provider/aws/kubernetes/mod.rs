@@ -57,6 +57,7 @@ use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use tokio::time::Duration;
 
+use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 
@@ -139,6 +140,8 @@ pub struct Options {
     pub user_network_config: Option<UserNetworkConfig>,
     #[serde(default)]
     pub aws_addon_cni_version_override: Option<String>,
+    #[serde(default)]
+    pub aws_addon_kube_proxy_version_override: Option<String>,
     #[serde(default)]
     pub aws_addon_ebs_csi_version_override: Option<String>,
     #[serde(default)]
@@ -607,6 +610,14 @@ fn tera_context(
                 None => AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
 
                 Some(overridden_version) => AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+            }),
+        );
+        // Kube-proxy
+        context.insert(
+            "eks_addon_kube_proxy",
+            &(match &options.aws_addon_kube_proxy_version_override {
+                None => AwsKubeProxyAddon::new_from_k8s_version(kubernetes.version()),
+                Some(overridden_version) => AwsKubeProxyAddon::new_with_overridden_version(overridden_version),
             }),
         );
         // EBS CSI
