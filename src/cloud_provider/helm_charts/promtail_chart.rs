@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::errors::CommandError;
 use kube::Client;
 use semver::Version;
@@ -12,10 +15,15 @@ pub struct PromtailChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     loki_kube_dns_name: String,
+    customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl PromtailChart {
-    pub fn new(chart_prefix_path: Option<&str>, loki_kube_dns_name: String) -> Self {
+    pub fn new(
+        chart_prefix_path: Option<&str>,
+        loki_kube_dns_name: String,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+    ) -> Self {
         PromtailChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -28,10 +36,11 @@ impl PromtailChart {
                 PromtailChart::chart_name(),
             ),
             loki_kube_dns_name,
+            customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "promtail".to_string()
     }
 }
@@ -60,6 +69,10 @@ impl ToCommonHelmChart for PromtailChart {
                         value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
                     },
                 ],
+                yaml_files_content: match self.customer_helm_chart_override.clone() {
+                    Some(x) => vec![x.to_chart_values_generated()],
+                    None => vec![],
+                },
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
@@ -100,13 +113,24 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
+    use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
+
+    fn get_promtail_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
+        Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            Some(CustomerHelmChartsOverride {
+                chart_name: PromtailChart::chart_name(),
+                chart_values: "".to_string(),
+            })
+        })
+    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn promtail_chart_directory_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -129,7 +153,7 @@ mod tests {
     #[test]
     fn promtail_chart_values_file_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -156,7 +180,7 @@ mod tests {
     #[test]
     fn promtail_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
         let common_chart = chart.to_common_helm_chart();
 
         // execute:

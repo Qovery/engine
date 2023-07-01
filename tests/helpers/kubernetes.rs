@@ -85,6 +85,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                         pleco_resources_ttl: 14400,
                         ..Default::default()
                     },
+                    None,
                 )
                 .unwrap(),
             )
@@ -115,6 +116,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                         pleco_resources_ttl: 7200,
                         ..Default::default()
                     },
+                    None,
                 )
                 .unwrap(),
             )
@@ -135,6 +137,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     pleco_resources_ttl: 14400,
                     ..Default::default()
                 },
+                None,
             )
             .unwrap(),
         ),
@@ -426,6 +429,7 @@ pub fn get_environment_test_kubernetes(
                         aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
                         ..Default::default()
                     },
+                    None,
                 )
                 .unwrap(),
             )
@@ -456,6 +460,7 @@ pub fn get_environment_test_kubernetes(
                         aws_vpc_enable_flow_logs: false,
                         ..Default::default()
                     },
+                    None,
                 )
                 .unwrap(),
             )
@@ -478,6 +483,7 @@ pub fn get_environment_test_kubernetes(
                         pleco_resources_ttl: 14400,
                         ..Default::default()
                     },
+                    None,
                 )
                 .unwrap(),
             )

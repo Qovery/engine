@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use uuid::Uuid;
 
+use super::helm::ChartValuesGenerated;
+
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
@@ -212,6 +214,21 @@ impl Display for KubernetesMemoryResourceUnit {
             }
             .as_str(),
         )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CustomerHelmChartsOverride {
+    pub chart_name: String,
+    pub chart_values: String,
+}
+
+impl CustomerHelmChartsOverride {
+    pub fn to_chart_values_generated(&self) -> ChartValuesGenerated {
+        ChartValuesGenerated {
+            filename: format!("customer_{}_override.yaml", self.chart_name),
+            yaml_content: self.chart_values.clone(),
+        }
     }
 }
 

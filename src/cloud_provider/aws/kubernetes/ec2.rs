@@ -18,6 +18,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -31,6 +32,7 @@ use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::str::FromStr;
@@ -56,6 +58,7 @@ pub struct EC2 {
     instance: InstanceEc2,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
+    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl EC2 {
@@ -73,6 +76,7 @@ impl EC2 {
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
+        customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
@@ -112,6 +116,7 @@ impl EC2 {
             template_directory,
             logger,
             advanced_settings,
+            customer_helm_charts_override,
         })
     }
 
@@ -578,6 +583,11 @@ impl Kubernetes for EC2 {
             }
         };
         Ok(())
+    }
+
+    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
+        //todo(pmavro): use box/arc instead of clone
+        self.customer_helm_charts_override.clone()
     }
 }
 

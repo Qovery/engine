@@ -1,6 +1,7 @@
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::str;
 
 pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
@@ -115,6 +116,24 @@ impl ClusterAdvancedSettings {
 // AWS
 fn validate_aws_cloudwatch_eks_logs_retention_days(days: u32) -> bool {
     CLOUDWATCH_RETENTION_DAYS.contains(&days)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CustomerHelmChartsOverrideEncoded {
+    pub chart_name: String,
+    pub b64_chart_values: String,
+}
+
+impl CustomerHelmChartsOverrideEncoded {
+    pub fn to_decoded_customer_helm_chart_override(b64_chart_values: String) -> Result<String, String> {
+        match base64::decode(b64_chart_values) {
+            Ok(x) => match str::from_utf8(&x) {
+                Ok(content) => Ok(content.to_string()),
+                Err(e) => Err(e.to_string()),
+            },
+            Err(e) => Err(e.to_string()),
+        }
+    }
 }
 
 #[cfg(test)]

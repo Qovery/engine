@@ -111,6 +111,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 aws_cloudwatch_eks_logs_retention_days: 1,
                 ..Default::default()
             },
+            None,
         )
         .unwrap(),
     )
