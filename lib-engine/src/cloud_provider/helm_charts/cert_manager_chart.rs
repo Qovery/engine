@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, UpdateStrategy,
 };
@@ -5,6 +7,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::errors::CommandError;
 use kube::Client;
@@ -18,6 +21,7 @@ pub struct CertManagerChart {
     webhook_resources: HelmChartResources,
     ca_injector_resources: HelmChartResources,
     update_strategy: UpdateStrategy,
+    customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl CertManagerChart {
@@ -28,6 +32,7 @@ impl CertManagerChart {
         webhook_resources: HelmChartResourcesConstraintType,
         ca_injector_resources: HelmChartResourcesConstraintType,
         update_strategy: UpdateStrategy,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> CertManagerChart {
         CertManagerChart {
             chart_path: HelmChartPath::new(
@@ -69,6 +74,7 @@ impl CertManagerChart {
             },
             ff_metrics_history_enabled,
             update_strategy,
+            customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
         }
     }
 
@@ -156,6 +162,10 @@ impl ToCommonHelmChart for CertManagerChart {
                         value: self.ca_injector_resources.request_memory.to_string(),
                     },
                 ],
+                yaml_files_content: match self.customer_helm_chart_override.clone() {
+                    Some(x) => vec![x.to_chart_values_generated()],
+                    None => vec![],
+                },
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(CertManagerChartChecker::new())),
@@ -197,7 +207,18 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
     };
+    use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
+
+    fn get_cert_manager_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
+        Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            Some(CustomerHelmChartsOverride {
+                chart_name: CertManagerChart::chart_name(),
+                chart_values: "".to_string(),
+            })
+        })
+    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -210,6 +231,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            get_cert_manager_chart_override(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -240,6 +262,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            get_cert_manager_chart_override(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -274,6 +297,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            get_cert_manager_chart_override(),
         );
         let common_chart = chart.to_common_helm_chart();
 

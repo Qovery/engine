@@ -6,8 +6,8 @@ use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::KubernetesVersion;
+use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
+use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
@@ -265,6 +265,9 @@ pub struct TerraformStateCredentials {
     pub region: String,
 }
 
+pub type ChartValuesOverrideName = String;
+pub type ChartValuesOverrideValues = String;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
     pub kind: cloud_provider::kubernetes::Kind,
@@ -276,6 +279,7 @@ pub struct Kubernetes {
     pub options: Value,
     pub nodes_groups: Vec<NodeGroups>,
     pub advanced_settings: ClusterAdvancedSettings,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl Kubernetes {
@@ -286,6 +290,33 @@ impl Kubernetes {
         dns_provider: Arc<Box<dyn dns_provider::DnsProvider>>,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
+        let event_details =
+            event_details(&**cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
+
+        let decoded_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> =
+            match &self.customer_helm_charts_override {
+                Some(customer_helm_charts_override) => {
+                    let mut decoded_customer_helm_charts_override: HashMap<
+                        ChartValuesOverrideName,
+                        ChartValuesOverrideValues,
+                    > = HashMap::new();
+                    for (name, values) in customer_helm_charts_override.iter() {
+                        decoded_customer_helm_charts_override.insert(
+                            name.clone(),
+                            CustomerHelmChartsOverrideEncoded::to_decoded_customer_helm_chart_override(values.clone())
+                                .map_err(|e| {
+                                    Box::new(EngineError::new_base64_decode_issue(
+                                        event_details.clone(),
+                                        format!("Failed to decode chart override {name}: {:?}", e).as_str(),
+                                    ))
+                                })?,
+                        );
+                    }
+                    Some(decoded_customer_helm_charts_override)
+                }
+                None => None,
+            };
+
         match self.kind {
             cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
@@ -303,6 +334,7 @@ impl Kubernetes {
                 self.nodes_groups.clone(),
                 logger,
                 self.advanced_settings.clone(),
+                decoded_helm_charts_override,
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -326,6 +358,7 @@ impl Kubernetes {
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
                 self.advanced_settings.clone(),
+                decoded_helm_charts_override,
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -357,6 +390,7 @@ impl Kubernetes {
                     ec2_instance,
                     logger,
                     self.advanced_settings.clone(),
+                    decoded_helm_charts_override,
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
