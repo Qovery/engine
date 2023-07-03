@@ -109,6 +109,11 @@ pub enum KubernetesVersion {
         patch: Option<u8>,
         suffix: Option<String>,
     },
+    V1_25 {
+        prefix: Option<String>,
+        patch: Option<u8>,
+        suffix: Option<String>,
+    },
 }
 
 impl KubernetesVersion {
@@ -117,6 +122,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_22 { prefix, .. } => prefix,
             KubernetesVersion::V1_23 { prefix, .. } => prefix,
             KubernetesVersion::V1_24 { prefix, .. } => prefix,
+            KubernetesVersion::V1_25 { prefix, .. } => prefix,
         }
     }
 
@@ -125,6 +131,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_22 { .. } => 1,
             KubernetesVersion::V1_23 { .. } => 1,
             KubernetesVersion::V1_24 { .. } => 1,
+            KubernetesVersion::V1_25 { .. } => 1,
         }
     }
 
@@ -133,6 +140,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_22 { .. } => 22,
             KubernetesVersion::V1_23 { .. } => 23,
             KubernetesVersion::V1_24 { .. } => 24,
+            KubernetesVersion::V1_25 { .. } => 25,
         }
     }
 
@@ -141,6 +149,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_22 { patch, .. } => patch,
             KubernetesVersion::V1_23 { patch, .. } => patch,
             KubernetesVersion::V1_24 { patch, .. } => patch,
+            KubernetesVersion::V1_25 { patch, .. } => patch,
         }
     }
 
@@ -149,6 +158,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_22 { suffix, .. } => suffix,
             KubernetesVersion::V1_23 { suffix, .. } => suffix,
             KubernetesVersion::V1_24 { suffix, .. } => suffix,
+            KubernetesVersion::V1_25 { suffix, .. } => suffix,
         }
     }
 
@@ -164,7 +174,12 @@ impl KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            KubernetesVersion::V1_24 { .. } => None,
+            KubernetesVersion::V1_24 { .. } => Some(KubernetesVersion::V1_25 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_25 { .. } => None,
         }
     }
 }
@@ -225,6 +240,11 @@ impl FromStr for KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
+            "1.25" => Ok(KubernetesVersion::V1_25 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
             // EC2 specifics
             "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23 {
                 prefix: Some('v'.to_string()),
@@ -239,6 +259,11 @@ impl FromStr for KubernetesVersion {
             "v1.24.14+k3s1" => Ok(KubernetesVersion::V1_24 {
                 prefix: Some('v'.to_string()),
                 patch: Some(14),
+                suffix: Some("+k3s1".to_string()),
+            }),
+            "v1.25.11+k3s1" => Ok(KubernetesVersion::V1_25 {
+                prefix: Some('v'.to_string()),
+                patch: Some(11),
                 suffix: Some("+k3s1".to_string()),
             }),
             _ => Err(()),
@@ -2223,6 +2248,14 @@ mod tests {
                 suffix: Some("+k3s1".to_string()),
             })
         );
+        assert_eq!(
+            K8sVersion::from_str("v1.25.11+k3s1"),
+            Ok(K8sVersion::V1_25 {
+                prefix: Some("v".to_string()),
+                patch: Some(11),
+                suffix: Some("+k3s1".to_string()),
+            })
+        );
 
         // failing tests
         assert!(K8sVersion::from_str("toto").is_err());
@@ -2292,6 +2325,19 @@ mod tests {
                 suffix: None,
             }
             .next_version(),
+            Some(K8sVersion::V1_25 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+        assert_eq!(
+            K8sVersion::V1_25 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }
+            .next_version(),
             None
         );
 
@@ -2312,7 +2358,20 @@ mod tests {
         assert_eq!(
             K8sVersion::V1_24 {
                 prefix: Some("v".to_string()),
-                patch: Some(16),
+                patch: Some(14),
+                suffix: Some("+k3s1".to_string()),
+            }
+            .next_version(),
+            Some(K8sVersion::V1_25 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            })
+        );
+        assert_eq!(
+            K8sVersion::V1_25 {
+                prefix: Some("v".to_string()),
+                patch: Some(11),
                 suffix: Some("+k3s1".to_string()),
             }
             .next_version(),
