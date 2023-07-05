@@ -1025,6 +1025,9 @@ fn check_failed_nodegroups_to_remove(
                     aws_sdk_eks::model::NodegroupStatus::DeleteFailed => {
                         failed_nodegroups_to_remove.push(nodegroup.clone())
                     }
+                    aws_sdk_eks::model::NodegroupStatus::Degraded => {
+                        failed_nodegroups_to_remove.push(nodegroup.clone())
+                    }
                     _ => {
                         info!(
                             "Nodegroup {} is in state {:?}, it will not be deleted",
@@ -1130,7 +1133,7 @@ mod tests {
         let ngs = vec![];
         assert_eq!(check_failed_nodegroups_to_remove(ngs).unwrap().len(), 0);
 
-        // x nodegroups, 1 ok, 2 create failed, 1 delete failure, others in other states => 3 to delete
+        // x nodegroups, 1 ok, 2 create failed, 1 delete failure, others in other states => 4 to delete
         let ngs = vec![
             DescribeNodegroupOutput::builder().nodegroup(nodegroup_ok).build(),
             DescribeNodegroupOutput::builder()
@@ -1194,7 +1197,7 @@ mod tests {
                 .build(),
         ];
         let failed_ngs = check_failed_nodegroups_to_remove(ngs).unwrap();
-        assert_eq!(failed_ngs.len(), 3);
+        assert_eq!(failed_ngs.len(), 4);
         assert_eq!(
             failed_ngs[0].nodegroup().unwrap().nodegroup_name().unwrap(),
             "nodegroup_create_failed"
@@ -1205,6 +1208,10 @@ mod tests {
         );
         assert_eq!(
             failed_ngs[2].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_Degraded"
+        );
+        assert_eq!(
+            failed_ngs[3].nodegroup().unwrap().nodegroup_name().unwrap(),
             "nodegroup_DeleteFailed"
         );
     }
