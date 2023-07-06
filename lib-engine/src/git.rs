@@ -3,7 +3,10 @@ use std::path::Path;
 use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
-use git2::{Cred, CredentialType, Error, Object, Oid, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
+use git2::{
+    CertificateCheckStatus, Cred, CredentialType, Error, Object, Oid, RemoteCallbacks, Repository,
+    SubmoduleUpdateOptions,
+};
 use url::Url;
 
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
@@ -116,6 +119,7 @@ where
             // for auth
             let mut callbacks = RemoteCallbacks::new();
             callbacks.credentials(authentication_callback(&get_credentials));
+            callbacks.certificate_check(|_, _| Ok(CertificateCheckStatus::CertificateOk));
 
             let mut fo = git2::FetchOptions::new();
             fo.remote_callbacks(callbacks);
@@ -157,6 +161,7 @@ where
 mod tests {
     use crate::git::{checkout, clone, clone_at_commit, get_parent_commit_id};
     use git2::{Cred, CredentialType};
+    use std::path::PathBuf;
     use url::Url;
     use uuid::Uuid;
 
@@ -336,10 +341,11 @@ mod tests {
         };
         let repo = clone_at_commit(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
-            "d22414a253db2bcf3acf91f85565d2dabe9211cc",
+            "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8",
             clone_dir.path(),
             &get_credentials,
         );
         assert!(matches!(repo, Ok(_)));
+        assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
     }
 }
