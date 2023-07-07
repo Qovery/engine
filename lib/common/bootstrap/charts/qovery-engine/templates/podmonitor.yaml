@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-{{- include "qovery-engine.labels" . | nindent 6 }}
+      {{- include "qovery-engine.selectorLabels" . | nindent 6 }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace | quote }}
