@@ -308,7 +308,7 @@ pub fn ec2_aws_helm_charts(
             request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        false, // no metrics history on EC2 ATM
         get_chart_overrride_fn.clone(),
     )
     .to_common_helm_chart();
