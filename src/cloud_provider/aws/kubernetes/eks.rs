@@ -20,6 +20,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
 use crate::io_models::context::Context;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -38,6 +39,7 @@ use aws_sdk_eks::output::{
 use aws_smithy_client::SdkError;
 use function_name::named;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fs;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -63,6 +65,7 @@ pub struct EKS {
     options: Options,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
+    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl EKS {
@@ -80,6 +83,7 @@ impl EKS {
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
+        customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -112,6 +116,7 @@ impl EKS {
             template_directory,
             logger,
             advanced_settings,
+            customer_helm_charts_override,
         })
     }
 
@@ -724,6 +729,10 @@ impl Kubernetes for EKS {
         ));
         Ok(())
     }
+
+    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
+        self.customer_helm_charts_override.clone()
+    }
 }
 
 #[cfg(test)]
@@ -1025,6 +1034,9 @@ fn check_failed_nodegroups_to_remove(
                     aws_sdk_eks::model::NodegroupStatus::DeleteFailed => {
                         failed_nodegroups_to_remove.push(nodegroup.clone())
                     }
+                    aws_sdk_eks::model::NodegroupStatus::Degraded => {
+                        failed_nodegroups_to_remove.push(nodegroup.clone())
+                    }
                     _ => {
                         info!(
                             "Nodegroup {} is in state {:?}, it will not be deleted",
@@ -1130,7 +1142,7 @@ mod tests {
         let ngs = vec![];
         assert_eq!(check_failed_nodegroups_to_remove(ngs).unwrap().len(), 0);
 
-        // x nodegroups, 1 ok, 2 create failed, 1 delete failure, others in other states => 3 to delete
+        // x nodegroups, 1 ok, 2 create failed, 1 delete failure, others in other states => 4 to delete
         let ngs = vec![
             DescribeNodegroupOutput::builder().nodegroup(nodegroup_ok).build(),
             DescribeNodegroupOutput::builder()
@@ -1194,7 +1206,7 @@ mod tests {
                 .build(),
         ];
         let failed_ngs = check_failed_nodegroups_to_remove(ngs).unwrap();
-        assert_eq!(failed_ngs.len(), 3);
+        assert_eq!(failed_ngs.len(), 4);
         assert_eq!(
             failed_ngs[0].nodegroup().unwrap().nodegroup_name().unwrap(),
             "nodegroup_create_failed"
@@ -1205,6 +1217,10 @@ mod tests {
         );
         assert_eq!(
             failed_ngs[2].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_Degraded"
+        );
+        assert_eq!(
+            failed_ngs[3].nodegroup().unwrap().nodegroup_name().unwrap(),
             "nodegroup_DeleteFailed"
         );
     }

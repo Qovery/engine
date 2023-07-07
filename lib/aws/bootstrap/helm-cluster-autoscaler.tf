@@ -61,22 +61,6 @@ resource "aws_iam_policy" "cluster_autoscaler_policy" {
 POLICY
 }
 
-# remove this block after migration
-resource "aws_iam_user" "iam_eks_cluster_autoscaler" {
-  name = "qovery-clustauto-${var.kubernetes_cluster_id}"
-  tags = local.tags_eks
-}
-
-resource "aws_iam_access_key" "iam_eks_cluster_autoscaler" {
-  user = aws_iam_user.iam_eks_cluster_autoscaler.name
-}
-
-resource "aws_iam_user_policy_attachment" "cluster_autoscaler_attachment" {
-  user       = aws_iam_user.iam_eks_cluster_autoscaler.name
-  policy_arn = aws_iam_policy.cluster_autoscaler_policy.arn
-}
-# end of removal
-
 resource "aws_iam_role_policy_attachment" "cluster_autoscaler_attachment" {
   role       = aws_iam_role.iam_eks_cluster_autoscaler.name
   policy_arn = aws_iam_policy.cluster_autoscaler_policy.arn

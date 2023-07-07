@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::errors::CommandError;
 use kube::Client;
 use semver::Version;
@@ -13,6 +16,7 @@ pub struct PrometheusAdapterChart {
     chart_values_path: HelmChartValuesFilePath,
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
+    customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl PrometheusAdapterChart {
@@ -20,7 +24,8 @@ impl PrometheusAdapterChart {
         chart_prefix_path: Option<&str>,
         prometheus_url: String,
         prometheus_namespace: HelmChartNamespaces,
-    ) -> PrometheusAdapterChart {
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+    ) -> Self {
         PrometheusAdapterChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -34,6 +39,7 @@ impl PrometheusAdapterChart {
             ),
             prometheus_internal_url: prometheus_url,
             prometheus_namespace,
+            customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
         }
     }
 
@@ -55,6 +61,10 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                     key: "prometheus.url".to_string(),
                     value: self.prometheus_internal_url.clone(),
                 }],
+                yaml_files_content: match self.customer_helm_chart_override.clone() {
+                    Some(x) => vec![x.to_chart_values_generated()],
+                    None => vec![],
+                },
                 ..Default::default()
             },
             ..Default::default()
@@ -96,13 +106,29 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
+    use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
+
+    fn get_prometheus_adapter_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
+        Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            Some(CustomerHelmChartsOverride {
+                chart_name: PrometheusAdapterChart::chart_name(),
+                chart_values: "".to_string(),
+            })
+        })
+    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn kube_prometheus_stack_chart_directory_exists_test() {
         // setup:
-        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+        let chart = PrometheusAdapterChart::new(
+            None,
+            "whatever".to_string(),
+            HelmChartNamespaces::Prometheus,
+            get_prometheus_adapter_chart_override(),
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -125,7 +151,12 @@ mod tests {
     #[test]
     fn kube_prometheus_stack_chart_values_file_exists_test() {
         // setup:
-        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+        let chart = PrometheusAdapterChart::new(
+            None,
+            "whatever".to_string(),
+            HelmChartNamespaces::Prometheus,
+            get_prometheus_adapter_chart_override(),
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -152,7 +183,12 @@ mod tests {
     #[test]
     fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+        let chart = PrometheusAdapterChart::new(
+            None,
+            "whatever".to_string(),
+            HelmChartNamespaces::Prometheus,
+            get_prometheus_adapter_chart_override(),
+        );
         let common_chart = chart.to_common_helm_chart();
 
         // execute:

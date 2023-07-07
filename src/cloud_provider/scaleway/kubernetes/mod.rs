@@ -28,6 +28,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::domain::ToHelmString;
@@ -50,6 +51,7 @@ use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -142,6 +144,7 @@ pub struct Kapsule {
     options: KapsuleOptions,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
+    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl Kapsule {
@@ -157,6 +160,7 @@ impl Kapsule {
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
+        customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
         let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
@@ -232,6 +236,7 @@ impl Kapsule {
             options,
             logger,
             advanced_settings,
+            customer_helm_charts_override,
         })
     }
 
@@ -984,6 +989,7 @@ impl Kapsule {
             kubeconfig_path,
             &credentials_environment_variables,
             &**self.context.qovery_api,
+            self.customer_helm_charts_override(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
@@ -1894,5 +1900,9 @@ impl Kubernetes for Kapsule {
             let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details);
         };
         Ok(())
+    }
+
+    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
+        self.customer_helm_charts_override.clone()
     }
 }

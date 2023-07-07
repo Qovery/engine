@@ -4,6 +4,8 @@ use crate::cloud_provider::helm::{
     ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
     UpdateStrategy,
 };
+use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -13,20 +15,23 @@ use crate::errors::CommandError;
 
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
-use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::cloud_provider::models::{
+    CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::models::third_parties::LetsEncryptConfig;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEc2QoveryTerraformConfig {
@@ -106,7 +111,18 @@ pub fn ec2_aws_helm_charts(
     _kubernetes_config: &Path,
     _envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
+    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
+    let get_chart_overrride_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
+        Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            match customer_helm_charts_override.clone() {
+                Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
+                    chart_name: chart_name.to_string(),
+                    chart_values: content.clone(),
+                }),
+                None => None,
+            }
+        });
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
@@ -269,6 +285,7 @@ pub fn ec2_aws_helm_charts(
             limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
         }),
         UpdateStrategy::Recreate,
+        get_chart_overrride_fn.clone(),
     )
     .to_common_helm_chart();
 
@@ -281,43 +298,20 @@ pub fn ec2_aws_helm_charts(
     )
     .to_common_helm_chart();
 
-    let nginx_ingress = CommonChart {
-        chart_info: ChartInfo {
-            name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/ingress-nginx"),
-            namespace: HelmChartNamespaces::NginxIngress,
-            // Because of NLB, svc can take some time to start
-            timeout_in_seconds: 300,
-            values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "controller.admissionWebhooks.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                // Controller resources limits
-                // Memory is set to 256Mi to prevent random OOM on x64
-                ChartSetValue {
-                    key: "controller.resources.limits.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-                // Default backend resources limits
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Nginx ingress
+    let nginx_ingress = NginxIngressChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+        }),
+        HelmChartResourcesConstraintType::ChartDefault,
+        false, // no metrics history on EC2 ATM
+        get_chart_overrride_fn.clone(),
+    )
+    .to_common_helm_chart();
 
     let nginx_ingress_wildcard_dns_record = CommonChart {
         chart_info: ChartInfo {

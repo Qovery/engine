@@ -8,7 +8,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::any::Any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
@@ -40,6 +40,7 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::context::Context;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::domain::StringPath;
@@ -747,6 +748,7 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
+    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
 }
 
 pub trait KubernetesNode {

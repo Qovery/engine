@@ -1,6 +1,6 @@
 {{- if .Values.metrics.enabled }}
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: qovery-engine
   labels:
@@ -8,11 +8,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-{{- include "qovery-engine.labels" . | nindent 6 }}
+      {{- include "qovery-engine.selectorLabels" . | nindent 6 }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace | quote }}
-  endpoints:
+  podMetricsEndpoints:
   - port: {{ .Values.metrics.portName }}
     interval: 30s
     scrapeTimeout: 5s

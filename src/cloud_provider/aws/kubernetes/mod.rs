@@ -1230,6 +1230,7 @@ fn create(
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &**kubernetes.context().qovery_api,
+                kubernetes.customer_helm_charts_override(),
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
@@ -1277,6 +1278,7 @@ fn create(
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &**kubernetes.context().qovery_api,
+                kubernetes.customer_helm_charts_override(),
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }

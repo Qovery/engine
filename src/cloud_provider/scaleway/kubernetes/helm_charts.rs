@@ -3,14 +3,18 @@ use crate::cloud_provider::helm::{
     ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
     UpdateStrategy,
 };
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
@@ -22,16 +26,16 @@ use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometh
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
-use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScalewayQoveryTerraformConfig {
@@ -134,8 +138,19 @@ pub fn scw_helm_charts(
     _kubernetes_config: &Path,
     envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
+    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     info!("preparing chart configuration to be deployed");
+    let get_chart_overrride_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
+        Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            match customer_helm_charts_override.clone() {
+                Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
+                    chart_name: chart_name.to_string(),
+                    chart_values: content.clone(),
+                }),
+                None => None,
+            }
+        });
 
     let content_file = match File::open(qovery_terraform_config_file) {
         Ok(x) => x,
@@ -197,7 +212,10 @@ pub fn scw_helm_charts(
     // Promtail
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
-        true => Some(PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart()),
+        true => Some(
+            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone())
+                .to_common_helm_chart(),
+        ),
     };
 
     // Loki
@@ -217,6 +235,7 @@ pub fn scw_helm_charts(
                     region: Some(chart_config_prerequisites.zone.region().to_string()),
                     ..Default::default()
                 },
+                get_chart_overrride_fn.clone(),
             )
             .to_common_helm_chart(),
         ),
@@ -242,6 +261,7 @@ pub fn scw_helm_charts(
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 true,
+                get_chart_overrride_fn.clone(),
             )
             .to_common_helm_chart(),
         ),
@@ -251,8 +271,13 @@ pub fn scw_helm_charts(
     let prometheus_adapter = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
-                .to_common_helm_chart(),
+            PrometheusAdapterChart::new(
+                chart_prefix_path,
+                prometheus_internal_url.clone(),
+                prometheus_namespace,
+                get_chart_overrride_fn.clone(),
+            )
+            .to_common_helm_chart(),
         ),
     };
 
@@ -261,7 +286,9 @@ pub fn scw_helm_charts(
     // Kube state metrics
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
-        true => Some(KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart()),
+        true => {
+            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart())
+        }
     };
 
     // Grafana chart
@@ -297,6 +324,7 @@ pub fn scw_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
+        get_chart_overrride_fn.clone(),
     )
     .to_common_helm_chart();
 
@@ -322,67 +350,15 @@ pub fn scw_helm_charts(
         );
     }
 
-    let nginx_ingress = CommonChart {
-        chart_info: ChartInfo {
-            name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/ingress-nginx"),
-            namespace: HelmChartNamespaces::NginxIngress,
-            // Because of NLB, svc can take some time to start
-            timeout_in_seconds: 300,
-            values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "controller.admissionWebhooks.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                // metrics
-                ChartSetValue {
-                    key: "controller.metrics.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.metrics.serviceMonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                // Controller resources limits
-                ChartSetValue {
-                    key: "controller.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.limits.memory".to_string(),
-                    value: "768Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.memory".to_string(),
-                    value: "768Mi".to_string(),
-                },
-                // Default backend resources limits
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Nginx ingress
+    let nginx_ingress = NginxIngressChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        chart_config_prerequisites.ff_metrics_history_enabled,
+        get_chart_overrride_fn.clone(),
+    )
+    .to_common_helm_chart();
 
     let pleco = match chart_config_prerequisites.disable_pleco {
         true => None,

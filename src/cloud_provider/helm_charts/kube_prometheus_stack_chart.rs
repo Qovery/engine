@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::errors::CommandError;
 use kube::Client;
@@ -18,6 +21,7 @@ pub struct KubePrometheusStackChart {
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
     kubelet_service_monitor_resource_enabled: bool,
+    customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl KubePrometheusStackChart {
@@ -27,6 +31,7 @@ impl KubePrometheusStackChart {
         prometheus_internal_url: String,
         prometheus_namespace: HelmChartNamespaces,
         kubelet_service_monitor_resource_enabled: bool,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> Self {
         KubePrometheusStackChart {
             chart_path: HelmChartPath::new(
@@ -43,10 +48,11 @@ impl KubePrometheusStackChart {
             prometheus_internal_url,
             prometheus_namespace,
             kubelet_service_monitor_resource_enabled,
+            customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "kube-prometheus-stack".to_string()
     }
 }
@@ -91,6 +97,10 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                         value: self.kubelet_service_monitor_resource_enabled.to_string(),
                     },
                 ],
+                yaml_files_content: match self.customer_helm_chart_override.clone() {
+                    Some(x) => vec![x.to_chart_values_generated()],
+                    None => vec![],
+                },
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KubePrometheusStackChartChecker::new())),
@@ -132,8 +142,17 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
+    use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
-
+    use std::sync::Arc;
+    fn get_prometheus_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
+        Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            Some(CustomerHelmChartsOverride {
+                chart_name: KubePrometheusStackChart::chart_name(),
+                chart_values: "".to_string(),
+            })
+        })
+    }
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn kube_prometheus_stack_chart_directory_exists_test() {
@@ -144,6 +163,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            get_prometheus_chart_override(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -173,6 +193,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            get_prometheus_chart_override(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -206,6 +227,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            get_prometheus_chart_override(),
         );
         let common_chart = chart.to_common_helm_chart();
 
