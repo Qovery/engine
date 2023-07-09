@@ -6,6 +6,15 @@ use crate::{
     events::EventDetails,
 };
 
+pub struct K8sPod {
+    pub metadata: K8sMetadata,
+    pub status: String,
+}
+
+pub struct K8sPodStatus {
+    pub phase: String,
+}
+
 pub struct K8sDeployment {
     pub metadata: K8sMetadata,
     pub status: Option<K8sDeploymentStatus>,
@@ -19,6 +28,8 @@ pub struct K8sStatefulset {
 pub struct K8sMetadata {
     pub name: String,
     pub namespace: String,
+    //#[serde(rename(deserialize = "deletion_grace_period_seconds"))]
+    pub termination_grace_period_seconds: Option<i64>,
 }
 
 pub struct K8sDeploymentStatus {
@@ -97,6 +108,7 @@ impl K8sDeployment {
                         )))
                     }
                 },
+                termination_grace_period_seconds: k8s_deployment.metadata.deletion_grace_period_seconds,
             },
             status: deployment_status,
         })
@@ -151,6 +163,7 @@ impl K8sStatefulset {
                         )))
                     }
                 },
+                termination_grace_period_seconds: k8s_statefulset.metadata.deletion_grace_period_seconds,
             },
             status: statefulset_status,
         })
