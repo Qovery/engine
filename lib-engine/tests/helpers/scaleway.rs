@@ -30,7 +30,7 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_25 {
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_26 {
     prefix: None,
     patch: None,
     suffix: None,
