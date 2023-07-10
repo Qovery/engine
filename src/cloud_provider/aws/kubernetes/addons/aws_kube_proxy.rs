@@ -14,10 +14,10 @@ impl AwsKubeProxyAddon {
             // https://docs.aws.amazon.com/en_us/eks/latest/userguide/managing-kube-proxy.html
             // aws eks describe-addon-versions --kubernetes-version 1.25 --addon-name kube-proxy | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
-                KubernetesVersion::V1_22 { .. } => "v1.22.17-eksbuild.2",
                 KubernetesVersion::V1_23 { .. } => "v1.23.16-eksbuild.2",
                 KubernetesVersion::V1_24 { .. } => "v1.24.10-eksbuild.2",
                 KubernetesVersion::V1_25 { .. } => "v1.25.6-eksbuild.1",
+                KubernetesVersion::V1_26 { .. } => "v1.26.2-eksbuild.1",
             }
             .to_string(),
         }
