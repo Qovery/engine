@@ -19,7 +19,6 @@ use crate::helpers::database::{test_db, StorageSize};
 // By design, there is only one node instance for EC2 preventing to run in parallel database tests because of port clash.
 // This file aims to create a dedicated EC2 cluster for publicly exposed managed DB tests.
 
-#[allow(dead_code)]
 fn test_ec2_database(
     test_name: &str,
     database_mode: DatabaseMode,
