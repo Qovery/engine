@@ -598,7 +598,7 @@ pub fn test_db(
 ) -> String {
     let sem_ver = match VersionsNumber::from_str(version) {
         Ok(v) => v,
-        Err(e) => panic!("Database version has a wrong format: `{}`", version),
+        Err(e) => panic!("Database version has a wrong format: `{}`, error: {}", version, e),
     };
     let context_for_delete = context.clone_not_same_execution_id();
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
