@@ -505,7 +505,7 @@ fn tera_context(
 
     // TODO(ENG-1456): remove condition when migration is done
     if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
-        if suffix == "+k3s1" && patch == &8 {
+        if suffix.as_ref() == "+k3s1" && patch == &8 {
             context.insert("is_old_k3s_version", &true);
             context.insert("ec2_port", &9876.to_string());
         }

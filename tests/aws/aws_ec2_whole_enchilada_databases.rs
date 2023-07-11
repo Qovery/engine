@@ -9,6 +9,7 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::{Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
+use std::sync::Arc;
 use tracing::{span, Level};
 
 use crate::helpers;
@@ -65,9 +66,9 @@ fn test_ec2_database(
             &localisation,
             Kind::Ec2,
             KubernetesVersion::V1_25 {
-                prefix: Some('v'.to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(11),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             },
             &cluster_domain,
             None,
@@ -133,22 +134,22 @@ fn test_private_mysql_managed_dbs() {
 #[named]
 #[test]
 fn test_private_mongodb_managed_dbs() {
-    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Mongodb, false, "4.4")
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Mongodb, false, "4.0")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
 #[named]
 #[test]
 fn test_private_redis_managed_dbs() {
-    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Redis, false, "6")
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Redis, false, "6.2")
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
-// #[named]
+#[named]
 #[test]
 #[ignore = "Public containered DBs are not supported on EC2, it's a known limitation"]
 fn test_public_containered_dbs() {
-    // test_ec2_database(function_name!(), DatabaseMode::CONTAINER, true, DbVersionsToTest::Latest);
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Mysql, true, "8.0");
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
@@ -176,5 +177,5 @@ fn test_private_mongodb_containered_dbs() {
 #[named]
 #[test]
 fn test_private_redis_containered_dbs() {
-    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Redis, false, "6")
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Redis, false, "6.2")
 }

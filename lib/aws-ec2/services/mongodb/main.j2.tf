@@ -47,6 +47,8 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
 
   tags = local.mongodb_database_tags
 
+  engine_version     = var.documentdb_version
+
   # DocumentDB instance basics
   port = var.port
   timeouts {

@@ -2,6 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Write;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::errors::{CommandError, EngineError};
@@ -57,12 +58,8 @@ impl VersionsNumber {
         self.major.clone()
     }
 
-    pub fn to_major_minor_version_string(&self, default_minor: &str) -> String {
-        let test = format!(
-            "{}.{}",
-            self.major.clone(),
-            self.minor.as_ref().unwrap_or(&default_minor.to_string())
-        );
+    pub fn to_major_minor_version_string(&self, default_minor: String) -> String {
+        let test = format!("{}.{}", self.major.clone(), self.minor.as_ref().unwrap_or(&default_minor));
 
         test
     }
@@ -78,10 +75,10 @@ impl FromStr for VersionsNumber {
 
         let mut version_split = version.splitn(4, '.').map(|v| v.trim());
 
-        let major = match version_split.next() {
+        let major: Arc<str> = match version_split.next() {
             Some(major) => {
                 let major = major.to_string();
-                major.replace('v', "")
+                Arc::from(major.replace('v', ""))
             }
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
@@ -90,19 +87,24 @@ impl FromStr for VersionsNumber {
             }
         };
 
-        let minor = version_split.next().map(|minor| {
+        let minor: Option<Arc<str>> = version_split.next().map(|minor| {
             let minor = minor.to_string();
-            minor.replace('+', "")
+            Arc::from(minor.replace('+', ""))
         });
 
-        let patch = version_split.next().map(|patch| patch.to_string());
+        let patch: Option<Arc<str>> = version_split.next().map(|patch| Arc::from(patch.to_string()));
 
-        let suffix = version_split.next().map(|suffix| suffix.to_string());
+        let suffix: Option<Arc<str>> = version_split.next().map(|suffix| Arc::from(suffix.to_string()));
 
         // TODO(benjaminch): Handle properly the case where versions are empty
         // eq. 1..2
 
-        Ok(VersionsNumber::new(major, minor, patch, suffix))
+        Ok(VersionsNumber::new(
+            major.to_string(),
+            minor.map(|m| m.to_string()),
+            patch.map(|p| p.to_string()),
+            suffix.map(|s| s.to_string()),
+        ))
     }
 }
 
@@ -126,5 +128,73 @@ impl fmt::Display for VersionsNumber {
         }
 
         Ok(())
+    }
+}
+
+pub struct VersionsNumberBuilder {
+    major: Arc<str>,
+    minor: Option<Arc<str>>,
+    patch: Option<Arc<str>>,
+    suffix: Option<Arc<str>>,
+}
+
+impl VersionsNumberBuilder {
+    pub fn new() -> Self {
+        VersionsNumberBuilder::default()
+    }
+
+    pub fn build(&self) -> VersionsNumber {
+        VersionsNumber {
+            major: self.major.to_string(),
+            minor: self.minor.as_ref().map(|m| m.to_string()),
+            patch: self.patch.as_ref().map(|p| p.to_string()),
+            suffix: self.suffix.as_ref().map(|s| s.to_string()),
+        }
+    }
+
+    pub fn major(mut self, major: u32) -> Self {
+        self.major = Arc::from(major.to_string());
+        self
+    }
+
+    pub fn major_str(mut self, major: Arc<str>) -> Self {
+        self.major = major;
+        self
+    }
+
+    pub fn minor(mut self, minor: u32) -> Self {
+        self.minor = Some(Arc::from(minor.to_string()));
+        self
+    }
+
+    pub fn minor_str(mut self, minor: Arc<str>) -> Self {
+        self.minor = Some(minor);
+        self
+    }
+
+    pub fn patch(mut self, patch: u32) -> Self {
+        self.patch = Some(Arc::from(patch.to_string()));
+        self
+    }
+
+    pub fn patch_str(mut self, patch: Arc<str>) -> Self {
+        self.patch = Some(patch);
+        self
+    }
+
+    pub fn suffix(mut self, suffix: Arc<str>) -> Self {
+        self.suffix = Some(suffix);
+        self
+    }
+}
+
+impl Default for VersionsNumberBuilder {
+    fn default() -> Self {
+        VersionsNumberBuilder {
+            major: Arc::from("0".to_string()),
+            minor: None,
+            patch: None,
+            suffix: None,
+        }
     }
 }

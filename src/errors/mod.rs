@@ -291,6 +291,12 @@ impl From<ObjectStorageError> for CommandError {
     }
 }
 
+impl From<DatabaseError> for CommandError {
+    fn from(db_err: DatabaseError) -> Self {
+        CommandError::new_from_safe_message(db_err.to_string())
+    }
+}
+
 impl DatabaseError {
     pub fn from_rds_sdk_error(
         sdk_error: RdsSdkError<DescribeDBInstancesError>,
@@ -969,6 +975,8 @@ pub enum Tag {
     CannotReadFile,
     /// InvalidJobOutputCannotBeSerialized: represents an error where Job output is not valid and cannot be serialized.
     InvalidJobOutputCannotBeSerialized,
+    /// DatabaseError: represents a database error
+    DatabaseError,
 }
 
 impl Tag {
@@ -4481,6 +4489,23 @@ impl EngineError {
             Some(CommandError::new("Invalid job output format".to_string(), Some(format!("Invalid job output format: {raw_error} / Job output json: {output_json}")), None)),
             None,
             Some("Check that your job output json follows these rules: https://hub.qovery.com/docs/using-qovery/configuration/lifecycle-job/#job-output".to_string()),
+        )
+    }
+
+    /// Creates new error for database
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `database_error`: Database error
+    pub fn new_database_error(event_details: EventDetails, database_error: DatabaseError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DatabaseError,
+            database_error.to_string(),
+            Some(database_error.into()),
+            None,
+            None,
         )
     }
 }
