@@ -188,6 +188,8 @@ pub fn get_database_terraform_config(
     }
 }
 
+// TODO(benjaminch): to be remove, doesn't make any sense now
+#[deprecated(note = "This struct doesn't make more sense now, we should not change requested service version")]
 pub struct ServiceVersionCheckResult {
     requested_version: VersionsNumber,
     matched_version: VersionsNumber,
