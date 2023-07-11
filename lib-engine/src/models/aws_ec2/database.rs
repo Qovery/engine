@@ -3,14 +3,15 @@ use crate::cloud_provider::service::{
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::models::aws_ec2::database_utils::{
-    get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
-};
 use crate::models::database::{Container, Database, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 
 use crate::io_models::database::DatabaseOptions;
+use crate::models::aws_ec2::database_utils::{
+    is_allowed_managed_mongodb_version, is_allowed_managed_mysql_version, is_allowed_managed_postgres_version,
+    is_allowed_managed_redis_version,
+};
 use crate::models::types::{AWSEc2, ToTeraContext};
 use crate::unit_conversion::cpu_string_to_float;
 use tera::Context as TeraContext;
@@ -235,13 +236,19 @@ where
         event_details: EventDetails,
     ) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
-            service::DatabaseType::PostgreSQL => get_managed_postgres_version,
-            service::DatabaseType::MongoDB => get_managed_mongodb_version,
-            service::DatabaseType::MySQL => get_managed_mysql_version,
-            service::DatabaseType::Redis => get_managed_redis_version,
+            service::DatabaseType::PostgreSQL => is_allowed_managed_postgres_version,
+            service::DatabaseType::MongoDB => is_allowed_managed_mongodb_version,
+            service::DatabaseType::MySQL => is_allowed_managed_mysql_version,
+            service::DatabaseType::Redis => is_allowed_managed_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details)
+        check_service_version(
+            fn_version(&self.version)
+                .map(|_| self.version.to_string())
+                .map_err(CommandError::from),
+            self,
+            event_details,
+        )
     }
 
     fn to_tera_context_for_aws_managed(

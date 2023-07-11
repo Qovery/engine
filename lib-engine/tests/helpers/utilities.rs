@@ -847,7 +847,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "d41af121c648cd119a1d7aebecadddc7e8a6e548".to_string(),
+                app_commit: "c8dd8b57a4ebafabc860f0b948f881dad5ab632e".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED && database_username == "default").to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),

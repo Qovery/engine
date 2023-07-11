@@ -1,5 +1,6 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::FuncTestsSecrets;
+use lazy_static::lazy_static;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{CpuArchitecture, InstanceEc2};
@@ -8,11 +9,21 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
+use std::string::ToString;
+use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
 
 pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
+
+lazy_static! {
+    pub static ref AWS_EC2_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_25 {
+        prefix: Some(Arc::from("v")),
+        patch: Some(11),
+        suffix: Some(Arc::from("+k3s1")),
+    };
+}
 
 pub fn ec2_kubernetes_instance() -> InstanceEc2 {
     InstanceEc2::new("t3.large".to_string(), 20, CpuArchitecture::AMD64)
@@ -51,9 +62,9 @@ pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) 
             .as_str(),
         KubernetesKind::Ec2,
         KubernetesVersion::V1_25 {
-            prefix: Some('v'.to_string()),
+            prefix: Some(Arc::from("v")),
             patch: Some(11),
-            suffix: Some("+k3s1".to_string()),
+            suffix: Some(Arc::from("+k3s1")),
         },
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
