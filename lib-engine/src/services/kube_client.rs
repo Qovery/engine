@@ -44,7 +44,7 @@ impl QubeClient {
         event_details: EventDetails,
         namespace: Option<&str>,
         select_resource: SelectK8sResourceBy,
-    ) -> Result<Vec<Pod>, Box<EngineError>> {
+    ) -> Result<Vec<K8sPod>, Box<EngineError>> {
         let client: Api<Pod> = match namespace {
             Some(namespace_name) => Api::namespaced(self.client.clone(), namespace_name),
             None => Api::all(self.client.clone()),
@@ -65,16 +65,16 @@ impl QubeClient {
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
-                        "Error while trying to get kubernetes deployments with labels `{labels}`. {e}"
+                        "Error while trying to get kubernetes pods with labels `{labels}`. {e}"
                     )),
                 ))),
             },
-            SelectK8sResourceBy::Name(deployment_name) => match client.get(deployment_name.as_str()).await {
+            SelectK8sResourceBy::Name(pod_name) => match client.get(pod_name.as_str()).await {
                 Ok(x) => Ok(vec![K8sPod::from_k8s_pod(event_details, x)?]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
-                        "Error while trying to get kubernetes deployments from {deployment_name}/{}. {e}",
+                        "Error while trying to get kubernetes pods from {pod_name}/{}. {e}",
                         namespace.unwrap_or("no namespace")
                     )),
                 ))),

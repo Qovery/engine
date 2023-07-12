@@ -48,18 +48,23 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::{Context, Features};
 use crate::models::domain::{ToHelmString, ToTerraformString};
+use crate::models::kubernetes::K8sPod;
 use crate::models::third_parties::LetsEncryptConfig;
 
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
+
+use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
+use chrono::Duration as ChronoDuration;
 use tokio::time::Duration;
 
 use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
+use lazy_static::lazy_static;
 
 mod addons;
 pub mod ec2;
@@ -68,6 +73,12 @@ pub mod eks;
 pub mod eks_helm_charts;
 pub mod helm_charts;
 pub mod node;
+
+lazy_static! {
+    static ref AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::hours(1);
+    // https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html
+    static ref AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::minutes(15);
+}
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +257,7 @@ fn tera_context(
     zones: &[AwsZones],
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
+    eks_upgrade_timeout_in_min: ChronoDuration,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
@@ -502,6 +514,8 @@ fn tera_context(
     context.insert("ec2_masters_version", &kubernetes.version().to_string());
     context.insert("ec2_workers_version", &kubernetes.version().to_string());
     context.insert("k3s_version", &kubernetes.version().to_string());
+
+    context.insert("eks_upgrade_timeout_in_min", &eks_upgrade_timeout_in_min.num_minutes());
 
     // TODO(ENG-1456): remove condition when migration is done
     if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
@@ -812,6 +826,51 @@ fn get_nodegroup_autoscaling_config_from_aws(
     Ok(scaling_config)
 }
 
+fn define_cluster_upgrade_timeout(
+    pods_list: Vec<K8sPod>,
+    kubernetes_action: KubernetesClusterAction,
+) -> (ChronoDuration, Option<String>) {
+    let mut cluster_upgrade_timeout = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+    let mut message = None;
+    if kubernetes_action != KubernetesClusterAction::Bootstrap {
+        // this shouldn't be a blocker in any case
+        let mut max_termination_period_found = ChronoDuration::seconds(0);
+        let mut pod_names = Vec::new();
+
+        // find the highest termination period among all pods
+        for pod in pods_list {
+            let current_termination_period = pod
+                .metadata
+                .termination_grace_period_seconds
+                .unwrap_or(ChronoDuration::seconds(0));
+
+            if current_termination_period > max_termination_period_found {
+                max_termination_period_found = current_termination_period;
+            }
+
+            if current_termination_period > *AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION {
+                pod_names.push(format!(
+                    "{} [{:?}] ({} seconds)",
+                    pod.metadata.name.clone(),
+                    pod.status.phase,
+                    current_termination_period
+                ));
+            }
+        }
+
+        // update upgrade timeout if required
+        let upgrade_time_in_minutes = ChronoDuration::minutes(max_termination_period_found.num_minutes() * 2);
+        if !pod_names.is_empty() {
+            cluster_upgrade_timeout = upgrade_time_in_minutes;
+            message = Some(format!(
+                        "Kubernetes workers timeout will be adjusted to {} minutes, because some pods have a termination period greater than 15 min. Pods:\n{}",
+                        cluster_upgrade_timeout.num_minutes(), pod_names.join(", ")
+                    ));
+        }
+    };
+    (cluster_upgrade_timeout, message)
+}
+
 fn create(
     kubernetes: &dyn Kubernetes,
     kubernetes_long_id: uuid::Uuid,
@@ -865,8 +924,30 @@ fn create(
             aws_eks_client.clone(),
         )?;
 
+        // in case error, this should no be a blocking error
+        let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+        if let Ok(kube_client) = kubernetes.q_kube_client() {
+            let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+                .unwrap_or(Vec::with_capacity(0));
+
+            let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Upgrade(None));
+            cluster_upgrade_timeout_in_min = timeout;
+
+            if let Some(x) = message {
+                kubernetes
+                    .logger()
+                    .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+            }
+        };
+
         // generate terraform files and copy them into temp dir
-        let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+        let context = tera_context(
+            kubernetes,
+            aws_zones,
+            &node_groups_with_desired_states,
+            options,
+            cluster_upgrade_timeout_in_min,
+        )?;
 
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
@@ -1400,8 +1481,30 @@ fn pause(
         aws_eks_client,
     )?;
 
+    // in case error, this should no be a blocking error
+    let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+    if let Ok(kube_client) = kubernetes.q_kube_client() {
+        let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+            .unwrap_or(Vec::with_capacity(0));
+
+        let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Pause);
+        cluster_upgrade_timeout_in_min = timeout;
+
+        if let Some(x) = message {
+            kubernetes
+                .logger()
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+        }
+    };
+
     // generate terraform files and copy them into temp dir
-    let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+    let mut context = tera_context(
+        kubernetes,
+        aws_zones,
+        &node_groups_with_desired_states,
+        options,
+        cluster_upgrade_timeout_in_min,
+    )?;
 
     // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
     let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
@@ -1615,7 +1718,28 @@ fn delete(
     };
 
     // generate terraform files and copy them into temp dir
-    let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+    // in case error, this should no be a blocking error
+    let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+    if let Ok(kube_client) = kubernetes.q_kube_client() {
+        let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+            .unwrap_or(Vec::with_capacity(0));
+
+        let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Delete);
+        cluster_upgrade_timeout_in_min = timeout;
+
+        if let Some(x) = message {
+            kubernetes
+                .logger()
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+        }
+    };
+    let mut context = tera_context(
+        kubernetes,
+        aws_zones,
+        &node_groups_with_desired_states,
+        options,
+        cluster_upgrade_timeout_in_min,
+    )?;
     context.insert("is_deletion_step", &true);
 
     if let Err(e) =
@@ -2149,7 +2273,17 @@ async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Res
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::patch_kube_proxy_for_aws_user_network;
+    use chrono::Duration;
+
+    use crate::{
+        cloud_provider::{
+            aws::kubernetes::{patch_kube_proxy_for_aws_user_network, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION},
+            models::KubernetesClusterAction,
+        },
+        models::kubernetes::{K8sMetadata, K8sPod, K8sPodPhase, K8sPodStatus},
+    };
+
+    use super::define_cluster_upgrade_timeout;
 
     #[ignore]
     #[tokio::test]
@@ -2158,5 +2292,48 @@ mod tests {
         patch_kube_proxy_for_aws_user_network(kube_client).await?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_upgrade_timeout() {
+        // bootrap
+        assert_eq!(
+            define_cluster_upgrade_timeout(Vec::new(), KubernetesClusterAction::Bootstrap).0,
+            *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION
+        );
+        // update without nodes
+        assert_eq!(
+            define_cluster_upgrade_timeout(Vec::new(), KubernetesClusterAction::Update(None)).0,
+            *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION
+        );
+        // update with 1 node above termination_grace_period_seconds
+        let res = define_cluster_upgrade_timeout(
+            vec![
+                K8sPod {
+                    metadata: K8sMetadata {
+                        name: "x".to_string(),
+                        namespace: "x".to_string(),
+                        termination_grace_period_seconds: Some(Duration::seconds(40)),
+                    },
+                    status: K8sPodStatus {
+                        phase: K8sPodPhase::Running,
+                    },
+                },
+                K8sPod {
+                    metadata: K8sMetadata {
+                        name: "y".to_string(),
+                        namespace: "z".to_string(),
+                        termination_grace_period_seconds: Some(Duration::minutes(80)),
+                    },
+                    status: K8sPodStatus {
+                        phase: K8sPodPhase::Pending,
+                    },
+                },
+            ],
+            KubernetesClusterAction::Update(None),
+        );
+        assert_eq!(res.0, Duration::minutes(160));
+        assert!(res.1.is_some());
+        assert!(res.1.unwrap().contains("160 minutes"));
     }
 }

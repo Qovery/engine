@@ -143,7 +143,7 @@ pub struct InstanceEc2 {
     pub instance_architecture: CpuArchitecture,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum KubernetesClusterAction {
     Bootstrap,
     Update(Option<i32>),

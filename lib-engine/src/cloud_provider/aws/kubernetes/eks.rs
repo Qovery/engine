@@ -37,6 +37,7 @@ use aws_sdk_eks::output::{
     DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
 };
 use aws_smithy_client::SdkError;
+
 use function_name::named;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -46,7 +47,10 @@ use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::{get_rusoto_eks_client, should_update_desired_nodes};
+use super::{
+    define_cluster_upgrade_timeout, get_rusoto_eks_client, should_update_desired_nodes,
+    AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
+};
 
 /// EKS kubernetes provider allowing to deploy an EKS cluster.
 pub struct EKS {
@@ -323,8 +327,29 @@ impl Kubernetes for EKS {
             aws_eks_client,
         )?;
 
+        // in case error, this should no be in the blocking process
+        let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+        if let Ok(kube_client) = self.q_kube_client() {
+            let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+                .unwrap_or_else(|_| Vec::with_capacity(0));
+
+            let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Upgrade(None));
+            cluster_upgrade_timeout_in_min = timeout;
+
+            if let Some(x) = message {
+                self.logger()
+                    .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+            }
+        };
+
         // generate terraform files and copy them into temp dir
-        let mut context = kubernetes::tera_context(self, &self.zones, &node_groups_with_desired_states, &self.options)?;
+        let mut context = kubernetes::tera_context(
+            self,
+            &self.zones,
+            &node_groups_with_desired_states,
+            &self.options,
+            cluster_upgrade_timeout_in_min,
+        )?;
 
         //
         // Upgrade master nodes

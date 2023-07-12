@@ -720,6 +720,8 @@ pub enum Tag {
     K8sCannotGetStatefulset,
     // K8sAddonVersionNotSupported: represents an error while the given kubernetes addon has no support for the given kubernetes version.
     K8sAddonVersionNotSupported,
+    /// K8sGetPodError: represents an error while getting pod.
+    K8sGetPodError,
     /// K8sGetDeploymentError: Kubernetes get deployment error
     K8sGetDeploymentError,
     /// K8sDeleteDeploymentError: Kubernetes delete deployment error
@@ -3073,6 +3075,16 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_k8s_enable_to_get_pvc(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(event_details, Tag::K8sCannotGetPVCs, error.to_string(), Some(error), None, None)
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_pod_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(event_details, Tag::K8sGetPodError, error.to_string(), Some(error), None, None)
     }
 
     /// Creates new error from a command error
