@@ -6,6 +6,12 @@ variable "documentdb_identifier" {
   type = string
 }
 
+variable "documentdb_version" {
+  description = "DocumentDB version"
+  default = "{{ version }}"
+  type = string
+}
+
 variable "documentdb_instances_number" {
   description = "DocumentDB instance numbers"
   default = 1

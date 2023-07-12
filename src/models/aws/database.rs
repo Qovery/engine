@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure)]
+
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
     ServiceVersionCheckResult,
@@ -6,7 +8,8 @@ use crate::cloud_provider::{service, DeploymentTarget};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EventDetails, Stage};
 use crate::models::aws::database_utils::{
-    get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
+    is_allowed_managed_mongodb_version, is_allowed_managed_mysql_version, is_allowed_managed_postgres_version,
+    is_allowed_managed_redis_version,
 };
 use crate::models::database::{Container, Database, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 
@@ -239,13 +242,19 @@ where
         event_details: EventDetails,
     ) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
-            service::DatabaseType::PostgreSQL => get_managed_postgres_version,
-            service::DatabaseType::MongoDB => get_managed_mongodb_version,
-            service::DatabaseType::MySQL => get_managed_mysql_version,
-            service::DatabaseType::Redis => get_managed_redis_version,
+            service::DatabaseType::PostgreSQL => is_allowed_managed_postgres_version,
+            service::DatabaseType::MongoDB => is_allowed_managed_mongodb_version,
+            service::DatabaseType::MySQL => is_allowed_managed_mysql_version,
+            service::DatabaseType::Redis => is_allowed_managed_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details)
+        check_service_version(
+            fn_version(&self.version)
+                .map(|_| self.version.to_string())
+                .map_err(CommandError::from),
+            self,
+            event_details,
+        )
     }
 
     fn to_tera_context_for_aws_managed(

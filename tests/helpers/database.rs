@@ -13,7 +13,7 @@ use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
@@ -25,6 +25,7 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
+use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
@@ -35,6 +36,7 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::database::DatabaseInstanceType;
+use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
@@ -594,12 +596,16 @@ pub fn test_db(
     existing_infra_ctx: Option<&InfrastructureContext>,
     storage_size: StorageSize,
 ) -> String {
+    let sem_ver = match VersionsNumber::from_str(version) {
+        Ok(v) => v,
+        Err(e) => panic!("Database version has a wrong format: `{}`, error: {}", version, e),
+    };
     let context_for_delete = context.clone_not_same_execution_id();
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let app_id = Uuid::new_v4();
     let database_username = match db_kind {
         DatabaseKind::Redis => match database_mode {
-            MANAGED => match version {
+            MANAGED => match sem_ver.to_major_version_string().as_str() {
                 "7" => "default".to_string(),
                 "6" => "default".to_string(),
                 _ => "superuser".to_string(),
@@ -718,11 +724,7 @@ pub fn test_db(
     let kubernetes_version = match kubernetes_kind {
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => KubernetesVersion::V1_24 {
-            prefix: Some('v'.to_string()),
-            patch: Some(14),
-            suffix: Some("+k3s1".to_string()),
-        },
+        KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
     };
 
     let computed_infra_ctx: InfrastructureContext;

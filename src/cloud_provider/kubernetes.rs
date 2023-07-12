@@ -14,8 +14,8 @@ use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 use tracing::Span;
@@ -96,29 +96,29 @@ impl Display for KubernetesAddon {
 #[derive(Clone, Debug, PartialEq)]
 pub enum KubernetesVersion {
     V1_22 {
-        prefix: Option<String>,
+        prefix: Option<Arc<str>>,
         patch: Option<u8>,
-        suffix: Option<String>,
+        suffix: Option<Arc<str>>,
     },
     V1_23 {
-        prefix: Option<String>,
+        prefix: Option<Arc<str>>,
         patch: Option<u8>,
-        suffix: Option<String>,
+        suffix: Option<Arc<str>>,
     },
     V1_24 {
-        prefix: Option<String>,
+        prefix: Option<Arc<str>>,
         patch: Option<u8>,
-        suffix: Option<String>,
+        suffix: Option<Arc<str>>,
     },
     V1_25 {
-        prefix: Option<String>,
+        prefix: Option<Arc<str>>,
         patch: Option<u8>,
-        suffix: Option<String>,
+        suffix: Option<Arc<str>>,
     },
 }
 
 impl KubernetesVersion {
-    pub fn prefix(&self) -> &Option<String> {
+    pub fn prefix(&self) -> &Option<Arc<str>> {
         match &self {
             KubernetesVersion::V1_22 { prefix, .. } => prefix,
             KubernetesVersion::V1_23 { prefix, .. } => prefix,
@@ -154,7 +154,7 @@ impl KubernetesVersion {
         }
     }
 
-    pub fn suffix(&self) -> &Option<String> {
+    pub fn suffix(&self) -> &Option<Arc<str>> {
         match &self {
             KubernetesVersion::V1_22 { suffix, .. } => suffix,
             KubernetesVersion::V1_23 { suffix, .. } => suffix,
@@ -214,7 +214,7 @@ impl From<KubernetesVersion> for VersionsNumber {
                 false => None,
             },
             suffix: match val.suffix().is_some() {
-                true => Some(val.suffix().as_ref().unwrap_or(&"".to_string()).to_string()),
+                true => Some(val.suffix().as_ref().unwrap_or(&Arc::from("")).to_string()),
                 false => None,
             },
         }
@@ -248,24 +248,24 @@ impl FromStr for KubernetesVersion {
             }),
             // EC2 specifics
             "v1.23.8+k3s1" => Ok(KubernetesVersion::V1_23 {
-                prefix: Some('v'.to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(8),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }),
             "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
-                prefix: Some('v'.to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(16),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }),
             "v1.24.14+k3s1" => Ok(KubernetesVersion::V1_24 {
-                prefix: Some('v'.to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(14),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }),
             "v1.25.11+k3s1" => Ok(KubernetesVersion::V1_25 {
-                prefix: Some('v'.to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(11),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }),
             _ => Err(()),
         }
@@ -1676,6 +1676,7 @@ mod tests {
     use crate::utilities::create_kube_client;
     use std::env;
     use std::str::FromStr;
+    use std::sync::Arc;
     use uuid::Uuid;
 
     use super::kube_copy_secret_to_another_namespace;
@@ -2237,25 +2238,25 @@ mod tests {
         assert_eq!(
             K8sVersion::from_str("v1.23.16+k3s1"),
             Ok(K8sVersion::V1_23 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(16),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             })
         );
         assert_eq!(
             K8sVersion::from_str("v1.24.14+k3s1"),
             Ok(K8sVersion::V1_24 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(14),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             })
         );
         assert_eq!(
             K8sVersion::from_str("v1.25.11+k3s1"),
             Ok(K8sVersion::V1_25 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(11),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             })
         );
 
@@ -2278,9 +2279,9 @@ mod tests {
         // K3S
         assert_eq!(
             VersionsNumber::from(K8sVersion::V1_23 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(16),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }),
             VersionsNumber::new(
                 1.to_string(),
@@ -2346,9 +2347,9 @@ mod tests {
         // K3S
         assert_eq!(
             K8sVersion::V1_23 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(16),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }
             .next_version(),
             Some(K8sVersion::V1_24 {
@@ -2359,9 +2360,9 @@ mod tests {
         );
         assert_eq!(
             K8sVersion::V1_24 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(14),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }
             .next_version(),
             Some(K8sVersion::V1_25 {
@@ -2372,9 +2373,9 @@ mod tests {
         );
         assert_eq!(
             K8sVersion::V1_25 {
-                prefix: Some("v".to_string()),
+                prefix: Some(Arc::from("v")),
                 patch: Some(11),
-                suffix: Some("+k3s1".to_string()),
+                suffix: Some(Arc::from("+k3s1")),
             }
             .next_version(),
             None
@@ -2408,20 +2409,20 @@ mod tests {
         assert_eq!(version_1_23.to_string(), "1.23".to_string());
 
         let version_full = K8sVersion::V1_24 {
-            prefix: Some("v".to_string()),
+            prefix: Some(Arc::from("v")),
             patch: Some(16),
-            suffix: Some("+k3s1".to_string()),
+            suffix: Some(Arc::from("+k3s1")),
         };
         assert_eq!(
             version_full.prefix().clone().expect("Unable to get version's prefix"),
-            "v".to_string()
+            Arc::from("v"),
         );
         assert_eq!(version_full.major(), 1);
         assert_eq!(version_full.minor(), 24);
         assert_eq!(version_full.patch().expect("Unable to get version's patch"), 16);
         assert_eq!(
             version_full.suffix().clone().expect("Unable to get version's suffix"),
-            "+k3s1".to_string()
+            Arc::from("+k3s1")
         );
         assert_eq!(version_full.to_string(), "v1.24.16+k3s1".to_string())
     }

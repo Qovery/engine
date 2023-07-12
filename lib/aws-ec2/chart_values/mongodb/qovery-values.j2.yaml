@@ -40,7 +40,7 @@ resources:
 customLivenessProbe:
   exec:
     command:
-      - mongo
+      - mongosh
       - --eval
       - "db.adminCommand('ping')"
   initialDelaySeconds: 30
@@ -51,7 +51,7 @@ customLivenessProbe:
 customReadinessProbe:
   exec:
     command:
-      - mongo
+      - mongosh
       - --eval
       - "db.adminCommand('ping')"
   initialDelaySeconds: 30

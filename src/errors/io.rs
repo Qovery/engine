@@ -216,6 +216,7 @@ pub enum Tag {
     Base64DecodeIssue,
     CannotReadFile,
     InvalidJobOutputCannotBeSerialized,
+    DatabaseError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -435,6 +436,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::Base64DecodeIssue => Tag::Base64DecodeIssue,
             errors::Tag::CannotReadFile => Tag::CannotReadFile,
             errors::Tag::InvalidJobOutputCannotBeSerialized => Tag::InvalidJobOutputCannotBeSerialized,
+            errors::Tag::DatabaseError => Tag::DatabaseError,
         }
     }
 }

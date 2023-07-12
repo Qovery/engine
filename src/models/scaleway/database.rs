@@ -3,17 +3,17 @@ use crate::cloud_provider::service::{
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::io_models::database::DatabaseOptions;
 use crate::models::database::{
     Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
 use crate::models::database_utils::{
-    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-    get_self_hosted_redis_version,
+    is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
+    is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
 };
-use crate::models::scaleway::database_utils::{pick_managed_mysql_version, pick_managed_postgres_version};
+use crate::models::scaleway::database_utils::{is_allowed_managed_mysql_version, is_allowed_managed_postgres_version};
 use crate::models::types::{ToTeraContext, SCW};
 use tera::Context as TeraContext;
 
@@ -186,7 +186,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let check_version = |event_details| {
-            check_service_version(pick_managed_postgres_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_managed_postgres_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
         self.to_tera_context_for_scaleway_managed(target, &self.options, &check_version)
     }
@@ -198,7 +204,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
-            check_service_version(get_self_hosted_postgres_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_containered_postgres_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
         self.to_tera_context_for_container(target, &self.options)
     }
@@ -212,7 +224,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let check_version = |event_details| {
-            check_service_version(pick_managed_mysql_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_managed_mysql_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
         self.to_tera_context_for_scaleway_managed(target, &self.options, &check_version)
     }
@@ -224,7 +242,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
-            check_service_version(get_self_hosted_mysql_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_containered_mysql_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
         self.to_tera_context_for_container(target, &self.options)
     }
@@ -238,7 +262,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
-            check_service_version(get_self_hosted_mongodb_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_containered_mongodb_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
 
         self.to_tera_context_for_container(target, &self.options)
@@ -253,7 +283,13 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let _check_version = |event_details| {
-            check_service_version(get_self_hosted_redis_version(self.version.to_string()), self, event_details)
+            check_service_version(
+                is_allowed_containered_redis_version(&self.version)
+                    .map(|_| self.version.to_string())
+                    .map_err(CommandError::from),
+                self,
+                event_details,
+            )
         };
         self.to_tera_context_for_container(target, &self.options)
     }

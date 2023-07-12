@@ -7,14 +7,14 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::managed_db_name_sanitizer;
 use crate::cloud_provider::{service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::database_utils::{
-    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-    get_self_hosted_redis_version,
+    is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
+    is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::runtime::block_on;
@@ -23,6 +23,7 @@ use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -97,6 +98,18 @@ pub enum DatabaseError {
     DatabaseNotFound {
         database_type: service::DatabaseType,
         database_id: String,
+    },
+
+    #[error("Version `{database_version}` for database for {database_type:?} is unknown")]
+    UnknownDatabaseVersion {
+        database_type: service::DatabaseType,
+        database_version: Arc<str>,
+    },
+
+    #[error("Version `{database_version}` for database for {database_type:?} is not supported")]
+    UnsupportedDatabaseVersion {
+        database_type: service::DatabaseType,
+        database_version: Arc<str>,
     },
 
     #[error("Database instance type `{requested_database_instance_type}` is invalid for cloud provider `{database_cloud_provider}`.")]
@@ -393,13 +406,19 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
 
     fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
-            service::DatabaseType::PostgreSQL => get_self_hosted_postgres_version,
-            service::DatabaseType::MongoDB => get_self_hosted_mongodb_version,
-            service::DatabaseType::MySQL => get_self_hosted_mysql_version,
-            service::DatabaseType::Redis => get_self_hosted_redis_version,
+            service::DatabaseType::PostgreSQL => is_allowed_containered_postgres_version,
+            service::DatabaseType::MongoDB => is_allowed_containered_mongodb_version,
+            service::DatabaseType::MySQL => is_allowed_containered_mysql_version,
+            service::DatabaseType::Redis => is_allowed_containered_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details)
+        check_service_version(
+            fn_version(&self.version)
+                .map(|_| self.version.to_string())
+                .map_err(CommandError::from),
+            self,
+            event_details,
+        )
     }
 }
 

@@ -996,7 +996,7 @@ fn redis_disk_resize() {
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+    test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -1004,14 +1004,14 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+    test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -1019,21 +1019,21 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v7_deploy_a_working_dev_environment() {
-    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+    test_redis_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v7_deploy_a_working_dev_environment() {
-    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+    test_redis_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Redis production environment (Elasticache)
@@ -1042,7 +1042,7 @@ fn public_redis_v7_deploy_a_working_dev_environment() {
 #[test]
 #[ignore = "No managed db deploy in this version"]
 fn private_redis_v5_deploy_a_working_prod_environment() {
-    test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, false);
+    test_redis_configuration("5.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -1050,12 +1050,12 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn private_redis_v6_deploy_a_working_prod_environment() {
-    test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, false);
+    test_redis_configuration("6.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_redis_v7_deploy_a_working_prod_environment() {
-    test_redis_configuration("7", function_name!(), MANAGED, KubernetesKind::Eks, false);
+    test_redis_configuration("7.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }

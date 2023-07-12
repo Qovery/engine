@@ -1,198 +1,281 @@
-use crate::errors::CommandError;
-use crate::models::database_utils::{generate_supported_version, get_supported_version_to_use};
-use std::collections::HashMap;
+use crate::cloud_provider::service::DatabaseType;
+use crate::models::database::DatabaseError;
+use crate::models::types::VersionsNumber;
+use std::sync::Arc;
 
-pub(super) fn get_managed_mysql_version(requested_version: String) -> Result<String, CommandError> {
-    let mut supported_mysql_versions = HashMap::new();
+pub(super) fn is_allowed_managed_mysql_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
     // aws rds describe-db-engine-versions --engine mysql --query "*[].{Engine:Engine,EngineVersion:EngineVersion}" --output text
 
-    // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(42), Some(42), None);
-    supported_mysql_versions.extend(v57);
+    // Allow only major 5 and 8
+    if !&["5", "8"].contains(&requested_version.major.as_str()) {
+        return Err(DatabaseError::UnsupportedDatabaseVersion {
+            database_type: DatabaseType::MySQL,
+            database_version: Arc::from(requested_version.to_string()),
+        });
+    }
 
-    // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(32), Some(32), None);
-    supported_mysql_versions.extend(v8);
+    // If we want to filter out some versions, we should filter those out here
+    // <-
 
-    get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
+    Ok(())
 }
 
-pub(super) fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
-    let mut supported_mongodb_versions = HashMap::new();
+pub(super) fn is_allowed_managed_mongodb_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
+    // Allow only major 4, 5 and 6
+    if !&["4", "5"].contains(&requested_version.major.as_str()) {
+        return Err(DatabaseError::UnsupportedDatabaseVersion {
+            database_type: DatabaseType::MongoDB,
+            database_version: Arc::from(requested_version.to_string()),
+        });
+    }
 
-    // v4.0.0
-    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(0), None);
-    supported_mongodb_versions.extend(mongo_version);
+    // If we want to filter out some versions, we should filter those out here
+    // <-
 
-    // v5.0.0
-    let mongo_version = generate_supported_version(5, 0, 0, Some(0), Some(0), None);
-    supported_mongodb_versions.extend(mongo_version);
-
-    get_supported_version_to_use("DocumentDB", supported_mongodb_versions, requested_version)
+    Ok(())
 }
 
-pub(super) fn get_managed_postgres_version(requested_version: String) -> Result<String, CommandError> {
-    let mut supported_postgres_versions = HashMap::new();
-
+pub(super) fn is_allowed_managed_postgres_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
     // aws rds describe-db-engine-versions --engine postgres --query "*[].{Engine:Engine,EngineVersion:EngineVersion}" --output text
 
-    // v11
-    let v11 = generate_supported_version(11, 12, 20, None, None, None);
-    supported_postgres_versions.extend(v11);
+    // Allow only major from 11 to 15
+    if !&["11", "12", "13", "14", "15"].contains(&requested_version.major.as_str()) {
+        return Err(DatabaseError::UnsupportedDatabaseVersion {
+            database_type: DatabaseType::PostgreSQL,
+            database_version: Arc::from(requested_version.to_string()),
+        });
+    }
 
-    // v12
-    let v12 = generate_supported_version(12, 7, 15, None, None, None);
-    supported_postgres_versions.extend(v12);
+    // If we want to filter out some versions, we should filter those out here
+    // <-
 
-    // v13
-    let v13 = generate_supported_version(13, 3, 11, None, None, None);
-    supported_postgres_versions.extend(v13);
-
-    // v14
-    let v14 = generate_supported_version(14, 1, 8, None, None, None);
-    supported_postgres_versions.extend(v14);
-
-    // v15
-    let v15 = generate_supported_version(15, 2, 3, None, None, None);
-    supported_postgres_versions.extend(v15);
-
-    get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
+    Ok(())
 }
 
-pub(super) fn get_managed_redis_version(requested_version: String) -> Result<String, CommandError> {
-    let mut supported_redis_versions = HashMap::with_capacity(2);
+pub(super) fn is_allowed_managed_redis_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
 
-    supported_redis_versions.insert("7".to_string(), "7.0".to_string());
-    supported_redis_versions.insert("6".to_string(), "6.x".to_string());
-    supported_redis_versions.insert("5".to_string(), "5.0.6".to_string());
+    // Allow only major 5, 6 and 7
+    if !&["5", "6", "7"].contains(&requested_version.major.as_str()) {
+        return Err(DatabaseError::UnsupportedDatabaseVersion {
+            database_type: DatabaseType::Redis,
+            database_version: Arc::from(requested_version.to_string()),
+        });
+    }
 
-    get_supported_version_to_use("Elasticache", supported_redis_versions, requested_version)
+    // If we want to filter out some versions, we should filter those out here
+    // <-
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::ErrorMessageVerbosity::SafeOnly;
+    use crate::cloud_provider::service::DatabaseType;
     use crate::models::aws::database_utils::{
-        get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
+        is_allowed_managed_mongodb_version, is_allowed_managed_mysql_version, is_allowed_managed_postgres_version,
+        is_allowed_managed_redis_version,
     };
-    use crate::models::database_utils::{
-        get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-        get_self_hosted_redis_version,
-    };
+    use crate::models::database::DatabaseError;
+    use crate::models::types::VersionsNumberBuilder;
+    use std::sync::Arc;
 
     #[test]
-    fn check_postgres_version() {
-        // managed version
-        assert_eq!(get_managed_postgres_version("12".to_string()).unwrap(), "12.15");
-        assert_eq!(get_managed_postgres_version("12.7".to_string()).unwrap(), "12.7");
-        assert_eq!(get_managed_postgres_version("13".to_string()).unwrap(), "13.11");
-        assert_eq!(get_managed_postgres_version("13.5".to_string()).unwrap(), "13.5");
-        assert_eq!(get_managed_postgres_version("14".to_string()).unwrap(), "14.8");
-        assert_eq!(get_managed_postgres_version("14.2".to_string()).unwrap(), "14.2");
-        assert_eq!(
-            get_managed_postgres_version("12.3.0".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "Postgresql 12.3.0 version is not supported"
+    fn test_aws_is_allowed_managed_mysql_versions() {
+        // v5
+        assert!(is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(5).build()).is_ok());
+        assert!(is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(5).minor(1).build()).is_ok());
+        assert!(
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(5).minor(2).patch(3).build()).is_ok()
         );
-        assert_eq!(
-            get_managed_postgres_version("11.3".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "Postgresql 11.3 version is not supported"
-        );
-        // self-hosted version
-        assert_eq!(get_self_hosted_postgres_version("14".to_string()).unwrap(), "14.8.0");
-        assert_eq!(get_self_hosted_postgres_version("14.4".to_string()).unwrap(), "14.4.0");
-        assert_eq!(get_self_hosted_postgres_version("14.4.0".to_string()).unwrap(), "14.4.0");
-        assert_eq!(
-            get_self_hosted_postgres_version("1.0".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "Postgresql 1.0 version is not supported"
+
+        // v8
+        assert!(is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(8).build()).is_ok());
+        assert!(is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(8).minor(1).build()).is_ok());
+        assert!(
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(8).minor(2).patch(3).build()).is_ok()
         );
     }
 
     #[test]
-    fn check_redis_version() {
-        // managed version
-        assert_eq!(get_managed_redis_version("7".to_string()).unwrap(), "7.0");
-        assert_eq!(get_managed_redis_version("6".to_string()).unwrap(), "6.x");
-        assert_eq!(get_managed_redis_version("5".to_string()).unwrap(), "5.0.6");
+    fn test_aws_is_allowed_managed_mysql_unsupported_versions() {
+        // unsupported versions
+        // <- unsupported versions to be added here
         assert_eq!(
-            get_managed_redis_version("1.0".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "Elasticache 1.0 version is not supported"
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(4).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MySQL,
+                database_version: Arc::from("4"),
+            }
         );
-
-        // self-hosted version
-        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.11");
-        assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.12");
-        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.2.12");
         assert_eq!(
-            get_self_hosted_redis_version("1.0".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "Redis 1.0 version is not supported"
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(6).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MySQL,
+                database_version: Arc::from("6"),
+            }
         );
-    }
-
-    #[test]
-    fn check_mysql_version() {
-        // managed version
-        assert_eq!(get_managed_mysql_version("8".to_string()).unwrap(), "8.0.32");
-        assert_eq!(get_managed_mysql_version("8.0".to_string()).unwrap(), "8.0.32");
-        assert_eq!(get_managed_mysql_version("8.0.32".to_string()).unwrap(), "8.0.32");
         assert_eq!(
-            get_managed_mysql_version("8.0.99".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "RDS MySQL 8.0.99 version is not supported"
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(7).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MySQL,
+                database_version: Arc::from("7"),
+            }
         );
-        // self-hosted version
-        assert_eq!(get_self_hosted_mysql_version("5".to_string()).unwrap(), "5.7.42");
-        assert_eq!(get_self_hosted_mysql_version("5.7".to_string()).unwrap(), "5.7.42");
-        assert_eq!(get_self_hosted_mysql_version("5.7.42".to_string()).unwrap(), "5.7.42");
         assert_eq!(
-            get_self_hosted_mysql_version("1.0".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "MySQL 1.0 version is not supported"
+            is_allowed_managed_mysql_version(&VersionsNumberBuilder::new().major(9).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MySQL,
+                database_version: Arc::from("9"),
+            }
         );
     }
 
     #[test]
-    fn check_mongodb_version() {
-        // managed version
-        assert_eq!(get_managed_mongodb_version("4".to_string()).unwrap(), "4.0.0");
-        assert_eq!(get_managed_mongodb_version("4.0".to_string()).unwrap(), "4.0.0");
-        assert_eq!(
-            get_managed_mongodb_version("4.4".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "DocumentDB 4.4 version is not supported"
+    fn test_aws_is_allowed_managed_redis_versions() {
+        // v5
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(5).build()).is_ok());
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(5).minor(2).build()).is_ok());
+        assert!(
+            is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(5).minor(3).patch(5).build()).is_ok()
         );
-        // self-hosted version
-        assert_eq!(get_self_hosted_mongodb_version("4".to_string()).unwrap(), "4.4.15");
-        assert_eq!(get_self_hosted_mongodb_version("4.2".to_string()).unwrap(), "4.2.21");
+
+        // v6
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(6).build()).is_ok());
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(6).minor(3).build()).is_ok());
+        assert!(
+            is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(6).minor(4).patch(6).build()).is_ok()
+        );
+
+        // v7
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(7).build()).is_ok());
+        assert!(is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(7).minor(4).build()).is_ok());
+        assert!(
+            is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(7).minor(5).patch(7).build()).is_ok()
+        );
+    }
+
+    #[test]
+    fn test_aws_is_allowed_managed_redis_unsupported_versions() {
+        // unsupported versions
+        // <- unsupported versions to be added here
         assert_eq!(
-            get_self_hosted_mongodb_version("3.4".to_string())
-                .unwrap_err()
-                .message(SafeOnly)
-                .as_str(),
-            "MongoDB 3.4 version is not supported"
+            is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(4).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::Redis,
+                database_version: Arc::from("4"),
+            }
+        );
+        assert_eq!(
+            is_allowed_managed_redis_version(&VersionsNumberBuilder::new().major(8).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::Redis,
+                database_version: Arc::from("8"),
+            }
+        );
+    }
+
+    #[test]
+    fn test_aws_is_allowed_managed_mongodb_versions() {
+        // v4
+        assert!(is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(4).build()).is_ok());
+        assert!(is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(4).minor(1).build()).is_ok());
+        assert!(
+            is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(4).minor(2).patch(3).build())
+                .is_ok()
+        );
+
+        // v5
+        assert!(is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(5).build()).is_ok());
+        assert!(is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(5).minor(2).build()).is_ok());
+        assert!(
+            is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(5).minor(3).patch(4).build())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_aws_is_allowed_managed_mongodb_unsupported_versions() {
+        // unsupported versions
+        // <- unsupported versions to be added here
+        assert_eq!(
+            is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(3).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MongoDB,
+                database_version: Arc::from("3"),
+            }
+        );
+        assert_eq!(
+            is_allowed_managed_mongodb_version(&VersionsNumberBuilder::new().major(6).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::MongoDB,
+                database_version: Arc::from("6"),
+            }
+        );
+    }
+
+    #[test]
+    fn test_aws_is_allowed_managed_postgres_versions() {
+        // v11
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(11).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(11).minor(6).build()).is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(11).minor(7).patch(2).build())
+                .is_ok()
+        );
+
+        // v12
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(12).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(12).minor(7).build()).is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(12).minor(8).patch(3).build())
+                .is_ok()
+        );
+
+        // v13
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(13).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(13).minor(8).build()).is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(13).minor(9).patch(4).build())
+                .is_ok()
+        );
+
+        // v14
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(14).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(14).minor(9).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(
+            &VersionsNumberBuilder::new().major(14).minor(10).patch(5).build()
+        )
+        .is_ok());
+
+        // v15
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(15).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(15).minor(10).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(
+            &VersionsNumberBuilder::new().major(15).minor(11).patch(6).build()
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_aws_is_allowed_managed_postgres_unsupported_versions() {
+        // unsupported versions
+        // <- unsupported versions to be added here
+        assert_eq!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(10).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::PostgreSQL,
+                database_version: Arc::from("10"),
+            }
+        );
+        assert_eq!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).build()).unwrap_err(),
+            DatabaseError::UnsupportedDatabaseVersion {
+                database_type: DatabaseType::PostgreSQL,
+                database_version: Arc::from("16"),
+            }
         );
     }
 }

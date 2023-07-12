@@ -8,8 +8,8 @@ use crate::models;
 use crate::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::models::types::CloudProvider as CloudProviderTrait;
 use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
+use crate::models::types::{CloudProvider as CloudProviderTrait, VersionsNumberBuilder};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
@@ -70,8 +70,20 @@ impl Database {
             publicly_accessible: self.publicly_accessible,
         };
 
-        let version = VersionsNumber::from_str(self.version.as_str())
+        let mut version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
+
+        // TODO(benjaminch): migration code to be removed once DB versions are migrated in Core
+        match &self.kind {
+            DatabaseKind::Mongodb => {}
+            DatabaseKind::Redis => match version.major.as_str() {
+                "7" => version = VersionsNumberBuilder::new().major(7).minor(0).build(), // 7 => 7.0
+                "6" => version = VersionsNumberBuilder::new().major(6).minor(2).build(), // 6 => 6.2
+                "5" => version = VersionsNumberBuilder::new().major(5).minor(0).build(), // 5 => 5.0
+                _ => {}
+            },
+            _ => {}
+        }
 
         // Trying to pick database instance type for managed DB building based on cloud provider
         // Container DB instance type to be set to None as it's not needed

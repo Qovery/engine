@@ -505,7 +505,7 @@ fn tera_context(
 
     // TODO(ENG-1456): remove condition when migration is done
     if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
-        if suffix == "+k3s1" && patch == &8 {
+        if suffix.as_ref() == "+k3s1" && patch == &8 {
             context.insert("is_old_k3s_version", &true);
             context.insert("ec2_port", &9876.to_string());
         }
@@ -821,7 +821,6 @@ fn create(
     options: &Options,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-    let kubernetes_action = KubernetesClusterAction::Bootstrap;
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
@@ -857,7 +856,7 @@ fn create(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    let terraform_apply = || {
+    let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
@@ -1040,7 +1039,7 @@ fn create(
     // upgrade cluster instead if required
     if kubernetes.context().is_first_cluster_deployment() {
         // terraform deployment dedicated to cloud resources
-        terraform_apply()?;
+        terraform_apply(KubernetesClusterAction::Bootstrap)?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
@@ -1104,7 +1103,7 @@ fn create(
     }
 
     // apply to generate tf_qovery_config.json
-    terraform_apply()?;
+    terraform_apply(KubernetesClusterAction::Update(None))?;
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
