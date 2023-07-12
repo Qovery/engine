@@ -27,6 +27,7 @@ use async_trait::async_trait;
 use aws_sdk_ec2::model::{Filter, VolumeState};
 use aws_sdk_ec2::types::SdkError;
 use aws_types::SdkConfig;
+use chrono::Duration;
 use function_name::named;
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -356,6 +357,7 @@ impl Kubernetes for EC2 {
                 false,
             )],
             &self.options,
+            Duration::minutes(0), // not used for EC2
         )?;
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(

@@ -69,7 +69,7 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
 
   timeouts {
     create = "60m"
-    delete = "60m"
+    delete = "{{ eks_upgrade_timeout_in_min }}m"
     update = "60m"
   }
 

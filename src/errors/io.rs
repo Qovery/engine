@@ -217,6 +217,7 @@ pub enum Tag {
     CannotReadFile,
     InvalidJobOutputCannotBeSerialized,
     DatabaseError,
+    K8sGetPodError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -260,6 +261,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sHistory => Tag::K8sHistory,
             errors::Tag::K8sCannotCreateNamespace => Tag::K8sCannotCreateNamespace,
             errors::Tag::K8sPodIsNotReady => Tag::K8sPodIsNotReady,
+            errors::Tag::K8sGetPodError => Tag::K8sGetPodError,
             errors::Tag::K8sGetDeploymentError => Tag::K8sGetDeploymentError,
             errors::Tag::K8sDeleteDeploymentError => Tag::K8sDeleteDeploymentError,
             errors::Tag::K8sGetStatefulsetError => Tag::K8sGetStatefulsetError,
