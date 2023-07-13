@@ -69,6 +69,7 @@ resource "aws_db_instance" "postgresql_instance" {
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now
+  allow_major_version_upgrade = var.allow_major_version_upgrade
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   maintenance_window = var.preferred_maintenance_window
 

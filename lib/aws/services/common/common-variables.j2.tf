@@ -98,6 +98,12 @@ variable "kubernetes_cluster_az_list" {
 
 # Upgrades
 
+variable "allow_major_version_upgrade" {
+  description = "Enable to allow major engine version upgrades when changing engine versions"
+  default = true
+  type = bool
+}
+
 variable "auto_minor_version_upgrade" {
   description = "Indicates that minor engine upgrades will be applied automatically to the DB instance during the maintenance window"
   default = true

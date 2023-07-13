@@ -167,9 +167,9 @@ pub fn cluster_test(
 
     let kubernetes_boot_version = match kubernetes_kind {
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => KubernetesVersion::V1_25 {
+        KubernetesKind::Ec2 => KubernetesVersion::V1_26 {
             prefix: Some(Arc::from("v")),
-            patch: Some(11),
+            patch: Some(6),
             suffix: Some(Arc::from("+k3s1")),
         },
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
