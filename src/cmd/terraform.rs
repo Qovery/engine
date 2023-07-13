@@ -61,8 +61,8 @@ pub enum TerraformError {
     },
     NotEnoughPermissions {
         resource_type_and_name: String,
-        action: String,
-        user: String,
+        action: Option<String>,
+        user: Option<String>,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -397,8 +397,8 @@ impl TerraformError {
                 ) {
                     return TerraformError::NotEnoughPermissions {
                         resource_type_and_name: resource_type_and_name.to_string(),
-                        user: user.to_string(),
-                        action: action.to_string(),
+                        user: Some(user.to_string()),
+                        action: Some(action.to_string()),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
@@ -495,6 +495,21 @@ impl TerraformError {
             }
         }
 
+        if raw_terraform_error_output.contains("scaleway-sdk-go: insufficient permissions:") {
+            if let Ok(scw_resource) = Regex::new(r"with (?P<resource>\b(?:\w*.\w*))") {
+                if let Some(cap) = scw_resource.captures(raw_terraform_error_output.as_str()) {
+                    if let Some(resource) = cap.name("resource").map(|e| e.as_str()) {
+                        return TerraformError::NotEnoughPermissions {
+                            resource_type_and_name: resource.to_string(),
+                            raw_message: raw_terraform_error_output,
+                            user: None,
+                            action: None,
+                        };
+                    }
+                }
+            }
+        }
+
         if raw_terraform_error_output.contains("scaleway-sdk-go: invalid argument(s):")
             && raw_terraform_error_output.contains("must be unique across the project")
         {
@@ -509,6 +524,7 @@ impl TerraformError {
                 }
             }
         }
+
         // Resources creation errors
         // AWS
         // BucketAlreadyOwnedByYou: S3 bucket cannot be created because it already exists. It might happen if Terraform lost connection before writing to the state.
@@ -594,9 +610,14 @@ impl TerraformError {
                 user,
                 action,
                 ..
-            } => format!(
-                "Error, user `{user}` cannot perform `{action}` on `{resource_type_and_name}`."
-            ),
+            } => match (user, action) {
+                (Some(user_value), Some(action_value)) => format!(
+                    "Error, user `{user_value}` cannot perform `{action_value}` on `{resource_type_and_name}`."
+                ),
+                _ => format!(
+                    "Error, cannot perform action due to permission on `{resource_type_and_name}`."
+                ),
+            }
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 ..
@@ -1464,6 +1485,26 @@ terraform {
     }
 
     #[test]
+    fn test_terraform_error_scw_permissions_issue() {
+        // setup:
+        let raw_message = "Error: scaleway-sdk-go: insufficient permissions: \n\n  with scaleway_k8s_cluster.kubernetes_cluster,\n  on ks-master-cluster.tf line 1, in resource \"scaleway_k8s_cluster\" \"kubernetes_cluster\":\n   1: resource \"scaleway_k8s_cluster\" \"kubernetes_cluster".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::NotEnoughPermissions {
+                resource_type_and_name: "scaleway_k8s_cluster.kubernetes_cluster".to_string(),
+                user: None,
+                action: None,
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
     fn test_terraform_error_aws_quotas_issue() {
         // setup:
         struct TestCase<'a> {
@@ -1651,8 +1692,8 @@ terraform {
         // validate:
         assert_eq!(
             TerraformError::NotEnoughPermissions {
-                user: "arn:aws:iam::542561660426:user/thomas".to_string(),
-                action: "iam:CreatePolicy".to_string(),
+                user: Some("arn:aws:iam::542561660426:user/thomas".to_string()),
+                action: Some("iam:CreatePolicy".to_string()),
                 resource_type_and_name: "policy qovery-aws-EBS-CSI-Driver-z2242cca3".to_string(),
                 raw_message,
             },
