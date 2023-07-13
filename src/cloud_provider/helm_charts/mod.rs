@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::cloud_provider::helm::CommonChart;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -34,6 +36,7 @@ pub enum HelmChartResourcesConstraintType {
 //   requests:
 //     cpu: [request_cpu_m]
 //     memory: [request_memory_mi]
+#[derive(Serialize)]
 pub struct HelmChartResources {
     pub limit_cpu: KubernetesCpuResourceUnit,
     pub limit_memory: KubernetesMemoryResourceUnit,
