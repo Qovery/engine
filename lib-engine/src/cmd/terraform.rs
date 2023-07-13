@@ -106,6 +106,7 @@ pub enum TerraformError {
     },
     AlreadyExistingResource {
         resource_type: String,
+        resource_name: Option<String>,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -472,6 +473,23 @@ impl TerraformError {
                 }
             }
         }
+        // ResourceInUseException: Cluster already exists with name: xxx
+        if let Ok(cluster_name_regex) = Regex::new(
+            r"Error: creating (?P<resource_type>[\w\W\d]+) \((?P<resource_name>[\w\W\d]+)\): ResourceInUseException",
+        ) {
+            if let Some(cap) = cluster_name_regex.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_type), Some(resource_name)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("resource_name").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::AlreadyExistingResource {
+                        resource_type: resource_type.to_string(),
+                        resource_name: Some(resource_name.to_string()),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
@@ -518,6 +536,7 @@ impl TerraformError {
                     if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
                         return TerraformError::AlreadyExistingResource {
                             resource_type: resource_type.to_string(),
+                            resource_name: None,
                             raw_message: raw_terraform_error_output,
                         };
                     }
@@ -668,8 +687,11 @@ impl TerraformError {
             TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
                 format!("Error, service `{service_type}` requiring an opt-in is not activated.",)
             }
-            TerraformError::AlreadyExistingResource { resource_type, .. } => {
-                format!("Error, resource {resource_type} already exists.")
+            TerraformError::AlreadyExistingResource { resource_type, resource_name, .. } => {
+                match resource_name {
+                    Some(name) => format!("Error, resource type `{resource_type}` with name `{name}` already exists."),
+                    None => format!("Error, resource type `{resource_type}` already exists."),
+                }
             }
             TerraformError::ResourceDependencyViolation { resource_name, resource_kind, .. } => {
                 format!("Error, resource {resource_kind} `{resource_name}` has dependency violation.")
@@ -1636,7 +1658,7 @@ terraform {
     }
 
     #[test]
-    fn test_terraform_error_resources_issues() {
+    fn test_terraform_error_scw_resources_issues() {
         // setup:
         struct TestCase<'a> {
             input_raw_std: &'a str,
@@ -1662,6 +1684,7 @@ terraform {
                 input_raw_error: "Error: scaleway-sdk-go: invalid argument(s): name does not respect constraint, cluster name must be unique across the project",
                 expected_terraform_error: TerraformError::AlreadyExistingResource {
                     resource_type: "scaleway_k8s_cluster.kubernetes_cluster".to_string(),
+                    resource_name: None,
                     raw_message:
                     "Error: scaleway-sdk-go: invalid argument(s): name does not respect constraint, cluster name must be unique across the project".to_string(),
                 },
@@ -1695,6 +1718,37 @@ terraform {
                 user: Some("arn:aws:iam::542561660426:user/thomas".to_string()),
                 action: Some("iam:CreatePolicy".to_string()),
                 resource_type_and_name: "policy qovery-aws-EBS-CSI-Driver-z2242cca3".to_string(),
+                raw_message,
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_already_existing_resource_issue() {
+        // setup:
+        let raw_message = r#"Error: creating EKS Cluster (qovery-zd3c17088): ResourceInUseException: Cluster already exists with name: qovery-zd3c17088
+{
+  RespMetadata: {
+    StatusCode: 409,
+    RequestID: "dc9831bc-bcac-422c-8195-df7ab1219282"
+  },
+  ClusterName: "qovery-zd3c17088",
+  Message_: "Cluster already exists with name: qovery-zd3c17088"
+}
+
+  with aws_eks_cluster.eks_cluster,
+  on eks-master-cluster.tf line 35, in resource "aws_eks_cluster" "eks_cluster":
+  35: resource "aws_eks_cluster" "eks_cluster" {"#.to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::AlreadyExistingResource {
+                resource_type: "EKS Cluster".to_string(),
+                resource_name: Some("qovery-zd3c17088".to_string()),
                 raw_message,
             },
             result
