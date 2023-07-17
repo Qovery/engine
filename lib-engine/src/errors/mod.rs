@@ -13,7 +13,7 @@ use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
 use crate::cloud_provider::kubernetes::KubernetesError;
-use crate::cmd::command;
+use crate::cmd::{command, terraform};
 use crate::events::{EventDetails, Stage};
 use crate::models::database::DatabaseError;
 use crate::models::types::VersionsNumber;
@@ -803,6 +803,8 @@ pub enum Tag {
     TerraformS3BucketCreationErrorAlreadyOwnedByYou,
     /// TerraformCannotImportResource: represents an error where Terraform cannot import the given resource.
     TerraformCannotImportResource,
+    /// TerraformManagedDatabaseError: represents an error on managed database.
+    TerraformManagedDatabaseError,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2813,6 +2815,28 @@ impl EngineError {
                 None,
                 None,
             ),
+            TerraformError::ManagedDatabaseError { ref database_error_sub_type, .. } => match **database_error_sub_type {
+                terraform::DatabaseError::VersionUpgradeNotPossible { .. } => {
+                    EngineError::new(
+                        event_details,
+                        Tag::TerraformManagedDatabaseError,
+                        terraform_error.to_safe_message(),
+                        Some(terraform_error.into()),
+                        None,
+                        Some("You should refer to your cloud provider documentation in order to proceed with database upgrade.".to_string()),
+                    )
+                },
+                terraform::DatabaseError::VersionNotSupportedOnTheInstanceType { .. } => {
+                    EngineError::new(
+                        event_details,
+                        Tag::TerraformManagedDatabaseError,
+                        terraform_error.to_safe_message(),
+                        Some(terraform_error.into()),
+                        None,
+                        Some("You should refer to your cloud provider documentation for supported combinations of instance type and engine version.".to_string()),
+                    )
+                }
+            },
         }
     }
 

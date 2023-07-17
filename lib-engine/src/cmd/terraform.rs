@@ -41,6 +41,12 @@ pub enum QuotaExceededError {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum DatabaseError {
+    VersionUpgradeNotPossible { from: String, to: String },
+    VersionNotSupportedOnTheInstanceType { version: String, db_instance_type: String },
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TerraformError {
     Unknown {
         terraform_args: Vec<String>,
@@ -164,6 +170,13 @@ pub enum TerraformError {
     S3BucketAlreadyOwnedByYou {
         bucket_name: String,
         terraform_resource_name: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
+    ManagedDatabaseError {
+        database_name: Option<String>,
+        database_type: String,
+        database_error_sub_type: Box<DatabaseError>,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -507,9 +520,9 @@ impl TerraformError {
             }
         }
         // ResourceInUseException: Cluster already exists with name: xxx
-        if let Ok(cluster_name_regex) = Regex::new(
-            r"Error: creating (?P<resource_type>[\w\W\d]+) \((?P<resource_name>[\w\W\d]+)\): ResourceInUseException",
-        ) {
+        if let Ok(cluster_name_regex) =
+            Regex::new(r"Error: creating (?P<resource_type>.*) \((?P<resource_name>[-\w]+)\): ResourceInUseException")
+        {
             if let Some(cap) = cluster_name_regex.captures(raw_terraform_error_output.as_str()) {
                 if let (Some(resource_type), Some(resource_name)) = (
                     cap.name("resource_type").map(|e| e.as_str()),
@@ -529,7 +542,7 @@ impl TerraformError {
             && raw_terraform_error_output.contains("failed: timeout after")
         {
             if let Ok(scw_resource_issue) = Regex::new(
-                r"(?P<resource_type>\bscaleway_(?:\w*.\w*)): Refreshing state... \[id=(?P<resource_identifier>[\w\W\d]+)]",
+                r"(?P<resource_type>\bscaleway_(?:.*)): Refreshing state... \[id=(?P<resource_identifier>.*)\]",
             ) {
                 if let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str()) {
                     if let (Some(resource_type), Some(resource_identifier)) = (
@@ -597,6 +610,56 @@ impl TerraformError {
             }
         }
 
+        // Managed database errors
+        // AWS
+        // InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        if let Ok(managed_db_upgrade_error_re) = Regex::new(
+            r#"Error: Failed to modify [\w\W]+ \((?P<database_name>.+?)\): InvalidParameterCombination: Cannot upgrade (?P<database_type>[\w\W]+) from (?P<version_from>[\d\.]+) to (?P<version_to>[\d\.]+)"#,
+        ) {
+            if let Some(cap) = managed_db_upgrade_error_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(database_name), Some(database_type), Some(version_from), Some(version_to)) = (
+                    cap.name("database_name").map(|e| e.as_str()),
+                    cap.name("database_type").map(|e| e.as_str()),
+                    cap.name("version_from").map(|e| e.as_str()),
+                    cap.name("version_to").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ManagedDatabaseError {
+                        database_name: Some(database_name.to_string()),
+                        database_type: database_type.to_string(),
+                        database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
+                            from: version_from.to_string(),
+                            to: version_to.to_string(),
+                        }),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+        // InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported
+        if let Ok(managed_db_version_instance_type_incompatible_error_re) = Regex::new(
+            r#"InvalidParameterCombination: The combination of [\w\s]+ '(?P<database_instance_type>.+?)', [\w\s]+ '(?P<database_type>.+?)' and [\w\s]+ version '(?P<database_engine_version>.+?)' is not supported"#,
+        ) {
+            if let Some(cap) =
+                managed_db_version_instance_type_incompatible_error_re.captures(raw_terraform_error_output.as_str())
+            {
+                if let (Some(database_instance_type), Some(database_type), Some(database_engine_version)) = (
+                    cap.name("database_instance_type").map(|e| e.as_str()),
+                    cap.name("database_type").map(|e| e.as_str()),
+                    cap.name("database_engine_version").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ManagedDatabaseError {
+                        database_name: None,
+                        database_type: database_type.to_string(),
+                        database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
+                            version: database_engine_version.to_string(),
+                            db_instance_type: database_instance_type.to_string(),
+                        }),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // Terraform general errors
         if raw_terraform_error_output.contains("Two interrupts received. Exiting immediately.") {
             return TerraformError::MultipleInterruptsReceived {
@@ -640,7 +703,7 @@ impl TerraformError {
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
-        // (un-catched) so we can act / report properly to the user.
+        // (un-caught) so we can act / report properly to the user.
         TerraformError::Unknown {
             terraform_args,
             raw_message: raw_terraform_error_output,
@@ -655,7 +718,7 @@ impl TerraformError {
                 terraform_args.join(" "),
             ),
             TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately.".to_string(),
-            TerraformError::AccountBlockedByProvider { .. } => "Yout account has been blocked by cloud provider.".to_string(),
+            TerraformError::AccountBlockedByProvider { .. } => "Your account has been blocked by cloud provider.".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -767,7 +830,18 @@ impl TerraformError {
             },
             TerraformError::CannotImportResource { resource_type, resource_identifier, .. } => {
                 format!("Error, cannot import Terraform resource `{resource_identifier}` type `{resource_type}`")
-            }
+            },
+            TerraformError::ManagedDatabaseError { database_name, database_type, database_error_sub_type, .. } => {
+                match **database_error_sub_type {
+                    DatabaseError::VersionUpgradeNotPossible { ref from, ref to } => {
+                        match database_name {
+                            Some(name) => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}` on `{name}`"),
+                            None => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}`"),
+                        }
+                    },
+                    DatabaseError::VersionNotSupportedOnTheInstanceType { ref version,ref db_instance_type } => format!("Error, `{database_type}` version `{version}` is not compatible with instance type `{db_instance_type}`"),
+                }
+            },
         }
     }
 }
@@ -842,6 +916,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::CannotImportResource { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ManagedDatabaseError { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1355,8 +1432,8 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>, env: &[(&str, &str)]) -> Resu
 mod tests {
     use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
-        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, QuotaExceededError,
-        TerraformError,
+        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, DatabaseError,
+        QuotaExceededError, TerraformError,
     };
     use std::fs;
     use std::process::Child;
@@ -1771,6 +1848,70 @@ terraform {
                 tc.input_raw_std.to_string(),
                 tc.input_raw_error.to_string(),
             );
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
+    }
+
+    #[test]
+    fn test_terraform_error_aws_managed_db_issues() {
+        // setup:
+        struct TestCase<'a> {
+            input_raw_error: &'a str,
+            expected_terraform_error: TerraformError,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input_raw_error: r#"Error: Failed to modify DocDB Cluster (ze73ae545-mongodb): InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        status code: 400, request id: f6f2f684-4994-45a7-a29a-b75bbb3ebb1b
+
+  with aws_docdb_cluster.documentdb_cluster,
+  on main.tf line 45, in resource "aws_docdb_cluster" "documentdb_cluster":
+  45: resource "aws_docdb_cluster" "documentdb_cluster" {"#,
+                expected_terraform_error: TerraformError::ManagedDatabaseError {
+                    database_name: Some("ze73ae545-mongodb".to_string()),
+                    database_type: "docdb".to_string(),
+                    database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
+                        from: "4.0.0".to_string(),
+                        to: "5.0.0".to_string(),
+                    }),
+                    raw_message: r#"Error: Failed to modify DocDB Cluster (ze73ae545-mongodb): InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        status code: 400, request id: f6f2f684-4994-45a7-a29a-b75bbb3ebb1b
+
+  with aws_docdb_cluster.documentdb_cluster,
+  on main.tf line 45, in resource "aws_docdb_cluster" "documentdb_cluster":
+  45: resource "aws_docdb_cluster" "documentdb_cluster" {"#.to_string(),
+                },
+            },
+            TestCase {
+                input_raw_error: r#"Error: error creating ElastiCache Cache Cluster: InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported. Please consult the documentation for supported combinations of cluster class and cache engine.
+	status code: 400, request id: fe420d33-e0b1-497f-bdb8-3c656e7da6ba
+
+  with aws_elasticache_cluster.elasticache_cluster,
+  on main.tf line 29, in resource "aws_elasticache_cluster" "elasticache_cluster":
+  29: resource "aws_elasticache_cluster" "elasticache_cluster" {"#,
+                expected_terraform_error: TerraformError::ManagedDatabaseError {
+                    database_name: None,
+                    database_type: "redis".to_string(),
+                    database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
+                        version: "5.0.6".to_string(),
+                        db_instance_type: "cache.t4g.micro".to_string(),
+                    }),
+                    raw_message: r#"Error: error creating ElastiCache Cache Cluster: InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported. Please consult the documentation for supported combinations of cluster class and cache engine.
+	status code: 400, request id: fe420d33-e0b1-497f-bdb8-3c656e7da6ba
+
+  with aws_elasticache_cluster.elasticache_cluster,
+  on main.tf line 29, in resource "aws_elasticache_cluster" "elasticache_cluster":
+  29: resource "aws_elasticache_cluster" "elasticache_cluster" {"#.to_string(),
+                },
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), tc.input_raw_error.to_string());
 
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
