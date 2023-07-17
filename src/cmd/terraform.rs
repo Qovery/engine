@@ -29,6 +29,7 @@ bitflags! {
 pub enum QuotaExceededError {
     ResourceLimitExceeded {
         resource_type: String,
+        current_resource_count: Option<u32>,
         max_resource_count: Option<u32>,
     },
 
@@ -192,6 +193,32 @@ impl TerraformError {
                 raw_message: raw_terraform_error_output,
             };
         }
+        if let Ok(scw_quotas_exceeded_re) = Regex::new(
+            r"Error: scaleway-sdk-go: quota exceeded\(s\): (?P<resource_type>\w+) has reached its quota \((?P<current_resource_count>\d+)/(?P<max_resource_count>\d+)\)",
+        ) {
+            if let Some(cap) = scw_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_type), Some(current_resource_count), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("current_resource_count").map(|e| e.as_str().parse::<u32>()),
+                    cap.name("max_resource_count").map(|e| e.as_str().parse::<u32>()),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            current_resource_count: match current_resource_count {
+                                Ok(c) => Some(c),
+                                Err(_) => None,
+                            },
+                            max_resource_count: match max_resource_count {
+                                Ok(c) => Some(c),
+                                Err(_) => None,
+                            },
+                        },
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // AWS
         if let Ok(aws_quotas_exceeded_re) =
@@ -202,6 +229,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -245,6 +273,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -264,6 +293,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -279,6 +309,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -294,6 +325,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -313,6 +345,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -672,14 +705,19 @@ impl TerraformError {
                             "SCW new account requires cloud provider validation.".to_string(),
                         QuotaExceededError::ResourceLimitExceeded {
                             resource_type,
+                            current_resource_count,
                             max_resource_count,
                         } => format!(
-                            "`{}` has reached its quotas{}.",
+                            "`{}` has reached its quotas of `{}/{}`.",
                             resource_type,
+                            match current_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },
                             match max_resource_count {
-                                None => "".to_string(),
-                                Some(count) => format!(" of {count}"),
-                            }
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },
                         ),
                     },
                 )
@@ -1489,7 +1527,7 @@ terraform {
     }
 
     #[test]
-    fn test_terraform_error_scw_quotas_issue() {
+    fn test_terraform_error_scw_new_account_quotas_issue() {
         // setup:
         let raw_message = "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>".to_string();
 
@@ -1500,6 +1538,33 @@ terraform {
         assert_eq!(
             TerraformError::QuotasExceeded {
                 sub_type: QuotaExceededError::ScwNewAccountNeedsValidation,
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_scw_quotas_issue() {
+        // setup:
+        let raw_message =
+            r#"Error: scaleway-sdk-go: quota exceeded(s): CpServersType_PRO2_XXS has reached its quota (0/1)
+         with scaleway_k8s_pool.kubernetes_cluster_workers_1,
+         on ks-workers-nodes.tf line 2, in resource "scaleway_k8s_pool" "kubernetes_cluster_workers_1":
+          2: resource "scaleway_k8s_pool" "kubernetes_cluster_workers_1" {"#
+                .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    current_resource_count: Some(0u32),
+                    max_resource_count: Some(1u32),
+                    resource_type: "CpServersType_PRO2_XXS".to_string(),
+                },
                 raw_message
             },
             result
@@ -1540,6 +1605,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "Error: creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached"
@@ -1551,6 +1617,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "error creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
@@ -1562,6 +1629,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "vCPUs".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(32),
                     },
                     raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
@@ -1574,6 +1642,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "EIP".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message:
@@ -1595,6 +1664,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
@@ -1606,6 +1676,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "vCPU".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(32),
                     },
                     raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.".to_string(),
@@ -1630,6 +1701,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "Fleet Requests".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "AsgInstanceLaunchFailures: You've reached your quota for maximum Fleet Requests for this account. Launching EC2 instance failed.".to_string(),
@@ -1640,6 +1712,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "nodegroups".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(30),
                     },
                     raw_message: "InvalidParameterException: Limit of 30 nodegroups exceeded.".to_string(),

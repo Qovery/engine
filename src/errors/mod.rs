@@ -2663,7 +2663,7 @@ impl EngineError {
             } => {
                 let terraform_error_string = terraform_error.to_safe_message();
                 match sub_type.clone() {
-                    QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
+                    QuotaExceededError::ResourceLimitExceeded { resource_type, current_resource_count, max_resource_count } => {
                         if let Some(Kind::Aws) = event_details.provider_kind() {
                             return EngineError::new(
                                 event_details,
@@ -2671,9 +2671,12 @@ impl EngineError {
                                 terraform_error_string,
                                 Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                                 Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
-                                Some(format!("Request AWS to increase your `{}` limit{} via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, match max_resource_count {
-                                    None => "".to_string(),
-                                    Some(count) => format!(" (current max = {count}"),
+                                Some(format!("Request AWS to increase your `{}` limit (current count = {}, max count = {}) via this page https://aws.amazon.com/contact-us/ec2-request.", resource_type, match current_resource_count {
+                                    None => "NA".to_string(),
+                                    Some(count) => count.to_string(),
+                                },match max_resource_count {
+                                    None => "NA".to_string(),
+                                    Some(count) => count.to_string(),
                                 })),
                             );
                         }
@@ -2685,9 +2688,12 @@ impl EngineError {
                             terraform_error_string, // Note: Terraform error message are supposed to be safe
                             Some(terraform_error.into()),
                             Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
-                            Some(format!("Request your cloud provider to increase your `{}` limit{}", resource_type, match max_resource_count {
-                                None => "".to_string(),
-                                Some(count) => format!("(current max = {count}"),
+                            Some(format!("Request your cloud provider to increase your `{}` limit (current count = {}, max count = {})", resource_type, match current_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },match max_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
                             })),
                         )
                     },
