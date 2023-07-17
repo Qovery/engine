@@ -1,7 +1,6 @@
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, Route};
 use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
-use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
@@ -73,6 +72,7 @@ pub struct Router<T: CloudProvider> {
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
     pub(crate) name: String,
+    pub(crate) kube_name: String,
     pub(crate) default_domain: String,
     pub(crate) custom_domains: Vec<CustomDomain>,
     pub(crate) routes: Vec<Route>,
@@ -87,6 +87,7 @@ impl<T: CloudProvider> Router<T> {
         context: &Context,
         long_id: Uuid,
         name: &str,
+        kube_name: String,
         action: Action,
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
@@ -110,6 +111,7 @@ impl<T: CloudProvider> Router<T> {
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
+            kube_name,
             action,
             default_domain: default_domain.to_string(),
             custom_domains,
@@ -151,7 +153,7 @@ impl<T: CloudProvider> Router<T> {
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
                 // advanced settings
                 context.insert("advanced_settings", &application.advanced_settings());
-                (application.sanitized_name(), application.public_ports())
+                (application.kube_name(), application.public_ports())
             } else {
                 let container = environment
                     .containers
@@ -162,7 +164,7 @@ impl<T: CloudProvider> Router<T> {
                 // advanced settings
                 context.insert("advanced_settings", &container.advanced_settings());
 
-                (container.kube_service_name(), container.public_ports())
+                (container.kube_name(), container.public_ports())
             };
 
         // Get the alternative names we need to generate for the certificate
@@ -183,8 +185,8 @@ impl<T: CloudProvider> Router<T> {
             .filter(|port| port.protocol == Protocol::GRPC)
             .cloned()
             .collect();
-        let http_hosts = to_host_data_template(&service_name, &http_ports, &self.default_domain, &self.custom_domains);
-        let grpc_hosts = to_host_data_template(&service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
+        let http_hosts = to_host_data_template(service_name, &http_ports, &self.default_domain, &self.custom_domains);
+        let grpc_hosts = to_host_data_template(service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
 
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts", &http_hosts);
@@ -350,8 +352,8 @@ impl<T: CloudProvider> Service for Router<T> {
         &self.name
     }
 
-    fn sanitized_name(&self) -> String {
-        sanitize_name("router", self.id())
+    fn kube_name(&self) -> &str {
+        &self.kube_name
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {

@@ -72,6 +72,7 @@ fn should_increase_app_storage_size() {
             resized_app.long_id,
             *test_app.action(),
             resized_app.name.as_str(),
+            resized_app.name.clone(),
             resized_app.ports.clone(),
             resized_app.total_cpus.to_string(),
             resized_app.cpu_burst.to_string(),
@@ -234,6 +235,7 @@ fn should_have_mounted_files_as_volume() {
         let mut statefulset = application.clone();
         let statefulset_id = QoveryIdentifier::new_random();
         statefulset.name = statefulset_id.short().to_string();
+        statefulset.kube_name = statefulset.name.clone();
         statefulset.long_id = statefulset_id.to_uuid();
         let storage_id = QoveryIdentifier::new_random();
         statefulset.readiness_probe = None;

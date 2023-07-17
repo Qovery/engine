@@ -37,6 +37,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) kube_name: String,
     pub(super) action: Action,
     pub registry: Registry,
     pub image: String,
@@ -71,6 +72,7 @@ impl<T: CloudProvider> Container<T> {
         context: &Context,
         long_id: Uuid,
         name: String,
+        kube_name: String,
         action: Action,
         registry: Registry,
         image: String,
@@ -145,6 +147,7 @@ impl<T: CloudProvider> Container<T> {
             long_id,
             action,
             name,
+            kube_name,
             registry,
             image,
             tag,
@@ -181,10 +184,6 @@ impl<T: CloudProvider> Container<T> {
         format!("{}/common/charts/q-container", self.lib_root_directory)
     }
 
-    fn kube_service_name(&self) -> String {
-        format!("container-{}", to_short_id(&self.long_id))
-    }
-
     pub fn registry(&self) -> &Registry {
         &self.registry
     }
@@ -213,7 +212,7 @@ impl<T: CloudProvider> Container<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: self.kube_service_name(),
+                name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
                 image_full: format!(
@@ -242,7 +241,7 @@ impl<T: CloudProvider> Container<T> {
                 .registry_docker_json_config
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
-                    secret_name: format!("{}-registry", self.kube_service_name()),
+                    secret_name: format!("{}-registry", self.kube_name()),
                     docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
@@ -313,8 +312,8 @@ impl<T: CloudProvider> Service for Container<T> {
         self.name()
     }
 
-    fn sanitized_name(&self) -> String {
-        self.name.to_string()
+    fn kube_name(&self) -> &str {
+        &self.kube_name
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -350,7 +349,6 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;
-    fn kube_service_name(&self) -> String;
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
@@ -374,10 +372,6 @@ where
             self.image,
             self.tag
         )
-    }
-
-    fn kube_service_name(&self) -> String {
-        self.kube_service_name()
     }
 
     fn startup_timeout(&self) -> Duration {

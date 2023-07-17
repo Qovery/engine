@@ -1,6 +1,5 @@
 use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use chrono::Utc;
-use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol, StorageType};
 use qovery_engine::io_models::context::Context;
@@ -11,6 +10,7 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
+use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use tracing::error;
 use url::Url;
@@ -31,10 +31,12 @@ pub fn working_environment(
         ..Default::default()
     };
 
+    let env_id = Uuid::new_v4();
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: application_id.to_uuid(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-myenv", env_id),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -42,7 +44,8 @@ pub fn working_environment(
         max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: application_id.to_uuid(),
-            name: application_name,
+            name: application_name.clone(),
+            kube_name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "4bc6a902e83129a118185660b3c9e13dfd0ffc27".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -101,7 +104,8 @@ pub fn working_environment(
     if with_router {
         req.routers = vec![Router {
             long_id: Uuid::new_v4(),
-            name: router_name,
+            name: router_name.clone(),
+            kube_name: router_name,
             action: Action::Create,
             default_domain: application_domain,
             public_port: 443,
@@ -166,6 +170,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let mut statefulset = application.clone();
     let statefulset_id = QoveryIdentifier::new_random();
     statefulset.name = statefulset_id.short().to_string();
+    statefulset.kube_name = statefulset.name.clone();
     statefulset.long_id = statefulset_id.to_uuid();
     statefulset.liveness_probe = None;
     statefulset.readiness_probe = None;
@@ -203,11 +208,15 @@ pub fn environment_2_app_2_routers_1_psql(
     let suffix = QoveryIdentifier::new_random().short().to_string();
     let application_id1 = Uuid::new_v4();
     let application_id2 = Uuid::new_v4();
+    let router_1 = Uuid::new_v4();
+    let router_2 = Uuid::new_v4();
 
+    let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -216,6 +225,7 @@ pub fn environment_2_app_2_routers_1_psql(
             action: Action::Create,
             long_id: Uuid::new_v4(),
             name: database_name.clone(),
+            kube_name: database_name.clone(),
             created_at: Utc::now(),
             version: "11.8.0".to_string(),
             fqdn_id: fqdn.clone(),
@@ -237,7 +247,8 @@ pub fn environment_2_app_2_routers_1_psql(
         applications: vec![
             Application {
                 long_id: application_id1,
-                name: sanitize_name("pg", &format!("{}-{}", "pg-app1", &suffix)),
+                name: format!("{}-{}", "pg-pg-app1", &suffix),
+                kube_name: format!("{}-{}", "pg-pg-app1", &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
@@ -295,7 +306,8 @@ pub fn environment_2_app_2_routers_1_psql(
             },
             Application {
                 long_id: application_id2,
-                name: sanitize_name("pg", &format!("{}-{}", "pg-app2", &suffix)),
+                name: format!("{}-{}", "pg-pg-app2", &suffix),
+                kube_name: format!("{}-{}", "pg-pg-app2", &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
@@ -356,8 +368,9 @@ pub fn environment_2_app_2_routers_1_psql(
         jobs: vec![],
         routers: vec![
             Router {
-                long_id: Uuid::new_v4(),
+                long_id: router_1,
                 name: "main".to_string(),
+                kube_name: format!("router-{}", router_1),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
@@ -368,8 +381,9 @@ pub fn environment_2_app_2_routers_1_psql(
                 }],
             },
             Router {
-                long_id: Uuid::new_v4(),
+                long_id: router_2,
                 name: "second-router".to_string(),
+                kube_name: format!("router-{}", router_2),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
@@ -406,10 +420,12 @@ pub fn non_working_environment(context: &Context) -> EnvironmentRequest {
 pub fn echo_app_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_id = Uuid::new_v4();
+    let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: application_id,
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -418,6 +434,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         applications: vec![Application {
             long_id: Uuid::new_v4(),
             name: format!("{}-{}", "echo-app", &suffix),
+            kube_name: format!("{}-{}", "echo-app", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
@@ -475,6 +492,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         routers: vec![Router {
             long_id: Uuid::new_v4(),
             name: "main".to_string(),
+            kube_name: "main".to_string(),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -504,10 +522,12 @@ pub fn environment_only_http_server(
         ..Default::default()
     };
 
+    let env_id = Uuid::new_v4();
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -515,7 +535,8 @@ pub fn environment_only_http_server(
         max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: application_id,
-            name: application_name,
+            name: application_name.clone(),
+            kube_name: application_name,
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
@@ -576,6 +597,7 @@ pub fn environment_only_http_server(
         req.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: router_name,
+            kube_name: "main".to_string(),
             action: Action::Create,
             default_domain: application_domain,
             public_port: 443,
