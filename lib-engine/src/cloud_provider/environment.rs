@@ -35,6 +35,7 @@ impl Environment {
     pub fn new(
         long_id: Uuid,
         name: String,
+        kube_name: String,
         project_long_id: Uuid,
         organization_long_id: Uuid,
         action: Action,
@@ -56,7 +57,7 @@ impl Environment {
 
         Environment {
             event_details,
-            namespace: format!("{project_id}-{env_id}"),
+            namespace: kube_name,
             id: env_id,
             long_id,
             project_id,

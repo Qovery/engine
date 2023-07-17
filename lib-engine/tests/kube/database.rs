@@ -56,6 +56,7 @@ fn should_increase_db_storage_size() {
             resized_db.long_id,
             *test_db.action(),
             resized_db.name.as_str(),
+            resized_db.name.clone(),
             VersionsNumber::from_str(&resized_db.version).expect("Unable to parse db version"),
             resized_db.created_at,
             &resized_db.fqdn,

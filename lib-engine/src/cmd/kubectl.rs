@@ -9,6 +9,7 @@ use std::path::Path;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
+use uuid::Uuid;
 
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -66,7 +67,7 @@ where
 pub fn kubectl_exec_get_number_of_restart<P>(
     kubernetes_config: P,
     namespace: &str,
-    pod_name: &str,
+    service_id: &Uuid,
     envs: Vec<(&str, &str)>,
 ) -> Result<String, CommandError>
 where
@@ -81,7 +82,8 @@ where
         vec![
             "get",
             "po",
-            pod_name,
+            "-l",
+            &format!("qovery.com/service-id={}", service_id),
             "-n",
             namespace,
             "-o=custom-columns=:.status.containerStatuses..restartCount",

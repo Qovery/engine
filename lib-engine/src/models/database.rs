@@ -4,7 +4,6 @@ use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
     ServiceType, ServiceVersionCheckResult,
 };
-use crate::cloud_provider::utilities::managed_db_name_sanitizer;
 use crate::cloud_provider::{service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
@@ -141,6 +140,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
     pub(crate) name: String,
+    pub(crate) kube_name: String,
     pub(crate) version: VersionsNumber,
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) fqdn: String,
@@ -162,6 +162,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         long_id: Uuid,
         action: Action,
         name: &str,
+        kube_name: String,
         version: VersionsNumber,
         created_at: DateTime<Utc>,
         fqdn: &str,
@@ -198,6 +199,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
+            kube_name,
             version,
             created_at,
             fqdn: fqdn.to_string(),
@@ -227,7 +229,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             true => fqdn.to_string(),
             false => match M::is_managed() {
                 true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
-                false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
+                false => format!("{}.{}.svc.cluster.local", self.kube_name(), target.environment.namespace()),
             },
         }
     }
@@ -270,15 +272,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         &self.name
     }
 
-    fn sanitized_name(&self) -> String {
-        // FIXME: specific case only for aws ;'(
-        // This is sad, but can't change that as it would break/wipe all container db for users
-        // AWS and AWS-EC2
-        if C::lib_directory_name().starts_with("aws") {
-            managed_db_name_sanitizer(60, T::lib_directory_name(), &self.id)
-        } else {
-            format!("{}-{}", T::lib_directory_name(), &self.id)
-        }
+    fn kube_name(&self) -> &str {
+        &self.kube_name
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -533,7 +528,7 @@ pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode,
                     if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
                         kube_client,
                         namespace,
-                        &format!("app={}", database.sanitized_name()),
+                        &format!("app={}", database.kube_name()),
                     ))
                     .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
                     .items

@@ -37,7 +37,7 @@ pub trait Service: Send {
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
-    fn sanitized_name(&self) -> String;
+    fn kube_name(&self) -> &str;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
     fn action(&self) -> &Action;
     // used to retrieve logs by using Kubernetes labels (selector)
@@ -146,7 +146,7 @@ pub fn default_tera_context(
     context.insert("region", kubernetes.region());
     context.insert("zone", kubernetes.zone());
     context.insert("name", service.name());
-    context.insert("sanitized_name", &service.sanitized_name());
+    context.insert("sanitized_name", &service.kube_name());
     context.insert("namespace", environment.namespace());
     context.insert("cluster_name", kubernetes.name());
 
