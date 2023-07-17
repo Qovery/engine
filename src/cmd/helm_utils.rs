@@ -47,7 +47,7 @@ pub struct BackupStatus {
     pub backup_path: PathBuf,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CRDSUpdate {
     pub path: String,
     pub resources: Vec<String>,

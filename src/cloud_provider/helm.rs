@@ -19,14 +19,14 @@ use crate::deployment_action::deploy_helm::default_helm_timeout;
 use std::{fs, thread};
 use uuid::Uuid;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HelmAction {
     Deploy,
     Destroy,
     Skip,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum HelmChartNamespaces {
     KubeSystem,
     Prometheus,
@@ -68,19 +68,28 @@ impl Display for UpdateStrategy {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChartSetValue {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChartValuesGenerated {
     pub filename: String,
     pub yaml_content: String,
 }
 
-#[derive(Clone)]
+impl ChartValuesGenerated {
+    pub fn new(name: String, yaml_content: String) -> Self {
+        ChartValuesGenerated {
+            filename: format!("{}_override.yaml", name),
+            yaml_content,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ChartInfo {
     pub name: String,
     pub path: String,

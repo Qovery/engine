@@ -1,4 +1,7 @@
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::{
+    apps::v1::{Deployment, StatefulSet},
+    core::v1::Pod,
+};
 use kube::{
     api::{ListParams, Patch, PatchParams},
     Api,
@@ -8,7 +11,7 @@ use serde_json::json;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
-    models::kubernetes::{K8sDeployment, K8sStatefulset},
+    models::kubernetes::{K8sDeployment, K8sPod, K8sStatefulset},
     runtime::block_on,
     utilities::create_kube_client,
 };
@@ -34,6 +37,49 @@ impl QubeClient {
         let kube_client = block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
             .map_err(|err| Box::new(EngineError::new_cannot_connect_to_k8s_cluster(event_details, err)))?;
         Ok(QubeClient { client: kube_client })
+    }
+
+    pub async fn get_pods(
+        &self,
+        event_details: EventDetails,
+        namespace: Option<&str>,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sPod>, Box<EngineError>> {
+        let client: Api<Pod> = match namespace {
+            Some(namespace_name) => Api::namespaced(self.client.clone(), namespace_name),
+            None => Api::all(self.client.clone()),
+        };
+
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match select_resource {
+            SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
+                Ok(x) => Ok(K8sPod::from_k8s_pod_objectlist(event_details, x)),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes pods with labels `{labels}`. {e}"
+                    )),
+                ))),
+            },
+            SelectK8sResourceBy::Name(pod_name) => match client.get(pod_name.as_str()).await {
+                Ok(x) => Ok(vec![K8sPod::from_k8s_pod(event_details, x)?]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes pods from {pod_name}/{}. {e}",
+                        namespace.unwrap_or("no namespace")
+                    )),
+                ))),
+            },
+        }
     }
 
     pub async fn get_deployments(

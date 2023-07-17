@@ -1,10 +1,33 @@
-use k8s_openapi::api::apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus};
+use chrono::Duration;
+use k8s_openapi::api::{
+    apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
+    core::v1::{Pod, PodStatus},
+};
 use kube::core::ObjectList;
 
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
 };
+
+pub struct K8sPod {
+    pub metadata: K8sMetadata,
+    pub status: K8sPodStatus,
+}
+
+pub struct K8sPodStatus {
+    pub phase: K8sPodPhase,
+}
+
+#[derive(Default, Debug)]
+pub enum K8sPodPhase {
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    #[default]
+    Unknown,
+}
 
 pub struct K8sDeployment {
     pub metadata: K8sMetadata,
@@ -19,6 +42,8 @@ pub struct K8sStatefulset {
 pub struct K8sMetadata {
     pub name: String,
     pub namespace: String,
+    //#[serde(rename(deserialize = "deletion_grace_period_seconds"))]
+    pub termination_grace_period_seconds: Option<Duration>,
 }
 
 pub struct K8sDeploymentStatus {
@@ -29,6 +54,33 @@ pub struct K8sDeploymentStatus {
 pub struct K8sStatefulsetStatus {
     pub replicas: i32,
     pub ready_replicas: Option<i32>,
+}
+
+impl K8sPodStatus {
+    pub fn from_k8s_pod_status(k8s_pod_status: Option<PodStatus>) -> K8sPodStatus {
+        let phase = match k8s_pod_status {
+            Some(x) => x.phase,
+            None => None,
+        };
+        K8sPodStatus {
+            phase: K8sPodPhase::from_k8s_pod_phase(phase),
+        }
+    }
+}
+
+impl K8sPodPhase {
+    pub fn from_k8s_pod_phase(phase: Option<String>) -> K8sPodPhase {
+        match phase {
+            Some(x) => match x.as_str() {
+                "Pending" => K8sPodPhase::Pending,
+                "Running" => K8sPodPhase::Running,
+                "Succeeded" => K8sPodPhase::Succeeded,
+                "Failed" => K8sPodPhase::Failed,
+                _ => K8sPodPhase::Unknown,
+            },
+            None => K8sPodPhase::Unknown,
+        }
+    }
 }
 
 impl K8sDeploymentStatus {
@@ -46,6 +98,53 @@ impl K8sStatefulsetStatus {
             replicas: k8s_statefulset_status.replicas,
             ready_replicas: k8s_statefulset_status.ready_replicas,
         }
+    }
+}
+
+impl K8sPod {
+    pub fn from_k8s_pod_objectlist(event_details: EventDetails, k8s_pods: ObjectList<Pod>) -> Vec<K8sPod> {
+        let mut pods: Vec<K8sPod> = Vec::with_capacity(k8s_pods.items.len());
+
+        for deploy in k8s_pods.items {
+            if let Ok(x) = K8sPod::from_k8s_pod(event_details.clone(), deploy) {
+                pods.push(x);
+            };
+        }
+        pods
+    }
+
+    pub fn from_k8s_pod(event_details: EventDetails, k8s_pod: Pod) -> Result<K8sPod, Box<EngineError>> {
+        let pod_status = K8sPodStatus::from_k8s_pod_status(k8s_pod.status);
+
+        Ok(K8sPod {
+            metadata: K8sMetadata {
+                name: match k8s_pod.metadata.name.clone() {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_pod_error(
+                            event_details,
+                            CommandError::new_from_safe_message(
+                                "can't read kubernetes pod, name is missing".to_string(),
+                            ),
+                        )))
+                    }
+                },
+                namespace: match k8s_pod.metadata.namespace {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_pod_error(
+                            event_details,
+                            CommandError::new_from_safe_message(format!(
+                                "can't read kubernetes pod, namespace is missing for pod name `{}`",
+                                k8s_pod.metadata.name.unwrap_or("unknown".to_string())
+                            )),
+                        )))
+                    }
+                },
+                termination_grace_period_seconds: k8s_pod.metadata.deletion_grace_period_seconds.map(Duration::seconds),
+            },
+            status: pod_status,
+        })
     }
 }
 
@@ -97,6 +196,10 @@ impl K8sDeployment {
                         )))
                     }
                 },
+                termination_grace_period_seconds: k8s_deployment
+                    .metadata
+                    .deletion_grace_period_seconds
+                    .map(Duration::seconds),
             },
             status: deployment_status,
         })
@@ -151,6 +254,10 @@ impl K8sStatefulset {
                         )))
                     }
                 },
+                termination_grace_period_seconds: k8s_statefulset
+                    .metadata
+                    .deletion_grace_period_seconds
+                    .map(Duration::seconds),
             },
             status: statefulset_status,
         })

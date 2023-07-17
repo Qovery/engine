@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -11,6 +11,7 @@ use crate::cloud_provider::models::{
 };
 use crate::errors::CommandError;
 use kube::Client;
+use tera::{Context, Tera};
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
 
@@ -77,6 +78,66 @@ impl NginxIngressChart {
 
 impl ToCommonHelmChart for NginxIngressChart {
     fn to_common_helm_chart(&self) -> CommonChart {
+        // use this to override chart values but let the user to override it if necessary
+        let mut tera = Tera::default();
+        let nginx_ingress_override = r"
+controller:
+    resources:
+        limits:
+            cpu: {{ controller_resources_limits_cpu }}
+            memory: {{ controller_resources_limits_memory }}
+        requests:
+            cpu: {{ controller_resources_requests_cpu }}
+            memory: {{ controller_resources_requests_memory }}
+defaultBackend:
+    resources:
+        limits:
+            cpu: {{ default_backend_resources_limits_cpu }}
+            memory: {{ default_backend_resources_limits_memory }}
+        requests:
+            cpu: {{ default_backend_resources_requests_cpu }}
+            memory: {{ default_backend_resources_requests_memory }}
+        ";
+        tera.add_raw_template("nginx_ingress_override", nginx_ingress_override)
+            .unwrap();
+        let mut context = Context::new();
+        context.insert(
+            "controller_resources_limits_cpu",
+            &self.controller_resources.limit_cpu.to_string(),
+        );
+        context.insert(
+            "controller_resources_limits_memory",
+            &self.controller_resources.limit_memory.to_string(),
+        );
+        context.insert(
+            "controller_resources_requests_cpu",
+            &self.controller_resources.request_cpu.to_string(),
+        );
+        context.insert(
+            "controller_resources_requests_memory",
+            &self.controller_resources.request_memory.to_string(),
+        );
+        context.insert(
+            "default_backend_resources_limits_cpu",
+            &self.default_backend_resources.limit_cpu.to_string(),
+        );
+        context.insert(
+            "default_backend_resources_limits_memory",
+            &self.default_backend_resources.limit_memory.to_string(),
+        );
+        context.insert(
+            "default_backend_resources_requests_cpu",
+            &self.default_backend_resources.request_cpu.to_string(),
+        );
+        context.insert(
+            "default_backend_resources_requests_memory",
+            &self.default_backend_resources.request_memory.to_string(),
+        );
+        let rendered_nginx_overrride = ChartValuesGenerated::new(
+            "qovery_nginx_ingress".to_string(),
+            tera.render("nginx_ingress_override", &context).unwrap(),
+        );
+
         CommonChart {
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
@@ -99,44 +160,14 @@ impl ToCommonHelmChart for NginxIngressChart {
                         key: "controller.metrics.serviceMonitor.enabled".to_string(),
                         value: self.ff_metrics_history_enabled.to_string(),
                     },
-                    // Controller resources limits
-                    ChartSetValue {
-                        key: "controller.resources.limits.cpu".to_string(),
-                        value: self.controller_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "controller.resources.requests.cpu".to_string(),
-                        value: self.controller_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "controller.resources.limits.memory".to_string(),
-                        value: self.controller_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "controller.resources.requests.memory".to_string(),
-                        value: self.controller_resources.request_memory.to_string(),
-                    },
-                    // Default backend resources limits
-                    ChartSetValue {
-                        key: "defaultBackend.resources.limits.cpu".to_string(),
-                        value: self.default_backend_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "defaultBackend.resources.requests.cpu".to_string(),
-                        value: self.default_backend_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "defaultBackend.resources.limits.memory".to_string(),
-                        value: self.default_backend_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "defaultBackend.resources.requests.memory".to_string(),
-                        value: self.default_backend_resources.request_memory.to_string(),
-                    },
                 ],
-                yaml_files_content: match self.customer_helm_chart_override.clone() {
-                    Some(x) => vec![x.to_chart_values_generated()],
-                    None => vec![],
+                yaml_files_content: {
+                    // order matters: last one overrides previous ones, so customer override should be last
+                    let mut x = vec![rendered_nginx_overrride];
+                    if let Some(customer_helm_chart_override) = self.customer_helm_chart_override.clone() {
+                        x.push(customer_helm_chart_override.to_chart_values_generated());
+                    };
+                    x
                 },
                 ..Default::default()
             },
