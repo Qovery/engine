@@ -151,10 +151,10 @@ defaultBackend:
                         key: "controller.admissionWebhooks.enabled".to_string(),
                         value: "false".to_string(),
                     },
-                    // metrics
+                    // enable metrics for customers who wants to manage it by their own
                     ChartSetValue {
                         key: "controller.metrics.enabled".to_string(),
-                        value: self.ff_metrics_history_enabled.to_string(),
+                        value: true.to_string(),
                     },
                     ChartSetValue {
                         key: "controller.metrics.serviceMonitor.enabled".to_string(),

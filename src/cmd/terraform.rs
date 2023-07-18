@@ -29,6 +29,7 @@ bitflags! {
 pub enum QuotaExceededError {
     ResourceLimitExceeded {
         resource_type: String,
+        current_resource_count: Option<u32>,
         max_resource_count: Option<u32>,
     },
 
@@ -37,6 +38,12 @@ pub enum QuotaExceededError {
     // There is some cloud providers specific errors and it would make more sense to delegate logic
     // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
     ScwNewAccountNeedsValidation,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum DatabaseError {
+    VersionUpgradeNotPossible { from: String, to: String },
+    VersionNotSupportedOnTheInstanceType { version: String, db_instance_type: String },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -166,6 +173,13 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    ManagedDatabaseError {
+        database_name: Option<String>,
+        database_type: String,
+        database_error_sub_type: Box<DatabaseError>,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -192,6 +206,32 @@ impl TerraformError {
                 raw_message: raw_terraform_error_output,
             };
         }
+        if let Ok(scw_quotas_exceeded_re) = Regex::new(
+            r"Error: scaleway-sdk-go: quota exceeded\(s\): (?P<resource_type>\w+) has reached its quota \((?P<current_resource_count>\d+)/(?P<max_resource_count>\d+)\)",
+        ) {
+            if let Some(cap) = scw_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_type), Some(current_resource_count), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("current_resource_count").map(|e| e.as_str().parse::<u32>()),
+                    cap.name("max_resource_count").map(|e| e.as_str().parse::<u32>()),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            current_resource_count: match current_resource_count {
+                                Ok(c) => Some(c),
+                                Err(_) => None,
+                            },
+                            max_resource_count: match max_resource_count {
+                                Ok(c) => Some(c),
+                                Err(_) => None,
+                            },
+                        },
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // AWS
         if let Ok(aws_quotas_exceeded_re) =
@@ -202,6 +242,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -245,6 +286,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -264,6 +306,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -279,6 +322,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -294,6 +338,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: None,
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -313,6 +358,7 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
+                            current_resource_count: None,
                             max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
@@ -474,9 +520,9 @@ impl TerraformError {
             }
         }
         // ResourceInUseException: Cluster already exists with name: xxx
-        if let Ok(cluster_name_regex) = Regex::new(
-            r"Error: creating (?P<resource_type>[\w\W\d]+) \((?P<resource_name>[\w\W\d]+)\): ResourceInUseException",
-        ) {
+        if let Ok(cluster_name_regex) =
+            Regex::new(r"Error: creating (?P<resource_type>.*) \((?P<resource_name>[-\w]+)\): ResourceInUseException")
+        {
             if let Some(cap) = cluster_name_regex.captures(raw_terraform_error_output.as_str()) {
                 if let (Some(resource_type), Some(resource_name)) = (
                     cap.name("resource_type").map(|e| e.as_str()),
@@ -496,7 +542,7 @@ impl TerraformError {
             && raw_terraform_error_output.contains("failed: timeout after")
         {
             if let Ok(scw_resource_issue) = Regex::new(
-                r"(?P<resource_type>\bscaleway_(?:\w*.\w*)): Refreshing state... \[id=(?P<resource_identifier>[\w\W\d]+)]",
+                r"(?P<resource_type>\bscaleway_(?:.*)): Refreshing state... \[id=(?P<resource_identifier>.*)\]",
             ) {
                 if let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str()) {
                     if let (Some(resource_type), Some(resource_identifier)) = (
@@ -564,6 +610,56 @@ impl TerraformError {
             }
         }
 
+        // Managed database errors
+        // AWS
+        // InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        if let Ok(managed_db_upgrade_error_re) = Regex::new(
+            r#"Error: Failed to modify [\w\W]+ \((?P<database_name>.+?)\): InvalidParameterCombination: Cannot upgrade (?P<database_type>[\w\W]+) from (?P<version_from>[\d\.]+) to (?P<version_to>[\d\.]+)"#,
+        ) {
+            if let Some(cap) = managed_db_upgrade_error_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(database_name), Some(database_type), Some(version_from), Some(version_to)) = (
+                    cap.name("database_name").map(|e| e.as_str()),
+                    cap.name("database_type").map(|e| e.as_str()),
+                    cap.name("version_from").map(|e| e.as_str()),
+                    cap.name("version_to").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ManagedDatabaseError {
+                        database_name: Some(database_name.to_string()),
+                        database_type: database_type.to_string(),
+                        database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
+                            from: version_from.to_string(),
+                            to: version_to.to_string(),
+                        }),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+        // InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported
+        if let Ok(managed_db_version_instance_type_incompatible_error_re) = Regex::new(
+            r#"InvalidParameterCombination: The combination of [\w\s]+ '(?P<database_instance_type>.+?)', [\w\s]+ '(?P<database_type>.+?)' and [\w\s]+ version '(?P<database_engine_version>.+?)' is not supported"#,
+        ) {
+            if let Some(cap) =
+                managed_db_version_instance_type_incompatible_error_re.captures(raw_terraform_error_output.as_str())
+            {
+                if let (Some(database_instance_type), Some(database_type), Some(database_engine_version)) = (
+                    cap.name("database_instance_type").map(|e| e.as_str()),
+                    cap.name("database_type").map(|e| e.as_str()),
+                    cap.name("database_engine_version").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ManagedDatabaseError {
+                        database_name: None,
+                        database_type: database_type.to_string(),
+                        database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
+                            version: database_engine_version.to_string(),
+                            db_instance_type: database_instance_type.to_string(),
+                        }),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // Terraform general errors
         if raw_terraform_error_output.contains("Two interrupts received. Exiting immediately.") {
             return TerraformError::MultipleInterruptsReceived {
@@ -607,7 +703,7 @@ impl TerraformError {
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
-        // (un-catched) so we can act / report properly to the user.
+        // (un-caught) so we can act / report properly to the user.
         TerraformError::Unknown {
             terraform_args,
             raw_message: raw_terraform_error_output,
@@ -622,7 +718,7 @@ impl TerraformError {
                 terraform_args.join(" "),
             ),
             TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately.".to_string(),
-            TerraformError::AccountBlockedByProvider { .. } => "Yout account has been blocked by cloud provider.".to_string(),
+            TerraformError::AccountBlockedByProvider { .. } => "Your account has been blocked by cloud provider.".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -672,14 +768,19 @@ impl TerraformError {
                             "SCW new account requires cloud provider validation.".to_string(),
                         QuotaExceededError::ResourceLimitExceeded {
                             resource_type,
+                            current_resource_count,
                             max_resource_count,
                         } => format!(
-                            "`{}` has reached its quotas{}.",
+                            "`{}` has reached its quotas of `{}/{}`.",
                             resource_type,
+                            match current_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },
                             match max_resource_count {
-                                None => "".to_string(),
-                                Some(count) => format!(" of {count}"),
-                            }
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },
                         ),
                     },
                 )
@@ -729,7 +830,18 @@ impl TerraformError {
             },
             TerraformError::CannotImportResource { resource_type, resource_identifier, .. } => {
                 format!("Error, cannot import Terraform resource `{resource_identifier}` type `{resource_type}`")
-            }
+            },
+            TerraformError::ManagedDatabaseError { database_name, database_type, database_error_sub_type, .. } => {
+                match **database_error_sub_type {
+                    DatabaseError::VersionUpgradeNotPossible { ref from, ref to } => {
+                        match database_name {
+                            Some(name) => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}` on `{name}`"),
+                            None => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}`"),
+                        }
+                    },
+                    DatabaseError::VersionNotSupportedOnTheInstanceType { ref version,ref db_instance_type } => format!("Error, `{database_type}` version `{version}` is not compatible with instance type `{db_instance_type}`"),
+                }
+            },
         }
     }
 }
@@ -804,6 +916,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::CannotImportResource { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ManagedDatabaseError { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1317,8 +1432,8 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>, env: &[(&str, &str)]) -> Resu
 mod tests {
     use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
-        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, QuotaExceededError,
-        TerraformError,
+        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, DatabaseError,
+        QuotaExceededError, TerraformError,
     };
     use std::fs;
     use std::process::Child;
@@ -1489,7 +1604,7 @@ terraform {
     }
 
     #[test]
-    fn test_terraform_error_scw_quotas_issue() {
+    fn test_terraform_error_scw_new_account_quotas_issue() {
         // setup:
         let raw_message = "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>".to_string();
 
@@ -1500,6 +1615,33 @@ terraform {
         assert_eq!(
             TerraformError::QuotasExceeded {
                 sub_type: QuotaExceededError::ScwNewAccountNeedsValidation,
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_scw_quotas_issue() {
+        // setup:
+        let raw_message =
+            r#"Error: scaleway-sdk-go: quota exceeded(s): CpServersType_PRO2_XXS has reached its quota (0/1)
+         with scaleway_k8s_pool.kubernetes_cluster_workers_1,
+         on ks-workers-nodes.tf line 2, in resource "scaleway_k8s_pool" "kubernetes_cluster_workers_1":
+          2: resource "scaleway_k8s_pool" "kubernetes_cluster_workers_1" {"#
+                .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    current_resource_count: Some(0u32),
+                    max_resource_count: Some(1u32),
+                    resource_type: "CpServersType_PRO2_XXS".to_string(),
+                },
                 raw_message
             },
             result
@@ -1540,6 +1682,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "Error: creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached"
@@ -1551,6 +1694,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "error creating EC2 VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
@@ -1562,6 +1706,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "vCPUs".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(32),
                     },
                     raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
@@ -1574,6 +1719,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "EIP".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message:
@@ -1595,6 +1741,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "VPC".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
@@ -1606,6 +1753,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "vCPU".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(32),
                     },
                     raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.".to_string(),
@@ -1630,6 +1778,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "Fleet Requests".to_string(),
+                        current_resource_count: None,
                         max_resource_count: None,
                     },
                     raw_message: "AsgInstanceLaunchFailures: You've reached your quota for maximum Fleet Requests for this account. Launching EC2 instance failed.".to_string(),
@@ -1640,6 +1789,7 @@ terraform {
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "nodegroups".to_string(),
+                        current_resource_count: None,
                         max_resource_count: Some(30),
                     },
                     raw_message: "InvalidParameterException: Limit of 30 nodegroups exceeded.".to_string(),
@@ -1698,6 +1848,70 @@ terraform {
                 tc.input_raw_std.to_string(),
                 tc.input_raw_error.to_string(),
             );
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
+    }
+
+    #[test]
+    fn test_terraform_error_aws_managed_db_issues() {
+        // setup:
+        struct TestCase<'a> {
+            input_raw_error: &'a str,
+            expected_terraform_error: TerraformError,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input_raw_error: r#"Error: Failed to modify DocDB Cluster (ze73ae545-mongodb): InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        status code: 400, request id: f6f2f684-4994-45a7-a29a-b75bbb3ebb1b
+
+  with aws_docdb_cluster.documentdb_cluster,
+  on main.tf line 45, in resource "aws_docdb_cluster" "documentdb_cluster":
+  45: resource "aws_docdb_cluster" "documentdb_cluster" {"#,
+                expected_terraform_error: TerraformError::ManagedDatabaseError {
+                    database_name: Some("ze73ae545-mongodb".to_string()),
+                    database_type: "docdb".to_string(),
+                    database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
+                        from: "4.0.0".to_string(),
+                        to: "5.0.0".to_string(),
+                    }),
+                    raw_message: r#"Error: Failed to modify DocDB Cluster (ze73ae545-mongodb): InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
+        status code: 400, request id: f6f2f684-4994-45a7-a29a-b75bbb3ebb1b
+
+  with aws_docdb_cluster.documentdb_cluster,
+  on main.tf line 45, in resource "aws_docdb_cluster" "documentdb_cluster":
+  45: resource "aws_docdb_cluster" "documentdb_cluster" {"#.to_string(),
+                },
+            },
+            TestCase {
+                input_raw_error: r#"Error: error creating ElastiCache Cache Cluster: InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported. Please consult the documentation for supported combinations of cluster class and cache engine.
+	status code: 400, request id: fe420d33-e0b1-497f-bdb8-3c656e7da6ba
+
+  with aws_elasticache_cluster.elasticache_cluster,
+  on main.tf line 29, in resource "aws_elasticache_cluster" "elasticache_cluster":
+  29: resource "aws_elasticache_cluster" "elasticache_cluster" {"#,
+                expected_terraform_error: TerraformError::ManagedDatabaseError {
+                    database_name: None,
+                    database_type: "redis".to_string(),
+                    database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
+                        version: "5.0.6".to_string(),
+                        db_instance_type: "cache.t4g.micro".to_string(),
+                    }),
+                    raw_message: r#"Error: error creating ElastiCache Cache Cluster: InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported. Please consult the documentation for supported combinations of cluster class and cache engine.
+	status code: 400, request id: fe420d33-e0b1-497f-bdb8-3c656e7da6ba
+
+  with aws_elasticache_cluster.elasticache_cluster,
+  on main.tf line 29, in resource "aws_elasticache_cluster" "elasticache_cluster":
+  29: resource "aws_elasticache_cluster" "elasticache_cluster" {"#.to_string(),
+                },
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), tc.input_raw_error.to_string());
 
             // validate:
             assert_eq!(tc.expected_terraform_error, result);

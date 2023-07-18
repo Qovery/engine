@@ -195,6 +195,7 @@ pub enum Tag {
     TerraformStateLocked,
     TerraformClusterUnsupportedVersionUpdate,
     TerraformS3BucketCreationErrorAlreadyOwnedByYou,
+    TerraformManagedDatabaseError,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -400,6 +401,7 @@ impl From<errors::Tag> for Tag {
                 Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou
             }
             errors::Tag::TerraformCannotImportResource => Tag::TerraformCannotImportResource,
+            errors::Tag::TerraformManagedDatabaseError => Tag::TerraformManagedDatabaseError,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,

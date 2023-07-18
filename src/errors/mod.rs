@@ -13,7 +13,7 @@ use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
 use crate::cloud_provider::kubernetes::KubernetesError;
-use crate::cmd::command;
+use crate::cmd::{command, terraform};
 use crate::events::{EventDetails, Stage};
 use crate::models::database::DatabaseError;
 use crate::models::types::VersionsNumber;
@@ -803,6 +803,8 @@ pub enum Tag {
     TerraformS3BucketCreationErrorAlreadyOwnedByYou,
     /// TerraformCannotImportResource: represents an error where Terraform cannot import the given resource.
     TerraformCannotImportResource,
+    /// TerraformManagedDatabaseError: represents an error on managed database.
+    TerraformManagedDatabaseError,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2663,7 +2665,7 @@ impl EngineError {
             } => {
                 let terraform_error_string = terraform_error.to_safe_message();
                 match sub_type.clone() {
-                    QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
+                    QuotaExceededError::ResourceLimitExceeded { resource_type, current_resource_count, max_resource_count } => {
                         if let Some(Kind::Aws) = event_details.provider_kind() {
                             return EngineError::new(
                                 event_details,
@@ -2671,9 +2673,12 @@ impl EngineError {
                                 terraform_error_string,
                                 Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                                 Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
-                                Some(format!("Request AWS to increase your `{}` limit{} via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, match max_resource_count {
-                                    None => "".to_string(),
-                                    Some(count) => format!(" (current max = {count}"),
+                                Some(format!("Request AWS to increase your `{}` limit (current count = {}, max count = {}) via this page https://aws.amazon.com/contact-us/ec2-request.", resource_type, match current_resource_count {
+                                    None => "NA".to_string(),
+                                    Some(count) => count.to_string(),
+                                },match max_resource_count {
+                                    None => "NA".to_string(),
+                                    Some(count) => count.to_string(),
                                 })),
                             );
                         }
@@ -2685,9 +2690,12 @@ impl EngineError {
                             terraform_error_string, // Note: Terraform error message are supposed to be safe
                             Some(terraform_error.into()),
                             Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
-                            Some(format!("Request your cloud provider to increase your `{}` limit{}", resource_type, match max_resource_count {
-                                None => "".to_string(),
-                                Some(count) => format!("(current max = {count}"),
+                            Some(format!("Request your cloud provider to increase your `{}` limit (current count = {}, max count = {})", resource_type, match current_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
+                            },match max_resource_count {
+                                None => "NA".to_string(),
+                                Some(count) => count.to_string(),
                             })),
                         )
                     },
@@ -2807,6 +2815,28 @@ impl EngineError {
                 None,
                 None,
             ),
+            TerraformError::ManagedDatabaseError { ref database_error_sub_type, .. } => match **database_error_sub_type {
+                terraform::DatabaseError::VersionUpgradeNotPossible { .. } => {
+                    EngineError::new(
+                        event_details,
+                        Tag::TerraformManagedDatabaseError,
+                        terraform_error.to_safe_message(),
+                        Some(terraform_error.into()),
+                        None,
+                        Some("You should refer to your cloud provider documentation in order to proceed with database upgrade.".to_string()),
+                    )
+                },
+                terraform::DatabaseError::VersionNotSupportedOnTheInstanceType { .. } => {
+                    EngineError::new(
+                        event_details,
+                        Tag::TerraformManagedDatabaseError,
+                        terraform_error.to_safe_message(),
+                        Some(terraform_error.into()),
+                        None,
+                        Some("You should refer to your cloud provider documentation for supported combinations of instance type and engine version.".to_string()),
+                    )
+                }
+            },
         }
     }
 
