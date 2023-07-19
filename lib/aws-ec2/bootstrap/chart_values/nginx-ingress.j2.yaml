@@ -1,6 +1,12 @@
 controller:
   replicaCount: 1
   useComponentLabel: true
+  admissionWebhooks:
+    enabled: set-by-engine-code
+  metrics:
+    enabled: set-by-engine-code
+    serviceMonitor:
+      enabled: set-by-engine-code
   config:
     proxy-body-size: 100m
     server-tokens: "false"

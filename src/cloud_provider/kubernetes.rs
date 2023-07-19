@@ -18,6 +18,7 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
+use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
 
@@ -756,7 +757,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, EnumIter)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
