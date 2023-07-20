@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
+use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -49,8 +49,8 @@ impl AwsIamEksUserMapperChart {
 }
 
 impl ToCommonHelmChart for AwsIamEksUserMapperChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: AwsIamEksUserMapperChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -76,7 +76,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(AwsIamEksUserMapperChecker::new())),
-        }
+        })
     }
 }
 
@@ -234,7 +234,7 @@ mod tests {
             "whatever".to_string(),
             "whatever".to_string(),
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
