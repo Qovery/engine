@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart};
+use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -62,8 +62,8 @@ impl QoveryStorageClassChart {
 }
 
 impl ToCommonHelmChart for QoveryStorageClassChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryStorageClassChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -72,7 +72,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
             chart_installation_checker: Some(Box::new(QoveryStorageClassChartInstallationChecker::new(
                 self.storage_types_to_be_checked_after_install.clone(),
             ))),
-        }
+        })
     }
 }
 
@@ -195,7 +195,7 @@ mod tests {
     fn qovery_storage_class_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = QoveryStorageClassChart::new(None, HashSet::new());
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

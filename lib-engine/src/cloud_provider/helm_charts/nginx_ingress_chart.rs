@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -77,7 +78,7 @@ impl NginxIngressChart {
 }
 
 impl ToCommonHelmChart for NginxIngressChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         // use this to override chart values but let the user to override it if necessary
         let mut tera = Tera::default();
         let nginx_ingress_override = r"
@@ -99,7 +100,10 @@ defaultBackend:
             memory: {{ default_backend_resources_requests_memory }}
         ";
         tera.add_raw_template("nginx_ingress_override", nginx_ingress_override)
-            .expect("Impossible to add nginx_ingress_override template");
+            .map_err(|e| HelmChartError::CreateTemplateError {
+                chart_name: NginxIngressChart::chart_name(),
+                msg: e.to_string(),
+            })?;
         let mut context = Context::new();
         context.insert(
             "controller_resources_limits_cpu",
@@ -136,10 +140,13 @@ defaultBackend:
         let rendered_nginx_overrride = ChartValuesGenerated::new(
             "qovery_nginx_ingress".to_string(),
             tera.render("nginx_ingress_override", &context)
-                .expect("Impossible to render nginx_ingress_override"),
+                .map_err(|e| HelmChartError::RenderingError {
+                    chart_name: NginxIngressChart::chart_name(),
+                    msg: e.to_string(),
+                })?,
         );
 
-        CommonChart {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
                 path: self.chart_path.to_string(),
@@ -173,7 +180,7 @@ defaultBackend:
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(NginxIngressChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -301,7 +308,7 @@ mod tests {
             true,
             get_nginx_ingress_chart_override(),
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         for cloud_provider in KubernetesKind::iter() {
             let values_file_lib_path = format!(

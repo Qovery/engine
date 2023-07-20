@@ -1,4 +1,6 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, UpdateStrategy};
+use crate::cloud_provider::helm::{
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, UpdateStrategy,
+};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -50,8 +52,8 @@ impl ExternalDNSChart {
 }
 
 impl ToCommonHelmChart for ExternalDNSChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "externaldns".to_string(),
                 path: self.chart_path.to_string(),
@@ -137,7 +139,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(ExternalDNSChartInstallationChecker::new())),
-        }
+        })
     }
 }
 
@@ -264,7 +266,7 @@ mod tests {
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

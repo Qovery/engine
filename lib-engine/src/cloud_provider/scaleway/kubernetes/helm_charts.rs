@@ -184,7 +184,7 @@ pub fn scw_helm_charts(
     // Qovery storage class
     let q_storage_class =
         QoveryStorageClassChart::new(chart_prefix_path, HashSet::from_iter(vec![QoveryStorageType::Ssd]))
-            .to_common_helm_chart();
+            .to_common_helm_chart()?;
 
     // CoreDNS config
     let coredns_config = CoreDNSConfigChart::new(
@@ -207,14 +207,14 @@ pub fn scw_helm_charts(
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Promtail
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
             PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone())
-                .to_common_helm_chart(),
+                .to_common_helm_chart()?,
         ),
     };
 
@@ -237,7 +237,7 @@ pub fn scw_helm_charts(
                 },
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -263,7 +263,7 @@ pub fn scw_helm_charts(
                 true,
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -277,7 +277,7 @@ pub fn scw_helm_charts(
                 prometheus_namespace,
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -287,7 +287,7 @@ pub fn scw_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => {
-            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart())
+            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart()?)
         }
     };
 
@@ -312,7 +312,7 @@ pub fn scw_helm_charts(
                 },
                 "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -326,7 +326,7 @@ pub fn scw_helm_charts(
         UpdateStrategy::RollingUpdate,
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Cert Manager Configs
     let cert_manager_config = CertManagerConfigsChart::new(
@@ -335,7 +335,7 @@ pub fn scw_helm_charts(
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
@@ -346,7 +346,7 @@ pub fn scw_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 UpdateStrategy::RollingUpdate,
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         );
     }
 
@@ -358,7 +358,7 @@ pub fn scw_helm_charts(
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     let pleco = match chart_config_prerequisites.disable_pleco {
         true => None,
