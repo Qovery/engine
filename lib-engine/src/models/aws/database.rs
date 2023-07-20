@@ -342,8 +342,9 @@ where
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
-        context.insert("database_name", self.kube_name());
-        context.insert("database_db_name", self.name());
+        // Must be only alphanumeric characters
+        let db_name = self.kube_name().chars().filter(|s: &char| s.is_ascii_alphanumeric()).collect::<String>();
+        context.insert("database_name", &db_name);
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());
         context.insert("database_port", &self.private_port);
