@@ -631,7 +631,7 @@ where
                 )? && !k8s_external_service_name_exists(
                     &target.kube,
                     target.environment.namespace(),
-                    &self.selector(),
+                    &self.kube_label_selector(),
                     &event_details,
                     self.id(),
                 )? {
@@ -683,7 +683,7 @@ where
         return Err(Box::new(EngineError::new_cannot_restart_service(
             self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
             target.environment.namespace(),
-            &self.selector(),
+            &self.kube_label_selector(),
             command_error,
         )));
     }
@@ -726,7 +726,7 @@ where
                 path: self.workspace_directory().to_string(),
                 namespace: HelmChartNamespaces::Custom,
                 custom_namespace: Some(target.environment.namespace().to_string()),
-                k8s_selector: Some(self.selector()),
+                k8s_selector: Some(self.kube_label_selector()),
                 values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
                 // need to perform reinstall (but keep PVC) to update the statefulset
                 reinstall_chart_if_installed_version_is_below_than: match T::db_type() {
@@ -766,7 +766,7 @@ where
             delete_pending_service(
                 target.kubernetes.get_kubeconfig_file_path()?.as_str(),
                 target.environment.namespace(),
-                self.selector().as_str(),
+                self.kube_label_selector().as_str(),
                 target.kubernetes.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
             )?;
@@ -802,7 +802,7 @@ where
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
-                    self.selector(),
+                    self.kube_label_selector(),
                     true,
                     Duration::from_secs(5 * 60),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
@@ -822,7 +822,7 @@ where
                     action: HelmAction::Destroy,
                     namespace: HelmChartNamespaces::Custom,
                     custom_namespace: Some(target.environment.namespace().to_string()),
-                    k8s_selector: Some(self.selector()),
+                    k8s_selector: Some(self.kube_label_selector()),
                     ..Default::default()
                 };
                 let helm = HelmDeployment::new(
@@ -845,7 +845,7 @@ where
                 )) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),
-                        self.selector(),
+                        self.kube_label_selector(),
                         CommandError::new_from_safe_message(err.to_string()),
                     )));
                 }
@@ -860,7 +860,7 @@ where
             DatabaseDeploymentReporter::new(self, target, Action::Restart),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let restart_service = RestartServiceAction::new(
-                    self.selector(),
+                    self.kube_label_selector(),
                     true,
                     self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
                 );

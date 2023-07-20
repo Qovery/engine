@@ -217,33 +217,31 @@ pub fn are_pvcs_bound(
     event_details: &EventDetails,
     kube_client: &kube::Client,
 ) -> Result<(), Box<EngineError>> {
-    if let Some(selector) = &service.selector() {
-        return match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
-            kube_client,
-            namespace,
-            selector,
-        )) {
-            Ok(pvcs) => {
-                for pvc in pvcs.items {
-                    if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name) {
-                        if let Some(phase) = status.phase {
-                            if phase.to_lowercase().as_str() != "bound" {
-                                return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
-                                    event_details.clone(),
-                                    CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
-                                    service.name(),
-                                )));
-                            };
-                        }
+    let selector = service.kube_label_selector();
+    match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+        kube_client,
+        namespace,
+        &selector,
+    )) {
+        Ok(pvcs) => {
+            for pvc in pvcs.items {
+                if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name) {
+                    if let Some(phase) = status.phase {
+                        if phase.to_lowercase().as_str() != "bound" {
+                            return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
+                                event_details.clone(),
+                                CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
+                                service.name(),
+                            )));
+                        };
                     }
                 }
-
-                Ok(())
             }
-            Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details.clone(), e))),
-        };
+
+            Ok(())
+        }
+        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details.clone(), e))),
     }
-    Ok(())
 }
 
 pub fn update_pvcs(

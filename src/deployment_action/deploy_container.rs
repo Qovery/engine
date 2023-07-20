@@ -46,7 +46,7 @@ where
 
             let last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),
-                &self.selector(),
+                &self.kube_label_selector(),
                 if self.is_stateful() {
                     KubeObjectKind::Statefulset
                 } else {
@@ -63,7 +63,7 @@ where
         let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
-                self.selector(),
+                self.kube_label_selector(),
                 self.is_stateful(),
                 Duration::from_secs(5 * 60),
                 event_details.clone(),
@@ -99,7 +99,7 @@ where
                 namespace: HelmChartNamespaces::Custom,
                 custom_namespace: Some(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
-                k8s_selector: Some(self.selector()),
+                k8s_selector: Some(self.kube_label_selector()),
                 ..Default::default()
             };
 
@@ -116,7 +116,7 @@ where
             delete_pending_service(
                 target.kubernetes.get_kubeconfig_file_path()?.as_str(),
                 target.environment.namespace(),
-                self.selector().as_str(),
+                self.kube_label_selector().as_str(),
                 target.kubernetes.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
             )?;
@@ -156,7 +156,7 @@ where
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Pause),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
-                    self.selector(),
+                    self.kube_label_selector(),
                     self.is_stateful(),
                     Duration::from_secs(5 * 60),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
@@ -176,7 +176,7 @@ where
         let pre_task = |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             let last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),
-                &self.selector(),
+                &self.kube_label_selector(),
                 if self.is_stateful() {
                     KubeObjectKind::Statefulset
                 } else {
@@ -215,13 +215,13 @@ where
                 logger.info("🪓 Terminating network volume of the container".to_string());
                 if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                     &target.kube,
-                    &self.selector(),
+                    &self.kube_label_selector(),
                     target.environment.namespace(),
                     KubeDeleteMode::Normal,
                 )) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),
-                        self.selector(),
+                        self.kube_label_selector(),
                         CommandError::new_from_safe_message(err.to_string()),
                     )));
                 }
@@ -263,7 +263,7 @@ where
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Restart),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let restart_service = RestartServiceAction::new(
-                    self.selector(),
+                    self.kube_label_selector(),
                     self.is_stateful(),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
                 );
