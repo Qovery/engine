@@ -839,7 +839,7 @@ where
                 logger.info("🪓 Terminating network volume of the database".to_string());
                 if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                     &target.kube,
-                    &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
+                    &format!("app={}", self.kube_name()), //FIXME: legacy labels ;(
                     target.environment.namespace(),
                     KubeDeleteMode::Normal,
                 )) {

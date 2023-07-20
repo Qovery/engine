@@ -141,6 +141,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -283,6 +284,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {},
             source: JobSource::Docker {

@@ -185,12 +185,12 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
-        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
+        let srv_id = &environment.applications[0].long_id;
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -198,7 +198,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -208,7 +208,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -502,7 +502,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         }
 
         for mut application in environment.applications.into_iter() {
-            let mut advanced_settings = application.advanced_settings.borrow_mut();
+            let advanced_settings = application.advanced_settings.borrow_mut();
             application.ports.push(Port {
                 long_id: Uuid::new_v4(),
                 port: 5050,
@@ -589,7 +589,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(&infra_ctx, Kind::Aws, environment, secrets) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -753,7 +753,7 @@ fn redeploy_same_app_with_ebs() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(&infra_ctx, Kind::Aws, environment, secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -761,14 +761,24 @@ fn redeploy_same_app_with_ebs() {
             Err(_) => panic!(),
         };
 
-        let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) =
-            is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check1, app_name.as_str(), secrets.clone());
+        let (_, number) = is_pod_restarted_env(
+            &infra_ctx,
+            Kind::Aws,
+            &environment_check1,
+            &environment_check1.applications[0].long_id,
+            secrets.clone(),
+        );
 
         let ret = environment_redeploy.deploy_environment(&ea2, &infra_ctx_bis);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let (_, number2) = is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check2, app_name.as_str(), secrets);
+        let (_, number2) = is_pod_restarted_env(
+            &infra_ctx,
+            Kind::Aws,
+            &environment_check2,
+            &environment_check2.applications[0].long_id,
+            secrets,
+        );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
@@ -1038,7 +1048,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
                 kubeconfig.as_ref().unwrap().as_str(),
                 environment_domain.namespace(),
-                router.sanitized_name().as_str(),
+                router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
             ) {
                 Ok(res) => match res {
@@ -1100,6 +1110,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -1206,6 +1217,7 @@ fn deploy_container_with_storages_on_aws_eks() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -1327,6 +1339,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -1460,6 +1473,7 @@ fn deploy_container_with_router_on_aws_eks() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -1524,6 +1538,7 @@ fn deploy_container_with_router_on_aws_eks() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
+            kube_name: "default-router".to_string(),
             action: Action::Create,
             default_domain: "main".to_string(),
             public_port: 443,
@@ -1578,6 +1593,7 @@ fn deploy_job_on_aws_eks() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(), //Uuid::default(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
@@ -1667,6 +1683,7 @@ fn deploy_cronjob_on_aws_eks() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "* * * * *".to_string(),
@@ -1759,6 +1776,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         environment.jobs = vec![Job {
             long_id: cronjob_uuid,
             name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "*/10 * * * *".to_string(),
@@ -1876,6 +1894,7 @@ fn build_and_deploy_job_on_aws_eks() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {},
             source: JobSource::Docker {
@@ -1966,6 +1985,7 @@ fn test_restart_deployment() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -2074,6 +2094,7 @@ fn test_restart_statefulset() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -2201,6 +2222,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {},
             source: JobSource::Docker {
@@ -2363,7 +2385,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(&infra_ctx, Kind::Aws, environment.clone(), secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
             Ok(pvc) => {
                 assert!(pvc.items.is_some());
                 let pvcs = pvc.items.unwrap();
@@ -2400,7 +2422,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         let resized_ret = resized_environment.deploy_environment(&resized_ea, &resized_infra_ctx);
         assert!(matches!(resized_ret, TransactionResult::Ok));
 
-        match get_pvc(&resized_infra_ctx, Kind::Aws, resized_environment.clone(), secrets) {
+        match get_pvc(&resized_infra_ctx, Kind::Aws, &resized_environment, secrets) {
             Ok(pvc) => {
                 assert!(pvc.items.is_some());
                 let pvcs = pvc.items.unwrap();

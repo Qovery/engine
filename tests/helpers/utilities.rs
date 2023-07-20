@@ -48,7 +48,6 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::database::DatabaseInstanceType;
-use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -590,16 +589,10 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
 pub fn is_pod_restarted_env(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
-    environment_check: EnvironmentRequest,
-    pod_to_check: &str,
+    environment_check: &EnvironmentRequest,
+    service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!(
-        "{}-{}",
-        to_short_id(&environment_check.project_long_id),
-        to_short_id(&environment_check.long_id),
-    );
-
     let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
     assert!(kubeconfig.is_ok());
 
@@ -607,8 +600,8 @@ pub fn is_pod_restarted_env(
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
                 path.as_str(),
-                namespace_name.as_str(),
-                pod_to_check,
+                environment_check.kube_name.as_str(),
+                service_id,
                 get_cloud_provider_credentials(provider_kind, &secrets),
             );
             match restarted_database {
@@ -626,23 +619,17 @@ pub fn is_pod_restarted_env(
 pub fn get_pods(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
-    environment_check: EnvironmentRequest,
-    pod_to_check: &str,
+    environment_check: &EnvironmentRequest,
+    service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        to_short_id(&environment_check.project_long_id),
-        to_short_id(&environment_check.long_id),
-    );
-
     let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
     assert!(kubeconfig.is_ok());
 
     cmd::kubectl::kubectl_exec_get_pods(
         kubeconfig.unwrap().as_str(),
-        Some(namespace_name.as_str()),
-        Some(pod_to_check),
+        Some(environment_check.kube_name.as_str()),
+        Some(&format!("qovery.com/service-id={}", service_id)),
         get_cloud_provider_credentials(provider_kind, &secrets),
     )
 }
@@ -711,15 +698,9 @@ pub fn generate_organization_id(region: &str) -> Uuid {
 pub fn get_pvc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
-    environment_check: EnvironmentRequest,
+    environment_check: &EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        to_short_id(&environment_check.project_long_id),
-        to_short_id(&environment_check.long_id),
-    );
-
     let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
     assert!(kubeconfig.is_ok());
 
@@ -727,7 +708,7 @@ pub fn get_pvc(
         Ok(path) => {
             match kubectl_get_pvc(
                 path.as_str(),
-                namespace_name.as_str(),
+                &environment_check.kube_name,
                 get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
                 Ok(pvc) => Ok(pvc),
@@ -744,12 +725,6 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        to_short_id(&environment_check.project_long_id),
-        to_short_id(&environment_check.long_id),
-    );
-
     let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
     assert!(kubeconfig.is_ok());
 
@@ -757,7 +732,7 @@ pub fn get_svc(
         Ok(path) => {
             match kubectl_get_svc(
                 path.as_str(),
-                namespace_name.as_str(),
+                &environment_check.kube_name,
                 get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
                 Ok(svc) => Ok(svc),

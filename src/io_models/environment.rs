@@ -23,6 +23,7 @@ pub struct EnvironmentRequest {
     pub execution_id: String,
     pub long_id: Uuid,
     pub name: String,
+    pub kube_name: String,
     pub project_long_id: Uuid,
     pub organization_long_id: Uuid,
     pub action: Action,
@@ -220,6 +221,7 @@ impl EnvironmentRequest {
         Ok(Environment::new(
             self.long_id,
             self.name.clone(),
+            self.kube_name.clone(),
             self.project_long_id,
             self.organization_long_id,
             self.action.to_service_action(),

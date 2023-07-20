@@ -224,10 +224,12 @@ pub fn environment_3_apps_3_databases(
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "pg2".to_string();
 
+    let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -236,7 +238,8 @@ pub fn environment_3_apps_3_databases(
         applications: vec![
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_1,
+                name: app_name_1.clone(),
+                kube_name: app_name_1,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
@@ -294,7 +297,8 @@ pub fn environment_3_apps_3_databases(
             },
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_2,
+                name: app_name_2.clone(),
+                kube_name: app_name_2,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "71990e977a60c87034530614607494a96dee2254".to_string(),
@@ -352,7 +356,8 @@ pub fn environment_3_apps_3_databases(
             },
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_3,
+                name: app_name_3.clone(),
+                kube_name: app_name_3,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "mongo-app".to_string(),
                 commit_id: "c5da00d2463061787e5fc2e31e7cd67877fd9881".to_string(),
@@ -419,7 +424,8 @@ pub fn environment_3_apps_3_databases(
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_name,
+                name: database_name.clone(),
+                kube_name: database_name,
                 created_at: Utc::now(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn.clone(),
@@ -442,7 +448,8 @@ pub fn environment_3_apps_3_databases(
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_name_2,
+                name: database_name_2.clone(),
+                kube_name: database_name_2,
                 created_at: Utc::now(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn_2.clone(),
@@ -465,7 +472,8 @@ pub fn environment_3_apps_3_databases(
                 kind: DatabaseKind::Mongodb,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_db_name_mongo,
+                name: database_db_name_mongo.clone(),
+                kube_name: database_db_name_mongo,
                 created_at: Utc::now(),
                 version: version_mongo.to_string(),
                 fqdn_id: database_host_mongo.clone(),
@@ -492,10 +500,12 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_name = format!("{}-{}", "simple-app", &suffix);
 
+    let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -503,7 +513,8 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
-            name: application_name,
+            name: application_name.clone(),
+            kube_name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "4bc6a902e83129a118185660b3c9e13dfd0ffc27".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -538,10 +549,12 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
     let suffix = Uuid::new_v4();
     let application_name = format!("{}-{}", "simple-app", to_short_id(&suffix));
 
+    let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: suffix,
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: suffix,
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -549,7 +562,8 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::from_str("9d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
-            name: application_name,
+            name: application_name.clone(),
+            kube_name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -666,6 +680,7 @@ pub fn test_db(
         action: Action::Create,
         long_id: Uuid::new_v4(),
         name: to_short_id(&db_id),
+        kube_name: to_short_id(&db_id),
         created_at: Utc::now(),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
@@ -792,7 +807,7 @@ pub fn test_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size.size())
@@ -975,6 +990,7 @@ pub fn test_pause_managed_db(
         action: Action::Create,
         long_id: Uuid::new_v4(),
         name: to_short_id(&db_id),
+        kube_name: to_short_id(&db_id),
         created_at: Utc::now(),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
@@ -1075,7 +1091,7 @@ pub fn test_pause_managed_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{storage_size}Gi")
@@ -1239,7 +1255,8 @@ pub fn test_db_on_upgrade(
         kind: db_kind,
         action: Action::Create,
         long_id: Uuid::from_str("7d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
-        name: db_id,
+        name: db_id.clone(),
+        kube_name: db_id,
         created_at: Utc::now(),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
@@ -1346,7 +1363,7 @@ pub fn test_db_on_upgrade(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(&infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(&infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{storage_size}Gi")

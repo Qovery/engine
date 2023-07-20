@@ -154,12 +154,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
-        let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
             &infra_ctx,
             ProviderKind::Scw,
-            environment.clone(),
-            app_name.as_str(),
+            &environment,
+            &environment.databases[0].long_id,
             secrets.clone(),
         );
         assert!(ret.is_ok());
@@ -311,6 +310,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             action: Action::Create,
             long_id: Uuid::new_v4(),
             name: database_db_name.clone(),
+            kube_name: database_db_name.clone(),
             created_at: Utc::now(),
             version: "11.8.0".to_string(),
             fqdn_id: database_host.clone(),
@@ -389,12 +389,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql-{}-0", to_short_id(&environment_check.databases[0].long_id));
         let (ret, _) = is_pod_restarted_env(
             &infra_ctx,
             ProviderKind::Scw,
-            environment_check,
-            database_name.as_str(),
+            &environment_check,
+            &environment_check.databases[0].long_id,
             secrets.clone(),
         );
         assert!(ret);

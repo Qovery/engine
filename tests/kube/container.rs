@@ -71,6 +71,7 @@ fn should_increase_container_storage_size() {
             &resized_context,
             resized_container.long_id,
             resized_container.name.clone(),
+            resized_container.name.clone(),
             *test_container.action(),
             resized_container.registry.clone(),
             resized_container.image.clone(),
@@ -231,6 +232,7 @@ fn should_have_mounted_files_as_volume() {
         let mut statefulset = container.clone();
         let statefulset_id = QoveryIdentifier::new_random();
         statefulset.name = statefulset_id.short().to_string();
+        statefulset.kube_name = statefulset.name.clone();
         statefulset.long_id = statefulset_id.to_uuid();
         let storage_id = QoveryIdentifier::new_random();
         statefulset.storages = vec![qovery_engine::io_models::application::Storage {

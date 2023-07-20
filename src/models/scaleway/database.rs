@@ -147,7 +147,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
-        context.insert("database_name", self.sanitized_name().as_str());
+        context.insert("database_name", self.kube_name());
         context.insert("database_db_name", self.name());
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());

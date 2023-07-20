@@ -115,10 +115,6 @@ fn await_resolve<R>(
     }
 }
 
-pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{prefix}-{name}").replace('_', "-")
-}
-
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
     let mut new_name = format!("{}{}", prefix, name.replace(['_', '-'], ""));

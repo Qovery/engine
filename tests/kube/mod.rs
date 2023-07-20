@@ -46,10 +46,12 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
     let logger = logger();
     let infra_ctx = aws_default_infra_config(&context, logger.clone());
 
+    let env_id = Uuid::new_v4();
     let mut environment = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: QoveryIdentifier::new_random().to_uuid(),
+        long_id: env_id,
         name: "env".to_string(),
+        kube_name: format!("env-{}-my-env", to_short_id(&env_id)),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -71,6 +73,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 action: Action::Create,
                 long_id: db_id,
                 name: to_short_id(&db_id),
+                kube_name: to_short_id(&db_id),
                 created_at: Utc::now(),
                 version: "13".to_string(),
                 fqdn_id: database_host.clone(),
@@ -98,7 +101,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
             let storage_2_id = QoveryIdentifier::new_random().to_uuid();
             let container = Container {
                 long_id: container_id.to_uuid(),
-                name: container_name,
+                name: container_name.clone(),
+                kube_name: container_name,
                 action: Action::Create,
                 registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
@@ -179,7 +183,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
             let storage_2_id = QoveryIdentifier::new_random().to_uuid();
             let app = Application {
                 long_id: application_id.to_uuid(),
-                name: application_name,
+                name: application_name.clone(),
+                kube_name: application_name,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -255,7 +260,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
             let job_name = job_id.short().to_string();
             let job = Job {
                 long_id: job_id.to_uuid(),
-                name: job_name,
+                name: job_name.clone(),
+                kube_name: job_name,
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),

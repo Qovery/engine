@@ -218,7 +218,7 @@ where
 
             // Get kube config file
             let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file_path()?;
-            let job_pod_selector = format!("job-name={}", job.kube_service_name());
+            let job_pod_selector = format!("job-name={}", job.kube_name());
             let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
             let job_max_nb_restart = job.max_nb_restart();
@@ -236,14 +236,11 @@ where
                 set_of_pods_already_processed.insert(pod_name.clone());
 
                 // Wait for the job container to be terminated
-                logger.info(format!(
-                    "Waiting for the job container {} to be processed...",
-                    job.kube_service_name()
-                ));
+                logger.info(format!("Waiting for the job container {} to be processed...", job.kube_name()));
                 let _ = block_on(await_condition(
                     kube_pod_api.clone(),
                     &pod_name,
-                    is_job_pod_container_terminated(job.kube_service_name().as_str()),
+                    is_job_pod_container_terminated(job.kube_name()),
                 ));
 
                 // Get JSON output from shared volume
@@ -307,13 +304,12 @@ where
 
                 // wait for job to finish
                 let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
-                let ret =
-                    block_on(await_condition(jobs, &job.kube_service_name(), is_job_terminated())).map_err(|_err| {
-                        EngineError::new_job_error(
-                            event_details.clone(),
-                            format!("Cannot find job for terminated pod {}", &pod_name),
-                        )
-                    })?;
+                let ret = block_on(await_condition(jobs, job.kube_name(), is_job_terminated())).map_err(|_err| {
+                    EngineError::new_job_error(
+                        event_details.clone(),
+                        format!("Cannot find job for terminated pod {}", &pod_name),
+                    )
+                })?;
                 let job_status_result = match job_status(&ret.as_ref()) {
                     JobStatus::Success => return Ok(state),
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),
@@ -341,17 +337,17 @@ where
         if job.is_cron_job() && job.is_force_trigger() {
             // check if cronjob is installed
             let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
-            let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(&job.kube_service_name())).is_ok();
+            let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(job.kube_name())).is_ok();
 
             // create cronjob
             helm.on_create(target)?;
 
             // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
             let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
-            let cronjob = block_on(k8s_cronjob_api.get(&job.kube_service_name())).map_err(|err| {
+            let cronjob = block_on(k8s_cronjob_api.get(job.kube_name())).map_err(|err| {
                 EngineError::new_job_error(
                     event_details.clone(),
-                    format!("Cannot get cronjob {}: {}", job.kube_service_name(), err),
+                    format!("Cannot get cronjob {}: {}", job.kube_name(), err),
                 )
             })?;
 
@@ -367,11 +363,9 @@ where
                 EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {err}"))
             })?;
 
-            let job = block_on(await_condition(k8s_job_api, &job.kube_service_name(), is_job_terminated())).map_err(
-                |_err| {
-                    EngineError::new_job_error(event_details.clone(), "Cannot find job for terminated pod".to_string())
-                },
-            )?;
+            let job = block_on(await_condition(k8s_job_api, job.kube_name(), is_job_terminated())).map_err(|_err| {
+                EngineError::new_job_error(event_details.clone(), "Cannot find job for terminated pod".to_string())
+            })?;
 
             let cronjob_result = match job_status(&job.as_ref()) {
                 JobStatus::Success => Ok(()),

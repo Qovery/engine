@@ -133,11 +133,13 @@ fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
 fn test_environment(kube: &dyn Kubernetes) -> Environment {
     let app = test_application(kube);
     let app_id = *app.long_id();
+    let env_id = Uuid::new_v4();
     Environment::new(
         Uuid::new_v4(),
         "my_test_environment".to_string(),
+        format!("env-{}-my-test-environment", to_short_id(&env_id)),
         Uuid::new_v4(),
-        Uuid::new_v4(),
+        env_id,
         Action::Create,
         kube.context(),
         1,
@@ -219,6 +221,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         long_id,
         Action::Create,
         "my_application_name",
+        "my-application-name".to_string(),
         vec![test_port()],
         "1".to_string(),
         "2".to_string(),
@@ -326,6 +329,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         test_kube.context(),
         Uuid::new_v4(),
         "my_container_name".to_string(),
+        "my-application-name".to_string(),
         Action::Create,
         Registry::DockerHub {
             long_id: Default::default(),
@@ -406,6 +410,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
         Uuid::new_v4(),
         Action::Create,
         "my_managed_db_name",
+        "my-managed-db-name".to_string(),
         VersionsNumber::new("13".to_string(), None, None, None),
         Utc::now(),
         "my_managed_db_fqdn",
@@ -440,6 +445,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
         Uuid::new_v4(),
         Action::Create,
         "my_container_db_name",
+        "my-container-db-name".to_string(),
         VersionsNumber::new("13".to_string(), None, None, None),
         Utc::now(),
         "my_container_db_fqdn",
@@ -474,6 +480,7 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         test_kube.context(),
         long_id,
         "my_router_name",
+        "my-router-name".to_string(),
         Action::Create,
         "my_default_domain",
         vec![test_custom_domain()],
@@ -495,6 +502,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         test_kube.context(),
         Uuid::new_v4(),
         "my_job_name".to_string(),
+        "my-application-name".to_string(),
         Action::Create,
         ImageSource::Registry {
             source: Box::new(RegistryImageSource {

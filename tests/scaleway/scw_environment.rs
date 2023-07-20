@@ -216,12 +216,12 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
-        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
+        let selector = &environment.applications[0].long_id;
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -229,7 +229,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -239,7 +239,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -474,7 +474,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Scw, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -607,12 +607,12 @@ fn deploy_a_working_environment_and_pause_it() {
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
-        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
+        let selector = &environment.applications[0].long_id;
 
         let result = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -620,7 +620,7 @@ fn deploy_a_working_environment_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -630,7 +630,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let result = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -711,7 +711,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Scw, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -719,15 +719,24 @@ fn scaleway_kapsule_redeploy_same_app() {
             Err(_) => panic!(),
         };
 
-        let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) =
-            is_pod_restarted_env(&infra_ctx, Kind::Scw, environment_check1, app_name.as_str(), secrets.clone());
+        let (_, number) = is_pod_restarted_env(
+            &infra_ctx,
+            Kind::Scw,
+            &environment_check1,
+            &environment_check1.applications[0].long_id,
+            secrets.clone(),
+        );
 
         let result = environment_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_bis);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let (_, number2) =
-            is_pod_restarted_env(&infra_ctx, Kind::Scw, environment_check2, app_name.as_str(), secrets.clone());
+        let (_, number2) = is_pod_restarted_env(
+            &infra_ctx,
+            Kind::Scw,
+            &environment_check2,
+            &environment_check2.applications[0].long_id,
+            secrets.clone(),
+        );
 
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
@@ -1055,7 +1064,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
                 kubeconfig.as_ref().unwrap().as_str(),
                 environment_domain.namespace(),
-                router.sanitized_name().as_str(),
+                router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
             ) {
                 Ok(res) => match res {
@@ -1122,6 +1131,7 @@ fn deploy_container_with_no_router_on_scw() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -1234,6 +1244,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
@@ -1367,6 +1378,7 @@ fn deploy_container_with_router_on_scw() {
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -1428,6 +1440,7 @@ fn deploy_container_with_router_on_scw() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
+            kube_name: "default-router".to_string(),
             action: Action::Create,
             default_domain: "main".to_string(),
             public_port: 443,
@@ -1482,6 +1495,7 @@ fn deploy_job_on_scw_kapsule() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(), //Uuid::default(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
@@ -1571,6 +1585,7 @@ fn deploy_cronjob_on_scw_kapsule() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "* * * * *".to_string(),
@@ -1661,6 +1676,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "*/10 * * * *".to_string(),
@@ -1752,6 +1768,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {},
             source: JobSource::Docker {
@@ -1851,6 +1868,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
             name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {},
             source: JobSource::Docker {

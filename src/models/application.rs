@@ -6,7 +6,6 @@ use crate::cloud_provider::models::{
     Storage,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
-use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::{ApplicationAdvancedSettings, Port};
@@ -40,6 +39,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) long_id: Uuid,
     pub(super) action: Action,
     pub(super) name: String,
+    pub(super) kube_name: String,
     pub(super) ports: Vec<Port>,
     pub(super) total_cpus: String,
     pub(super) cpu_burst: String,
@@ -67,6 +67,7 @@ impl<T: CloudProvider> Application<T> {
         long_id: Uuid,
         action: Action,
         name: &str,
+        kube_name: String,
         ports: Vec<Port>,
         total_cpus: String,
         cpu_burst: String,
@@ -103,6 +104,7 @@ impl<T: CloudProvider> Application<T> {
             long_id,
             action,
             name: name.to_string(),
+            kube_name,
             ports,
             total_cpus,
             cpu_burst,
@@ -154,7 +156,7 @@ impl<T: CloudProvider> Application<T> {
         context.insert("region", kubernetes.region());
         context.insert("zone", kubernetes.zone());
         context.insert("name", self.name());
-        context.insert("sanitized_name", &self.sanitized_name());
+        context.insert("sanitized_name", &self.kube_name());
         context.insert("namespace", environment.namespace());
         context.insert("cluster_name", kubernetes.name());
         context.insert("total_cpus", &self.total_cpus());
@@ -308,10 +310,6 @@ impl<T: CloudProvider> Application<T> {
         self.entrypoint.clone()
     }
 
-    pub fn sanitized_name(&self) -> String {
-        sanitize_name("app", self.id())
-    }
-
     pub fn workspace_directory(&self) -> &str {
         &self.workspace_directory
     }
@@ -334,8 +332,8 @@ impl<T: CloudProvider> Service for Application<T> {
         self.name()
     }
 
-    fn sanitized_name(&self) -> String {
-        self.sanitized_name()
+    fn kube_name(&self) -> &str {
+        &self.kube_name
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {

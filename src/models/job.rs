@@ -31,6 +31,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) kube_name: String,
     pub(super) action: Action,
     pub image_source: ImageSource,
     pub(super) schedule: JobSchedule,
@@ -60,6 +61,7 @@ impl<T: CloudProvider> Job<T> {
         context: &Context,
         long_id: Uuid,
         name: String,
+        kube_name: String,
         action: Action,
         image_source: ImageSource,
         schedule: JobSchedule,
@@ -123,6 +125,7 @@ impl<T: CloudProvider> Job<T> {
             max_nb_restart,
             max_duration: max_duration_in_sec,
             name,
+            kube_name,
             command_args,
             entrypoint,
             force_trigger,
@@ -156,10 +159,6 @@ impl<T: CloudProvider> Job<T> {
 
     pub fn schedule(&self) -> &JobSchedule {
         &self.schedule
-    }
-
-    fn kube_service_name(&self) -> String {
-        format!("job-{}", to_short_id(&self.long_id))
     }
 
     pub fn should_force_trigger(&self) -> bool {
@@ -205,7 +204,7 @@ impl<T: CloudProvider> Job<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: self.kube_service_name(),
+                name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 image_full,
                 image_tag,
@@ -230,7 +229,7 @@ impl<T: CloudProvider> Job<T> {
                 .registry_docker_json_config
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
-                    secret_name: format!("{}-registry", self.kube_service_name()),
+                    secret_name: format!("{}-registry", self.kube_name()),
                     docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
@@ -294,8 +293,8 @@ impl<T: CloudProvider> Service for Job<T> {
         self.name()
     }
 
-    fn sanitized_name(&self) -> String {
-        panic!("don't use that, it is deprecated");
+    fn kube_name(&self) -> &str {
+        &self.kube_name
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -355,7 +354,6 @@ impl<T: CloudProvider> Service for Job<T> {
 pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
     fn advanced_settings(&self) -> &JobAdvancedSettings;
     fn image_full(&self) -> String;
-    fn kube_service_name(&self) -> String;
     fn startup_timeout(&self) -> Duration;
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
@@ -385,10 +383,6 @@ where
             }
             ImageSource::Build { source: build } => build.image.full_image_name_with_tag(),
         }
-    }
-
-    fn kube_service_name(&self) -> String {
-        self.kube_service_name()
     }
 
     fn startup_timeout(&self) -> Duration {
