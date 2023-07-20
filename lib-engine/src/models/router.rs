@@ -123,8 +123,8 @@ impl<T: CloudProvider> Router<T> {
         })
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("routerId={}", self.id))
+    fn kube_label_selector(&self) -> String {
+        format!("qovery.com/service-id={}", self.long_id)
     }
 
     pub fn workspace_directory(&self) -> &str {
@@ -364,8 +364,8 @@ impl<T: CloudProvider> Service for Router<T> {
         &self.action
     }
 
-    fn selector(&self) -> Option<String> {
-        self.selector()
+    fn kube_label_selector(&self) -> String {
+        self.kube_label_selector()
     }
 
     fn as_service(&self) -> &dyn Service {

@@ -38,10 +38,9 @@ pub trait Service: Send {
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn kube_name(&self) -> &str;
+    fn kube_label_selector(&self) -> String;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
     fn action(&self) -> &Action;
-    // used to retrieve logs by using Kubernetes labels (selector)
-    fn selector(&self) -> Option<String>;
     fn as_service(&self) -> &dyn Service;
     fn as_service_mut(&mut self) -> &mut dyn Service;
     fn build(&self) -> Option<&Build>;
