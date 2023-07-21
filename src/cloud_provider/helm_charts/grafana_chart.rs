@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -47,7 +48,7 @@ impl GrafanaChart {
 }
 
 impl ToCommonHelmChart for GrafanaChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         let mut chart = CommonChart {
             chart_info: ChartInfo {
                 name: GrafanaChart::chart_name(),
@@ -97,7 +98,7 @@ impl ToCommonHelmChart for GrafanaChart {
             });
         }
 
-        chart
+        Ok(chart)
     }
 }
 
@@ -301,7 +302,7 @@ mod tests {
             },
             "whatever".to_string(),
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

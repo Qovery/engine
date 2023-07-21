@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -46,8 +46,8 @@ impl PromtailChart {
 }
 
 impl ToCommonHelmChart for PromtailChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: PromtailChart::chart_name(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
@@ -76,7 +76,7 @@ impl ToCommonHelmChart for PromtailChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -181,7 +181,7 @@ mod tests {
     fn promtail_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

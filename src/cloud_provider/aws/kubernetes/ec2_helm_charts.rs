@@ -170,7 +170,7 @@ pub fn ec2_aws_helm_charts(
             QoveryStorageType::Nvme,
         ]),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // CoreDNS config
     let coredns_config = CoreDNSConfigChart::new(
@@ -229,7 +229,7 @@ pub fn ec2_aws_helm_charts(
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::Recreate,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
@@ -245,7 +245,7 @@ pub fn ec2_aws_helm_charts(
                 }),
                 UpdateStrategy::Recreate,
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         );
     }
 
@@ -260,7 +260,7 @@ pub fn ec2_aws_helm_charts(
         }),
         UpdateStrategy::Recreate,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
@@ -287,7 +287,7 @@ pub fn ec2_aws_helm_charts(
         UpdateStrategy::Recreate,
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Cert Manager Configs
     let cert_manager_config = CertManagerConfigsChart::new(
@@ -296,7 +296,7 @@ pub fn ec2_aws_helm_charts(
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Nginx ingress
     let nginx_ingress = NginxIngressChart::new(
@@ -311,7 +311,7 @@ pub fn ec2_aws_helm_charts(
         false, // no metrics history on EC2 ATM
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     let nginx_ingress_wildcard_dns_record = CommonChart {
         chart_info: ChartInfo {

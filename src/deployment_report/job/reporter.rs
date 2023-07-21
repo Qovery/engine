@@ -75,7 +75,7 @@ impl<T> JobDeploymentReporter<T> {
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
-            selector: job.selector().unwrap_or_default(),
+            selector: job.kube_label_selector(),
             logger: deployment_target.env_logger(job, action.to_environment_step()),
             send_final_deleted_status: send_final_delete_status,
             _phantom: PhantomData,

@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -54,8 +54,8 @@ impl ClusterAutoscalerChart {
 }
 
 impl ToCommonHelmChart for ClusterAutoscalerChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: ClusterAutoscalerChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -91,7 +91,7 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(ClusterAutoscalerChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -214,7 +214,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

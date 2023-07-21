@@ -143,7 +143,7 @@ pub fn eks_aws_helm_charts(
             QoveryStorageType::Nvme,
         ]),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // AWS IAM EKS user mapper
     let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
@@ -156,13 +156,13 @@ pub fn eks_aws_helm_charts(
             .aws_iam_user_mapper_group_name
             .to_string(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // AWS nodes term handler
-    let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart();
+    let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // AWS UI view
-    let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart();
+    let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // Cluster autoscaler
     let cluster_autoscaler = ClusterAutoscalerChart::new(
@@ -174,7 +174,7 @@ pub fn eks_aws_helm_charts(
         prometheus_namespace,
         chart_config_prerequisites.ff_metrics_history_enabled,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // CoreDNS config
     let coredns_config = CoreDNSConfigChart::new(
@@ -197,14 +197,14 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Promtail
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
             PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone())
-                .to_common_helm_chart(),
+                .to_common_helm_chart()?,
         ),
     };
 
@@ -228,7 +228,7 @@ pub fn eks_aws_helm_charts(
                 },
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -254,7 +254,7 @@ pub fn eks_aws_helm_charts(
                 false,
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -268,7 +268,7 @@ pub fn eks_aws_helm_charts(
                 prometheus_namespace,
                 get_chart_overrride_fn.clone(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -281,7 +281,7 @@ pub fn eks_aws_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 UpdateStrategy::RollingUpdate,
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         );
     }
 
@@ -291,13 +291,13 @@ pub fn eks_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Kube state metrics
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => {
-            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart())
+            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart()?)
         }
     };
 
@@ -325,7 +325,7 @@ pub fn eks_aws_helm_charts(
                 },
                 AwsStorageType::GP2.to_k8s_storage_class(),
             )
-            .to_common_helm_chart(),
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -339,7 +339,7 @@ pub fn eks_aws_helm_charts(
         UpdateStrategy::RollingUpdate,
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Cert Manager Configs
     let cert_manager_config = CertManagerConfigsChart::new(
@@ -348,7 +348,7 @@ pub fn eks_aws_helm_charts(
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     // Nginx ingress
     let nginx_ingress = NginxIngressChart::new(
@@ -358,7 +358,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_overrride_fn.clone(),
     )
-    .to_common_helm_chart();
+    .to_common_helm_chart()?;
 
     let pleco = match chart_config_prerequisites.disable_pleco {
         true => None,

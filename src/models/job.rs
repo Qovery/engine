@@ -146,7 +146,7 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn helm_selector(&self) -> Option<String> {
-        Some(self.selector())
+        Some(self.kube_label_selector())
     }
 
     pub fn helm_release_name(&self) -> String {
@@ -267,7 +267,7 @@ impl<T: CloudProvider> Job<T> {
         matches!(self.schedule, JobSchedule::Cron { .. })
     }
 
-    pub fn selector(&self) -> String {
+    pub fn kube_label_selector(&self) -> String {
         format!("qovery.com/service-id={}", self.long_id)
     }
 
@@ -297,16 +297,16 @@ impl<T: CloudProvider> Service for Job<T> {
         &self.kube_name
     }
 
+    fn kube_label_selector(&self) -> String {
+        self.kube_label_selector()
+    }
+
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         (self.mk_event_details)(stage)
     }
 
     fn action(&self) -> &Action {
         self.action()
-    }
-
-    fn selector(&self) -> Option<String> {
-        Some(self.selector())
     }
 
     fn as_service(&self) -> &dyn Service {

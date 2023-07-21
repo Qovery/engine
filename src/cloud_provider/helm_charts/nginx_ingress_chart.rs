@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -77,7 +78,7 @@ impl NginxIngressChart {
 }
 
 impl ToCommonHelmChart for NginxIngressChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         // use this to override chart values but let the user to override it if necessary
         let mut tera = Tera::default();
         let nginx_ingress_override = r"
@@ -99,7 +100,10 @@ defaultBackend:
             memory: {{ default_backend_resources_requests_memory }}
         ";
         tera.add_raw_template("nginx_ingress_override", nginx_ingress_override)
-            .unwrap();
+            .map_err(|e| HelmChartError::CreateTemplateError {
+                chart_name: NginxIngressChart::chart_name(),
+                msg: e.to_string(),
+            })?;
         let mut context = Context::new();
         context.insert(
             "controller_resources_limits_cpu",
@@ -135,10 +139,14 @@ defaultBackend:
         );
         let rendered_nginx_overrride = ChartValuesGenerated::new(
             "qovery_nginx_ingress".to_string(),
-            tera.render("nginx_ingress_override", &context).unwrap(),
+            tera.render("nginx_ingress_override", &context)
+                .map_err(|e| HelmChartError::RenderingError {
+                    chart_name: NginxIngressChart::chart_name(),
+                    msg: e.to_string(),
+                })?,
         );
 
-        CommonChart {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
                 path: self.chart_path.to_string(),
@@ -172,7 +180,7 @@ defaultBackend:
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(NginxIngressChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -204,10 +212,15 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use strum::IntoEnumIterator;
+
     use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
+    use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType;
     use crate::cloud_provider::helm_charts::HelmChartType;
+    use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
     use std::sync::Arc;
@@ -252,69 +265,67 @@ mod tests {
 
     // Makes sure chart values file exists.
     // todo:(pmavro): fix it
-    // #[test]
-    // fn nginx_ingress_chart_values_file_exists_test() {
-    //     // setup:
-    //     let chart = NginxIngressChart::new(
-    //         None,
-    //         HelmChartResourcesConstraintType::ChartDefault,
-    //         HelmChartResourcesConstraintType::ChartDefault,
-    //         true,
-    //         get_nginx_ingress_chart_override(),
-    //     );
+    #[test]
+    fn nginx_ingress_chart_values_file_exists_test() {
+        // setup:
+        let chart = NginxIngressChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            true,
+            get_nginx_ingress_chart_override(),
+        );
 
-    //     let current_directory = env::current_dir().expect("Impossible to get current directory");
-    //     let chart_values_path = format!(
-    //         "{}/lib/{}/bootstrap/chart_values/{}.yaml",
-    //         current_directory
-    //             .to_str()
-    //             .expect("Impossible to convert current directory to string"),
-    //         get_helm_path_kubernetes_provider_sub_folder_name(
-    //             chart.chart_values_path.helm_path(),
-    //             HelmChartType::Shared
-    //         ),
-    //         NginxIngressChart::chart_name(),
-    //     );
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/{}/bootstrap/chart_values/{}.j2.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
+            NginxIngressChart::chart_old_name(),
+        );
 
-    //     // execute
-    //     let values_file = std::fs::File::open(&chart_values_path);
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
 
-    //     // verify:
-    //     assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
-    // }
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
+    }
 
     // Make sure rust code doesn't set a value not declared inside values file.
     // All values should be declared / set in values file unless it needs to be injected via rust code.
-    // todo(pmavro): fix it
-    // #[test]
-    // fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test() {
-    //     // setup:
-    //     let chart = NginxIngressChart::new(
-    //         None,
-    //         HelmChartResourcesConstraintType::ChartDefault,
-    //         HelmChartResourcesConstraintType::ChartDefault,
-    //         true,
-    //         get_nginx_ingress_chart_override(),
-    //     );
-    //     let chart_values_file_path = chart.chart_values_path.helm_path().clone();
+    #[test]
+    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = NginxIngressChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            true,
+            get_nginx_ingress_chart_override(),
+        );
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
-    //     let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
-    //         CommonChart {
-    //             // just fake to mimic common chart for test
-    //             chart_info: chart.to_common_helm_chart().chart_info,
-    //             ..Default::default()
-    //         },
-    //         format!(
-    //             "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
-    //             get_helm_path_kubernetes_provider_sub_folder_name(
-    //                 &chart_values_file_path,
-    //                 HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
-    //             ),
-    //             NginxIngressChart::chart_old_name(),
-    //         ),
-    //     );
+        for cloud_provider in KubernetesKind::iter() {
+            let values_file_lib_path = format!(
+                "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::CloudProviderSpecific(cloud_provider)
+                ),
+                NginxIngressChart::chart_old_name(),
+            );
 
-    //     // verify:
-    //     assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
-    //}
+            // execute:
+            let missing_fields =
+                get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
+
+            // verify:
+            assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        }
+    }
 }

@@ -1,4 +1,6 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart, HelmChartNamespaces};
+use crate::cloud_provider::helm::{
+    ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError, HelmChartNamespaces,
+};
 use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use kube::Client;
@@ -24,8 +26,8 @@ impl AwsUiViewChart {
 }
 
 impl ToCommonHelmChart for AwsUiViewChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: AwsUiViewChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -33,7 +35,7 @@ impl ToCommonHelmChart for AwsUiViewChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(AwsUiViewChartChecker::new())),
-        }
+        })
     }
 }
 

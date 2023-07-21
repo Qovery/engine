@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart, HelmChartNamespaces};
+use crate::cloud_provider::helm::{
+    ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError, HelmChartNamespaces,
+};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -41,8 +43,8 @@ impl KubeStateMetricsChart {
 }
 
 impl ToCommonHelmChart for KubeStateMetricsChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KubeStateMetricsChart::chart_name(),
                 namespace: HelmChartNamespaces::Prometheus,
@@ -56,7 +58,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KubeStateMetricsChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -161,7 +163,7 @@ mod tests {
     fn kube_state_metrics_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = KubeStateMetricsChart::new(None, get_kube_state_metrics_chart_override());
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

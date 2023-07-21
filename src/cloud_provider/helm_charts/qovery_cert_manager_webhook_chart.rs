@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -56,8 +57,8 @@ impl QoveryCertManagerWebhookChart {
 }
 
 impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryCertManagerWebhookChart::chart_name(),
                 namespace: HelmChartNamespaces::CertManager,
@@ -101,7 +102,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryCertManagerWebhookChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -228,7 +229,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

@@ -4,6 +4,7 @@ extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
+use crate::cloud_provider::helm::HelmChartError;
 use crate::cloud_provider::service::DatabaseType;
 use crate::cloud_provider::Kind;
 use crate::cmd;
@@ -63,6 +64,23 @@ impl From<kube::Error> for CommandError {
     fn from(err: kube::Error) -> Self {
         CommandError::new(
             format!("error while executing kube operation: {err}"),
+            Some(format!("{err:?}")),
+            None,
+        )
+    }
+}
+
+impl From<HelmChartError> for CommandError {
+    fn from(err: HelmChartError) -> Self {
+        CommandError::new(
+            match err.clone() {
+                HelmChartError::CreateTemplateError { chart_name, msg: _ } => {
+                    format!("error while creating helm template for chart {chart_name}")
+                }
+                HelmChartError::RenderingError { chart_name, msg: _ } => {
+                    format!("error while rendering helm template for chart {chart_name}")
+                }
+            },
             Some(format!("{err:?}")),
             None,
         )

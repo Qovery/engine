@@ -173,7 +173,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn helm_selector(&self) -> Option<String> {
-        Some(self.selector())
+        Some(self.kube_label_selector())
     }
 
     pub fn helm_release_name(&self) -> String {
@@ -286,7 +286,7 @@ impl<T: CloudProvider> Container<T> {
         cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, self.long_id), 128)
     }
 
-    pub fn selector(&self) -> String {
+    pub fn kube_label_selector(&self) -> String {
         format!("qovery.com/service-id={}", self.long_id)
     }
 
@@ -316,16 +316,16 @@ impl<T: CloudProvider> Service for Container<T> {
         &self.kube_name
     }
 
+    fn kube_label_selector(&self) -> String {
+        self.kube_label_selector()
+    }
+
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         (self.mk_event_details)(stage)
     }
 
     fn action(&self) -> &Action {
         self.action()
-    }
-
-    fn selector(&self) -> Option<String> {
-        Some(self.selector())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -459,7 +459,7 @@ pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
     match !container.is_stateful() {
         true => Ok(None),
         false => {
-            let selector = Container::selector(container);
+            let selector = Container::kube_label_selector(container);
             let (statefulset_name, statefulset_volumes) =
                 get_service_statefulset_name_and_volumes(kube_client, namespace, &selector, event_details)?;
             let storage_err = Box::new(EngineError::new_service_missing_storage(

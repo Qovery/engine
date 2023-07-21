@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -84,8 +85,8 @@ impl CertManagerChart {
 }
 
 impl ToCommonHelmChart for CertManagerChart {
-    fn to_common_helm_chart(&self) -> CommonChart {
-        CommonChart {
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        Ok(CommonChart {
             chart_info: ChartInfo {
                 name: CertManagerChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -169,7 +170,7 @@ impl ToCommonHelmChart for CertManagerChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(CertManagerChartChecker::new())),
-        }
+        })
     }
 }
 
@@ -299,7 +300,7 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
         );
-        let common_chart = chart.to_common_helm_chart();
+        let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(

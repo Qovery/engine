@@ -130,7 +130,7 @@ where
         return Err(Box::new(EngineError::new_cannot_restart_service(
             self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
             target.environment.namespace(),
-            &self.selector(),
+            &self.kube_label_selector(),
             command_error,
         )));
     }
@@ -172,7 +172,7 @@ where
 
         let last_image = block_on(get_last_deployed_image(
             target.kube.clone(),
-            &job.selector(),
+            &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob
             } else {
@@ -193,7 +193,7 @@ where
             namespace: HelmChartNamespaces::Custom,
             custom_namespace: Some(target.environment.namespace().to_string()),
             timeout_in_seconds: job.startup_timeout().as_secs() as i64,
-            k8s_selector: Some(job.selector()),
+            k8s_selector: Some(job.kube_label_selector()),
             ..Default::default()
         };
 
@@ -426,7 +426,7 @@ where
     let pre_run = move |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         let last_image = block_on(get_last_deployed_image(
             target.kube.clone(),
-            &job.selector(),
+            &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob
             } else {
@@ -447,7 +447,7 @@ where
             namespace: HelmChartNamespaces::Custom,
             custom_namespace: Some(target.environment.namespace().to_string()),
             timeout_in_seconds: job.startup_timeout().as_secs() as i64,
-            k8s_selector: Some(job.selector()),
+            k8s_selector: Some(job.kube_label_selector()),
             ..Default::default()
         };
 

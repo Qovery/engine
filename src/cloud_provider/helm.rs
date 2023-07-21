@@ -13,11 +13,20 @@ use semver::Version;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::deploy_helm::default_helm_timeout;
 use std::{fs, thread};
 use uuid::Uuid;
+
+#[derive(Error, Debug, Clone)]
+pub enum HelmChartError {
+    #[error("Error while creating template: {chart_name:?}: {msg:?}")]
+    CreateTemplateError { chart_name: String, msg: String },
+    #[error("Error while rendering template: {chart_name:?}: {msg:?}")]
+    RenderingError { chart_name: String, msg: String },
+}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HelmAction {

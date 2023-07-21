@@ -6,6 +6,8 @@ use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryR
 use std::env;
 use std::fmt::{Display, Formatter};
 
+use super::helm::HelmChartError;
+
 pub mod cert_manager_chart;
 pub mod cert_manager_config_chart;
 pub mod coredns_config_chart;
@@ -156,7 +158,7 @@ pub enum HelmChartDirectoryLocation {
 }
 
 pub trait ToCommonHelmChart {
-    fn to_common_helm_chart(&self) -> CommonChart;
+    fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError>;
 }
 
 pub fn get_helm_values_set_in_code_but_absent_in_values_file(
