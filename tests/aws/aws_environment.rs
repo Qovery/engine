@@ -190,7 +190,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -198,7 +198,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -208,7 +208,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
