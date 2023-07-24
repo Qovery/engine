@@ -8,6 +8,10 @@ metadata:
     appLongId: {{ long_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: application
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

@@ -10,6 +10,10 @@ metadata:
     app: {{ sanitized_name }}
     envId: {{ environment_id }}
     appLongId: {{ long_id }}
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: application
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
 spec:
   type: ClusterIP
   ports:
