@@ -43,7 +43,7 @@ k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_22
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
 # tar gz
-flate2 = "1.0.23"
+flate2 = "1.0.26"
 tar = "0.4.38"
 
 # logger
