@@ -296,9 +296,10 @@ pub fn eks_aws_helm_charts(
     // Kube state metrics
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
-        true => {
-            Some(KubeStateMetricsChart::new(chart_prefix_path, get_chart_overrride_fn.clone()).to_common_helm_chart()?)
-        }
+        true => Some(
+            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_overrride_fn.clone())
+                .to_common_helm_chart()?,
+        ),
     };
 
     // Grafana chart
