@@ -170,7 +170,7 @@ impl PauseServiceAction {
             // timeout
             Err(_) => {
                 let command_error = CommandError::new_from_safe_message(format!(
-                    "Timout of {}s exceeded while un-pausing service",
+                    "Timeout of {}s exceeded while un-pausing service",
                     self.timeout.as_secs()
                 ));
                 return Err(Box::new(EngineError::new_k8s_scale_replicas(
@@ -223,7 +223,7 @@ impl DeploymentAction for PauseServiceAction {
             // timeout
             Err(_) => {
                 let command_error = CommandError::new_from_safe_message(format!(
-                    "Timout of {}s exceeded while scaling down service",
+                    "Timeout of {}s exceeded while scaling down service",
                     self.timeout.as_secs()
                 ));
                 return Err(Box::new(EngineError::new_k8s_scale_replicas(
