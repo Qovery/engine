@@ -185,8 +185,21 @@ impl<T: CloudProvider> Router<T> {
             .filter(|port| port.protocol == Protocol::GRPC)
             .cloned()
             .collect();
-        let http_hosts = to_host_data_template(service_name, &http_ports, &self.default_domain, &self.custom_domains);
-        let grpc_hosts = to_host_data_template(service_name, &grpc_ports, &self.default_domain, &self.custom_domains);
+        let cluster_domain = target.kubernetes.dns_provider().domain().to_string();
+        let http_hosts = to_host_data_template(
+            service_name,
+            &http_ports,
+            &self.default_domain,
+            &self.custom_domains,
+            &cluster_domain,
+        );
+        let grpc_hosts = to_host_data_template(
+            service_name,
+            &grpc_ports,
+            &self.default_domain,
+            &self.custom_domains,
+            &cluster_domain,
+        );
 
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts", &http_hosts);
@@ -215,6 +228,7 @@ fn to_host_data_template(
     ports: &[&Port],
     default_domain: &str,
     custom_domains: &[CustomDomain],
+    cluster_domain: &str,
 ) -> Vec<HostDataTemplate> {
     if ports.is_empty() {
         return vec![];
@@ -270,8 +284,15 @@ fn to_host_data_template(
         }
 
         for custom_domain in &custom_domains {
+            // We allow users to use the cluster domain as a custom domain. So in this case it must be separated by a -
+            // and not create a new subdomain
+            let separator = if custom_domain.domain.ends_with(cluster_domain) {
+                '-'
+            } else {
+                '.'
+            };
             hosts.push(HostDataTemplate {
-                domain_name: format!("{}.{}", port.name, custom_domain.domain),
+                domain_name: format!("{}{}{}", port.name, separator, custom_domain.domain),
                 service_name: service_name.to_string(),
                 service_port: port.port,
             });
@@ -522,7 +543,7 @@ mod tests {
             target_domain: "".to_string(),
         }];
 
-        let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains);
+        let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains, "cluster.com");
         assert_eq!(ret.len(), 5);
         assert!(ret.contains(&HostDataTemplate {
             domain_name: "cluster.com".to_string(),
@@ -551,7 +572,7 @@ mod tests {
         }));
 
         // If the port is not the default one, there should not be  default and wildcard route/host
-        let ret = to_host_data_template("srv", &[&port_grpc], "cluster.com", &custom_domains);
+        let ret = to_host_data_template("srv", &[&port_grpc], "cluster.com", &custom_domains, "cluster.com");
         assert_eq!(ret.len(), 2);
         assert!(ret.contains(&HostDataTemplate {
             domain_name: "grpc-cluster.com".to_string(),
@@ -575,7 +596,8 @@ mod tests {
                 target_domain: "".to_string(),
             },
         ];
-        let ret = to_host_data_template("srv", &[&port_http, &port_grpc], "cluster.com", &custom_domains);
+        let ret =
+            to_host_data_template("srv", &[&port_http, &port_grpc], "cluster.com", &custom_domains, "cluster.com");
         assert_eq!(ret.len(), 10);
         assert!(ret.contains(&HostDataTemplate {
             domain_name: "grpc-cluster.com".to_string(),
@@ -626,6 +648,38 @@ mod tests {
             domain_name: "grpc.super.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+        }));
+    }
+
+    #[test]
+    pub fn test_ingress_host_template_with_custom_domain_managed_by_cluster() {
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            publicly_accessible: true,
+            port: 80,
+            is_default: true,
+            protocol: Protocol::HTTP,
+        };
+        let custom_domains = vec![CustomDomain {
+            domain: "toto.cluster.com".to_string(),
+            target_domain: "".to_string(),
+        }];
+
+        let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains, "cluster.com");
+        assert_eq!(ret.len(), 4);
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http-toto.cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
+        }));
+
+        let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains, "fake.com");
+        assert_eq!(ret.len(), 4);
+        assert!(ret.contains(&HostDataTemplate {
+            domain_name: "http.toto.cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 80,
         }));
     }
 }

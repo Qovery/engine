@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -14,12 +14,14 @@ use semver::Version;
 pub struct KubeStateMetricsChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    ff_metrics_history_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl KubeStateMetricsChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
+        ff_metrics_history_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> KubeStateMetricsChart {
         KubeStateMetricsChart {
@@ -34,6 +36,7 @@ impl KubeStateMetricsChart {
                 KubeStateMetricsChart::chart_name(),
             ),
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            ff_metrics_history_enabled,
         }
     }
 
@@ -51,6 +54,10 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(4, 23, 0)),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
+                values: vec![ChartSetValue {
+                    key: "prometheus.monitor.enabled".to_string(),
+                    value: self.ff_metrics_history_enabled.to_string(),
+                }],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
@@ -112,7 +119,7 @@ mod tests {
     #[test]
     fn kube_state_metrics_chart_directory_exists_test() {
         // setup:
-        let chart = KubeStateMetricsChart::new(None, get_kube_state_metrics_chart_override());
+        let chart = KubeStateMetricsChart::new(None, false, get_kube_state_metrics_chart_override());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -135,7 +142,7 @@ mod tests {
     #[test]
     fn kube_state_metrics_chart_values_file_exists_test() {
         // setup:
-        let chart = KubeStateMetricsChart::new(None, get_kube_state_metrics_chart_override());
+        let chart = KubeStateMetricsChart::new(None, false, get_kube_state_metrics_chart_override());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -162,7 +169,7 @@ mod tests {
     #[test]
     fn kube_state_metrics_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = KubeStateMetricsChart::new(None, get_kube_state_metrics_chart_override());
+        let chart = KubeStateMetricsChart::new(None, false, get_kube_state_metrics_chart_override());
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

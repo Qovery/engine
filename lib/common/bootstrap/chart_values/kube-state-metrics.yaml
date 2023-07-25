@@ -1,6 +1,7 @@
 prometheus:
   monitor:
-    enabled: false
+    enabled: set-by-engine-code
+    honorLabels: true
 resources:
   limits:
     cpu: 75m

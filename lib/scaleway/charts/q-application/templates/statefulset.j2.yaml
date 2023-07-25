@@ -13,6 +13,10 @@ metadata:
     envId: {{ environment_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: application
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
 spec:
@@ -37,6 +41,7 @@ spec:
         qovery.com/service-id: {{ long_id }}
         qovery.com/service-type: application
         qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
