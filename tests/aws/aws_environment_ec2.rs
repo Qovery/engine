@@ -138,8 +138,9 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         };
 
         environment.applications = vec![];
+        let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
-            long_id: Uuid::new_v4(),
+            long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             kube_name: "my-little-container".to_string(),
             action: Action::Create,
@@ -171,6 +172,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             ram_limit_in_mib: 250,
             min_instances: 1,
             max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),

@@ -45,6 +45,23 @@ impl CloudProvider for SCW {
     fn lib_directory_name() -> &'static str {
         "scaleway"
     }
+
+    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
+        // SCW doesn't support UDP loadbalancer
+        // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
+        // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
+        &[
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
+                "leastconn",
+            ),
+            ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
+            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
+            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
+            ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
+            ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
+        ]
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
