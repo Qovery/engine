@@ -28,6 +28,7 @@ pub trait CloudProvider: Send + Sync {
     fn registry_short_name() -> &'static str;
     fn registry_full_name() -> &'static str;
     fn lib_directory_name() -> &'static str;
+    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)];
 }
 
 pub trait ToTeraContext {

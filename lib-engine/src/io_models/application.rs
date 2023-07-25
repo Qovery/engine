@@ -32,6 +32,13 @@ use super::UpdateStrategy;
 pub enum Protocol {
     HTTP,
     GRPC,
+    TCP,
+    UDP,
+}
+impl Protocol {
+    pub fn is_layer4(&self) -> bool {
+        matches!(self, Protocol::TCP | Protocol::UDP)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]

@@ -84,6 +84,7 @@ fn should_increase_container_storage_size() {
             resized_container.ram_limit_in_mib,
             resized_container.min_instances,
             resized_container.max_instances,
+            resized_container.public_domain.clone(),
             resized_container.ports.clone(),
             storages,
             envs,
