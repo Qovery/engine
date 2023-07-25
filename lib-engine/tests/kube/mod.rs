@@ -113,7 +113,14 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
-                    "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                    r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                    .to_string(),
                 ],
                 entrypoint: None,
                 cpu_request_in_mili: 250,
@@ -122,18 +129,16 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ram_limit_in_mib: 250,
                 min_instances: 1,
                 max_instances: 1,
-                ports: vec![
-                    Port {
-                        long_id: Uuid::new_v4(),
-                        port: 8080,
-                        is_default: true,
-                        name: "http".to_string(),
-                        publicly_accessible: false,
-                        protocol: Protocol::HTTP,
-                    },
-                ],
+                ports: vec![Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: true,
+                    name: "http".to_string(),
+                    publicly_accessible: false,
+                    protocol: Protocol::HTTP,
+                }],
                 readiness_probe: Some(Probe {
-                    r#type: ProbeType::Tcp{host: None},
+                    r#type: ProbeType::Tcp { host: None },
                     port: 8080,
                     initial_delay_seconds: 1,
                     timeout_seconds: 2,
@@ -142,7 +147,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     failure_threshold: 5,
                 }),
                 liveness_probe: Some(Probe {
-                    r#type: ProbeType::Tcp{host: None},
+                    r#type: ProbeType::Tcp { host: None },
                     port: 8080,
                     initial_delay_seconds: 1,
                     timeout_seconds: 2,
@@ -152,20 +157,20 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 }),
                 storages: vec![
                     Storage {
-                    id: to_short_id(&storage_1_id),
-                    long_id: storage_1_id,
-                    name: "photos1".to_string(),
-                    storage_type: StorageType::Ssd,
-                    size_in_gib: NormalSize.size(),
-                    mount_point: "/mnt/photos1".to_string(),
-                    snapshot_retention_in_days: 0,
+                        id: to_short_id(&storage_1_id),
+                        long_id: storage_1_id,
+                        name: "photos1".to_string(),
+                        storage_type: StorageType::Ssd,
+                        size_in_gib: NormalSize.size(),
+                        mount_point: "/mnt/photos1".to_string(),
+                        snapshot_retention_in_days: 0,
                     },
                     Storage {
                         id: to_short_id(&storage_2_id),
                         long_id: storage_2_id,
                         name: "photos2".to_string(),
                         storage_type: StorageType::Ssd,
-                        size_in_gib:  NormalSize.size(),
+                        size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos2".to_string(),
                         snapshot_retention_in_days: 0,
                     },
