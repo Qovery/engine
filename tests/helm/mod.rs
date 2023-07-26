@@ -222,6 +222,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         Action::Create,
         "my_application_name",
         "my-application-name".to_string(),
+        format!("{}.{}", long_id, test_kube.dns_provider().domain()),
         vec![test_port()],
         "1".to_string(),
         "2".to_string(),

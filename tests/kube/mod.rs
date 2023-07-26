@@ -223,6 +223,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ],
                 environment_vars: BTreeMap::default(),
                 branch: "basic-app-deploy".to_string(),
+                public_domain: format!("{}.{}", application_id, infra_ctx.dns_provider().domain()),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 80,

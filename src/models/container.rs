@@ -68,7 +68,7 @@ pub fn get_mirror_repository_name(service_id: &Uuid) -> String {
     format!("qovery-mirror-{service_id}")
 }
 
-fn to_public_l4_ports<'a>(
+pub fn to_public_l4_ports<'a>(
     ports: impl Iterator<Item = &'a Port>,
     protocol: Protocol,
     public_domain: &str,
@@ -441,10 +441,10 @@ pub(super) struct ClusterTeraContext {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(super) struct PublicL4Ports {
-    pub(super) protocol: Protocol,
-    pub(super) ports: Vec<Port>,
-    pub(super) hostnames: Vec<String>,
+pub struct PublicL4Ports {
+    pub protocol: Protocol,
+    pub ports: Vec<Port>,
+    pub hostnames: Vec<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]

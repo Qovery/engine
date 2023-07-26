@@ -36,10 +36,7 @@ spec:
     {% endif %}
   selector:
     matchLabels:
-      ownerId: {{ owner_id }}
-      envId: {{ environment_id }}
-      appId: {{ id }}
-      app: {{ sanitized_name }}
+      qovery.com/service-id: {{ long_id }}
   template:
     metadata:
       labels:
@@ -107,7 +104,7 @@ spec:
             {%- for port in ports %}
             - containerPort: {{ port.port }}
               name: "p{{ port.port }}"
-              protocol: TCP
+              protocol: {% if port.protocol == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
             {%- endfor %}
             {%- endif %}
           {%- if readiness_probe %}
