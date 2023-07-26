@@ -190,7 +190,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -198,7 +198,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -208,7 +208,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &srv_id, secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -1121,7 +1121,14 @@ fn deploy_container_with_no_router_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1152,18 +1159,18 @@ fn deploy_container_with_no_router_on_aws_eks() {
             environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
             mounted_files: vec![],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
-                initial_delay_seconds: 1,
+                initial_delay_seconds: 10,
                 timeout_seconds: 2,
                 period_seconds: 3,
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
-                initial_delay_seconds: 1,
+                initial_delay_seconds: 10,
                 timeout_seconds: 2,
                 period_seconds: 3,
                 success_threshold: 1,
@@ -1228,7 +1235,14 @@ fn deploy_container_with_storages_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1237,18 +1251,16 @@ fn deploy_container_with_storages_on_aws_eks() {
             ram_limit_in_mib: 250,
             min_instances: 1,
             max_instances: 1,
-            ports: vec![
-                Port {
-                    long_id: Uuid::new_v4(),
-                    port: 8080,
-                    is_default: true,
-                    name: "http".to_string(),
-                    publicly_accessible: false,
-                    protocol: Protocol::HTTP,
-                },
-            ],
+            ports: vec![Port {
+                long_id: Uuid::new_v4(),
+                port: 8080,
+                is_default: true,
+                name: "http".to_string(),
+                publicly_accessible: false,
+                protocol: Protocol::HTTP,
+            }],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -1257,7 +1269,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -1267,13 +1279,13 @@ fn deploy_container_with_storages_on_aws_eks() {
             }),
             storages: vec![
                 Storage {
-                id: to_short_id(&storage_id_1),
-                long_id: storage_id_1,
-                name: "photos1".to_string(),
-                storage_type: StorageType::Ssd,
-                size_in_gib: 10,
-                mount_point: "/mnt/photos1".to_string(),
-                snapshot_retention_in_days: 0,
+                    id: to_short_id(&storage_id_1),
+                    long_id: storage_id_1,
+                    name: "photos1".to_string(),
+                    storage_type: StorageType::Ssd,
+                    size_in_gib: 10,
+                    mount_point: "/mnt/photos1".to_string(),
+                    snapshot_retention_in_days: 0,
                 },
                 Storage {
                     id: to_short_id(&storage_id_2),
@@ -1283,7 +1295,8 @@ fn deploy_container_with_storages_on_aws_eks() {
                     size_in_gib: 10,
                     mount_point: "/mnt/photos2".to_string(),
                     snapshot_retention_in_days: 0,
-                }],
+                },
+            ],
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
@@ -1350,7 +1363,17 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!("apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; cat {} ; while true; do nc -l 8080; done", &mounted_file.mount_path),
+                format!(
+                    r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                cat {}
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#,
+                    &mounted_file.mount_path
+                ),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1378,18 +1401,18 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 },
             ],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
-                initial_delay_seconds: 1,
+                initial_delay_seconds: 10,
                 timeout_seconds: 2,
                 period_seconds: 3,
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
-                initial_delay_seconds: 1,
+                initial_delay_seconds: 10,
                 timeout_seconds: 2,
                 period_seconds: 3,
                 success_threshold: 1,
@@ -1996,7 +2019,14 @@ fn test_restart_deployment() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -2024,7 +2054,7 @@ fn test_restart_deployment() {
                 },
             ],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -2033,7 +2063,7 @@ fn test_restart_deployment() {
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -2105,19 +2135,24 @@ fn test_restart_statefulset() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
             ],
-            storages: vec![
-                Storage {
-                    id: "z111111".to_string(),
-                    long_id: Uuid::new_v4(),
-                    name: "storage-1".to_string(),
-                    mount_point: "/storage".to_string(),
-                    size_in_gib: 10,
-                    storage_type: StorageType::FastSsd,
-                    snapshot_retention_in_days: 1,
-                }
-            ],
+            storages: vec![Storage {
+                id: "z111111".to_string(),
+                long_id: Uuid::new_v4(),
+                name: "storage-1".to_string(),
+                mount_point: "/storage".to_string(),
+                size_in_gib: 10,
+                storage_type: StorageType::FastSsd,
+                snapshot_retention_in_days: 1,
+            }],
             mounted_files: vec![],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -2145,7 +2180,7 @@ fn test_restart_statefulset() {
                 },
             ],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -2154,7 +2189,7 @@ fn test_restart_statefulset() {
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,

@@ -44,14 +44,6 @@ pub struct Port {
     pub protocol: Protocol,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AdvancedSettingsProbeType {
-    None,
-    Tcp,
-    Http,
-}
-
 pub fn to_environment_variable(env_vars: BTreeMap<String, String>) -> Vec<EnvironmentVariable> {
     env_vars
         .into_iter()

@@ -1,6 +1,6 @@
 use k8s_openapi::api::{
     apps::v1::{Deployment, StatefulSet},
-    core::v1::Pod,
+    core::v1::{Pod, Secret},
 };
 use kube::{
     api::{ListParams, Patch, PatchParams},
@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
-    models::kubernetes::{K8sDeployment, K8sPod, K8sStatefulset},
+    models::kubernetes::{K8sDeployment, K8sPod, K8sSecret, K8sStatefulset},
     runtime::block_on,
     utilities::create_kube_client,
 };
@@ -37,6 +37,82 @@ impl QubeClient {
         let kube_client = block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
             .map_err(|err| Box::new(EngineError::new_cannot_connect_to_k8s_cluster(event_details, err)))?;
         Ok(QubeClient { client: kube_client })
+    }
+
+    pub async fn get_secrets(
+        &self,
+        event_details: EventDetails,
+        namespace: Option<&str>,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sSecret>, Box<EngineError>> {
+        let client: Api<Secret> = match namespace {
+            Some(namespace_name) => Api::namespaced(self.client.clone(), namespace_name),
+            None => Api::all(self.client.clone()),
+        };
+
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match select_resource {
+            SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
+                Ok(x) => Ok(K8sSecret::from_k8s_secret_objectlist(event_details, x)),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes pods with labels `{labels}`. {e}"
+                    )),
+                ))),
+            },
+            SelectK8sResourceBy::Name(pod_name) => match client.get(pod_name.as_str()).await {
+                Ok(x) => Ok(vec![K8sSecret::from_k8s_secret(event_details, x)?]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes pods from {pod_name}/{}. {e}",
+                        namespace.unwrap_or("no namespace")
+                    )),
+                ))),
+            },
+        }
+    }
+
+    /// Patch an existing secret
+    ///
+    /// Patch should looks like the content of the secret data, but in json:
+    /// ```
+    /// let patch = serde_json::json!({
+    ///     "data": {
+    ///         "release": "encoded_base64_string",
+    ///     }
+    /// });
+    /// ```
+    pub async fn patch_secret(
+        &self,
+        event_details: EventDetails,
+        name: &str,
+        namespace: &str,
+        patch: serde_json::Value,
+    ) -> Result<(), Box<EngineError>> {
+        let client: Api<Secret> = Api::namespaced(self.client.clone(), namespace);
+
+        let patch_params = PatchParams {
+            field_manager: Some(name.to_string()),
+            ..Default::default()
+        };
+
+        match client.patch(name, &patch_params, &Patch::Merge(&patch)).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(EngineError::new_k8s_patch_secret_error(
+                event_details,
+                CommandError::new_from_safe_message(format!("Error while trying to patch kubernetes secret. {e}")),
+            ))),
+        }
     }
 
     pub async fn get_pods(
@@ -257,12 +333,14 @@ mod tests {
 
     use uuid::Uuid;
 
+    use crate::services::kube_client::SelectK8sResourceBy;
     use crate::{
         events::{EventDetails, Stage},
         io_models::QoveryIdentifier,
     };
 
     use super::QubeClient;
+    use crate::runtime::block_on;
 
     pub fn get_qube_client() -> (QubeClient, EventDetails) {
         let kubeconfig = env::var("HOME").unwrap() + "/.kube/config";
@@ -288,21 +366,21 @@ mod tests {
         use crate::runtime::block_on;
         let (qube_client, event_details) = get_qube_client();
         let all_deployments =
-            block_on(qube_client.get_deployments(event_details.clone(), None, super::SelectK8sResourceBy::All));
+            block_on(qube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All));
         assert!(all_deployments.is_ok());
         assert!(!all_deployments.unwrap().is_empty());
         // coredns is by default available in k3d
         let coredns = block_on(qube_client.get_deployments(
             event_details.clone(),
             Some("kube-system"),
-            super::SelectK8sResourceBy::Name("coredns".to_string()),
+            SelectK8sResourceBy::Name("coredns".to_string()),
         ));
         assert!(coredns.is_ok());
         // find coredns in kube-system by selectors
         let coredns = block_on(qube_client.get_deployments(
             event_details,
             Some("kube-system"),
-            super::SelectK8sResourceBy::LabelsSelector("k8s-app=kube-dns".to_string()),
+            SelectK8sResourceBy::LabelsSelector("k8s-app=kube-dns".to_string()),
         ));
         assert!(coredns.is_ok());
         assert!(!coredns.unwrap().is_empty());
@@ -317,7 +395,7 @@ mod tests {
         let coredns = block_on(qube_client.get_deployments(
             event_details.clone(),
             Some("kube-system"),
-            super::SelectK8sResourceBy::Name("coredns".to_string()),
+            SelectK8sResourceBy::Name("coredns".to_string()),
         ));
         assert!(coredns.is_ok());
         let coredns_list = coredns.unwrap();
@@ -331,5 +409,14 @@ mod tests {
             2,
         ));
         assert!(set_replicas.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_get_secrets() {
+        let (qube_client, event_details) = get_qube_client();
+        let all_secrets = block_on(qube_client.get_secrets(event_details, None, SelectK8sResourceBy::All)).unwrap();
+        // there are secrets by default on a fresh K8s cluster, so it shouldn't be empty
+        assert!(!all_secrets.is_empty());
     }
 }

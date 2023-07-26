@@ -10,6 +10,7 @@ use crate::cmd::structs::HelmHistoryRow;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 
 use semver::Version;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
@@ -404,6 +405,33 @@ impl Clone for Box<dyn HelmChart> {
     fn clone(&self) -> Self {
         self.clone_dyn()
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChartReleaseData {
+    pub name: String,
+    pub chart: ChartReleaseContent,
+    pub manifest: String,
+    pub version: u32,
+    pub namespace: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChartReleaseContent {
+    pub metadata: ChartReleaseMetadata,
+    pub templates: Vec<ChartReleaseTemplate>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChartReleaseMetadata {
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChartReleaseTemplate {
+    pub name: String,
+    pub data: String,
 }
 
 fn deploy_parallel_charts(

@@ -1142,7 +1142,14 @@ fn deploy_container_with_no_router_on_scw() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1170,7 +1177,7 @@ fn deploy_container_with_no_router_on_scw() {
                 },
             ],
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -1179,7 +1186,7 @@ fn deploy_container_with_no_router_on_scw() {
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -1255,7 +1262,17 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                format!("apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; cat {} ; while true; do nc -l 8080; done", &mounted_file.mount_path),
+                format!(
+                    r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                cat {}
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#,
+                    &mounted_file.mount_path
+                ),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1287,7 +1304,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,
@@ -1296,7 +1313,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp{host: None},
+                r#type: ProbeType::Tcp { host: None },
                 port: 8080,
                 initial_delay_seconds: 1,
                 timeout_seconds: 2,

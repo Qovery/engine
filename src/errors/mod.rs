@@ -748,6 +748,10 @@ pub enum Tag {
     K8sGetStatefulsetError,
     /// K8sDeleteStatefulsetError: Kubernetes delete statefulset error
     K8sDeleteStatefulsetError,
+    /// K8sGetSecretError: Kubernetes get secret error
+    K8sGetSecretError,
+    /// K8sPatchSecretError: represents an error while trying to patch a secret
+    K8sPatchSecretError,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -835,6 +839,10 @@ pub enum Tag {
     HelmHistoryError,
     /// HelmDeployTimeout: represent a failure to run the helm command in the given time frame
     HelmDeployTimeout,
+    /// HelmReleaseDataNotFound: represents an error where helm release data cannot be found.
+    HelmReleaseDataNotFound,
+    /// HelmSecretNotFound: represents an error where helm secret cannot be found.
+    HelmSecretNotFound,
     /// CannotGetAnyAvailableVPC: represents an error while trying to get any available VPC.
     CannotGetAnyAvailableVPC,
     /// UnsupportedVersion: represents an error where product doesn't support the given version.
@@ -999,6 +1007,12 @@ pub enum Tag {
     InvalidJobOutputCannotBeSerialized,
     /// DatabaseError: represents a database error
     DatabaseError,
+    /// CompressionError: represents an error while trying to make a compression
+    CompressionError,
+    /// UncompressError: represents an error while trying to uncompress content
+    UncompressError,
+    /// JsonSerializeIssue: represents an error while trying to serialize a json
+    JsonSerializationError,
 }
 
 impl Tag {
@@ -3115,6 +3129,25 @@ impl EngineError {
         EngineError::new(event_details, Tag::HelmHistoryError, message, Some(raw_error), None, None)
     }
 
+    /// Creates new error while trying to parse Helm chart history content.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `helm_chart`: Helm chart name.
+    /// * `namespace`: Namespace.
+    /// * `raw_error`: Raw error message.
+    pub fn new_helm_chart_parse_history_content_error(
+        event_details: EventDetails,
+        helm_chart: String,
+        namespace: String,
+        version: u32,
+    ) -> EngineError {
+        let message = format!("Error while trying to parse helm chart `{namespace}/{helm_chart}` history {version}");
+
+        EngineError::new(event_details, Tag::HelmHistoryError, message, None, None, None)
+    }
+
     /// Creates new error from a command error
     ///
     /// Arguments:
@@ -3196,6 +3229,40 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sDeleteStatefulsetError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_secret_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sGetSecretError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_patch_secret_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sPatchSecretError,
             error.to_string(),
             Some(error),
             None,
@@ -4068,6 +4135,86 @@ impl EngineError {
         )
     }
 
+    /// Creates new error when trying to uncompress content
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Expected string to decode or message to return to the user.
+    pub fn new_uncompress_issue(event_details: EventDetails, error: &str) -> EngineError {
+        let message = format!("Error while trying to uncompress content: {error}");
+
+        EngineError::new(
+            event_details,
+            Tag::UncompressError,
+            message,
+            None,
+            None,
+            Some("Please contact Qovery support, this is a bug.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to serialize json
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message_to_decode`: Expected string to decode or message to return to the user.
+    pub fn new_json_serializing_issue(event_details: EventDetails, what: &str) -> EngineError {
+        let message = format!("Error while trying to serialize json: {what}");
+
+        EngineError::new(
+            event_details,
+            Tag::JsonSerializationError,
+            message,
+            None,
+            None,
+            Some("Please contact Qovery support, this is a bug.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to read helm chart release secret
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message_to_decode`: Expected string to decode or message to return to the user.
+    pub fn new_helm_release_data_not_found(
+        event_details: EventDetails,
+        namespace: &str,
+        secret_name: &str,
+    ) -> EngineError {
+        let message = format!("Couldn't find Helm release data in secret {namespace}/{secret_name}");
+
+        EngineError::new(
+            event_details,
+            Tag::HelmReleaseDataNotFound,
+            message,
+            None,
+            None,
+            Some("Please contact Qovery support, this is a bug.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to decode a missing secret
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message_to_decode`: Expected string to decode or message to return to the user.
+    pub fn new_helm_secret_is_missing(event_details: EventDetails, namespace: &str, secret_name: &str) -> EngineError {
+        let message = format!("Couldn't find Helm secret {namespace}/{secret_name}");
+
+        EngineError::new(
+            event_details,
+            Tag::HelmSecretNotFound,
+            message,
+            None,
+            None,
+            Some("Please contact Qovery support, this is a bug.".to_string()),
+        )
+    }
+
     /// Creates new object storage error.
     ///
     /// Arguments:
@@ -4564,6 +4711,25 @@ impl EngineError {
             Tag::DatabaseError,
             database_error.to_string(),
             Some(database_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for compression issue
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_compression_failure(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while making compression";
+
+        EngineError::new(
+            event_details,
+            Tag::CompressionError,
+            message.to_string(),
+            Some(raw_error),
             None,
             None,
         )
