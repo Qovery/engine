@@ -73,6 +73,7 @@ fn should_increase_app_storage_size() {
             *test_app.action(),
             resized_app.name.as_str(),
             resized_app.name.clone(),
+            resized_app.public_domain.clone(),
             resized_app.ports.clone(),
             resized_app.total_cpus.to_string(),
             resized_app.cpu_burst.to_string(),

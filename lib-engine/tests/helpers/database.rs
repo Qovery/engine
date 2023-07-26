@@ -225,6 +225,7 @@ pub fn environment_3_apps_3_databases(
     let database_name_2 = "pg2".to_string();
 
     let env_id = Uuid::new_v4();
+    let app_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: env_id,
@@ -237,7 +238,7 @@ pub fn environment_3_apps_3_databases(
         max_parallel_deploy: 1,
         applications: vec![
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: app_id,
                 name: app_name_1.clone(),
                 kube_name: app_name_1,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -259,6 +260,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 },
                 mounted_files: vec![],
+                public_domain: format!("{}.example.com", app_id),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -353,6 +355,7 @@ pub fn environment_3_apps_3_databases(
                     success_threshold: 1,
                     failure_threshold: 5,
                 }),
+                public_domain: format!("{}.example.com", app_id),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -379,6 +382,7 @@ pub fn environment_3_apps_3_databases(
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
                 },
                 mounted_files: vec![],
+                public_domain: format!("{}.example.com", app_id),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -537,6 +541,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             advanced_settings: Default::default(),
             readiness_probe: None,
             liveness_probe: None,
+            public_domain: format!("{}.example.com", Uuid::new_v4()),
         }],
         containers: vec![],
         jobs: vec![],
@@ -577,6 +582,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
+            public_domain: format!("{}.example.com", Uuid::new_v4()),
             ports: vec![],
             total_cpus: "100m".to_string(),
             total_ram_in_mib: 256,

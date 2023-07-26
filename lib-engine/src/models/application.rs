@@ -13,7 +13,9 @@ use crate::io_models::context::Context;
 use std::collections::BTreeSet;
 
 use crate::errors::EngineError;
+use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::container::to_public_l4_ports;
 use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -40,6 +42,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) action: Action,
     pub(super) name: String,
     pub(super) kube_name: String,
+    pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
     pub(super) total_cpus: String,
     pub(super) cpu_burst: String,
@@ -68,6 +71,7 @@ impl<T: CloudProvider> Application<T> {
         action: Action,
         name: &str,
         kube_name: String,
+        public_domain: String,
         ports: Vec<Port>,
         total_cpus: String,
         cpu_burst: String,
@@ -105,6 +109,7 @@ impl<T: CloudProvider> Application<T> {
             action,
             name: name.to_string(),
             kube_name,
+            public_domain,
             ports,
             total_cpus,
             cpu_burst,
@@ -192,6 +197,18 @@ impl<T: CloudProvider> Application<T> {
 
         context.insert("readiness_probe", &self.readiness_probe);
         context.insert("liveness_probe", &self.liveness_probe);
+
+        context.insert("loadbalancer_l4_annotations", T::loadbalancer_l4_annotations());
+        let mut vec = Vec::with_capacity(2);
+        context.insert("ports_layer4_public", {
+            if let Some(tcp) = to_public_l4_ports(self.ports.iter(), TCP, &self.public_domain) {
+                vec.push(tcp);
+            }
+            if let Some(udp) = to_public_l4_ports(self.ports.iter(), UDP, &self.public_domain) {
+                vec.push(udp);
+            }
+            &vec
+        });
 
         context.insert(
             "deployment_update_strategy_type",
