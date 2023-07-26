@@ -36,7 +36,10 @@ spec:
     {% endif %}
   selector:
     matchLabels:
-      qovery.com/service-id: {{ long_id }}
+      ownerId: {{ owner_id }}
+      envId: {{ environment_id }}
+      appId: {{ id }}
+      app: {{ sanitized_name }}
   template:
     metadata:
       labels:
