@@ -2635,14 +2635,14 @@ fn deploy_container_with_udp_tcp_public_ports() {
             sleep(Duration::from_secs(10));
 
             // check we can connect on port
-            let domain = format!("p443.{}.{}:{}", service_id, infra_ctx.dns_provider().domain(), main_port);
+            let domain = format!("p443-{}.{}:{}", service_id, infra_ctx.dns_provider().domain(), main_port);
             if std::net::TcpStream::connect(domain).is_err() {
                 continue;
             }
 
             // Check udp is echoing back our message
             let udp = UdpSocket::bind("[::]:0").expect("cannot bind udp socket");
-            udp.connect(format!("p80.{}.{}:80", service_id, infra_ctx.dns_provider().domain()))
+            udp.connect(format!("p80-{}.{}:80", service_id, infra_ctx.dns_provider().domain()))
                 .expect("cannot connect to udp socket");
             let _ = udp.set_nonblocking(true);
 
