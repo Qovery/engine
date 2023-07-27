@@ -45,6 +45,10 @@ impl CloudProvider for AWS {
     fn lib_directory_name() -> &'static str {
         "aws"
     }
+
+    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
+        &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")]
+    }
 }
 
 impl AWS {}

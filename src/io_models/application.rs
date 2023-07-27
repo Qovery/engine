@@ -32,6 +32,13 @@ use super::UpdateStrategy;
 pub enum Protocol {
     HTTP,
     GRPC,
+    TCP,
+    UDP,
+}
+impl Protocol {
+    pub fn is_layer4(&self) -> bool {
+        matches!(self, Protocol::TCP | Protocol::UDP)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -186,6 +193,7 @@ pub struct Application {
     pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
+    pub public_domain: String,
     pub ports: Vec<Port>,
     pub total_cpus: String,
     pub cpu_burst: String,
@@ -229,6 +237,7 @@ impl Application {
                         self.action.to_service_action(),
                         self.name.as_str(),
                         self.kube_name,
+                        self.public_domain,
                         self.ports,
                         self.total_cpus,
                         self.cpu_burst,
@@ -257,6 +266,7 @@ impl Application {
                         self.action.to_service_action(),
                         self.name.as_str(),
                         self.kube_name,
+                        self.public_domain,
                         self.ports,
                         self.total_cpus,
                         self.cpu_burst,
@@ -286,6 +296,7 @@ impl Application {
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.kube_name,
+                self.public_domain,
                 self.ports,
                 self.total_cpus,
                 self.cpu_burst,

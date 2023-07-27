@@ -7,7 +7,8 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::Port;
+use crate::io_models::application::Protocol::{TCP, UDP};
+use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::kubers_utils::kube_get_resources_by_selector;
@@ -50,6 +51,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) ram_limit_in_mib: u32,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
+    pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
     pub(super) storages: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
@@ -64,6 +66,26 @@ pub struct Container<T: CloudProvider> {
 
 pub fn get_mirror_repository_name(service_id: &Uuid) -> String {
     format!("qovery-mirror-{service_id}")
+}
+
+pub fn to_public_l4_ports<'a>(
+    ports: impl Iterator<Item = &'a Port>,
+    protocol: Protocol,
+    public_domain: &str,
+) -> Option<PublicL4Ports> {
+    let ports: Vec<Port> = ports
+        .filter(|p| p.publicly_accessible && p.protocol == protocol)
+        .cloned()
+        .collect();
+    if ports.is_empty() {
+        None
+    } else {
+        Some(PublicL4Ports {
+            protocol,
+            hostnames: ports.iter().map(|p| format!("{}.{}", p.name, public_domain)).collect(),
+            ports,
+        })
+    }
 }
 
 // Here we define the common behavior among all providers
@@ -85,6 +107,7 @@ impl<T: CloudProvider> Container<T> {
         ram_limit_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
+        public_domain: String,
         ports: Vec<Port>,
         storages: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
@@ -159,6 +182,7 @@ impl<T: CloudProvider> Container<T> {
             ram_limit_in_mib,
             min_instances,
             max_instances,
+            public_domain,
             ports,
             storages,
             environment_variables,
@@ -196,7 +220,6 @@ impl<T: CloudProvider> Container<T> {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;
         let registry_info = target.container_registry.registry_info();
-
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
@@ -230,7 +253,18 @@ impl<T: CloudProvider> Container<T> {
                 ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
+                public_domain: self.public_domain.clone(),
                 ports: self.ports.clone(),
+                ports_layer4_public: {
+                    let mut vec = Vec::with_capacity(2);
+                    if let Some(tcp) = to_public_l4_ports(self.ports.iter(), TCP, &self.public_domain) {
+                        vec.push(tcp);
+                    }
+                    if let Some(udp) = to_public_l4_ports(self.ports.iter(), UDP, &self.public_domain) {
+                        vec.push(udp);
+                    }
+                    vec
+                },
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
                 storages: vec![],
                 readiness_probe: self.readiness_probe.clone(),
@@ -247,6 +281,7 @@ impl<T: CloudProvider> Container<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
+            loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
         };
 
         ctx
@@ -406,6 +441,13 @@ pub(super) struct ClusterTeraContext {
 }
 
 #[derive(Serialize, Debug, Clone)]
+pub struct PublicL4Ports {
+    pub protocol: Protocol,
+    pub ports: Vec<Port>,
+    pub hostnames: Vec<String>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
@@ -421,7 +463,9 @@ pub(super) struct ServiceTeraContext {
     pub(super) ram_limit_in_mib: String,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
+    pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
+    pub(super) ports_layer4_public: Vec<PublicL4Ports>,
     pub(super) default_port: Option<Port>,
     pub(super) storages: Vec<StorageDataTemplate>,
     pub(super) readiness_probe: Option<Probe>,
@@ -448,6 +492,7 @@ pub(super) struct ContainerTeraContext {
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
+    pub(super) loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
 }
 
 pub fn get_container_with_invalid_storage_size<T: CloudProvider>(

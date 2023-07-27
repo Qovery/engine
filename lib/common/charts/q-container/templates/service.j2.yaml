@@ -14,7 +14,7 @@ spec:
   type: ClusterIP
   ports:
     {%- for port in service.ports %}
-    - protocol: TCP
+    - protocol: {% if port.protocol == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
       name: "p{{ port.port }}"
       port: {{ port.port }}
       targetPort: {{ port.port }}
@@ -22,3 +22,36 @@ spec:
   selector:
     qovery.com/service-id: {{ service.long_id }}
 {%- endif %}
+
+{%- for l4_ports in service.ports_layer4_public %}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ service.name }}-public-{{ l4_ports.protocol | lower }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: container
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "{{ l4_ports.hostnames | join(sep=",") }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for annotation in loadbalancer_l4_annotations %}
+    {{ annotation | first }}: "{{ annotation | last }}"
+    {%- endfor %}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    {%- for port in l4_ports.ports %}
+    - protocol: {{ port.protocol }}
+      name: "p{{ port.port }}"
+      port: {{ port.port }}
+      targetPort: {{ port.port }}
+    {%- endfor %}
+  selector:
+    qovery.com/service-id: {{ service.long_id }}
+{%- endfor %}

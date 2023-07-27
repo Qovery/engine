@@ -222,6 +222,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         Action::Create,
         "my_application_name",
         "my-application-name".to_string(),
+        format!("{}.{}", long_id, test_kube.dns_provider().domain()),
         vec![test_port()],
         "1".to_string(),
         "2".to_string(),
@@ -325,9 +326,10 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
 }
 
 pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
+    let service_id = Uuid::new_v4();
     Container::new(
         test_kube.context(),
-        Uuid::new_v4(),
+        service_id,
         "my_container_name".to_string(),
         "my-application-name".to_string(),
         Action::Create,
@@ -346,6 +348,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         4,
         5,
         6,
+        format!("{}.{}", service_id, "example.com"),
         vec![test_port()],
         vec![test_storage()],
         vec![test_env_var()],

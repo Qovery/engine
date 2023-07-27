@@ -94,6 +94,7 @@ pub fn working_environment(
                 failure_threshold: 5,
             }),
             advanced_settings: settings,
+            public_domain: format!("{}.{}", application_id.to_uuid(), test_domain),
         }],
         containers: vec![],
         jobs: vec![],
@@ -303,6 +304,7 @@ pub fn environment_2_app_2_routers_1_psql(
                     success_threshold: 1,
                     failure_threshold: 5,
                 }),
+                public_domain: format!("{}.{}", application_id1, test_domain),
             },
             Application {
                 long_id: application_id2,
@@ -327,6 +329,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_PASSWORD".to_string() => base64::encode(database_password),
                 },
                 mounted_files: vec![],
+                public_domain: format!("{}.{}", application_id2, test_domain),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -451,6 +454,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             },
             mounted_files: vec![],
             branch: "echo-app".to_string(),
+            public_domain: format!("{}.{}", application_id, test_domain),
             ports: vec![Port {
                 long_id: Default::default(),
                 port: 5678,
@@ -551,6 +555,7 @@ pub fn environment_only_http_server(
             environment_vars: BTreeMap::default(),
             mounted_files: vec![],
             branch: "main".to_string(),
+            public_domain: format!("{}.{}", application_id, test_domain),
             ports: vec![Port {
                 long_id: Default::default(),
                 port: 80,

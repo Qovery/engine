@@ -23,6 +23,8 @@ use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use tracing::{span, warn, Level};
 use url::Url;
 use uuid::Uuid;
@@ -1128,6 +1130,7 @@ fn deploy_container_with_no_router_on_scw() {
 
         environment.routers = vec![];
         environment.applications = vec![];
+        let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
@@ -1158,6 +1161,7 @@ fn deploy_container_with_no_router_on_scw() {
             ram_limit_in_mib: 250,
             min_instances: 1,
             max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1248,6 +1252,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
 
         environment.routers = vec![];
         environment.applications = vec![];
+        let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
@@ -1281,6 +1286,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             ram_limit_in_mib: 250,
             min_instances: 1,
             max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1392,8 +1398,9 @@ fn deploy_container_with_router_on_scw() {
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.applications = vec![];
+        let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
-            long_id: Uuid::new_v4(),
+            long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             kube_name: "my-little-container".to_string(),
             action: Action::Create,
@@ -1412,6 +1419,7 @@ fn deploy_container_with_router_on_scw() {
             ram_limit_in_mib: 250,
             min_instances: 1,
             max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1971,6 +1979,155 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                     .0
                     .to_str()
             );
+        }
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn deploy_container_with_tcp_public_port() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+        );
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.routers = vec![];
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.containers = vec![Container {
+            long_id: service_id,
+            name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "my-little-container".to_string(),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:5432,bind=[::],reuseaddr,fork STDOUT &
+                socat TCP6-LISTEN:443,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_mili: 250,
+            cpu_limit_in_mili: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 443,
+                    is_default: true,
+                    name: "p443".to_string(),
+                    publicly_accessible: true,
+                    protocol: Protocol::TCP,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 5432,
+                    is_default: false,
+                    name: "p5432".to_string(),
+                    publicly_accessible: true,
+                    protocol: Protocol::TCP,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 80,
+                    is_default: false,
+                    name: "p80".to_string(),
+                    publicly_accessible: false, // scaleway don't support udp loabalancer
+                    protocol: Protocol::UDP,
+                },
+            ],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 443,
+                initial_delay_seconds: 30,
+                timeout_seconds: 5,
+                period_seconds: 10,
+                success_threshold: 1,
+                failure_threshold: 50,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 443,
+                initial_delay_seconds: 30,
+                timeout_seconds: 5,
+                period_seconds: 10,
+                success_threshold: 1,
+                failure_threshold: 50,
+            }),
+            storages: vec![],
+            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // check we can connect on ports
+        sleep(Duration::from_secs(30));
+        let now = Instant::now();
+        let timeout = Duration::from_secs(60 * 10);
+        loop {
+            if now.elapsed() > timeout {
+                panic!("Cannot connect to endpoint before timeout of {:?}", timeout);
+            }
+
+            sleep(Duration::from_secs(10));
+
+            // check we can connect on port
+            let domain = format!("p443.{}.{}:443", service_id, infra_ctx.dns_provider().domain());
+            let domain2 = format!("p5432.{}.{}:5432", service_id, infra_ctx.dns_provider().domain());
+            if std::net::TcpStream::connect(domain).is_err() {
+                continue;
+            }
+
+            if std::net::TcpStream::connect(domain2).is_err() {
+                continue;
+            }
+
+            // exit loop
+            break;
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);

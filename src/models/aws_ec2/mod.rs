@@ -43,6 +43,10 @@ impl CloudProvider for AWSEc2 {
     fn lib_directory_name() -> &'static str {
         "aws-ec2"
     }
+
+    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
+        &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")]
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]

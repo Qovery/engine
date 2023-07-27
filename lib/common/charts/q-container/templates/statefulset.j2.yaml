@@ -78,7 +78,7 @@ spec:
             {%- for port in service.ports %}
             - containerPort: {{ port.port }}
               name: "p{{ port.port }}"
-              protocol: TCP
+              protocol: {% if port.protocol == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
             {%- endfor %}
           {%- if service.readiness_probe %}
           readinessProbe:

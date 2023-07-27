@@ -99,8 +99,9 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
             let container_name = container_id.short().to_string();
             let storage_1_id = QoveryIdentifier::new_random().to_uuid();
             let storage_2_id = QoveryIdentifier::new_random().to_uuid();
+            let service_id = Uuid::new_v4();
             let container = Container {
-                long_id: container_id.to_uuid(),
+                long_id: service_id,
                 name: container_name.clone(),
                 kube_name: container_name,
                 action: Action::Create,
@@ -129,6 +130,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ram_limit_in_mib: 250,
                 min_instances: 1,
                 max_instances: 1,
+                public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
                 ports: vec![Port {
                     long_id: Uuid::new_v4(),
                     port: 8080,
@@ -221,6 +223,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ],
                 environment_vars: BTreeMap::default(),
                 branch: "basic-app-deploy".to_string(),
+                public_domain: format!("{}.{}", application_id, infra_ctx.dns_provider().domain()),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 80,
