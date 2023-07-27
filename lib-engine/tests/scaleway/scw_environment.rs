@@ -2116,8 +2116,8 @@ fn deploy_container_with_tcp_public_port() {
             sleep(Duration::from_secs(10));
 
             // check we can connect on port
-            let domain = format!("p443.{}.{}:443", service_id, infra_ctx.dns_provider().domain());
-            let domain2 = format!("p5432.{}.{}:5432", service_id, infra_ctx.dns_provider().domain());
+            let domain = format!("p443-{}.{}:443", service_id, infra_ctx.dns_provider().domain());
+            let domain2 = format!("p5432-{}.{}:5432", service_id, infra_ctx.dns_provider().domain());
             if std::net::TcpStream::connect(domain).is_err() {
                 continue;
             }
