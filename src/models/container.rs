@@ -82,7 +82,7 @@ pub fn to_public_l4_ports<'a>(
     } else {
         Some(PublicL4Ports {
             protocol,
-            hostnames: ports.iter().map(|p| format!("{}.{}", p.name, public_domain)).collect(),
+            hostnames: ports.iter().map(|p| format!("{}-{}", p.name, public_domain)).collect(),
             ports,
         })
     }
