@@ -129,7 +129,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         name: svc_name.to_string(),
                         type_: "cloud load balancer".to_string(),
                         state: DeploymentState::Ready,
-                        message: None,
+                        message: Some(". It can take several minutes for the load balancer to be publicly reachable after the first deployment".to_string()),
                         events: vec![],
                     });
                 }
