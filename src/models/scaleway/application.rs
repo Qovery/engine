@@ -1,8 +1,6 @@
-use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::StorageDataTemplate;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, Stage};
 use crate::models::application::Application;
 use crate::models::scaleway::ScwStorageType;
 use crate::models::types::{ToTeraContext, SCW};
@@ -10,37 +8,8 @@ use tera::Context as TeraContext;
 
 impl ToTeraContext for Application<SCW> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
-        let event_details = (self.mk_event_details)(Stage::Environment(EnvironmentStep::LoadConfiguration));
-        let kubernetes = target.kubernetes;
-        let environment = target.environment;
-        let mut context = self.default_tera_context(kubernetes, environment);
-
-        // container registry credentials
-        context.insert("registry_secret_name", &format!("registry-token-{}", &self.id));
-        context.insert(
-            "container_registry_docker_json_config",
-            self.build
-                .image
-                .clone()
-                .registry_docker_json_config
-                .unwrap_or_default()
-                .as_str(),
-        );
-
-        let cpu_limits = match validate_k8s_required_cpu_and_burstable(self.total_cpus(), self.cpu_burst()) {
-            Ok(l) => l,
-            Err(e) => {
-                return Err(Box::new(EngineError::new_k8s_validate_required_cpu_and_burstable_error(
-                    event_details,
-                    self.total_cpus(),
-                    self.cpu_burst(),
-                    e,
-                )));
-            }
-        };
-        context.insert("cpu_burst", &cpu_limits.cpu_limit);
-
-        let storage = self
+        let mut context = self.default_tera_context(target);
+        let storages = self
             .storage
             .iter()
             .map(|s| StorageDataTemplate {
@@ -61,10 +30,8 @@ impl ToTeraContext for Application<SCW> {
             })
             .collect::<Vec<_>>();
 
-        let is_storage = !storage.is_empty();
-        context.insert("storage", &storage);
-        context.insert("is_storage", &is_storage);
+        context.service.storages = storages;
 
-        Ok(context)
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
     }
 }

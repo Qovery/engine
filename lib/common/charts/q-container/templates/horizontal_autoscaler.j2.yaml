@@ -7,7 +7,7 @@ metadata:
   labels:
     envId: {{ environment_short_id }}
     qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: container
+    qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
 spec:

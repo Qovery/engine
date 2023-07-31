@@ -235,6 +235,7 @@ impl<T: CloudProvider> Container<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
+                r#type: "container",
                 name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
@@ -270,6 +271,9 @@ impl<T: CloudProvider> Container<T> {
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings: self.advanced_settings.clone(),
+                legacy_deployment_matchlabels: false,
+                legacy_volumeclaim_template: false,
+                legacy_deployment_from_scaleway: false,
             },
             registry: registry_info
                 .registry_docker_json_config
@@ -451,6 +455,7 @@ pub struct PublicL4Ports {
 pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
+    pub(super) r#type: &'static str,
     pub(super) name: String,
     pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
@@ -471,6 +476,9 @@ pub(super) struct ServiceTeraContext {
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
+    pub(super) legacy_deployment_matchlabels: bool,
+    pub(super) legacy_volumeclaim_template: bool,
+    pub(super) legacy_deployment_from_scaleway: bool,
 }
 
 #[derive(Serialize, Debug, Clone)]

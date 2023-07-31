@@ -5,6 +5,7 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::container::ContainerAdvancedSettings;
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
 use crate::io_models::{
@@ -138,7 +139,7 @@ pub struct ApplicationAdvancedSettings {
 
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
-    pub hpa_cpu_average_utilization_percent: i8,
+    pub hpa_cpu_average_utilization_percent: u8,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -173,6 +174,40 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+        }
+    }
+}
+
+impl ApplicationAdvancedSettings {
+    pub fn to_container_advanced_settings(&self) -> ContainerAdvancedSettings {
+        ContainerAdvancedSettings {
+            security_service_account_name: self.security_service_account_name.clone(),
+            deployment_custom_domain_check_enabled: self.deployment_custom_domain_check_enabled,
+            deployment_termination_grace_period_seconds: self.deployment_termination_grace_period_seconds,
+            deployment_update_strategy_type: self.deployment_update_strategy_type,
+            deployment_update_strategy_rolling_update_max_unavailable_percent: self
+                .deployment_update_strategy_rolling_update_max_unavailable_percent,
+            deployment_update_strategy_rolling_update_max_surge_percent: self
+                .deployment_update_strategy_rolling_update_max_surge_percent,
+            network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
+            network_ingress_cors_enable: self.network_ingress_cors_enable,
+            network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,
+            network_ingress_cors_allow_origin: self.network_ingress_cors_allow_origin.clone(),
+            network_ingress_cors_allow_methods: self.network_ingress_cors_allow_methods.clone(),
+            network_ingress_cors_allow_headers: self.network_ingress_cors_allow_headers.clone(),
+            network_ingress_keepalive_time_seconds: self.network_ingress_keepalive_time_seconds,
+            network_ingress_keepalive_timeout_seconds: self.network_ingress_keepalive_timeout_seconds,
+            network_ingress_send_timeout_seconds: self.network_ingress_send_timeout_seconds,
+            network_ingress_proxy_connect_timeout_seconds: self.network_ingress_proxy_connect_timeout_seconds,
+            network_ingress_proxy_send_timeout_seconds: self.network_ingress_proxy_send_timeout_seconds,
+            network_ingress_proxy_read_timeout_seconds: self.network_ingress_proxy_read_timeout_seconds,
+            network_ingress_proxy_buffer_size_kb: self.network_ingress_proxy_buffer_size_kb,
+            network_ingress_whitelist_source_range: self.network_ingress_whitelist_source_range.clone(),
+            network_ingress_denylist_source_range: self.network_ingress_denylist_source_range.clone(),
+            network_ingress_basic_auth_env_var: self.network_ingress_basic_auth_env_var.clone(),
+            network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
+            network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
+            hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
         }
     }
 }
