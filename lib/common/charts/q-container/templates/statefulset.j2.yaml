@@ -19,7 +19,7 @@ spec:
   selector:
     matchLabels:
       {%- if service.legacy_deployment_matchlabels %}
-      app: app-{{ service.short_id }}
+      app: {{ service.name }}
       appId: {{ service.short_id }}
       envId: {{ environment_short_id }}
       ownerId: FAKE
@@ -30,7 +30,7 @@ spec:
     metadata:
       labels:
         {%- if service.legacy_deployment_matchlabels %}
-        app: app-{{ service.short_id }}
+        app: {{ service.name }}
         appId: {{ service.short_id }}
         ownerId: FAKE
         {%- endif %}
