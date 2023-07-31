@@ -35,7 +35,7 @@ spec:
       envId: {{ environment_short_id }}
       ownerId: FAKE
       {%- if not service.legacy_deployment_from_scaleway %}
-      app: {{ service.short_id }}
+      app: app-{{ service.short_id }}
       {%- endif %}
       {%- else %}
       qovery.com/service-id: {{ service.long_id }}
@@ -44,7 +44,7 @@ spec:
     metadata:
       labels:
         {%- if service.legacy_deployment_matchlabels %}
-        app: {{ service.short_id }}
+        app: app-{{ service.short_id }}
         appId: {{ service.short_id }}
         ownerId: FAKE
         {%- endif %}
