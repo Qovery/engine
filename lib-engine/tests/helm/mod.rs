@@ -24,7 +24,7 @@ use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, P
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
-use qovery_engine::io_models::{QoveryIdentifier, UpdateStrategy};
+use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
@@ -318,6 +318,8 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 31,
+            deployment_affinity_node_required: BTreeMap::new(),
+            deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -380,6 +382,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
+            deployment_affinity_node_required: BTreeMap::new(),
+            deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
             network_ingress_proxy_body_size_mb: 11,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
@@ -536,6 +540,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         JobAdvancedSettings {
             job_delete_ttl_seconds_after_finished: Some(8),
             deployment_termination_grace_period_seconds: 60,
+            deployment_affinity_node_required: BTreeMap::new(),
             cronjob_concurrency_policy: "my_cronjob_concurrency_policy".to_string(),
             cronjob_failed_jobs_history_limit: 9,
             cronjob_success_jobs_history_limit: 10,
