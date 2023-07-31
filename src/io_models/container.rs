@@ -21,7 +21,7 @@ use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
 
-use super::UpdateStrategy;
+use super::{PodAntiAffinity, UpdateStrategy};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Credentials {
@@ -171,6 +171,10 @@ pub struct ContainerAdvancedSettings {
     pub deployment_update_strategy_rolling_update_max_unavailable_percent: u32,
     #[serde(alias = "deployment.update_strategy.rolling_update.max_surge_percent")]
     pub deployment_update_strategy_rolling_update_max_surge_percent: u32,
+    #[serde(alias = "deployment.affinity.node.required")]
+    pub deployment_affinity_node_required: BTreeMap<String, String>,
+    #[serde(alias = "deployment.antiaffinity.pod")]
+    pub deployment_antiaffinity_pod: PodAntiAffinity,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -225,6 +229,8 @@ impl Default for ContainerAdvancedSettings {
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
+            deployment_affinity_node_required: BTreeMap::new(),
+            deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,

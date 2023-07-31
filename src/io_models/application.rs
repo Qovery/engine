@@ -27,7 +27,7 @@ use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
-use super::UpdateStrategy;
+use super::{PodAntiAffinity, UpdateStrategy};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Protocol {
@@ -89,6 +89,10 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_update_strategy_rolling_update_max_unavailable_percent: u32,
     #[serde(alias = "deployment.update_strategy.rolling_update.max_surge_percent")]
     pub deployment_update_strategy_rolling_update_max_surge_percent: u32,
+    #[serde(alias = "deployment.affinity.node.required")]
+    pub deployment_affinity_node_required: BTreeMap<String, String>,
+    #[serde(alias = "deployment.antiaffinity.pod")]
+    pub deployment_antiaffinity_pod: PodAntiAffinity,
 
     // Build
     #[serde(alias = "build.timeout_max_sec")]
@@ -152,6 +156,8 @@ impl Default for ApplicationAdvancedSettings {
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
+            deployment_affinity_node_required: BTreeMap::new(),
+            deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
@@ -189,6 +195,8 @@ impl ApplicationAdvancedSettings {
                 .deployment_update_strategy_rolling_update_max_unavailable_percent,
             deployment_update_strategy_rolling_update_max_surge_percent: self
                 .deployment_update_strategy_rolling_update_max_surge_percent,
+            deployment_affinity_node_required: self.deployment_affinity_node_required.clone(),
+            deployment_antiaffinity_pod: self.deployment_antiaffinity_pod.clone(),
             network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
             network_ingress_cors_enable: self.network_ingress_cors_enable,
             network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,

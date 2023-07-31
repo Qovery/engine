@@ -20,10 +20,18 @@ pub mod job;
 pub mod probe;
 pub mod router;
 
-#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug, Default)]
 pub enum UpdateStrategy {
+    #[default]
     RollingUpdate,
     Recreate,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Default)]
+pub enum PodAntiAffinity {
+    #[default]
+    Preferred,
+    Required,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
