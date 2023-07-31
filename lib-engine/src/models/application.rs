@@ -167,6 +167,7 @@ impl<T: CloudProvider> Application<T> {
                 user_unsafe_name: self.name.clone(),
                 image_full: self.build.image.full_image_name_with_tag(),
                 image_tag: self.build.image.tag.clone(),
+                version: self.commit_id(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: self.total_cpus.clone(),
