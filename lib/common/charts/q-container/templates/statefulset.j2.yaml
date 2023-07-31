@@ -42,6 +42,10 @@ spec:
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
+        {%- if service.legacy_deployment_matchlabels %}
+        appCommitId: {{ service.version }}
+        {%- endif %}
+        qovery.com/service-version: {{ service.version }}
     spec:
       affinity:
         podAntiAffinity:

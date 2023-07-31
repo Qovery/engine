@@ -246,6 +246,7 @@ impl<T: CloudProvider> Container<T> {
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),
+                version: self.tag.clone(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
@@ -460,6 +461,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
     pub(super) image_tag: String,
+    pub(super) version: String,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) cpu_request_in_mili: String,
