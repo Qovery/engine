@@ -22,7 +22,7 @@ pub struct DatabaseDeploymentRenderContext {
 }
 
 const MANAGED_REPORT_TEMPLATE: &str = r#"
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Managed database {{ type_ }} v{{ version }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
@@ -32,12 +32,10 @@ const MANAGED_REPORT_TEMPLATE: &str = r#"
 {%- endfor %}
 ┃
 ┃ ⛅️ Database instance is being provisionned at your cloud provider ...
-┃
-┃ ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 const CONTAINER_REPORT_TEMPLATE: &str = r#"
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Container database {{ type_ }} v{{ version }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
@@ -63,8 +61,6 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
-┃
-┃ ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_database_deployment_report(
@@ -205,7 +201,7 @@ mod test {
         println!("{rendered_report}");
 
         let gold_standard = r#"
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Container database PostgreSQL v14 deployment is in progress ⏳, below the current status:
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
@@ -224,8 +220,6 @@ mod test {
 ┃ 💽 Network volume pvc-1212 is STARTING
 ┃  |__ ⚠️ Failed to provision volume with StorageClass "aws-ebs-io1-0": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit
 ┃ 💽 Network volume pvc-2121 is READY
-┃
-┃ ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
@@ -269,15 +263,13 @@ mod test {
         println!("{rendered_report}");
 
         let gold_standard = r#"
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Managed database PostgreSQL v13 deployment is in progress ⏳, below the current status:
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
 ┃  |__ ⚠️ Pool of ip exhausted
 ┃
 ┃ ⛅️ Database instance is being provisionned at your cloud provider ...
-┃
-┃ ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
