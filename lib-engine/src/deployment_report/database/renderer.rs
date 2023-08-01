@@ -25,7 +25,10 @@ const MANAGED_REPORT_TEMPLATE: &str = r#"
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Managed database {{ type_ }} v{{ version }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
-┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
+┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}
+{%- if service.message %}
+┃  |__ 💭 {{ service.message }}
+{%- endif -%}
 {%- for event in service.events %}
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
@@ -38,7 +41,10 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Container database {{ type_ }} v{{ version }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
-┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
+┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}
+{%- if service.message %}
+┃  |__ 💭 {{ service.message }}
+{%- endif -%}
 {%- for event in service.events %}
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message -}}
 {%- endfor -%}
