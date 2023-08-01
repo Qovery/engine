@@ -2,13 +2,12 @@ use core::fmt;
 use k8s_openapi::api::apps::v1::DaemonSet;
 use kube::api::{Patch, PatchParams};
 use kube::Api;
-use serde_json::json;
+
 use std::collections::HashSet;
 use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
 
-use flate2::write::GzEncoder;
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
@@ -16,7 +15,6 @@ use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 use serde::{Deserialize, Serialize};
-use std::io::prelude::*;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
@@ -1259,113 +1257,6 @@ fn create(
             )
         })?;
     }
-
-    // temporary fix helm pdb on old qovery deployed apps
-    let kube_client = kubernetes.q_kube_client()?;
-    let secrets = block_on(kube_client.get_secrets(
-        event_details.clone(),
-        None,
-        SelectK8sResourceBy::LabelsSelector("owner=helm".to_string()),
-    ));
-    if let Ok(s) = secrets {
-        for secret in s {
-            let mut ignore_update = true;
-            let (chart_release, chart_release_string) =
-                match secret.get_decoded_helm_chart_release(event_details.clone()) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!(
-                            "cannot decode helm chart release: {}/{}: {}",
-                            secret.metadata.namespace, secret.metadata.name, e
-                        );
-                        continue;
-                    }
-                };
-            let mut updated_pdb = chart_release_string.clone();
-
-            // fix manifest content
-            if chart_release_string.contains("pdb.yaml\\napiVersion: policy/v1beta1") {
-                ignore_update = false;
-                updated_pdb = chart_release_string
-                    .replace("pdb.yaml\\napiVersion: policy/v1beta1", "pdb.yaml\\napiVersion: policy/v1");
-            };
-
-            // fix pdb content
-            for item in chart_release.chart.templates {
-                if item.name != *"templates/pdb.yaml" {
-                    continue;
-                }
-
-                // decode data
-                let decoded_pdb = match base64::decode(item.data.clone()) {
-                    Ok(x) => x,
-                    Err(_) => {
-                        debug!(
-                            "cannot decode pdb data content {}/{}",
-                            chart_release.namespace, chart_release.name
-                        );
-                        break;
-                    }
-                };
-                let mut new_content = String::from_utf8(decoded_pdb).unwrap();
-
-                // replace and reencode
-                if !new_content.contains("apiVersion: policy/v1beta1") {
-                    continue;
-                };
-                new_content = new_content.replace("apiVersion: policy/v1beta1", "apiVersion: policy/v1");
-                let new_content_encoded = base64::encode(new_content);
-                updated_pdb = updated_pdb.replace(item.data.as_str(), new_content_encoded.as_str());
-                ignore_update = false;
-            }
-
-            if ignore_update {
-                debug!("ignore pdb update for {}/{}", secret.metadata.namespace, secret.metadata.name);
-                continue;
-            }
-
-            warn!(
-                "fixing helm pdb on old qovery deployed apps: {}/{}",
-                secret.metadata.namespace, secret.metadata.name
-            );
-
-            // gzip compress
-            let mut tmp_compressed_pdb = GzEncoder::new(Vec::new(), flate2::Compression::default());
-            tmp_compressed_pdb.write_all(updated_pdb.as_bytes()).map_err(|e| {
-                EngineError::new_compression_failure(
-                    event_details.clone(),
-                    CommandError::new_from_safe_message(format!(
-                        "Cannot compress pdb for {}/{}: {}",
-                        secret.metadata.namespace, secret.metadata.name, e
-                    )),
-                )
-            })?;
-            let compressed_pdb = tmp_compressed_pdb.finish().map_err(|e| {
-                EngineError::new_compression_failure(
-                    event_details.clone(),
-                    CommandError::new_from_safe_message(format!(
-                        "Cannot finish compress pdb for {}/{}: {}",
-                        secret.metadata.namespace, secret.metadata.name, e
-                    )),
-                )
-            })?;
-            // 1st base64 encode
-            let encode_pdb_1 = base64::encode(compressed_pdb);
-            // 2nd base64 encode
-            let encode_pdb_2 = base64::encode(encode_pdb_1);
-            let patch = json!({
-                "data": {
-                    "release": encode_pdb_2,
-                }
-            });
-            block_on(kube_client.patch_secret(
-                event_details.clone(),
-                &secret.metadata.name,
-                &secret.metadata.namespace,
-                patch,
-            ))?;
-        }
-    };
 
     // retrieve cluster CPU architectures
     let mut nodegroups_arch_set = HashSet::new();

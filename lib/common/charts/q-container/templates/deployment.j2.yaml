@@ -8,7 +8,7 @@ metadata:
   labels:
     envId: {{ environment_short_id }}
     qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: container
+    qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
   annotations:
@@ -30,18 +30,36 @@ spec:
     {%- endif %}
   selector:
     matchLabels:
+      {%- if service.legacy_deployment_matchlabels %}
+      appId: {{ service.short_id }}
+      envId: {{ environment_short_id }}
+      ownerId: FAKE
+      {%- if not service.legacy_deployment_from_scaleway %}
+      app: {{ service.name }}
+      {%- endif %}
+      {%- else %}
       qovery.com/service-id: {{ service.long_id }}
+      {%- endif %}
   template:
     metadata:
       labels:
+        {%- if service.legacy_deployment_matchlabels %}
+        app: {{ service.name }}
+        appId: {{ service.short_id }}
+        ownerId: FAKE
+        {%- endif %}
         envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
-        qovery.com/service-type: container
+        qovery.com/service-type: {{ service.type }}
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
+        {%- if service.legacy_deployment_matchlabels %}
+        appCommitId: {{ service.version }}
+        {%- endif %}
+        qovery.com/service-version: {{ service.version }}
     spec:
       affinity:
         podAntiAffinity:

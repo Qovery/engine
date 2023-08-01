@@ -8,7 +8,7 @@ metadata:
   labels:
     envId: {{ environment_short_id }}
     qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: container
+    qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
   annotations:
@@ -18,18 +18,34 @@ spec:
   serviceName: {{ service.name }}
   selector:
     matchLabels:
+      {%- if service.legacy_deployment_matchlabels %}
+      app: {{ service.name }}
+      appId: {{ service.short_id }}
+      envId: {{ environment_short_id }}
+      ownerId: FAKE
+      {%- else %}
       qovery.com/service-id: {{ service.long_id }}
+      {%- endif %}
   template:
     metadata:
       labels:
+        {%- if service.legacy_deployment_matchlabels %}
+        app: {{ service.name }}
+        appId: {{ service.short_id }}
+        ownerId: FAKE
+        {%- endif %}
         envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
-        qovery.com/service-type: container
+        qovery.com/service-type: {{ service.type }}
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
+        {%- if service.legacy_deployment_matchlabels %}
+        appCommitId: {{ service.version }}
+        {%- endif %}
+        qovery.com/service-version: {{ service.version }}
     spec:
       affinity:
         podAntiAffinity:
@@ -145,7 +161,11 @@ spec:
               memory: {{ service.ram_request_in_mib }}
           volumeMounts:
 {%- for s in service.storages %}
+            {%- if service.legacy_volumeclaim_template %}
+            - name: {{ s.id }}
+            {%- else %}
             - name: {{ s.long_id }}
+            {%- endif %}
               mountPath: {{ s.mount_point }}
 {%- endfor %}
 {%- for mounted_file in mounted_files %}
@@ -163,15 +183,25 @@ spec:
   volumeClaimTemplates:
 {%- for s in service.storages %}
   - metadata:
+      {%- if service.legacy_volumeclaim_template %}
+      name: {{ s.id }}
+      labels:
+        ownerId: FAKE
+        envId: {{ environment_short_id }}
+        appId: {{ service.short_id }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+      {%- else %}
       name: {{ s.long_id }}
       labels:
         envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
-        qovery.com/service-type: container
+        qovery.com/service-type: {{ service.type }}
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
         qovery.com/disk-id: {{ s.long_id }}
         qovery.com/disk-type: {{ s.storage_type }}
+      {%- endif %}
     spec:
       accessModes:
         - ReadWriteOnce

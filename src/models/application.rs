@@ -1,9 +1,6 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, EnvironmentVariableDataTemplate, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile,
-    Storage,
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
@@ -12,10 +9,14 @@ use crate::io_models::application::{ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
 use std::collections::BTreeSet;
 
+use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::Kind::Scw;
 use crate::errors::EngineError;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::kubers_utils::kube_get_resources_by_selector;
-use crate::models::container::to_public_l4_ports;
+use crate::models::container::{
+    to_public_l4_ports, ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext,
+};
 use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -25,7 +26,6 @@ use itertools::Itertools;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
 use std::time::Duration;
-use tera::Context as TeraContext;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
@@ -136,123 +136,81 @@ impl<T: CloudProvider> Application<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/{}/charts/q-application", self.lib_root_directory, T::lib_directory_name(),)
+        format!("{}/common/charts/q-container", self.lib_root_directory)
     }
 
     fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
         self.ports.iter().filter(|port| port.publicly_accessible)
     }
 
-    pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
-        let mut context = TeraContext::new();
-        context.insert("id", self.id());
-        context.insert("long_id", &self.long_id);
-        context.insert("owner_id", environment.owner_id.as_str());
-        context.insert("project_id", environment.project_id.as_str());
-        context.insert("project_long_id", &environment.project_long_id);
-        context.insert("organization_id", environment.organization_id.as_str());
-        context.insert("organization_long_id", &environment.organization_long_id);
-        context.insert("environment_id", environment.id.as_str());
-        context.insert("environment_long_id", &environment.long_id);
-        context.insert("region", kubernetes.region());
-        context.insert("zone", kubernetes.zone());
-        context.insert("name", self.name());
-        context.insert("sanitized_name", &self.kube_name());
-        context.insert("namespace", environment.namespace());
-        context.insert("cluster_name", kubernetes.name());
-        context.insert("total_cpus", &self.total_cpus());
-        context.insert("total_ram_in_mib", &self.total_ram_in_mib());
-        context.insert("min_instances", &self.min_instances());
-        context.insert("max_instances", &self.max_instances());
-        context.insert("command_args", &self.command_args());
-        context.insert("entrypoint", &self.entrypoint());
+    pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
+        let environment = &target.environment;
+        let kubernetes = &target.kubernetes;
+        let registry_info = target.container_registry.registry_info();
+        let ctx = ContainerTeraContext {
+            organization_long_id: environment.organization_long_id,
+            project_long_id: environment.project_long_id,
+            environment_short_id: to_short_id(&environment.long_id),
+            environment_long_id: environment.long_id,
+            cluster: ClusterTeraContext {
+                long_id: *kubernetes.long_id(),
+                name: kubernetes.name().to_string(),
+                region: kubernetes.region().to_string(),
+                zone: kubernetes.zone().to_string(),
+            },
+            namespace: environment.namespace().to_string(),
+            service: ServiceTeraContext {
+                short_id: to_short_id(&self.long_id),
+                long_id: self.long_id,
+                r#type: "application",
+                name: self.kube_name().to_string(),
+                user_unsafe_name: self.name.clone(),
+                image_full: self.build.image.full_image_name_with_tag(),
+                image_tag: self.build.image.tag.clone(),
+                version: self.commit_id(),
+                command_args: self.command_args.clone(),
+                entrypoint: self.entrypoint.clone(),
+                cpu_request_in_mili: self.total_cpus.clone(),
+                cpu_limit_in_mili: self.total_cpus.clone(),
+                ram_request_in_mib: format!("{}Mi", self.total_ram_in_mib),
+                ram_limit_in_mib: format!("{}Mi", self.total_ram_in_mib),
+                min_instances: self.min_instances,
+                max_instances: self.max_instances,
+                public_domain: self.public_domain.clone(),
+                ports: self.ports.clone(),
+                ports_layer4_public: {
+                    let mut vec = Vec::with_capacity(2);
+                    if let Some(tcp) = to_public_l4_ports(self.ports.iter(), TCP, &self.public_domain) {
+                        vec.push(tcp);
+                    }
+                    if let Some(udp) = to_public_l4_ports(self.ports.iter(), UDP, &self.public_domain) {
+                        vec.push(udp);
+                    }
+                    vec
+                },
+                default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
+                storages: vec![],
+                readiness_probe: self.readiness_probe.clone(),
+                liveness_probe: self.liveness_probe.clone(),
+                advanced_settings: self.advanced_settings.to_container_advanced_settings(),
+                legacy_deployment_matchlabels: true,
+                legacy_volumeclaim_template: true,
+                legacy_deployment_from_scaleway: T::cloud_provider() == Scw,
+            },
+            registry: registry_info
+                .registry_docker_json_config
+                .as_ref()
+                .map(|docker_json| RegistryTeraContext {
+                    secret_name: format!("{}-registry", self.kube_name()),
+                    docker_json_config: Some(docker_json.to_string()),
+                }),
+            environment_variables: self.environment_variables.clone(),
+            mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
+            resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
+            loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
+        };
 
-        context.insert(
-            "security_service_account_name",
-            &self.advanced_settings.security_service_account_name,
-        );
-
-        context.insert(
-            "hpa_cpu_average_utilization_percent",
-            &self.advanced_settings.hpa_cpu_average_utilization_percent,
-        );
-
-        if let Some(default_port) = self.ports.iter().find(|p| p.is_default) {
-            context.insert("is_private_port", &true);
-            context.insert("private_port", &default_port.port);
-        } else {
-            context.insert("is_private_port", &false);
-        }
-
-        context.insert("version", &self.commit_id());
-
-        let commit_id = self.build.image.commit_id.as_str();
-        context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
-
-        context.insert(
-            "deployment_termination_grace_period_seconds",
-            &self.advanced_settings.deployment_termination_grace_period_seconds,
-        );
-
-        context.insert("readiness_probe", &self.readiness_probe);
-        context.insert("liveness_probe", &self.liveness_probe);
-
-        context.insert("loadbalancer_l4_annotations", T::loadbalancer_l4_annotations());
-        let mut vec = Vec::with_capacity(2);
-        context.insert("ports_layer4_public", {
-            if let Some(tcp) = to_public_l4_ports(self.ports.iter(), TCP, &self.public_domain) {
-                vec.push(tcp);
-            }
-            if let Some(udp) = to_public_l4_ports(self.ports.iter(), UDP, &self.public_domain) {
-                vec.push(udp);
-            }
-            &vec
-        });
-
-        context.insert(
-            "deployment_update_strategy_type",
-            &self.advanced_settings.deployment_update_strategy_type,
-        );
-        match self.advanced_settings.deployment_update_strategy_type {
-            crate::io_models::UpdateStrategy::RollingUpdate => {
-                context.insert(
-                    "deployment_update_strategy_rolling_update_max_unavailable_percent",
-                    &self
-                        .advanced_settings
-                        .deployment_update_strategy_rolling_update_max_unavailable_percent,
-                );
-                context.insert(
-                    "deployment_update_strategy_rolling_update_max_surge_percent",
-                    &self
-                        .advanced_settings
-                        .deployment_update_strategy_rolling_update_max_surge_percent,
-                );
-            }
-            crate::io_models::UpdateStrategy::Recreate => {}
-        }
-
-        let environment_variables = self
-            .environment_variables
-            .iter()
-            .map(|ev| EnvironmentVariableDataTemplate {
-                key: ev.key.clone(),
-                value: ev.value.clone(),
-            })
-            .collect::<Vec<_>>();
-
-        context.insert("environment_variables", &environment_variables);
-        context.insert("mounted_files", &self.mounted_files.iter().collect::<Vec<_>>());
-        context.insert("ports", &self.ports);
-        context.insert("is_registry_secret", &true);
-        context.insert("registry_secret", self.build().image.registry_secret_name(kubernetes.kind()));
-
-        context.insert(
-            "resource_expiration_in_seconds",
-            &kubernetes.advanced_settings().pleco_resources_ttl,
-        );
-
-        context
+        ctx
     }
 
     pub fn is_stateful(&self) -> bool {

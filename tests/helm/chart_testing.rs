@@ -167,7 +167,7 @@ fn q_container_test() {
 fn q_application_test() {
     dotenv::dotenv().ok();
     let test_info = application_context();
-    let chart_name = "q-application";
+    let chart_name = "q-container";
     let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
@@ -195,7 +195,7 @@ fn q_application_test() {
         chart_installation_checker: None,
     };
     let resources = get_kube_resources(
-        format!("{}/aws/charts/{}", lib_dir(), chart_name).as_str(),
+        format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
         None,
         &test_info,
