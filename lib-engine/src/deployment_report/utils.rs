@@ -514,7 +514,7 @@ pub fn get_last_events_for<'a>(
     max_events: usize,
     strategy: Strategy,
 ) -> Vec<&'a Event> {
-    let mut events = events
+    let events = events
         .filter(|ev| ev.involved_object.uid.as_deref() == Some(uid))
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
@@ -522,7 +522,8 @@ pub fn get_last_events_for<'a>(
 
     match strategy {
         OnlyWarningIfAny => {
-            if events.any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) {
+            // To avoid consuming the iterator
+            if events.clone().any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) {
                 events
                     .filter(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE))
                     .collect()
