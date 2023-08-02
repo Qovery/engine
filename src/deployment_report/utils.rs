@@ -129,7 +129,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         name: svc_name.to_string(),
                         type_: "cloud load balancer".to_string(),
                         state: DeploymentState::Ready,
-                        message: Some(". It can take several minutes for the load balancer to be publicly reachable after the first deployment".to_string()),
+                        message: Some("It can take several minutes for the load balancer to be publicly reachable after the first deployment. Beware of negative TTL of DNS resolver".to_string()),
                         events: vec![],
                     });
                 }
@@ -150,28 +150,29 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
             continue;
         }
 
+        // We only display Cloud provider LoadBalancer for now, not interested to display kube service
         // If it is not an LB (i.e: ClusterIP), we just check it has an internal ip assigned
-        if spec.cluster_ips.as_ref().map_or(0, |ips| ips.len()) > 0 {
-            svc_ctx.push(ServiceRenderContext {
-                name: svc_name.to_string(),
-                type_: "kubernetes load balancer".to_string(),
-                state: DeploymentState::Ready,
-                message: None,
-                events: vec![],
-            });
-            continue;
-        }
+        //if spec.cluster_ips.as_ref().map_or(0, |ips| ips.len()) > 0 {
+        //    svc_ctx.push(ServiceRenderContext {
+        //        name: svc_name.to_string(),
+        //        type_: "kubernetes load balancer".to_string(),
+        //        state: DeploymentState::Ready,
+        //        message: None,
+        //        events: vec![],
+        //    });
+        //    continue;
+        //}
 
-        // no ip for the LB
-        svc_ctx.push(ServiceRenderContext {
-            name: svc_name.to_string(),
-            type_: "kubernetes load balancer".to_string(),
-            state: DeploymentState::Starting,
-            message: Some("waiting to be assigned an Ip".to_string()),
-            events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
-                .flat_map(to_event_context)
-                .collect(),
-        });
+        //// no ip for the LB
+        //svc_ctx.push(ServiceRenderContext {
+        //    name: svc_name.to_string(),
+        //    type_: "kubernetes load balancer".to_string(),
+        //    state: DeploymentState::Starting,
+        //    message: Some("waiting to be assigned an Ip".to_string()),
+        //    events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
+        //        .flat_map(to_event_context)
+        //        .collect(),
+        //});
 
         continue;
     }
@@ -407,7 +408,7 @@ impl QPodExt for Pod {
         let to_error_message = |reason: &'a str| -> &'a str {
             match reason {
                 "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources",
-                "CrashLoopBackOff" => "crash loop, pod is restarting too frequently. Look into your application logs",
+                "CrashLoopBackOff" => "crash loop, pod is restarting too frequently. It might be due to either the crash of your application at startup (check the Live logs) or a wrong configuration of Liveness/Readiness probes (check the application settings)",
                 "ErrImagePull" => "cannot pull the image for your container",
                 "ImagePullBackOff" => "cannot pull the image for your container",
                 "Error" => "an undefined error occurred. Look into your applications logs and message below",

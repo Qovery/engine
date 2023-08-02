@@ -1085,6 +1085,195 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 #[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
+fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let service_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: service_id,
+            name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            kube_name: "affinity-container".to_string(),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps iproute2;
+                echo listening on port $PORT;
+                env
+                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                "#
+                .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_mili: 250,
+            cpu_limit_in_mili: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: true,
+                    name: "p8080".to_string(),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8081,
+                    is_default: false,
+                    name: "grpc".to_string(),
+                    publicly_accessible: false,
+                    protocol: Protocol::HTTP,
+                },
+            ],
+            storages: vec![],
+            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            mounted_files: vec![],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 10,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 10,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            advanced_settings: Default::default(),
+        }];
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let kube_conn = infra_ctx.kubernetes().q_kube_client().expect("kube client is not set");
+        // ensure default pod affinity is set to preferred
+        let preferred = block_on(kube_conn.get_deployments_from_api(
+            context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
+            None,
+            qovery_engine::services::kube_client::SelectK8sResourceBy::LabelsSelector(format!(
+                "qovery.com/service-id={}",
+                service_id
+            )),
+        ));
+        assert!(preferred.is_ok());
+        let deployments = preferred.unwrap().unwrap();
+        for deploy in deployments {
+            assert!(deploy
+                .spec
+                .unwrap()
+                .template
+                .spec
+                .unwrap()
+                .affinity
+                .unwrap()
+                .pod_anti_affinity
+                .unwrap()
+                .preferred_during_scheduling_ignored_during_execution
+                .is_some())
+        }
+
+        // set node affinity and pod antiaffinity to required
+        environment.containers[0].advanced_settings.deployment_antiaffinity_pod =
+            qovery_engine::io_models::PodAntiAffinity::Required;
+        let node_selector_key = "kubernetes.io/os";
+        let node_selector_value = "linux";
+        environment.containers[0]
+            .advanced_settings
+            .deployment_affinity_node_required = btreemap! {
+            node_selector_key.to_string() => node_selector_value.to_string()
+        };
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let requirred = block_on(kube_conn.get_deployments_from_api(
+            context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
+            None,
+            qovery_engine::services::kube_client::SelectK8sResourceBy::LabelsSelector(format!(
+                "qovery.com/service-id={}",
+                service_id
+            )),
+        ));
+        assert!(requirred.is_ok());
+        let deployments = requirred.unwrap().unwrap();
+        for deploy in deployments {
+            let pod_antiaffinity = deploy.spec.unwrap().template.spec.unwrap().affinity.unwrap();
+            // check pod antiaffinity
+            assert!(pod_antiaffinity
+                .pod_anti_affinity
+                .clone()
+                .unwrap()
+                .required_during_scheduling_ignored_during_execution
+                .is_some());
+            // check node selector
+            let node_affinity = pod_antiaffinity
+                .node_affinity
+                .unwrap()
+                .required_during_scheduling_ignored_during_execution
+                .unwrap()
+                .node_selector_terms[0]
+                .clone()
+                .match_expressions
+                .unwrap();
+            for nf in node_affinity {
+                assert_eq!(nf.key, node_selector_key);
+                assert_eq!(nf.values.unwrap()[0], node_selector_value);
+            }
+        }
+
+        // delete
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
 fn deploy_container_with_no_router_on_aws_eks() {
     engine_run_test(|| {
         init();

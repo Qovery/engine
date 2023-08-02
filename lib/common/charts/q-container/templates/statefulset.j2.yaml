@@ -48,15 +48,40 @@ spec:
         qovery.com/service-version: {{ service.version }}
     spec:
       affinity:
-        podAntiAffinity:
+        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
+            nodeSelectorTerms:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+            - matchExpressions:
+              - key: "{{ key }}"
+                operator: In
+                values:
+                - {{ value }}
+        {%- endfor %}
+        {%- endif %}
+        podAntiAffinity:
+          {%- if service.advanced_settings.deployment_antiaffinity_pod == "Required" %}
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchExpressions:
+              - key: "qovery.com/service-id"
+                operator: In
+                values:
+                - "{{ service.long_id }}"
+          {%- else %}
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: "kubernetes.io/hostname"
+              labelSelector:
                 matchExpressions:
                   - key: "qovery.com/service-id"
                     operator: In
                     values:
-                    - {{ service.long_id }}
-              topologyKey: "kubernetes.io/hostname"
+                    - "{{ service.long_id }}"
+          {%- endif %}
       automountServiceAccountToken: false
       {%- if service.advanced_settings.security_service_account_name != "" %}
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}

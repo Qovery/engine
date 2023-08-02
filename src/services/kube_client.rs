@@ -4,6 +4,7 @@ use k8s_openapi::api::{
 };
 use kube::{
     api::{ListParams, Patch, PatchParams},
+    core::{ListMeta, ObjectList},
     Api,
 };
 use serde_json::json;
@@ -62,6 +63,7 @@ impl QubeClient {
         match select_resource {
             SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
                 Ok(x) => Ok(K8sSecret::from_k8s_secret_objectlist(event_details, x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -71,6 +73,7 @@ impl QubeClient {
             },
             SelectK8sResourceBy::Name(pod_name) => match client.get(pod_name.as_str()).await {
                 Ok(x) => Ok(vec![K8sSecret::from_k8s_secret(event_details, x)?]),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -138,6 +141,7 @@ impl QubeClient {
         match select_resource {
             SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
                 Ok(x) => Ok(K8sPod::from_k8s_pod_objectlist(event_details, x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -147,6 +151,7 @@ impl QubeClient {
             },
             SelectK8sResourceBy::Name(pod_name) => match client.get(pod_name.as_str()).await {
                 Ok(x) => Ok(vec![K8sPod::from_k8s_pod(event_details, x)?]),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -158,12 +163,12 @@ impl QubeClient {
         }
     }
 
-    pub async fn get_deployments(
+    pub async fn get_deployments_from_api(
         &self,
         event_details: EventDetails,
         namespace: Option<&str>,
         select_resource: SelectK8sResourceBy,
-    ) -> Result<Vec<K8sDeployment>, Box<EngineError>> {
+    ) -> Result<Option<ObjectList<Deployment>>, Box<EngineError>> {
         let client: Api<Deployment> = match namespace {
             Some(namespace_name) => Api::namespaced(self.client.clone(), namespace_name),
             None => Api::all(self.client.clone()),
@@ -180,7 +185,8 @@ impl QubeClient {
 
         match select_resource {
             SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
-                Ok(x) => Ok(K8sDeployment::from_k8s_deployment_objectlist(event_details, x)),
+                Ok(x) => Ok(Some(x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(None),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -189,7 +195,11 @@ impl QubeClient {
                 ))),
             },
             SelectK8sResourceBy::Name(deployment_name) => match client.get(deployment_name.as_str()).await {
-                Ok(x) => Ok(vec![K8sDeployment::from_k8s_deployment(event_details, x)?]),
+                Ok(x) => Ok(Some(ObjectList {
+                    metadata: ListMeta::default(),
+                    items: vec![x],
+                })),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(None),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -198,6 +208,18 @@ impl QubeClient {
                     )),
                 ))),
             },
+        }
+    }
+
+    pub async fn get_deployments(
+        &self,
+        event_details: EventDetails,
+        namespace: Option<&str>,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sDeployment>, Box<EngineError>> {
+        match Self::get_deployments_from_api(self, event_details.clone(), namespace, select_resource).await? {
+            Some(x) => Ok(K8sDeployment::from_k8s_deployment_objectlist(event_details, x)),
+            None => Ok(vec![]),
         }
     }
 
@@ -274,6 +296,7 @@ impl QubeClient {
         match select_resource {
             SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
                 Ok(x) => Ok(K8sStatefulset::from_k8s_statefulset_objectlist(event_details, x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_statefulset_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -283,6 +306,7 @@ impl QubeClient {
             },
             SelectK8sResourceBy::Name(statfulset_name) => match client.get(statfulset_name.as_str()).await {
                 Ok(x) => Ok(vec![K8sStatefulset::from_k8s_statefulset(event_details, x)?]),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
                 Err(e) => Err(Box::new(EngineError::new_k8s_get_statefulset_error(
                     event_details,
                     CommandError::new_from_safe_message(format!(
@@ -326,7 +350,12 @@ impl QubeClient {
             ))),
         }
     }
+
+    fn is_error_code(e: &kube::Error, http_code_number: u16) -> bool {
+        matches!(e, kube::Error::Api(x) if x.code == http_code_number)
+    }
 }
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -418,5 +447,31 @@ mod tests {
         let all_secrets = block_on(qube_client.get_secrets(event_details, None, SelectK8sResourceBy::All)).unwrap();
         // there are secrets by default on a fresh K8s cluster, so it shouldn't be empty
         assert!(!all_secrets.is_empty());
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_error_management_code() {
+        let code_ok = QubeClient::is_error_code(
+            &kube::Error::Api(kube::error::ErrorResponse {
+                code: 404,
+                message: "".to_string(),
+                reason: "".to_string(),
+                status: "".to_string(),
+            }),
+            404,
+        );
+        assert!(code_ok);
+
+        let code_error = QubeClient::is_error_code(
+            &kube::Error::Api(kube::error::ErrorResponse {
+                code: 200,
+                message: "".to_string(),
+                reason: "".to_string(),
+                status: "".to_string(),
+            }),
+            404,
+        );
+        assert!(!code_error);
     }
 }

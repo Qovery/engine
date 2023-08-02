@@ -28,6 +28,19 @@ spec:
     spec:
       backoffLimit: {{ service.max_nb_restart }}
       activeDeadlineSeconds: {{ service.max_duration_in_sec }}
+      affinity:
+        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+            - matchExpressions:
+              - key: "{{ key }}"
+                operator: In
+                values:
+                - {{ value }}
+        {%- endfor %}
+        {%- endif %}
       {%- if service.advanced_settings.delete_ttl_seconds_after_finished %}
       ttlSecondsAfterFinished: {{ service.advanced_settings.delete_ttl_seconds_after_finished }}
       {%- endif %}

@@ -233,12 +233,12 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             return;
         }
 
-        self.logger.send_error(*error.clone());
+        //self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!(r#"
-❌ {} of database failed ! Look at the report above and to understand why.
-⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+❌ {} of Database failed! Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
+⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
                 "#, self.action).trim().to_string(),
             None,
         ));

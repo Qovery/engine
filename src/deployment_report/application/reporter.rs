@@ -4,7 +4,7 @@ use crate::deployment_report::application::renderer::render_app_deployment_repor
 use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
-use crate::errors::Tag::HelmDeployTimeout;
+
 use crate::models::application::ApplicationService;
 use crate::models::container::ContainerService;
 use crate::runtime::block_on;
@@ -136,6 +136,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             self.logger.send_progress(line);
         }
     }
+
     fn deployment_terminated(
         &self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
@@ -165,25 +166,13 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 .to_string(),
                 None,
             ));
-        } else if error.tag() == &HelmDeployTimeout {
-            self.logger.send_error(EngineError::new_engine_error(
-                *error.clone(),
-                format!(r#"
-❌ {} failed to be deployed in the given time frame.
-This most likely an issue with its configuration or because the app failed to start correctly.
-Look at the report from above to understand why, and check your applications logs.
-
-⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.service_type.to_string()).trim().to_string(),
-                None,
-            ));
         } else {
-            self.logger.send_error(*error.clone());
+            //self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
-❌ {} of {} failed ! Look at the report above and to understand why.
-⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+❌ {} of {} failed! Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
+⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
                 "#, self.action, self.service_type.to_string()).trim().to_string(),
                 None,
             ));
