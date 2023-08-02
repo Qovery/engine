@@ -56,14 +56,14 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
-┃     |__ 💢 {{ name }} crashed {{ s.restart_count }} times
-┃        |__ 💢 Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
+┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
 {%- endif -%}
 {%- endfor -%}
 {%- for event in pod.events %}
 ┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
+{%- if pvcs %}
 ┃
 {%- for pvc in pvcs %}
 ┃ 💽 Network volume {{ pvc.name }} is {{ pvc.state | upper }}
@@ -71,6 +71,7 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
+{%- endif %}
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_database_deployment_report(
@@ -241,8 +242,7 @@ mod test {
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
 ┃  |__ Pod app-pod-3 is STARTING
-┃     |__ 💢 app-container-1 crashed 3 times
-┃        |__ 💢 Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
+┃     |__ 💢 Container app-container-1 crashed 3 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┃     |__ ℹ️ Pulling image :P
 ┃     |__ ⚠️ Container started
 ┃

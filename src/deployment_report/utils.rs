@@ -1,3 +1,4 @@
+use crate::deployment_report::utils::Strategy::OnlyWarningIfAny;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{
@@ -126,7 +127,8 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                 type_: svc_type.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -155,7 +157,8 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         type_: svc_type.to_string(),
                         state: DeploymentState::Starting,
                         message: Some("waiting to be assigned an Ip".to_string()),
-                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
+                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                            .into_iter()
                             .flat_map(to_event_context)
                             .collect(),
                     });
@@ -220,7 +223,8 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
         name: job_name.to_string(),
         state,
         message,
-        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS)
+        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+            .into_iter()
             .flat_map(to_event_context)
             .collect(),
     };
@@ -265,7 +269,8 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
                 container_states: pod.container_states(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -278,7 +283,8 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Starting,
                 message: None,
                 container_states: pod.container_states(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -290,7 +296,8 @@ pub fn to_pods_render_context(
             state: DeploymentState::Starting,
             message: None,
             container_states: pod.container_states(),
-            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                .into_iter()
                 .flat_map(to_event_context)
                 .collect(),
         });
@@ -327,7 +334,8 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Failing,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -338,7 +346,8 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Starting,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -492,15 +501,34 @@ impl QPodExt for Pod {
 
 const DEFAULT_MAX_EVENTS: usize = 3;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Strategy {
+    //AllEvents,
+    OnlyWarningIfAny,
+}
+
+const WARNING_EVENT_TYPE: &str = "Warning";
 pub fn get_last_events_for<'a>(
     events: impl Iterator<Item = &'a Event>,
     uid: &str,
     max_events: usize,
-) -> impl Iterator<Item = &'a Event> {
-    events
-        // keep only selected object and events that are older than above time (2min)
+    strategy: Strategy,
+) -> Vec<&'a Event> {
+    let mut events = events
         .filter(|ev| ev.involved_object.uid.as_deref() == Some(uid))
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
-        .take(max_events)
+        .take(max_events);
+
+    match strategy {
+        OnlyWarningIfAny => {
+            if events.any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) {
+                events
+                    .filter(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE))
+                    .collect()
+            } else {
+                events.collect()
+            }
+        }
+    }
 }

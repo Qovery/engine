@@ -28,8 +28,7 @@ const REPORT_TEMPLATE: &str = r#"
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
-┃     |__ 💢 {{ name }} crashed {{ s.restart_count }} times
-┃        |__ 💢 Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
+┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
 {%- endif -%}
 {%- endfor -%}
 {%- for event in pod.events %}
@@ -123,8 +122,7 @@ mod test {
 ┃
 ┃ 🛰 Job has 1 pods. 0 starting, 0 terminating and 1 in error
 ┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
-┃     |__ 💢 app-container-1 crashed 5 times
-┃        |__ 💢 Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
+┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
