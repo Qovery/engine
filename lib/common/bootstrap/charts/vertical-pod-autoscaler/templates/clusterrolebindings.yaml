@@ -1,0 +1,112 @@
+{{- if .Values.rbac.create }}
+
+{{- if .Values.recommender.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-recommender
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-checkpoint-actor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-checkpoint-actor
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-recommender
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+
+{{- if .Values.updater.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-evictionter-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-evictioner
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-updater
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-status-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-status-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-updater
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+
+{{- if or .Values.recommender.enabled .Values.updater.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-actor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-actor
+subjects:
+{{- if .Values.recommender.enabled }}
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-recommender
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.updater.enabled }}
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-updater
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+
+{{- if coalesce .Values.recommender.enabled .Values.updater.enabled .Values.admissionController.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-target-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-target-reader
+subjects:
+{{- if .Values.recommender.enabled }}
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-recommender
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.admissionController.enabled}}
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-admission-controller
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.updater.enabled }}
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-updater
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+
+{{- end }}

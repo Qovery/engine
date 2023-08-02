@@ -231,6 +231,7 @@ pub fn ec2_aws_helm_charts(
         false,
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::Recreate,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -262,6 +263,7 @@ pub fn ec2_aws_helm_charts(
             request_memory: KubernetesMemoryResourceUnit::MebiByte(30),
         }),
         UpdateStrategy::Recreate,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -289,6 +291,7 @@ pub fn ec2_aws_helm_charts(
         }),
         UpdateStrategy::Recreate,
         get_chart_overrride_fn.clone(),
+        false,
     )
     .to_common_helm_chart()?;
 

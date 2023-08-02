@@ -1,0 +1,20 @@
+{{- if and .Values.admissionController.enabled .Values.admissionController.generateCertificate  }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name:  {{ include "vpa.fullname" . }}-admission-certgen
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/component: admission-certgen
+    {{- include "vpa.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vpa.fullname" . }}-admission-certgen
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.fullname" . }}-admission-certgen
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, UpdateStrategy,
+    VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -10,10 +11,12 @@ use crate::errors::CommandError;
 use kube::Client;
 
 pub struct MetricsServerChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     chart_resources: HelmChartResources,
     update_strategy: UpdateStrategy,
+    enable_vpa: bool,
 }
 
 impl MetricsServerChart {
@@ -21,8 +24,10 @@ impl MetricsServerChart {
         chart_prefix_path: Option<&str>,
         chart_resources: HelmChartResourcesConstraintType,
         update_strategy: UpdateStrategy,
+        enable_vpa: bool,
     ) -> MetricsServerChart {
         MetricsServerChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -43,6 +48,7 @@ impl MetricsServerChart {
                 },
             },
             update_strategy,
+            enable_vpa,
         }
     }
 
@@ -83,6 +89,26 @@ impl ToCommonHelmChart for MetricsServerChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(MetricsServerChartChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::Deployment,
+                            "metrics-server".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(250)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(64)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                        ),
+                    }],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -127,8 +153,12 @@ mod tests {
     #[test]
     fn metrics_server_chart_directory_exists_test() {
         // setup:
-        let chart =
-            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
+        let chart = MetricsServerChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::Recreate,
+            false,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -151,8 +181,12 @@ mod tests {
     #[test]
     fn metrics_server_chart_values_file_exists_test() {
         // setup:
-        let chart =
-            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
+        let chart = MetricsServerChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::Recreate,
+            false,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -179,8 +213,12 @@ mod tests {
     #[test]
     fn metrics_server_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart =
-            MetricsServerChart::new(None, HelmChartResourcesConstraintType::ChartDefault, UpdateStrategy::Recreate);
+        let chart = MetricsServerChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::Recreate,
+            false,
+        );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

@@ -35,6 +35,7 @@ impl ToCommonHelmChart for AwsUiViewChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(AwsUiViewChartChecker::new())),
+            vertical_pod_autoscaler: None,
         })
     }
 }

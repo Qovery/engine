@@ -123,6 +123,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(AwsIamEksUserMapperChecker::new())),
+            vertical_pod_autoscaler: None,
         })
     }
 }

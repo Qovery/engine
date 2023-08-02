@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::cloud_provider::models::CustomerHelmChartsOverride;
+use crate::cloud_provider::models::{
+    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::errors::CommandError;
 
 use kube::Client;
@@ -30,6 +33,7 @@ pub struct LokiS3BucketConfiguration {
 }
 
 pub struct LokiChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     // encryption_type: LokiEncryptionType,
@@ -37,6 +41,7 @@ pub struct LokiChart {
     loki_log_retention_in_weeks: u32,
     loki_s3_bucket_configuration: LokiS3BucketConfiguration,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    enable_vpa: bool,
 }
 
 impl LokiChart {
@@ -47,8 +52,10 @@ impl LokiChart {
         loki_log_retention_in_weeks: u32,
         loki_s3_bucket_configuration: LokiS3BucketConfiguration,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        enable_vpa: bool,
     ) -> Self {
         LokiChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -64,6 +71,7 @@ impl LokiChart {
             loki_log_retention_in_weeks,
             loki_s3_bucket_configuration,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            enable_vpa,
         }
     }
 
@@ -195,6 +203,26 @@ impl ToCommonHelmChart for LokiChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(LokiChartChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::StatefulSet,
+                            "loki".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(4)),
+                        ),
+                    }],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -257,6 +285,7 @@ mod tests {
             12,
             LokiS3BucketConfiguration::default(),
             get_loki_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -287,6 +316,7 @@ mod tests {
             12,
             LokiS3BucketConfiguration::default(),
             get_loki_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -321,6 +351,7 @@ mod tests {
             12,
             LokiS3BucketConfiguration::default(),
             get_loki_chart_override(),
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

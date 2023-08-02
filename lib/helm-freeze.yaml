@@ -112,6 +112,10 @@ charts:
   - name: datadog
     repo_name: datadog
     version: 2.22.17
+  - name: vpa
+    dest_folder_override: vertical-pod-autoscaler
+    repo_name: fairwinds
+    version: 2.2.1
 
 repos:
   - name: stable
@@ -146,6 +150,8 @@ repos:
     url: https://kir4h.github.io/charts
   - name: metrics-server
     url: https://kubernetes-sigs.github.io/metrics-server/
+  - name: fairwinds
+    url: https://charts.fairwinds.com/stable
 
 destinations:
   - name: default

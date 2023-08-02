@@ -26,6 +26,17 @@ resources:
     cpu: 100m
     memory: 640Mi
 
+vpa:
+  enabled: true
+  containerPolicy:
+    minAllowed:
+      cpu: 100m
+      memory: 100Mi
+    maxAllowed:
+      cpu: 200m
+      memory: 1Gi
+    controlledResources: ["cpu", "memory"]
+
 rbac:
   serviceAccount:
     annotations: {}
