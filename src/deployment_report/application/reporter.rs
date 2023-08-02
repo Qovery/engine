@@ -167,7 +167,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 None,
             ));
         } else {
-            self.logger.send_error(*error.clone());
+            //self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"

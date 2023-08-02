@@ -258,7 +258,7 @@ Look at your job logs in order to understand if the problem comes from the job c
                 None,
             ));
         } else {
-            self.logger.send_error(*error.clone());
+            //self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
