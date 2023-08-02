@@ -172,7 +172,7 @@ pub struct InvalidPVCStorage {
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-cpu
 ///
 /// TODO(benjaminch): Implement From<String> for KubernetesCpuResourceUnit
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub enum KubernetesCpuResourceUnit {
     /// Milli CPU
     MilliCpu(u32),
@@ -193,7 +193,7 @@ impl Display for KubernetesCpuResourceUnit {
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory
 ///
 /// TODO(benjaminch): Implement From<String> for KubernetesMemoryResourceUnit
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub enum KubernetesMemoryResourceUnit {
     /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1,048,576 bytes.
     MebiByte(u32),

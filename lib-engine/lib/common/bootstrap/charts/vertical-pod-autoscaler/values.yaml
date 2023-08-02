@@ -1,0 +1,280 @@
+# Default values for vertical-pod-autoscaler.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# imagePullSecrets -- A list of image pull secrets to be used for all pods
+imagePullSecrets: []
+# priorityClassName -- To set the priorityclass for all pods
+priorityClassName: ""
+# nameOverride -- A template override for the name
+nameOverride: ""
+# fullnameOverride -- A template override for the fullname
+fullnameOverride: ""
+# podLabels -- Labels to add to all pods
+podLabels: {}
+rbac:
+  # rbac.create -- If true, then rbac resources (clusterroles and clusterrolebindings) will be created for the selected components.
+  # Temporary rbac resources will still be created, to ensure a functioning installation process
+  create: true
+
+serviceAccount:
+  # serviceAccount.create -- Specifies whether a service account should be created for each component
+  create: true
+  # serviceAccount.annotations -- Annotations to add to the service accounts for each component
+  annotations: {}
+  # serviceAccount.name -- The base name of the service account to use (appended with the component). If not set and create is true, a name is generated using the fullname template and appended for each component
+  name: ""
+  # serviceAccount.automountServiceAccountToken -- Automount API credentials for the Service Account
+  automountServiceAccountToken: true
+
+recommender:
+  # recommender.enabled -- If true, the vpa recommender component will be installed.
+  enabled: true
+  # recommender.extraArgs -- A set of key-value flags to be passed to the recommender
+  extraArgs:
+    v: "4"
+    pod-recommendation-min-cpu-millicores: 15
+    pod-recommendation-min-memory-mb: 100
+  replicaCount: 1
+  # recommender.podDisruptionBudget -- This is the setting for the pod disruption budget
+  podDisruptionBudget: {}
+    # maxUnavailable: 1
+  image:
+    # recommender.image.repository -- The location of the recommender image
+    repository: registry.k8s.io/autoscaling/vpa-recommender
+    # recommender.image.tag -- Overrides the image tag whose default is the chart appVersion
+    tag: ""
+    # recommender.image.pullPolicy -- The pull policy for the recommender image. Recommend not changing this
+    pullPolicy: Always
+  # recommender.podAnnotations -- Annotations to add to the recommender pod
+  podAnnotations: {}
+  # recommender.podLabels -- Labels to add to the recommender pod
+  podLabels: {}
+  # recommender.podSecurityContext -- The security context for the recommender pod
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  # recommender.securityContext -- The security context for the containers inside the recommender pod
+  securityContext: {}
+  # recommender.livenessProbe -- The liveness probe definition inside the recommender pod
+  livenessProbe:
+    failureThreshold: 6
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # recommender.readinessProbe -- The readiness probe definition inside the recommender pod
+  readinessProbe:
+    failureThreshold: 120
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # recommender.resources -- The resources block for the recommender pod
+  resources:
+    limits:
+      cpu: 200m
+      memory: 1000Mi
+    requests:
+      cpu: 50m
+      memory: 500Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- Enables a prometheus operator podMonitor for the recommender
+  podMonitor:
+    enabled: false
+    annotations: {}
+    labels: {}
+
+updater:
+  # updater.enabled -- If true, the updater component will be deployed
+  enabled: true
+  # updater.extraArgs -- A key-value map of flags to pass to the updater
+  extraArgs: {}
+  replicaCount: 1
+  # updater.podDisruptionBudget -- This is the setting for the pod disruption budget
+  podDisruptionBudget: {}
+    # maxUnavailable: 1
+  image:
+    # updater.image.repository -- The location of the updater image
+    repository: registry.k8s.io/autoscaling/vpa-updater
+    # updater.image.tag -- Overrides the image tag whose default is the chart appVersion
+    tag: ""
+    # updater.image.pullPolicy -- The pull policy for the updater image. Recommend not changing this
+    pullPolicy: Always
+  # updater.podAnnotations -- Annotations to add to the updater pod
+  podAnnotations: {}
+  # updater.podLabels -- Labels to add to the updater pod
+  podLabels: {}
+  # updater.podSecurityContext -- The security context for the updater pod
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  # updater.securityContext -- The security context for the containers inside the updater pod
+  securityContext: {}
+  # updater.livenessProbe -- The liveness probe definition inside the updater pod
+  livenessProbe:
+    failureThreshold: 6
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # updater.readinessProbe -- The readiness probe definition inside the updater pod
+  readinessProbe:
+    failureThreshold: 120
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # updater.resources -- The resources block for the updater pod
+  resources:
+    limits:
+      cpu: 200m
+      memory: 1000Mi
+    requests:
+      cpu: 50m
+      memory: 500Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # -- Enables a prometheus operator podMonitor for the updater
+  podMonitor:
+    enabled: false
+    annotations: {}
+    labels: {}
+
+admissionController:
+  # admissionController.enabled -- If true, will install the admission-controller component of vpa
+  enabled: true
+  # admissionController.extraArgs -- A key-value map of flags to pass to the admissionController
+  extraArgs: {}
+  # admissionController.generateCertificate -- If true and admissionController is enabled, a pre-install hook will run to create the certificate for the webhook
+  generateCertificate: true
+  # admissionController.secretName -- Name for the TLS secret created for the webhook. Default {{ .Release.Name }}-tls-secret
+  secretName: "{{ include \"vpa.fullname\" . }}-tls-secret"
+  certGen:
+    image:
+      # admissionController.certGen.image.repository -- An image that contains certgen for creating certificates. Only used if admissionController.generateCertificate is true
+      repository: registry.k8s.io/ingress-nginx/kube-webhook-certgen
+      # admissionController.certGen.image.tag -- An image tag for the admissionController.certGen.image.repository image. Only used if admissionController.generateCertificate is true
+      tag: v20230312-helm-chart-4.5.2-28-g66a760794
+      # admissionController.certGen.image.pullPolicy -- The pull policy for the certgen image. Recommend not changing this
+      pullPolicy: Always
+    # admissionController.certGen.env -- Additional environment variables to be added to the certgen container. Format is KEY: Value format
+    env: {}
+    # admissionController.certGen.resources -- The resources block for the certgen pod
+    resources: {}
+    # admissionController.certGen.securityContext -- The securityContext block for the certgen pod
+    securityContext: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+  mutatingWebhookConfiguration:
+    # admissionController.mutatingWebhookConfiguration.annotations -- Additional annotations for the MutatingWebhookConfiguration. Can be used for integration with cert-manager
+    annotations: {}
+    # admissionController.mutatingWebhookConfiguration.failurePolicy -- The failurePolicy for the mutating webhook. Allowed values are: Ignore, Fail
+    failurePolicy: Ignore
+    # admissionController.mutatingWebhookConfiguration.namespaceSelector -- The namespaceSelector controls, which namespaces are affected by the webhook
+    namespaceSelector: {}
+    # admissionController.mutatingWebhookConfiguration.objectSelector -- The objectSelector can filter object on e.g. labels
+    objectSelector: {}
+    # admissionController.mutatingWebhookConfiguration.timeout -- Sets the amount of time the API server will wait on a response from the webhook service.
+    timeoutSeconds: 30
+
+  replicaCount: 1
+  # admissionController.podDisruptionBudget -- This is the setting for the pod disruption budget
+  podDisruptionBudget: {}
+    # maxUnavailable: 1
+  image:
+    # admissionController.image.repository -- The location of the vpa admission controller image
+    repository: registry.k8s.io/autoscaling/vpa-admission-controller
+    # admissionController.image.tag -- Overrides the image tag whose default is the chart appVersion
+    tag: ""
+    # admissionController.image.pullPolicy -- The pull policy for the admission controller image. Recommend not changing this
+    pullPolicy: Always
+  # admissionController.podAnnotations -- Annotations to add to the admission controller pod
+  podAnnotations: {}
+  # admissionController.podLabels -- Labels to add to the admission controller pod
+  podLabels: {}
+  # admissionController.podSecurityContext -- The security context for the admission controller pod
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  # admissionController.securityContext -- The security context for the containers inside the admission controller pod
+  securityContext: {}
+  # admissionController.livenessProbe -- The liveness probe definition inside the admission controller pod
+  livenessProbe:
+    failureThreshold: 6
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # admissionController.readinessProbe -- The readiness probe definition inside the admission controller pod
+  readinessProbe:
+    failureThreshold: 120
+    httpGet:
+      path: /health-check
+      port: metrics
+      scheme: HTTP
+    periodSeconds: 5
+    successThreshold: 1
+    timeoutSeconds: 3
+  # admissionController.resources -- The resources block for the admission controller pod
+  resources:
+    limits:
+      cpu: 200m
+      memory: 500Mi
+    requests:
+      cpu: 50m
+      memory: 200Mi
+  # admissionController.tlsSecretKeys -- The keys in the vpa-tls-certs secret to map in to the admission controller
+  tlsSecretKeys: []
+    # - key: ca.crt
+    #   path: caCert.pem
+    # - key: tls.crt
+    #   path: serverCert.pem
+    # - key: tls.key
+    #   path: serverKey.pem
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+tests:
+  # tests.securityContext -- The security context for the containers run as helm hook tests
+  securityContext:
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 10324
+    capabilities:
+      drop:
+        - ALL
+  image:
+    # tests.image.repository -- An image used for testing containing bash, cat and kubectl
+    repository: bitnami/kubectl
+    # tests.image.tag -- An image tag for the tests image
+    tag: ""
+    # tests.image.pullPolicy -- The pull policy for the tests image.
+    pullPolicy: Always
+
+# metrics-server -- configuration options for the [metrics server Helm chart](https://github.com/kubernetes-sigs/metrics-server/tree/master/charts/metrics-server). See the projects [README.md](https://github.com/kubernetes-sigs/metrics-server/tree/master/charts/metrics-server#configuration) for all available options
+metrics-server:
+  # metrics-server.enabled -- Whether or not the metrics server Helm chart should be installed
+  enabled: false

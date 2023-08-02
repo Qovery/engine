@@ -1,0 +1,75 @@
+{{- if .Values.admissionController.enabled }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-test-webhook-configuration
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "30"
+spec:
+  serviceAccountName: {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      {{- if .Values.tests.securityContext }}
+      securityContext:
+      {{- toYaml .Values.tests.securityContext | nindent 10 }}
+      {{- end }}
+      image: {{ include "vpa.test.image" . }}
+      {{- if .Values.tests.image }}
+      imagePullPolicy: {{ .Values.tests.image.pullPolicy }}
+      {{- end }}
+      command: ['bash']
+      args:
+        - -c
+        - |
+          #!/bin/bash
+
+          set -ex
+
+          # Get service FQDN
+          SERVICE=$(kubectl \
+            get service \
+            -n {{ .Release.Namespace }} \
+            {{ include "vpa.fullname" . }}-webhook \
+            -o=jsonpath="{.metadata.name}.{.metadata.namespace}.svc:{.spec.ports[0].port}")
+
+          # Get configured FQDN
+          WEBHOOK_SERVICE=$(kubectl \
+            get mutatingwebhookconfigurations.admissionregistration.k8s.io \
+            {{ include "vpa.fullname" . }}-webhook-config \
+            -o=jsonpath="{.webhooks[0].clientConfig.service.name}.{.webhooks[0].clientConfig.service.namespace}.svc:{.webhooks[0].clientConfig.service.port}")
+
+          # Get CA bundle
+          SECRET_CABUNDLE=$(kubectl \
+            get secret \
+            -n {{ .Release.Namespace }} \
+            {{ include "vpa.webhook.secret" . }} \
+            -o=jsonpath="{.data.ca}")
+
+          # Get configured CA bundle
+          WEBHOOK_CABUNDLE=$(kubectl \
+            get mutatingwebhookconfigurations.admissionregistration.k8s.io \
+            {{ include "vpa.fullname" . }}-webhook-config \
+            -o=jsonpath="{.webhooks[0].clientConfig.caBundle}")
+
+          # All corresponding values must match
+          if [ $SERVICE = $WEBHOOK_SERVICE ]
+          then
+            echo "$WEBHOOK_SERVICE matches $SERVICE"
+            if [ $WEBHOOK_CABUNDLE = $SECRET_CABUNDLE ]
+            then
+              echo "Webhook CA bundle matches"
+              exit 0;
+            else
+              echo "CA bundle in mutating webhook {{ include "vpa.fullname" . }}-webhook-config does not match secret {{ .Release.Namespace }}/{{ include "vpa.webhook.secret" . }}"
+            fi
+          else
+            echo "Service configured in mutating webhook {{ include "vpa.fullname" . }}-webhook-config is '$WEBHOOK_SERVICE' not '$SERVICE'"
+          fi
+          exit 1;
+  restartPolicy: Never
+{{- end }}

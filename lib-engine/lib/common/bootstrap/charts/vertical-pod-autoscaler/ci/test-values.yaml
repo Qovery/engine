@@ -1,0 +1,30 @@
+recommender:
+  enabled: true
+  podLabels:
+    app: test
+    foo: bar
+updater:
+  enabled: true
+  podLabels:
+    app: test
+    foo: bar
+admissionController:
+  enabled: true
+  extraArgs:
+    v: "4"
+  generateCertificate: true
+  certGen:
+    env:
+      ENVIRONMENTVARIABLE: exists
+  podLabels:
+    app: test
+    foo: bar
+podLabels:
+  app: test
+  foo: bar
+metrics-server:
+  enabled: true
+  apiService:
+    insecureSkipTLSVerify: true
+  args:
+    - "--kubelet-insecure-tls"

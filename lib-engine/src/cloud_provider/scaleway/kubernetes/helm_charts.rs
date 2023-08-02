@@ -5,6 +5,7 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::CustomerHelmChartsOverride;
@@ -195,6 +196,16 @@ pub fn scw_helm_charts(
             .to_string(),
     );
 
+    // Vertical pod autoscaler
+    let vpa = VpaChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        true,
+    )
+    .to_common_helm_chart()?;
+
     // External DNS
     let external_dns = ExternalDNSChart::new(
         chart_prefix_path,
@@ -205,6 +216,7 @@ pub fn scw_helm_charts(
         false,
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -212,7 +224,7 @@ pub fn scw_helm_charts(
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
-            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone())
+            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone(), true)
                 .to_common_helm_chart()?,
         ),
     };
@@ -235,6 +247,7 @@ pub fn scw_helm_charts(
                     ..Default::default()
                 },
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -261,6 +274,7 @@ pub fn scw_helm_charts(
                 prometheus_namespace,
                 true,
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -275,6 +289,7 @@ pub fn scw_helm_charts(
                 prometheus_internal_url.clone(),
                 prometheus_namespace,
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -325,6 +340,7 @@ pub fn scw_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         get_chart_overrride_fn.clone(),
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -517,7 +533,7 @@ pub fn scw_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config), Box::new(vpa)];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 

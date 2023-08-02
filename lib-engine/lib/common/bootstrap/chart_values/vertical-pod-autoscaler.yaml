@@ -1,0 +1,38 @@
+recommender:
+  extraArgs:
+    pod-recommendation-min-cpu-millicores: 50
+    pod-recommendation-min-memory-mb: 32
+    prometheus-cadvisor-job-name: kubelet
+    pod-namespace-label: namespace
+    pod-name-label: pod
+    container-namespace-label: namespace
+    container-pod-name-label: pod
+    container-name-label: container
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+updater:
+  extraArgs:
+    min-replicas: 1
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+admissionController:
+  enabled: true
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code

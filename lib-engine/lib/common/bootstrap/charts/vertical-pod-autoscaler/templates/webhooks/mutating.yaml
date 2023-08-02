@@ -1,0 +1,49 @@
+{{- if and .Values.admissionController.enabled (include "vpa.webhook.upgradable" .) }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "vpa.fullname" . }}-webhook-config
+  labels:
+    app.kubernetes.io/component: admission-controller
+    {{- include "vpa.labels" . | nindent 4 }}
+  {{- with .Values.admissionController.mutatingWebhookConfiguration.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "vpa.fullname" . }}-webhook
+      namespace: {{ .Release.Namespace }}
+      port: 443
+  failurePolicy: {{ .Values.admissionController.mutatingWebhookConfiguration.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vpa.k8s.io
+  namespaceSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.namespaceSelector | toYaml }}
+  objectSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.objectSelector | toYaml }}
+  reinvocationPolicy: Never
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+    scope: '*'
+  - apiGroups:
+    - autoscaling.k8s.io
+    apiVersions:
+    - '*'
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - verticalpodautoscalers
+    scope: '*'
+  sideEffects: None
+  timeoutSeconds: {{ .Values.admissionController.mutatingWebhookConfiguration.timeoutSeconds }}
+{{- end }}

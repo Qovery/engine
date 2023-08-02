@@ -1,14 +1,17 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, UpdateStrategy,
+    VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct ExternalDNSChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     dns_provider_configuration: DnsProviderConfiguration,
@@ -16,6 +19,7 @@ pub struct ExternalDNSChart {
     proxied: bool,
     cluster_id: String,
     update_strategy: UpdateStrategy,
+    enable_vpa: bool,
 }
 
 impl ExternalDNSChart {
@@ -26,8 +30,10 @@ impl ExternalDNSChart {
         proxied: bool,
         cluster_id: String,
         update_strategy: UpdateStrategy,
+        enable_vpa: bool,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -43,6 +49,7 @@ impl ExternalDNSChart {
             proxied,
             cluster_id,
             update_strategy,
+            enable_vpa,
         }
     }
 
@@ -139,6 +146,26 @@ impl ToCommonHelmChart for ExternalDNSChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(ExternalDNSChartInstallationChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::Deployment,
+                            "externaldns-external-dns".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(50)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(200)),
+                        ),
+                    }],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -195,6 +222,7 @@ mod tests {
             true,
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -228,6 +256,7 @@ mod tests {
             true,
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -265,6 +294,7 @@ mod tests {
             true,
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
