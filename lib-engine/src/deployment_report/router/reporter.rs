@@ -77,7 +77,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
             ));
             return;
         }
-        self.logger.send_error(*error.clone());
+        //self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!("
