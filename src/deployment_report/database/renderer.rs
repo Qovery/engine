@@ -53,9 +53,13 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 {% set all_pods = pods_failing | concat(with=pods_starting) -%}
 ┃ 🛰 Database has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
-┃     |__ 💢 Pod crashed {{ pod.restart_count }} times
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+{%- for name, s in pod.container_states %}
+{%- if s.restart_count > 0 %}
+┃     |__ 💢 {{ name }} crashed {{ s.restart_count }} times
+┃        |__ 💢 Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
 {%- endif -%}
+{%- endfor -%}
 {%- for event in pod.events %}
 ┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
@@ -106,10 +110,12 @@ mod test {
         DatabaseDeploymentRenderContext, CONTAINER_REPORT_TEMPLATE, MANAGED_REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        get_tera_instance, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
-        ServiceRenderContext,
+        get_tera_instance, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext, QContainerState,
+        QContainerStateTerminated, ServiceRenderContext,
     };
     use crate::utilities::to_short_id;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1;
+    use maplit::btreemap;
     use uuid::Uuid;
 
     #[test]
@@ -142,14 +148,18 @@ mod test {
                     name: "app-pod-1".to_string(),
                     state: DeploymentState::Failing,
                     message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                    restart_count: 0,
+                    container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
                     events: vec![],
                 },
                 PodRenderContext {
                     name: "app-pod-2".to_string(),
                     state: DeploymentState::Failing,
                     message: None,
-                    restart_count: 0,
+                    container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
                     events: vec![
                         EventRenderContext {
                             message: "Liveliness probe failed".to_string(),
@@ -166,7 +176,17 @@ mod test {
                 name: "app-pod-3".to_string(),
                 state: DeploymentState::Starting,
                 message: None,
-                restart_count: 3,
+                container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState {
+                        restart_count: 3u32,
+                        last_state: QContainerStateTerminated {
+                                exit_code: 132,
+                                reason:  Some("OOMKilled".to_string()),
+                                message: Some("using too much memory".to_string()),
+                                finished_at: Some(v1::Time(chrono::DateTime::default())),
+                        }
+                    },
+                },
                 events: vec![
                     EventRenderContext {
                         message: "Pulling image :P".to_string(),
@@ -182,7 +202,9 @@ mod test {
                 name: "app-pod-4".to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                restart_count: 0,
+                container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
                 events: vec![],
             }],
             pvcs: vec![
@@ -219,7 +241,8 @@ mod test {
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
 ┃  |__ Pod app-pod-3 is STARTING
-┃     |__ 💢 Pod crashed 3 times
+┃     |__ 💢 app-container-1 crashed 3 times
+┃        |__ 💢 Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┃     |__ ℹ️ Pulling image :P
 ┃     |__ ⚠️ Container started
 ┃
