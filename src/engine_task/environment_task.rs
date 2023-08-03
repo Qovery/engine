@@ -437,7 +437,7 @@ impl Task for EnvironmentTask {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new(
-                        "💣 Deployment failed".to_string(),
+                        "💣 Deployment aborted following a failure to deploy a service".to_string(),
                         Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                     ),
                 ));

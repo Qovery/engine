@@ -1,11 +1,13 @@
+use crate::deployment_report::utils::Strategy::OnlyWarningIfAny;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateTerminated, ContainerStateWaiting, Event, LoadBalancerStatus, PersistentVolumeClaim,
     Pod, PodStatus, Service, ServiceStatus,
 };
+use k8s_openapi::apimachinery::pkg::apis::meta::v1;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tera::Tera;
 
 #[derive(Debug, Serialize)]
@@ -25,12 +27,26 @@ pub struct ServiceRenderContext {
     pub events: Vec<EventRenderContext>,
 }
 
+#[derive(Debug, Serialize, Default)]
+pub struct QContainerStateTerminated {
+    pub exit_code: i32,
+    pub reason: Option<String>,
+    pub message: Option<String>,
+    pub finished_at: Option<v1::Time>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct QContainerState {
+    pub restart_count: u32,
+    pub last_state: QContainerStateTerminated,
+}
+
 #[derive(Debug, Serialize)]
 pub struct PodRenderContext {
     pub name: String,
     pub state: DeploymentState,
     pub message: Option<String>,
-    pub restart_count: u32,
+    pub container_states: BTreeMap<String, QContainerState>,
     pub events: Vec<EventRenderContext>,
 }
 
@@ -111,7 +127,8 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                 type_: svc_type.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -129,7 +146,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         name: svc_name.to_string(),
                         type_: "cloud load balancer".to_string(),
                         state: DeploymentState::Ready,
-                        message: Some("It can take several minutes for the load balancer to be publicly reachable after the first deployment. Beware of negative TTL of DNS resolver".to_string()),
+                        message: Some("It can take several minutes for the load balancer to be publicly reachable after the first deployment. Beware of negative cache TTL of DNS resolver".to_string()),
                         events: vec![],
                     });
                 }
@@ -140,7 +157,8 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         type_: svc_type.to_string(),
                         state: DeploymentState::Starting,
                         message: Some("waiting to be assigned an Ip".to_string()),
-                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
+                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                            .into_iter()
                             .flat_map(to_event_context)
                             .collect(),
                     });
@@ -205,7 +223,8 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
         name: job_name.to_string(),
         state,
         message,
-        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS)
+        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+            .into_iter()
             .flat_map(to_event_context)
             .collect(),
     };
@@ -238,7 +257,7 @@ pub fn to_pods_render_context(
                 name: pod_name.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                restart_count: pod.restart_count(),
+                container_states: pod.container_states(),
                 events: vec![],
             });
             continue;
@@ -249,8 +268,9 @@ pub fn to_pods_render_context(
                 name: pod_name.to_string(),
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
-                restart_count: pod.restart_count(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+                container_states: pod.container_states(),
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -262,8 +282,9 @@ pub fn to_pods_render_context(
                 name: pod_name.to_string(),
                 state: DeploymentState::Starting,
                 message: None,
-                restart_count: pod.restart_count(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+                container_states: pod.container_states(),
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -274,8 +295,9 @@ pub fn to_pods_render_context(
             name: pod_name.to_string(),
             state: DeploymentState::Starting,
             message: None,
-            restart_count: pod.restart_count(),
-            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+            container_states: pod.container_states(),
+            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                .into_iter()
                 .flat_map(to_event_context)
                 .collect(),
         });
@@ -312,7 +334,8 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Failing,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -323,7 +346,8 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Starting,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+                    .into_iter()
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -350,6 +374,7 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
 
 pub trait QPodExt {
     fn restart_count(&self) -> u32;
+    fn container_states(&self) -> BTreeMap<String, QContainerState>;
     fn is_starting(&self) -> bool;
     fn is_failing(&self) -> Option<&str>;
 }
@@ -363,6 +388,37 @@ impl QPodExt for Pod {
                 .iter()
                 .flatten()
                 .fold(0, |acc, status| acc + status.restart_count as u32),
+        }
+    }
+
+    fn container_states(&self) -> BTreeMap<String, QContainerState> {
+        match &self.status {
+            None => BTreeMap::new(),
+            Some(status) => status
+                .container_statuses
+                .iter()
+                .flatten()
+                .filter_map(|status| {
+                    status.last_state.as_ref().map(|state| {
+                        (
+                            status.name.clone(),
+                            QContainerState {
+                                restart_count: status.restart_count as u32,
+                                last_state: state
+                                    .terminated
+                                    .as_ref()
+                                    .map(|state| QContainerStateTerminated {
+                                        exit_code: state.exit_code,
+                                        reason: state.reason.clone(),
+                                        message: state.message.clone(),
+                                        finished_at: state.finished_at.clone(),
+                                    })
+                                    .unwrap_or_default(),
+                            },
+                        )
+                    })
+                })
+                .collect(),
         }
     }
 
@@ -445,15 +501,35 @@ impl QPodExt for Pod {
 
 const DEFAULT_MAX_EVENTS: usize = 3;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Strategy {
+    //AllEvents,
+    OnlyWarningIfAny,
+}
+
+const WARNING_EVENT_TYPE: &str = "Warning";
 pub fn get_last_events_for<'a>(
     events: impl Iterator<Item = &'a Event>,
     uid: &str,
     max_events: usize,
-) -> impl Iterator<Item = &'a Event> {
-    events
-        // keep only selected object and events that are older than above time (2min)
+    strategy: Strategy,
+) -> Vec<&'a Event> {
+    let events = events
         .filter(|ev| ev.involved_object.uid.as_deref() == Some(uid))
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
-        .take(max_events)
+        .take(max_events);
+
+    match strategy {
+        OnlyWarningIfAny => {
+            // To avoid consuming the iterator
+            if events.clone().any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) {
+                events
+                    .filter(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE))
+                    .collect()
+            } else {
+                events.collect()
+            }
+        }
+    }
 }

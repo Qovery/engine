@@ -263,8 +263,11 @@ Look at your job logs in order to understand if the problem comes from the job c
                 *error.clone(),
                 format!(r#"
 
-❌ {} of {} failed! Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
+❌ {} of {} failed !
+
+Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
 ⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
+
                 "#, self.action, self.job_type).trim().to_string(),
                 None,
             ));

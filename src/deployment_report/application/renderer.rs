@@ -37,13 +37,17 @@ const REPORT_TEMPLATE: &str = r#"
 {% set all_pods = pods_failing | concat(with=pods_starting) -%}
 ┃ 🛰 {{ service_type }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
-┃     |__ 💢 Pod crashed {{ pod.restart_count }} times
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+{%- for name, s in pod.container_states %}
+{%- if s.restart_count > 0 %}
+┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
 {%- endif -%}
+{%- endfor -%}
 {%- for event in pod.events %}
 ┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
+{%- if pvcs %}
 ┃
 {%- for pvc in pvcs %}
 ┃ 💽 Network volume {{ pvc.name }} is {{ pvc.state | upper }}
@@ -51,6 +55,7 @@ const REPORT_TEMPLATE: &str = r#"
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
+{%- endif %}
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_app_deployment_report(
@@ -90,9 +95,12 @@ mod test {
         AppDeploymentRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
+        fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext, QContainerState,
+        QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1;
+    use maplit::btreemap;
     use tera::Tera;
     use uuid::Uuid;
 
@@ -126,14 +134,26 @@ mod test {
                     name: "app-pod-1".to_string(),
                     state: DeploymentState::Failing,
                     message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                    restart_count: 5,
                     events: vec![],
+                    container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState {
+                            restart_count: 5u32,
+                            last_state: QContainerStateTerminated {
+                                exit_code: 132,
+                                reason:  Some("OOMKilled".to_string()),
+                                message: Some("using too much memory".to_string()),
+                                finished_at: Some(v1::Time(chrono::DateTime::default())),
+                            }
+                        },
+                    },
                 },
                 PodRenderContext {
                     name: "app-pod-2".to_string(),
                     state: DeploymentState::Failing,
                     message: None,
-                    restart_count: 0,
+                    container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
                     events: vec![
                         EventRenderContext {
                             message: "Liveliness probe failed".to_string(),
@@ -150,7 +170,17 @@ mod test {
                 name: "app-pod-3".to_string(),
                 state: DeploymentState::Starting,
                 message: None,
-                restart_count: 1,
+                container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState {
+                            restart_count: 1u32,
+                            last_state: QContainerStateTerminated {
+                                exit_code: 132,
+                                reason:  Some("Error".to_string()),
+                                message: None,
+                                finished_at: Some(v1::Time(chrono::DateTime::default())),
+                            }
+                        },
+                    },
                 events: vec![
                     EventRenderContext {
                         message: "Pulling image :P".to_string(),
@@ -166,7 +196,9 @@ mod test {
                 name: "app-pod-4".to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                restart_count: 0,
+                container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
                 events: vec![],
             }],
             pvcs: vec![
@@ -202,12 +234,12 @@ mod test {
 ┃
 ┃ 🛰 Application has 6 pods. 1 starting, 1 terminating and 2 in error
 ┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
-┃     |__ 💢 Pod crashed 5 times
+┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┃  |__ Pod app-pod-2 is FAILING
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
 ┃  |__ Pod app-pod-3 is STARTING
-┃     |__ 💢 Pod crashed 1 times
+┃     |__ 💢 Container app-container-1 crashed 1 times. Last terminated with exit code 132 due to Error  at 1970-01-01T00:00:00Z
 ┃     |__ ℹ️ Pulling image :P
 ┃     |__ ⚠️ Container started
 ┃

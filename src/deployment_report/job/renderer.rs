@@ -25,9 +25,12 @@ const REPORT_TEMPLATE: &str = r#"
 {% set all_pods = pods_failing | concat(with=pods_starting) | concat(with=pods_running) -%}
 ┃ 🛰 {{ job_type | capitalize }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
-┃     |__ 💢 Pod crashed {{ pod.restart_count }} times
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+{%- for name, s in pod.container_states %}
+{%- if s.restart_count > 0 %}
+┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
 {%- endif -%}
+{%- endfor -%}
 {%- for event in pod.events %}
 ┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
@@ -66,8 +69,12 @@ pub(super) fn render_job_deployment_report(
 mod test {
     use super::*;
     use crate::cloud_provider::service::Action;
-    use crate::deployment_report::utils::{fmt_event_type, DeploymentState, PodRenderContext};
+    use crate::deployment_report::utils::{
+        fmt_event_type, DeploymentState, PodRenderContext, QContainerState, QContainerStateTerminated,
+    };
     use crate::utilities::to_short_id;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1;
+    use maplit::btreemap;
     use tera::Tera;
     use uuid::Uuid;
 
@@ -84,7 +91,17 @@ mod test {
                 name: "app-pod-1".to_string(),
                 state: DeploymentState::Failing,
                 message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                restart_count: 5,
+                container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState {
+                        restart_count: 5u32,
+                        last_state: QContainerStateTerminated {
+                                exit_code: 132,
+                                reason:  Some("OOMKilled".to_string()),
+                                message: Some("using too much memory".to_string()),
+                                finished_at: Some(v1::Time(chrono::DateTime::default())),
+                        }
+                    },
+                },
                 events: vec![],
             }],
             pods_starting: vec![],
@@ -105,7 +122,7 @@ mod test {
 ┃
 ┃ 🛰 Job has 1 pods. 0 starting, 0 terminating and 1 in error
 ┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
-┃     |__ 💢 Pod crashed 5 times
+┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
