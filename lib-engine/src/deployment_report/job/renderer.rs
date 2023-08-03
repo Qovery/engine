@@ -25,7 +25,7 @@ const REPORT_TEMPLATE: &str = r#"
 {% set all_pods = pods_failing | concat(with=pods_starting) | concat(with=pods_running) -%}
 ┃ 🛰 {{ job_type | capitalize }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+┃  |__ Pod {{ pod.name }} at commit/tag {{ pod.service_version }} is {{ pod.state | upper }} {{ pod.message }}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
@@ -103,6 +103,7 @@ mod test {
                     },
                 },
                 events: vec![],
+                service_version: Some("debian:bookworm".to_string()),
             }],
             pods_starting: vec![],
             pods_terminating: vec![],
@@ -121,7 +122,7 @@ mod test {
 ┃ Job at tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 execution is in progress ⏳, below the current status:
 ┃
 ┃ 🛰 Job has 1 pods. 0 starting, 0 terminating and 1 in error
-┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
+┃  |__ Pod app-pod-1 at commit/tag debian:bookworm is FAILING pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 

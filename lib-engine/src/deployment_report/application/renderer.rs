@@ -37,7 +37,7 @@ const REPORT_TEMPLATE: &str = r#"
 {% set all_pods = pods_failing | concat(with=pods_starting) -%}
 ┃ 🛰 {{ service_type }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+┃  |__ Pod {{ pod.name }} at commit/tag {{ pod.service_version }} is {{ pod.state | upper }} {{ pod.message }}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
@@ -146,6 +146,7 @@ mod test {
                             }
                         },
                     },
+                    service_version: Some("debian:bookworm-slim".to_string()),
                 },
                 PodRenderContext {
                     name: "app-pod-2".to_string(),
@@ -164,6 +165,7 @@ mod test {
                             type_: "Warning".to_string(),
                         },
                     ],
+                    service_version: Some("e3c9b8b158e91229ab3f45d306f818feb2e564c3".to_string()),
                 },
             ],
             pods_starting: vec![PodRenderContext {
@@ -191,6 +193,7 @@ mod test {
                         type_: "Warning".to_string(),
                     },
                 ],
+                service_version: Some("AKA 47".to_string()),
             }],
             pods_terminating: vec![PodRenderContext {
                 name: "app-pod-4".to_string(),
@@ -200,6 +203,7 @@ mod test {
                         "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
                     },
                 events: vec![],
+                service_version: None,
             }],
             pvcs: vec![
                 PvcRenderContext {
@@ -233,12 +237,12 @@ mod test {
 ┃  |__ ⚠️ Pool of ip exhausted
 ┃
 ┃ 🛰 Application has 6 pods. 1 starting, 1 terminating and 2 in error
-┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
+┃  |__ Pod app-pod-1 at commit/tag debian:bookworm-slim is FAILING pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
-┃  |__ Pod app-pod-2 is FAILING
+┃  |__ Pod app-pod-2 at commit/tag e3c9b8b158e91229ab3f45d306f818feb2e564c3 is FAILING
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
-┃  |__ Pod app-pod-3 is STARTING
+┃  |__ Pod app-pod-3 at commit/tag AKA 47 is STARTING
 ┃     |__ 💢 Container app-container-1 crashed 1 times. Last terminated with exit code 132 due to Error  at 1970-01-01T00:00:00Z
 ┃     |__ ℹ️ Pulling image :P
 ┃     |__ ⚠️ Container started

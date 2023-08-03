@@ -246,7 +246,7 @@ impl<T: CloudProvider> Container<T> {
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),
-                version: self.tag.clone(),
+                version: format!("{}:{}", self.image, self.tag),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),

@@ -48,6 +48,7 @@ pub struct PodRenderContext {
     pub message: Option<String>,
     pub container_states: BTreeMap<String, QContainerState>,
     pub events: Vec<EventRenderContext>,
+    pub service_version: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -258,6 +259,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Terminating,
                 message: None,
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: vec![],
             });
             continue;
@@ -269,6 +271,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                     .into_iter()
                     .flat_map(to_event_context)
@@ -283,6 +286,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Starting,
                 message: None,
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                     .into_iter()
                     .flat_map(to_event_context)
@@ -296,6 +300,7 @@ pub fn to_pods_render_context(
             state: DeploymentState::Starting,
             message: None,
             container_states: pod.container_states(),
+            service_version: pod.service_version(),
             events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                 .into_iter()
                 .flat_map(to_event_context)
@@ -377,6 +382,7 @@ pub trait QPodExt {
     fn container_states(&self) -> BTreeMap<String, QContainerState>;
     fn is_starting(&self) -> bool;
     fn is_failing(&self) -> Option<&str>;
+    fn service_version(&self) -> Option<String>;
 }
 
 impl QPodExt for Pod {
@@ -496,6 +502,14 @@ impl QPodExt for Pod {
             }
             _ => None,
         }
+    }
+
+    fn service_version(&self) -> Option<String> {
+        let Some(annotations) = &self.metadata.annotations else {
+            return None;
+        };
+
+        annotations.get("qovery.com/service-version").cloned()
     }
 }
 
