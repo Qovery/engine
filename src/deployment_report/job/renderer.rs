@@ -20,8 +20,8 @@ const REPORT_TEMPLATE: &str = r#"
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ {{ job_type | capitalize }} at tag {{ tag }} execution is in progress ⏳, below the current status:
 ┃
-┃ 🛰 {{ job_type | capitalize }} at old version has {{ pods_old_version.nb_pods }} pods. {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
-┃ 🛰 {{ job_type | capitalize }} at new tag {{ tag }} has {{ pods_current_version.nb_pods }} pods. {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
+┃ 🛰 {{ job_type | capitalize }} at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
+┃ 🛰 {{ job_type | capitalize }} at new tag {{ tag }} has {{ pods_current_version.nb_pods }} pods: {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
 {%- set all_current_version_pods = pods_current_version.pods_failing | concat(with=pods_current_version.pods_starting) -%}
 {%- for pod in all_current_version_pods %}
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }}
@@ -130,8 +130,8 @@ mod test {
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Job at tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 execution is in progress ⏳, below the current status:
 ┃
-┃ 🛰 Job at old version has 0 pods. 0 running, 0 starting, 0 terminating and 0 in error
-┃ 🛰 Job at new tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 has 1 pods. 0 running, 0 starting, 0 terminating and 1 in error
+┃ 🛰 Job at old version has 0 pods: 0 running, 0 starting, 0 terminating and 0 in error
+┃ 🛰 Job at new tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 has 1 pods: 0 running, 0 starting, 0 terminating and 1 in error
 ┃  |__ Pod app-pod-1 is FAILING
 ┃     |__ 💭 Pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
