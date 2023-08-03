@@ -272,6 +272,10 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         &self.name
     }
 
+    fn version(&self) -> String {
+        self.version.to_string()
+    }
+
     fn kube_name(&self) -> &str {
         &self.kube_name
     }
@@ -444,8 +448,6 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Send {
 
     fn db_instance_type(&self) -> Option<&dyn DatabaseInstanceType>;
 
-    fn version(&self) -> String;
-
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 
     fn total_disk_size_in_gb(&self) -> u32;
@@ -468,10 +470,6 @@ where
             None => None,
             Some(t) => Some(t.as_ref()),
         }
-    }
-
-    fn version(&self) -> String {
-        self.version.to_string()
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {

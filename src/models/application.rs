@@ -167,7 +167,7 @@ impl<T: CloudProvider> Application<T> {
                 user_unsafe_name: self.name.clone(),
                 image_full: self.build.image.full_image_name_with_tag(),
                 image_tag: self.build.image.tag.clone(),
-                version: self.commit_id(),
+                version: self.version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: self.total_cpus.clone(),
@@ -284,6 +284,10 @@ impl<T: CloudProvider> Application<T> {
     pub fn workspace_directory(&self) -> &str {
         &self.workspace_directory
     }
+
+    fn service_version(&self) -> String {
+        self.build.git_repository.commit_id.clone()
+    }
 }
 
 impl<T: CloudProvider> Service for Application<T> {
@@ -301,6 +305,10 @@ impl<T: CloudProvider> Service for Application<T> {
 
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn version(&self) -> String {
+        self.service_version()
     }
 
     fn kube_name(&self) -> &str {

@@ -37,6 +37,7 @@ pub trait Service: Send {
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
+    fn version(&self) -> String;
     fn kube_name(&self) -> &str;
     fn kube_label_selector(&self) -> String;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
