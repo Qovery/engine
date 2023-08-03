@@ -173,7 +173,7 @@ impl<T: CloudProvider> Job<T> {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;
         let registry_info = target.container_registry.registry_info();
-        let (image_full, image_tag) = match &self.image_source {
+        let (image_full, image_tag, service_version) = match &self.image_source {
             ImageSource::Registry { source } => {
                 let image_tag = source.tag_for_mirror(&self.long_id);
                 (
@@ -184,9 +184,14 @@ impl<T: CloudProvider> Job<T> {
                         image_tag
                     ),
                     image_tag,
+                    format!("{}:{}", source.image, source.tag),
                 )
             }
-            ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
+            ImageSource::Build { source } => (
+                source.image.full_image_name_with_tag(),
+                source.image.tag.clone(),
+                source.git_repository.commit_id.clone(),
+            ),
         };
 
         let ctx = JobTeraContext {
@@ -205,6 +210,7 @@ impl<T: CloudProvider> Job<T> {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
                 name: self.kube_name().to_string(),
+                version: service_version,
                 user_unsafe_name: self.name.clone(),
                 image_full,
                 image_tag,
@@ -456,6 +462,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) version: String,
     pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
     pub(super) image_tag: String,

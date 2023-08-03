@@ -153,6 +153,7 @@ mod test {
                         "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
                     },
                     events: vec![],
+                    service_version: None,
                 },
                 PodRenderContext {
                     name: "app-pod-2".to_string(),
@@ -171,6 +172,7 @@ mod test {
                             type_: "Warning".to_string(),
                         },
                     ],
+                    service_version: None,
                 },
             ],
             pods_starting: vec![PodRenderContext {
@@ -198,6 +200,7 @@ mod test {
                         type_: "Warning".to_string(),
                     },
                 ],
+                service_version: None,
             }],
             pods_terminating: vec![PodRenderContext {
                 name: "app-pod-4".to_string(),
@@ -207,6 +210,7 @@ mod test {
                         "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
                     },
                 events: vec![],
+                service_version: None,
             }],
             pvcs: vec![
                 PvcRenderContext {
