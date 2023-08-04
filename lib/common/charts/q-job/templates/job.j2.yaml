@@ -10,6 +10,8 @@ metadata:
     qovery.com/service-type: job
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+  annotations:
+    qovery.com/service-version: {{ service.version }}
 spec:
   backoffLimit: {{ service.max_nb_restart }}
   activeDeadlineSeconds: {{ service.max_duration_in_sec }}
@@ -38,6 +40,8 @@ spec:
         qovery.com/service-type: job
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
+      annotations:
+        qovery.com/service-version: {{ service.version }}
     spec:
       restartPolicy: Never
       shareProcessNamespace: true

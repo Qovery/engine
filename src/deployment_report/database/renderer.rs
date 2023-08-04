@@ -1,8 +1,8 @@
 use crate::cloud_provider::service::DatabaseType;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReport;
 use crate::deployment_report::utils::{
-    get_tera_instance, to_pods_render_context, to_pvc_render_context, to_services_render_context, PodRenderContext,
-    PvcRenderContext, ServiceRenderContext,
+    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_services_render_context,
+    PodsRenderContext, PvcRenderContext, ServiceRenderContext,
 };
 use crate::utilities::to_short_id;
 use serde::Serialize;
@@ -15,9 +15,8 @@ pub struct DatabaseDeploymentRenderContext {
     pub version: String,
     pub services: Vec<ServiceRenderContext>,
     pub nb_pods: usize,
-    pub pods_failing: Vec<PodRenderContext>,
-    pub pods_starting: Vec<PodRenderContext>,
-    pub pods_terminating: Vec<PodRenderContext>,
+    pub pods_current_version: PodsRenderContext,
+    pub pods_old_version: PodsRenderContext,
     pub pvcs: Vec<PvcRenderContext>,
 }
 
@@ -50,10 +49,14 @@ const CONTAINER_REPORT_TEMPLATE: &str = r#"
 {%- endfor -%}
 {%- endfor %}
 ┃
-{% set all_pods = pods_failing | concat(with=pods_starting) -%}
-┃ 🛰 Database has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
-{%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+┃ 🛰 Database at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
+┃ 🛰 Database at new version {{ version }} has {{ pods_current_version.nb_pods }} pods: {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
+{%- set all_current_version_pods = pods_current_version.pods_failing | concat(with=pods_current_version.pods_starting) -%}
+{%- for pod in all_current_version_pods %}
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }}
+{%- if pod.message %}
+┃     |__ 💭 {{ pod.message }}
+{%- endif -%}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
@@ -78,8 +81,11 @@ pub(super) fn render_database_deployment_report(
     deployment_report: &DatabaseDeploymentReport,
 ) -> Result<String, tera::Error> {
     let services_ctx = to_services_render_context(&deployment_report.services, &deployment_report.events);
-    let (pods_starting, pods_terminating, pods_failing, _) =
-        to_pods_render_context(&deployment_report.pods, &deployment_report.events);
+    let (pods_current_version, pods_old_version) = to_pods_render_context_by_version(
+        &deployment_report.pods,
+        &deployment_report.events,
+        &deployment_report.version,
+    );
     let pvcs_ctx = to_pvc_render_context(&deployment_report.pvcs, &deployment_report.events);
     let render_ctx = DatabaseDeploymentRenderContext {
         name: to_short_id(&deployment_report.id),
@@ -88,9 +94,10 @@ pub(super) fn render_database_deployment_report(
         version: deployment_report.version.clone(),
         services: services_ctx,
         nb_pods: deployment_report.pods.len(),
-        pods_failing,
-        pods_starting,
-        pods_terminating,
+        // hack db does not have the annotation for version :x
+        // So everything is in the old version
+        pods_old_version: pods_current_version,
+        pods_current_version: pods_old_version,
         pvcs: pvcs_ctx,
     };
 
@@ -111,8 +118,8 @@ mod test {
         DatabaseDeploymentRenderContext, CONTAINER_REPORT_TEMPLATE, MANAGED_REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        get_tera_instance, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext, QContainerState,
-        QContainerStateTerminated, ServiceRenderContext,
+        get_tera_instance, DeploymentState, EventRenderContext, PodRenderContext, PodsRenderContext, PvcRenderContext,
+        QContainerState, QContainerStateTerminated, ServiceRenderContext,
     };
     use crate::utilities::to_short_id;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1;
@@ -144,40 +151,51 @@ mod test {
                 ],
             }],
             nb_pods: 6,
-            pods_failing: vec![
-                PodRenderContext {
-                    name: "app-pod-1".to_string(),
-                    state: DeploymentState::Failing,
-                    message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                    container_states: btreemap! {
+            pods_old_version: PodsRenderContext {
+                nb_pods: 0,
+                pods_running: vec![],
+                pods_starting: vec![],
+                pods_failing: vec![],
+                pods_terminating: vec![],
+            },
+            pods_current_version: PodsRenderContext {
+                nb_pods: 4,
+                pods_failing: vec![
+                    PodRenderContext {
+                        name: "app-pod-1".to_string(),
+                        state: DeploymentState::Failing,
+                        message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
+                        container_states: btreemap! {
                         "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
                     },
-                    events: vec![],
-                },
-                PodRenderContext {
-                    name: "app-pod-2".to_string(),
-                    state: DeploymentState::Failing,
+                        events: vec![],
+                        service_version: None,
+                    },
+                    PodRenderContext {
+                        name: "app-pod-2".to_string(),
+                        state: DeploymentState::Failing,
+                        message: None,
+                        container_states: btreemap! {
+                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
+                    },
+                        events: vec![
+                            EventRenderContext {
+                                message: "Liveliness probe failed".to_string(),
+                                type_: "Normal".to_string(),
+                            },
+                            EventRenderContext {
+                                message: "Readiness probe failed".to_string(),
+                                type_: "Warning".to_string(),
+                            },
+                        ],
+                        service_version: None,
+                    },
+                ],
+                pods_starting: vec![PodRenderContext {
+                    name: "app-pod-3".to_string(),
+                    state: DeploymentState::Starting,
                     message: None,
                     container_states: btreemap! {
-                        "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
-                    },
-                    events: vec![
-                        EventRenderContext {
-                            message: "Liveliness probe failed".to_string(),
-                            type_: "Normal".to_string(),
-                        },
-                        EventRenderContext {
-                            message: "Readiness probe failed".to_string(),
-                            type_: "Warning".to_string(),
-                        },
-                    ],
-                },
-            ],
-            pods_starting: vec![PodRenderContext {
-                name: "app-pod-3".to_string(),
-                state: DeploymentState::Starting,
-                message: None,
-                container_states: btreemap! {
                         "app-container-1".to_string() => QContainerState {
                         restart_count: 3u32,
                         last_state: QContainerStateTerminated {
@@ -188,26 +206,30 @@ mod test {
                         }
                     },
                 },
-                events: vec![
-                    EventRenderContext {
-                        message: "Pulling image :P".to_string(),
-                        type_: "Normal".to_string(),
-                    },
-                    EventRenderContext {
-                        message: "Container started".to_string(),
-                        type_: "Warning".to_string(),
-                    },
-                ],
-            }],
-            pods_terminating: vec![PodRenderContext {
-                name: "app-pod-4".to_string(),
-                state: DeploymentState::Terminating,
-                message: None,
-                container_states: btreemap! {
+                    events: vec![
+                        EventRenderContext {
+                            message: "Pulling image :P".to_string(),
+                            type_: "Normal".to_string(),
+                        },
+                        EventRenderContext {
+                            message: "Container started".to_string(),
+                            type_: "Warning".to_string(),
+                        },
+                    ],
+                    service_version: None,
+                }],
+                pods_terminating: vec![PodRenderContext {
+                    name: "app-pod-4".to_string(),
+                    state: DeploymentState::Terminating,
+                    message: None,
+                    container_states: btreemap! {
                         "app-container-1".to_string() => QContainerState { restart_count: 0u32, last_state: QContainerStateTerminated::default() },
                     },
-                events: vec![],
-            }],
+                    events: vec![],
+                    service_version: None,
+                }],
+                pods_running: vec![],
+            },
             pvcs: vec![
                 PvcRenderContext {
                     name: "pvc-1212".to_string(),
@@ -236,8 +258,10 @@ mod test {
 ┃  |__ ℹ️ No lease of ip yet
 ┃  |__ ⚠️ Pool of ip exhausted
 ┃
-┃ 🛰 Database has 6 pods. 1 starting, 1 terminating and 2 in error
-┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
+┃ 🛰 Database at old version has 0 pods: 0 running, 0 starting, 0 terminating and 0 in error
+┃ 🛰 Database at new version 14 has 4 pods: 0 running, 1 starting, 1 terminating and 2 in error
+┃  |__ Pod app-pod-1 is FAILING
+┃     |__ 💭 pod have been killed due to lack of/using too much memory resources
 ┃  |__ Pod app-pod-2 is FAILING
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
@@ -281,9 +305,20 @@ mod test {
                 ],
             }],
             nb_pods: 0,
-            pods_failing: vec![],
-            pods_starting: vec![],
-            pods_terminating: vec![],
+            pods_current_version: PodsRenderContext {
+                nb_pods: 0,
+                pods_running: vec![],
+                pods_starting: vec![],
+                pods_failing: vec![],
+                pods_terminating: vec![],
+            },
+            pods_old_version: PodsRenderContext {
+                nb_pods: 0,
+                pods_running: vec![],
+                pods_starting: vec![],
+                pods_failing: vec![],
+                pods_terminating: vec![],
+            },
             pvcs: vec![],
         };
 

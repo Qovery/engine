@@ -72,7 +72,7 @@ impl<T> JobDeploymentReporter<T> {
             is_force_trigger: job.is_force_trigger(),
             max_duration: *job.max_duration(),
             max_restarts: job.max_restarts(),
-            tag: job.image_full(),
+            tag: job.version(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             selector: job.kube_label_selector(),
@@ -249,11 +249,16 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"
-❌ {} failed: either it couldn't be executed correctly after `{}` retries or its execution didn't finish after `{}`. Underlying error: `{}`.
-This most likely an issue with its configuration/code.
-Look at your job logs in order to understand if the problem comes from the job code failure or if you just need to increase its max duration timeout.
+❌ {} failed !
 
-⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
+⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️
+➡️ Either it couldn't be executed correctly after `{}` retries or its execution didn't finish after `{}`.
+➡️ Underlying error: `{}`.
+➡️ This most likely an issue with its configuration/code.
+➡️ Look at your job logs in order to understand if the problem comes from the job code failure or if you just need to increase its max duration timeout.
+➡️
+➡️ ⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
+⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️
                 "#, self.job_type, self.max_restarts, self.max_duration_human_str(), job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
@@ -263,11 +268,11 @@ Look at your job logs in order to understand if the problem comes from the job c
                 *error.clone(),
                 format!(r#"
 
-❌ {} of {} failed !
-
-Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
-⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
-
+❌ {} of {} failed but we rollbacked it to previous safe/running version !
+⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️
+➡️ Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
+➡️ ⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
+⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️
                 "#, self.action, self.job_type).trim().to_string(),
                 None,
             ));

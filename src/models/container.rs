@@ -246,7 +246,7 @@ impl<T: CloudProvider> Container<T> {
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),
-                version: self.tag.clone(),
+                version: self.service_version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
@@ -333,6 +333,10 @@ impl<T: CloudProvider> Container<T> {
     pub fn workspace_directory(&self) -> &str {
         &self.workspace_directory
     }
+
+    fn service_version(&self) -> String {
+        format!("{}:{}", self.image, self.tag)
+    }
 }
 
 impl<T: CloudProvider> Service for Container<T> {
@@ -350,6 +354,10 @@ impl<T: CloudProvider> Service for Container<T> {
 
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn version(&self) -> String {
+        self.service_version()
     }
 
     fn kube_name(&self) -> &str {

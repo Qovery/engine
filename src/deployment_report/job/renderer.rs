@@ -1,6 +1,6 @@
 use crate::deployment_report::job::reporter::{JobDeploymentReport, JobType};
 use crate::deployment_report::utils::{
-    get_tera_instance, to_job_render_context, to_pods_render_context, JobRenderContext, PodRenderContext,
+    get_tera_instance, to_job_render_context, to_pods_render_context_by_version, JobRenderContext, PodsRenderContext,
 };
 use crate::utilities::to_short_id;
 use serde::Serialize;
@@ -12,20 +12,22 @@ pub struct JobDeploymentRenderContext {
     pub tag: String,
     pub nb_pods: usize,
     pub job: Option<JobRenderContext>,
-    pub pods_failing: Vec<PodRenderContext>,
-    pub pods_starting: Vec<PodRenderContext>,
-    pub pods_terminating: Vec<PodRenderContext>,
-    pub pods_running: Vec<PodRenderContext>,
+    pub pods_current_version: PodsRenderContext,
+    pub pods_old_version: PodsRenderContext,
 }
 
 const REPORT_TEMPLATE: &str = r#"
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ {{ job_type | capitalize }} at tag {{ tag }} execution is in progress ⏳, below the current status:
 ┃
-{% set all_pods = pods_failing | concat(with=pods_starting) | concat(with=pods_running) -%}
-┃ 🛰 {{ job_type | capitalize }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
-{%- for pod in all_pods %}
-┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}
+┃ 🛰 {{ job_type | capitalize }} at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
+┃ 🛰 {{ job_type | capitalize }} at new tag {{ tag }} has {{ pods_current_version.nb_pods }} pods: {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
+{%- set all_current_version_pods = pods_current_version.pods_failing | concat(with=pods_current_version.pods_starting) -%}
+{%- for pod in all_current_version_pods %}
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }}
+{%- if pod.message %}
+┃     |__ 💭 {{ pod.message }}
+{%- endif -%}
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
@@ -42,9 +44,8 @@ pub(super) fn render_job_deployment_report(
     service_tag: &str,
     deployment_info: &JobDeploymentReport,
 ) -> Result<String, tera::Error> {
-    let (pods_starting, pods_terminating, pods_failing, pods_running) =
-        to_pods_render_context(&deployment_info.pods, &deployment_info.events);
-
+    let (pods_current_version, pods_old_version): (PodsRenderContext, PodsRenderContext) =
+        to_pods_render_context_by_version(&deployment_info.pods, &deployment_info.events, service_tag);
     let job_ctx = deployment_info
         .job
         .as_ref()
@@ -56,10 +57,8 @@ pub(super) fn render_job_deployment_report(
         tag: service_tag.to_string(),
         nb_pods: deployment_info.pods.len(),
         job: job_ctx,
-        pods_failing,
-        pods_starting,
-        pods_terminating,
-        pods_running,
+        pods_current_version,
+        pods_old_version,
     };
     let ctx = tera::Context::from_serialize(render_ctx)?;
     get_tera_instance().render_str(REPORT_TEMPLATE, &ctx)
@@ -87,26 +86,37 @@ mod test {
             tag: "public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6".to_string(),
             nb_pods: 1,
             job: None,
-            pods_failing: vec![PodRenderContext {
-                name: "app-pod-1".to_string(),
-                state: DeploymentState::Failing,
-                message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                container_states: btreemap! {
-                        "app-container-1".to_string() => QContainerState {
-                        restart_count: 5u32,
-                        last_state: QContainerStateTerminated {
-                                exit_code: 132,
-                                reason:  Some("OOMKilled".to_string()),
-                                message: Some("using too much memory".to_string()),
-                                finished_at: Some(v1::Time(chrono::DateTime::default())),
-                        }
+            pods_old_version: PodsRenderContext {
+                nb_pods: 0,
+                pods_running: vec![],
+                pods_starting: vec![],
+                pods_failing: vec![],
+                pods_terminating: vec![],
+            },
+            pods_current_version: PodsRenderContext {
+                nb_pods: 1,
+                pods_failing: vec![PodRenderContext {
+                    name: "app-pod-1".to_string(),
+                    state: DeploymentState::Failing,
+                    message: Some("Pod have been killed due to lack of/using too much memory resources".to_string()),
+                    container_states: btreemap! {
+                            "app-container-1".to_string() => QContainerState {
+                            restart_count: 5u32,
+                            last_state: QContainerStateTerminated {
+                                    exit_code: 132,
+                                    reason:  Some("OOMKilled".to_string()),
+                                    message: Some("using too much memory".to_string()),
+                                    finished_at: Some(v1::Time(chrono::DateTime::default())),
+                            }
+                        },
                     },
-                },
-                events: vec![],
-            }],
-            pods_starting: vec![],
-            pods_terminating: vec![],
-            pods_running: vec![],
+                    events: vec![],
+                    service_version: Some("debian:bookworm".to_string()),
+                }],
+                pods_starting: vec![],
+                pods_terminating: vec![],
+                pods_running: vec![],
+            },
         };
 
         let ctx = tera::Context::from_serialize(render_ctx).unwrap();
@@ -120,8 +130,10 @@ mod test {
 ┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Job at tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 execution is in progress ⏳, below the current status:
 ┃
-┃ 🛰 Job has 1 pods. 0 starting, 0 terminating and 1 in error
-┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
+┃ 🛰 Job at old version has 0 pods: 0 running, 0 starting, 0 terminating and 0 in error
+┃ 🛰 Job at new tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 has 1 pods: 0 running, 0 starting, 0 terminating and 1 in error
+┃  |__ Pod app-pod-1 is FAILING
+┃     |__ 💭 Pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 

@@ -205,6 +205,7 @@ impl<T: CloudProvider> Job<T> {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
                 name: self.kube_name().to_string(),
+                version: self.service_version(),
                 user_unsafe_name: self.name.clone(),
                 image_full,
                 image_tag,
@@ -263,6 +264,15 @@ impl<T: CloudProvider> Job<T> {
         }
     }
 
+    fn service_version(&self) -> String {
+        match &self.image_source {
+            ImageSource::Registry { source: registry } => {
+                format!("{}:{}", registry.image, registry.tag)
+            }
+            ImageSource::Build { source: build } => build.git_repository.commit_id.clone(),
+        }
+    }
+
     pub fn is_cron_job(&self) -> bool {
         matches!(self.schedule, JobSchedule::Cron { .. })
     }
@@ -291,6 +301,10 @@ impl<T: CloudProvider> Service for Job<T> {
 
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn version(&self) -> String {
+        self.service_version()
     }
 
     fn kube_name(&self) -> &str {
@@ -355,7 +369,6 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
     fn advanced_settings(&self) -> &JobAdvancedSettings;
     fn image_full(&self) -> String;
     fn startup_timeout(&self) -> Duration;
-
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_schedule(&self) -> &JobSchedule;
     fn max_duration(&self) -> &Duration;
@@ -456,6 +469,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) version: String,
     pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
     pub(super) image_tag: String,

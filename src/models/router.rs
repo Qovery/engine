@@ -404,6 +404,10 @@ impl<T: CloudProvider> Service for Router<T> {
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
     }
+
+    fn version(&self) -> String {
+        "".to_string()
+    }
 }
 
 pub trait RouterService: Service + DeploymentAction + ToTeraContext + Send {

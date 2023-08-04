@@ -42,12 +42,22 @@ pub struct QContainerState {
 }
 
 #[derive(Debug, Serialize)]
+pub struct PodsRenderContext {
+    pub nb_pods: usize,
+    pub pods_running: Vec<PodRenderContext>,
+    pub pods_starting: Vec<PodRenderContext>,
+    pub pods_failing: Vec<PodRenderContext>,
+    pub pods_terminating: Vec<PodRenderContext>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct PodRenderContext {
     pub name: String,
     pub state: DeploymentState,
     pub message: Option<String>,
     pub container_states: BTreeMap<String, QContainerState>,
     pub events: Vec<EventRenderContext>,
+    pub service_version: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -230,7 +240,7 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
     };
 }
 
-pub fn to_pods_render_context(
+pub fn to_pods_render_context_by_state(
     pods: &[Pod],
     events: &[Event],
 ) -> (
@@ -258,6 +268,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Terminating,
                 message: None,
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: vec![],
             });
             continue;
@@ -269,6 +280,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                     .into_iter()
                     .flat_map(to_event_context)
@@ -283,6 +295,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Starting,
                 message: None,
                 container_states: pod.container_states(),
+                service_version: pod.service_version(),
                 events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                     .into_iter()
                     .flat_map(to_event_context)
@@ -296,6 +309,7 @@ pub fn to_pods_render_context(
             state: DeploymentState::Starting,
             message: None,
             container_states: pod.container_states(),
+            service_version: pod.service_version(),
             events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
                 .into_iter()
                 .flat_map(to_event_context)
@@ -304,6 +318,43 @@ pub fn to_pods_render_context(
     }
 
     (pods_starting, pods_terminating, pods_failing, pods_running)
+}
+
+pub fn to_pods_render_context_by_version(
+    pods: &[Pod],
+    events: &[Event],
+    service_version: &str,
+) -> (PodsRenderContext, PodsRenderContext) {
+    let (pods_starting, pods_terminating, pods_failing, pods_running) = to_pods_render_context_by_state(pods, events);
+    let (current_starting, starting_old): (Vec<_>, Vec<_>) = pods_starting
+        .into_iter()
+        .partition(|p| p.service_version.as_deref() == Some(service_version));
+    let (current_terminating, terminating_old): (Vec<_>, Vec<_>) = pods_terminating
+        .into_iter()
+        .partition(|p| p.service_version.as_deref() == Some(service_version));
+    let (current_failing, failing_old): (Vec<_>, Vec<_>) = pods_failing
+        .into_iter()
+        .partition(|p| p.service_version.as_deref() == Some(service_version));
+    let (current_running, running_old): (Vec<_>, Vec<_>) = pods_running
+        .into_iter()
+        .partition(|p| p.service_version.as_deref() == Some(service_version));
+
+    (
+        PodsRenderContext {
+            nb_pods: current_running.len() + current_starting.len() + current_failing.len() + current_terminating.len(),
+            pods_running: current_running,
+            pods_starting: current_starting,
+            pods_failing: current_failing,
+            pods_terminating: current_terminating,
+        },
+        PodsRenderContext {
+            nb_pods: running_old.len() + starting_old.len() + failing_old.len() + terminating_old.len(),
+            pods_running: running_old,
+            pods_starting: starting_old,
+            pods_failing: failing_old,
+            pods_terminating: terminating_old,
+        },
+    )
 }
 
 pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -> Vec<PvcRenderContext> {
@@ -377,6 +428,7 @@ pub trait QPodExt {
     fn container_states(&self) -> BTreeMap<String, QContainerState>;
     fn is_starting(&self) -> bool;
     fn is_failing(&self) -> Option<&str>;
+    fn service_version(&self) -> Option<String>;
 }
 
 impl QPodExt for Pod {
@@ -463,11 +515,11 @@ impl QPodExt for Pod {
 
         let to_error_message = |reason: &'a str| -> &'a str {
             match reason {
-                "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources",
-                "CrashLoopBackOff" => "crash loop, pod is restarting too frequently. It might be due to either the crash of your application at startup (check the Live logs) or a wrong configuration of Liveness/Readiness probes (check the application settings)",
-                "ErrImagePull" => "cannot pull the image for your container",
-                "ImagePullBackOff" => "cannot pull the image for your container",
-                "Error" => "an undefined error occurred. Look into your applications logs and message below",
+                "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources. Investigate the leak or increase memory resources.",
+                "CrashLoopBackOff" => "Crash loop, pod is restarting too frequently. It might be due to either the crash of your application at startup (check the Live logs) or a wrong configuration of Liveness/Readiness probes (check the application settings)",
+                "ErrImagePull" => "Cannot pull the image for your container",
+                "ImagePullBackOff" => "Cannot pull the image for your container",
+                "Error" => "An undefined error occurred. Look into your applications logs and message below",
                 _ => reason,
             }
         };
@@ -496,6 +548,14 @@ impl QPodExt for Pod {
             }
             _ => None,
         }
+    }
+
+    fn service_version(&self) -> Option<String> {
+        let Some(annotations) = &self.metadata.annotations else {
+            return None;
+        };
+
+        annotations.get("qovery.com/service-version").cloned()
     }
 }
 
