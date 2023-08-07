@@ -193,6 +193,10 @@ pub fn ec2_aws_helm_charts(
                     value: "public.ecr.aws/r3m4q3r9/registry-creds".to_string(),
                 },
                 ChartSetValue {
+                    key: "image.tag".to_string(),
+                    value: "2023-08-03T09-51-05".to_string(),
+                },
+                ChartSetValue {
                     key: "ecr.enabled".to_string(),
                     value: "true".to_string(),
                 },
