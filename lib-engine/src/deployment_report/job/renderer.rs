@@ -17,7 +17,7 @@ pub struct JobDeploymentRenderContext {
 }
 
 const REPORT_TEMPLATE: &str = r#"
-┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ {{ job_type | capitalize }} at tag {{ tag }} execution is in progress ⏳, below the current status:
 ┃
 ┃ 🛰 {{ job_type | capitalize }} at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
@@ -31,13 +31,16 @@ const REPORT_TEMPLATE: &str = r#"
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
+{%- if s.last_state.exit_code_msg %}
+┃     |__ 💭 Exit code {{ s.last_state.exit_code }} means {{ s.last_state.exit_code_msg }}
+{%- endif -%}
 {%- endif -%}
 {%- endfor -%}
 {%- for event in pod.events %}
 ┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_job_deployment_report(
     job_type: &JobType,
@@ -69,7 +72,7 @@ mod test {
     use super::*;
     use crate::cloud_provider::service::Action;
     use crate::deployment_report::utils::{
-        fmt_event_type, DeploymentState, PodRenderContext, QContainerState, QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type, DeploymentState, PodRenderContext, QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1;
@@ -104,6 +107,7 @@ mod test {
                             restart_count: 5u32,
                             last_state: QContainerStateTerminated {
                                     exit_code: 132,
+                                    exit_code_msg: exit_code_to_msg(137),
                                     reason:  Some("OOMKilled".to_string()),
                                     message: Some("using too much memory".to_string()),
                                     finished_at: Some(v1::Time(chrono::DateTime::default())),
@@ -127,7 +131,7 @@ mod test {
         println!("{rendered_report}");
 
         let gold_standard = r#"
-┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Job at tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 execution is in progress ⏳, below the current status:
 ┃
 ┃ 🛰 Job at old version has 0 pods: 0 running, 0 starting, 0 terminating and 0 in error
@@ -135,7 +139,8 @@ mod test {
 ┃  |__ Pod app-pod-1 is FAILING
 ┃     |__ 💭 Pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+┃     |__ 💭 Exit code 132 means the container was immediately terminated by the operating system via SIGKILL signal
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
             assert_eq!(rendered_line.trim_end(), gold_line);
