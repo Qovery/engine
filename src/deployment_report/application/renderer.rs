@@ -21,7 +21,7 @@ pub struct AppDeploymentRenderContext {
 }
 
 const REPORT_TEMPLATE: &str = r#"
-┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ {{ service_type }} at {{ tag_name }} {{ tag }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}
@@ -44,6 +44,9 @@ const REPORT_TEMPLATE: &str = r#"
 {%- for name, s in pod.container_states %}
 {%- if s.restart_count > 0 %}
 ┃     |__ 💢 Container {{ name }} crashed {{ s.restart_count }} times. Last terminated with exit code {{ s.last_state.exit_code }} due to {{ s.last_state.reason }} {{ s.last_state.message }} at {{ s.last_state.finished_at }}
+{%- if s.last_state.exit_code_msg %}
+┃     |__ 💭 Exit code {{ s.last_state.exit_code }} means {{ s.last_state.exit_code_msg }}
+{%- endif -%}
 {%- endif -%}
 {%- endfor -%}
 {%- for event in pod.events %}
@@ -59,7 +62,7 @@ const REPORT_TEMPLATE: &str = r#"
 {%- endfor -%}
 {%- endfor %}
 {%- endif %}
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_app_deployment_report(
     service_type: ServiceType,
@@ -97,8 +100,8 @@ mod test {
         AppDeploymentRenderContext, PodsRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext, QContainerState,
-        QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
+        QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1;
@@ -144,6 +147,7 @@ mod test {
                             restart_count: 5u32,
                             last_state: QContainerStateTerminated {
                                 exit_code: 132,
+                                exit_code_msg: exit_code_to_msg(132),
                                 reason:  Some("OOMKilled".to_string()),
                                 message: Some("using too much memory".to_string()),
                                 finished_at: Some(v1::Time(chrono::DateTime::default())),
@@ -170,6 +174,7 @@ mod test {
                             restart_count: 5u32,
                             last_state: QContainerStateTerminated {
                                 exit_code: 132,
+                                exit_code_msg: exit_code_to_msg(132),
                                 reason:  Some("OOMKilled".to_string()),
                                 message: Some("using too much memory".to_string()),
                                 finished_at: Some(v1::Time(chrono::DateTime::default())),
@@ -206,7 +211,8 @@ mod test {
                         "app-container-1".to_string() => QContainerState {
                             restart_count: 1u32,
                             last_state: QContainerStateTerminated {
-                                exit_code: 132,
+                                exit_code: 143,
+                                exit_code_msg: exit_code_to_msg(143),
                                 reason:  Some("Error".to_string()),
                                 message: None,
                                 finished_at: Some(v1::Time(chrono::DateTime::default())),
@@ -271,7 +277,7 @@ mod test {
         println!("{rendered_report}");
 
         let gold_standard = r#"
-┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Deployment Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Application at commit 34645524c3221a596fb59e8dbad4381f10f93933 deployment is in progress ⏳, below the current status:
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
@@ -286,14 +292,15 @@ mod test {
 ┃     |__ ℹ️ Liveliness probe failed
 ┃     |__ ⚠️ Readiness probe failed
 ┃  |__ Pod app-pod-3 is STARTING
-┃     |__ 💢 Container app-container-1 crashed 1 times. Last terminated with exit code 132 due to Error  at 1970-01-01T00:00:00Z
+┃     |__ 💢 Container app-container-1 crashed 1 times. Last terminated with exit code 143 due to Error  at 1970-01-01T00:00:00Z
+┃     |__ 💭 Exit code 143 means the container received warning that it was about to be terminated, then terminated (SIGTERM)
 ┃     |__ ℹ️ Pulling image :P
 ┃     |__ ⚠️ Container started
 ┃
 ┃ 💽 Network volume pvc-1212 is STARTING
 ┃  |__ ⚠️ Failed to provision volume with StorageClass "aws-ebs-io1-0": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit
 ┃ 💽 Network volume pvc-2121 is READY
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
             assert_eq!(rendered_line.trim_end(), gold_line);
