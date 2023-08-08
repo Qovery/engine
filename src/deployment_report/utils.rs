@@ -30,6 +30,7 @@ pub struct ServiceRenderContext {
 #[derive(Debug, Serialize, Default)]
 pub struct QContainerStateTerminated {
     pub exit_code: i32,
+    pub exit_code_msg: Option<&'static str>,
     pub reason: Option<String>,
     pub message: Option<String>,
     pub finished_at: Option<v1::Time>,
@@ -423,6 +424,24 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
     pvcs_context
 }
 
+pub fn exit_code_to_msg(exit_code: i32) -> Option<&'static str> {
+    match exit_code {
+        0 =>   Some("the container exited successfully"),
+        1 =>   Some("the container exited in an user/code error"),
+        125 => Some("the docker run command did not execute successfully. Check your entrypoint/command and arguments"),
+        126 => Some("a command specified in the image specification could not be invoked. Does the binary exist?"),
+        127 => Some("file or directory specified in the image specification was not found"),
+        128 => Some("the exit was triggered with an invalid exit code (valid codes are integers between 0-255)"),
+        134 => Some("the container aborted itself using the abort() function (SIGABRT)"),
+        135 => Some("the container was killed due to an invalid memory access (SIGBUS)"),
+        137 => Some("the container was immediately terminated by the operating system via SIGKILL signal"),
+        139 => Some("the container attempted to access memory that was not assigned to it and was terminated (SIGSEGV)"),
+        143 => Some("the container received warning that it was about to be terminated, then terminated (SIGTERM)"),
+        255 => Some("the container exited, returning an exit code outside the acceptable range, meaning the cause of the error is not known"),
+        _ => None,
+    }
+}
+
 pub trait QPodExt {
     fn restart_count(&self) -> u32;
     fn container_states(&self) -> BTreeMap<String, QContainerState>;
@@ -461,6 +480,7 @@ impl QPodExt for Pod {
                                     .as_ref()
                                     .map(|state| QContainerStateTerminated {
                                         exit_code: state.exit_code,
+                                        exit_code_msg: exit_code_to_msg(state.exit_code),
                                         reason: state.reason.clone(),
                                         message: state.message.clone(),
                                         finished_at: state.finished_at.clone(),

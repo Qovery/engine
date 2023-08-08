@@ -77,8 +77,6 @@ pub struct ApplicationAdvancedSettings {
     pub security_service_account_name: String,
 
     // Deployment
-    #[serde(alias = "deployment.delay_start_time_sec")]
-    pub deployment_delay_start_time_sec: u32,
     #[serde(alias = "deployment.termination_grace_period_seconds")]
     pub deployment_termination_grace_period_seconds: u32,
     #[serde(alias = "deployment.custom_domain_check_enabled")]
@@ -150,7 +148,6 @@ impl Default for ApplicationAdvancedSettings {
     fn default() -> Self {
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
-            deployment_delay_start_time_sec: 30,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
