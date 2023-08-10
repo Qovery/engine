@@ -379,6 +379,9 @@ pub enum EnvironmentStep {
     // Transfer data to core
     /// JobOutput: contains the environment variables to upsert
     JobOutput,
+
+    /// DatabaseOutput: contains the environment variables to upsert
+    DatabaseOutput,
 }
 
 impl EnvironmentStep {
@@ -423,10 +426,11 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 EnvironmentStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 EnvironmentStep::UnderMigration => "under-migration",
-                EnvironmentStep::JobOutput => "job-output",
                 EnvironmentStep::Restart => "restart",
                 EnvironmentStep::Restarted => "restarted",
                 EnvironmentStep::RestartedError => "restarted-error",
+                EnvironmentStep::JobOutput => "job-output",
+                EnvironmentStep::DatabaseOutput => "database-output",
             },
         )
     }
@@ -595,7 +599,8 @@ impl EventDetails {
                 | EnvironmentStep::PausedError
                 | EnvironmentStep::DeletedError
                 | EnvironmentStep::RestartedError
-                | EnvironmentStep::JobOutput => return,
+                | EnvironmentStep::JobOutput
+                | EnvironmentStep::DatabaseOutput => return,
             },
         };
     }

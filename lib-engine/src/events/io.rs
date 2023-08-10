@@ -199,6 +199,7 @@ pub enum EnvironmentStep {
     RetrieveClusterResources,
     UnderMigration,
     JobOutput,
+    DatabaseOutput,
     Restart,
     Restarted,
     RestartedError,
@@ -229,10 +230,11 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::RetrieveClusterConfig => EnvironmentStep::RetrieveClusterConfig,
             events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
             events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
-            events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
             events::EnvironmentStep::Restart => EnvironmentStep::Restart,
             events::EnvironmentStep::Restarted => EnvironmentStep::Restarted,
             events::EnvironmentStep::RestartedError => EnvironmentStep::RestartedError,
+            events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
+            events::EnvironmentStep::DatabaseOutput => EnvironmentStep::DatabaseOutput,
         }
     }
 }
