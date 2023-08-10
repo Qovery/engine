@@ -261,7 +261,7 @@ where
                                         .iter()
                                         .map(|(key, value)| (key.to_uppercase(), value.clone()))
                                         .collect();
-                                logger.core_configuration(
+                                logger.core_configuration_for_job(
                                     "Job output succeeded. Environment variables will be synchronized.".to_string(),
                                     serde_json::to_string(&deserialized_json_hashmap_with_uppercase_keys)
                                         .unwrap_or_else(|_| "{}".to_string()),

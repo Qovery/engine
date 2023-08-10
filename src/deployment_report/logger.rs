@@ -4,7 +4,7 @@ use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, St
 use crate::logger::Logger;
 use std::sync::Arc;
 
-use crate::events::EnvironmentStep::JobOutput;
+use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput};
 #[cfg(feature = "env-logger-check")]
 use std::sync::atomic::AtomicUsize;
 #[cfg(feature = "env-logger-check")]
@@ -113,7 +113,15 @@ impl EnvLogger {
             .log(EngineEvent::Error(err.clone(), Some(EventMessage::new_from_engine_error(err))));
     }
 
-    pub fn send_core_configuration(&self, safe_message: String, json: String) {
+    pub fn send_core_configuration_for_job(&self, safe_message: String, json: String) {
+        self.send_core_configuration(safe_message, json, JobOutput);
+    }
+
+    pub fn send_core_configuration_for_database(&self, safe_message: String, json: String) {
+        self.send_core_configuration(safe_message, json, DatabaseOutput);
+    }
+
+    fn send_core_configuration(&self, safe_message: String, json: String, step: EnvironmentStep) {
         #[cfg(feature = "env-logger-check")]
         {
             assert!(
@@ -123,7 +131,7 @@ impl EnvLogger {
         }
 
         self.logger.log(EngineEvent::Info(
-            EventDetails::clone_changing_stage(self.event_details_progress.clone(), Stage::Environment(JobOutput)),
+            EventDetails::clone_changing_stage(self.event_details_progress.clone(), Stage::Environment(step)),
             EventMessage::new_for_sending_core_data(safe_message, json),
         ));
     }
@@ -150,8 +158,12 @@ impl<'a> EnvProgressLogger<'a> {
         self.logger.log(engine_event);
     }
 
-    pub fn core_configuration(&self, msg: String, json: String) {
-        self.logger.send_core_configuration(msg, json)
+    pub fn core_configuration_for_job(&self, msg: String, json: String) {
+        self.logger.send_core_configuration_for_job(msg, json)
+    }
+
+    pub fn core_configuration_for_database(&self, msg: String, json: String) {
+        self.logger.send_core_configuration_for_database(msg, json)
     }
 }
 

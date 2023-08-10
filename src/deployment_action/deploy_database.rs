@@ -24,6 +24,7 @@ use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use semver::Version;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
@@ -265,6 +266,7 @@ fn await_db_state(
 
 fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed>>(
     db: &Database<C, Managed, T>,
+    logger: &EnvProgressLogger,
     event_details: EventDetails,
     target: &DeploymentTarget,
 ) -> Result<(), Box<EngineError>>
@@ -289,6 +291,20 @@ where
     let database_config =
         get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
             .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
+
+    // Sending hostname to the core to update env variable with real hostname
+    // useful when managed service requires TLS and using a CNAME is not possible due to certificate checks
+    {
+        let mut json: BTreeMap<&str, &str> = BTreeMap::new();
+        json.insert("hostname", database_config.target_hostname.as_str());
+        logger.core_configuration_for_database(
+            format!(
+                "retrieved database hostname {}, environment variables are going to be synchronized",
+                database_config.target_hostname
+            ),
+            serde_json::to_string(&json).unwrap_or_default(),
+        );
+    }
 
     // Deploy the external service name
     let values = vec![
@@ -533,8 +549,8 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
-            on_create_managed_impl(self, event_details.clone(), target)
+        let run = |logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
+            on_create_managed_impl(self, logger, event_details.clone(), target)
         };
         let post_run = |logger: &EnvSuccessLogger, _: ()| {
             if self.publicly_accessible {
@@ -621,7 +637,7 @@ where
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Delete),
-            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // First we must ensure the DB is created by looking for the k8s ExternalName service and AWS side
                 if !managed_database_exists(
                     self.db_type(),
@@ -641,7 +657,7 @@ where
 
                 // Then if it's in a ready state
                 // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
-                on_create_managed_impl(self, event_details.clone(), target)?;
+                on_create_managed_impl(self, logger, event_details.clone(), target)?;
 
                 let workspace_dir = self.workspace_directory();
 
