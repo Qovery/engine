@@ -299,7 +299,7 @@ where
         json.insert("hostname", database_config.target_hostname.as_str());
         logger.core_configuration_for_database(
             format!(
-                "retrieved database hostname {}, environment variables are going to be synchronized",
+                "🪡 Retrieved database hostname {}, environment variables are going to be stitched with it",
                 database_config.target_hostname
             ),
             serde_json::to_string(&json).unwrap_or_default(),
