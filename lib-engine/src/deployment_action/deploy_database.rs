@@ -24,6 +24,7 @@ use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use semver::Version;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
@@ -38,7 +39,6 @@ use aws_sdk_elasticache::error::DescribeCacheClustersError;
 use aws_sdk_elasticache::output::DescribeCacheClustersOutput;
 use aws_sdk_rds::error::DescribeDBInstancesError;
 use aws_sdk_rds::output::DescribeDbInstancesOutput;
-use maplit::btreemap;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -295,7 +295,8 @@ where
     // Sending hostname to the core to update env variable with real hostname
     // useful when managed service requires TLS and using a CNAME is not possible due to certificate checks
     {
-        let json = btreemap! { "hostname" => database_config.target_hostname.as_str() };
+        let mut json: BTreeMap<&str, &str> = BTreeMap::new();
+        json.insert("hostname", database_config.target_hostname.as_str());
         logger.core_configuration_for_database(
             format!(
                 "retrieved database hostname {}, environment variables are going to be synchronized",
