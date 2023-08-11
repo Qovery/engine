@@ -1,21 +1,26 @@
+iamK8sGroups: set-by-engine-code
+refreshIntervalSeconds: set-by-engine-code
+
 aws:
-  accessKey: set-by-engine-code
-  secretKey: set-by-engine-code
-  region: set-by-engine-code
+  defaultRegion: set-by-engine-code
+  roleArn: set-by-engine-code
 
-syncIamGroup: set-by-engine-code
-
-# Repository for the image is there 
+# Repository for the image is there
 # https://github.com/Qovery/iam-eks-user-mapper
+# and on Qovery public ECR => https://gallery.ecr.aws/r3m4q3r9/iam-eks-user-mapper
 image:
-  repository: public.ecr.aws/r3m4q3r9/iam-eks-user-mapper
+  repository: public.ecr.aws/r3m4q3r9/iam-eks-user-mapper-rs
   pullPolicy: IfNotPresent
-  tag: "v1.0.0"
+  tag: 2bf0fe4c
+
+serviceAccount:
+  name: set-by-engine-code
+  annotations: {}
 
 resources:
   limits:
-    cpu: 20m
-    memory: 32Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
   requests:
-    cpu: 10m
-    memory: 32Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code

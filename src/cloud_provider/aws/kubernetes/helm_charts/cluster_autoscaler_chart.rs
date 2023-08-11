@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
 };
@@ -11,7 +12,7 @@ pub struct ClusterAutoscalerChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     cloud_provider: String, // TODO(benjaminch): Pass cloud provider type here instead of string
-    chart_image_region: String,
+    chart_image_region: AwsRegion,
     cluster_name: String,
     aws_iam_cluster_autoscaler_role_arn: String,
     prometheus_namespace: HelmChartNamespaces,
@@ -22,7 +23,7 @@ impl ClusterAutoscalerChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
         cloud_provider: String,
-        chart_image_region: String,
+        chart_image_region: AwsRegion,
         cluster_name: String,
         aws_iam_cluster_autoscaler_role_arn: String,
         prometheus_namespace: HelmChartNamespaces,
@@ -67,7 +68,7 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                     },
                     ChartSetValue {
                         key: "awsRegion".to_string(),
-                        value: self.chart_image_region.to_string(),
+                        value: self.chart_image_region.to_aws_format().to_string(),
                     },
                     ChartSetValue {
                         key: "autoDiscovery.clusterName".to_string(),
@@ -124,6 +125,7 @@ impl ChartInstallationChecker for ClusterAutoscalerChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
+    use crate::cloud_provider::aws::regions::AwsRegion;
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -139,7 +141,7 @@ mod tests {
         let chart = ClusterAutoscalerChart::new(
             None,
             "whatever".to_string(),
-            "whatever".to_string(),
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
@@ -173,7 +175,7 @@ mod tests {
         let chart = ClusterAutoscalerChart::new(
             None,
             "whatever".to_string(),
-            "whatever".to_string(),
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
@@ -208,7 +210,7 @@ mod tests {
         let chart = ClusterAutoscalerChart::new(
             None,
             "whatever".to_string(),
-            "whatever".to_string(),
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,

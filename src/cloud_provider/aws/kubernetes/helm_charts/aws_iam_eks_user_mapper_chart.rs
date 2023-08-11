@@ -1,9 +1,13 @@
+use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
+    HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::errors::CommandError;
 use crate::runtime::block_on;
+use chrono::Duration;
 use k8s_openapi::api::rbac::v1::RoleBinding;
 use kube::core::params::ListParams;
 use kube::{Api, Client};
@@ -11,25 +15,30 @@ use kube::{Api, Client};
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
-    chart_image_region: String,
-    aws_iam_eks_user_mapper_key: String,
-    aws_iam_eks_user_mapper_secret: String,
-    aws_iam_user_mapper_group_name: String,
+    aws_region: AwsRegion,
+    aws_service_account_name: String,
+    aws_iam_eks_user_mapper_role_arn: String,
+    aws_iam_user_mapper_groups_names_mappings: String,
+    refresh_interval: Duration,
+    chart_resources: HelmChartResources,
 }
 
 impl AwsIamEksUserMapperChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
-        chart_image_region: String,
-        aws_iam_eks_user_mapper_key: String,
-        aws_iam_eks_user_mapper_secret: String,
-        aws_iam_user_mapper_group_name: String,
+        aws_region: AwsRegion,
+        aws_service_account_name: String,
+        aws_iam_eks_user_mapper_role_arn: String,
+        aws_iam_user_mapper_groups_names_mappings: String, // iam_group1->k8s_group1,iam_group2->k8s_group2,
+        refresh_interval: Duration,
+        chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
         AwsIamEksUserMapperChart {
-            chart_image_region,
-            aws_iam_eks_user_mapper_key,
-            aws_iam_eks_user_mapper_secret,
-            aws_iam_user_mapper_group_name,
+            aws_region,
+            aws_service_account_name,
+            aws_iam_eks_user_mapper_role_arn,
+            aws_iam_user_mapper_groups_names_mappings,
+            refresh_interval,
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
@@ -40,6 +49,15 @@ impl AwsIamEksUserMapperChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsIamEksUserMapperChart::chart_name(),
             ),
+            chart_resources: match chart_resources {
+                HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(20),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                },
+                HelmChartResourcesConstraintType::Constrained(r) => r,
+            },
         }
     }
 
@@ -57,20 +75,49 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
-                        key: "aws.accessKey".to_string(),
-                        value: self.aws_iam_eks_user_mapper_key.to_string(),
+                        key: "aws.defaultRegion".to_string(),
+                        value: self.aws_region.to_aws_format().to_string(),
                     },
                     ChartSetValue {
-                        key: "aws.secretKey".to_string(),
-                        value: self.aws_iam_eks_user_mapper_secret.to_string(),
+                        key: "aws.roleArn".to_string(),
+                        value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
                     },
                     ChartSetValue {
-                        key: "aws.region".to_string(),
-                        value: self.chart_image_region.to_string(),
+                        // we use string templating (r"...") to escape dot in annotation's key
+                        key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                        value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
                     },
                     ChartSetValue {
-                        key: "syncIamGroup".to_string(),
-                        value: self.aws_iam_user_mapper_group_name.to_string(),
+                        key: "iamK8sGroups".to_string(),
+                        value: self
+                            .aws_iam_user_mapper_groups_names_mappings
+                            .to_string()
+                            .replace(',', r"\,"), // commas should be escaped in --set otherwise it's wrongly interpreted by Helm
+                    },
+                    ChartSetValue {
+                        key: "refreshIntervalSeconds".to_string(),
+                        value: self.refresh_interval.num_seconds().to_string(),
+                    },
+                    ChartSetValue {
+                        key: "serviceAccount.name".to_string(),
+                        value: self.aws_service_account_name.to_string(),
+                    },
+                    // resources limits
+                    ChartSetValue {
+                        key: "resources.limits.cpu".to_string(),
+                        value: self.chart_resources.limit_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.limits.memory".to_string(),
+                        value: self.chart_resources.limit_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.cpu".to_string(),
+                        value: self.chart_resources.request_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.memory".to_string(),
+                        value: self.chart_resources.request_memory.to_string(),
                     },
                 ],
                 ..Default::default()
@@ -151,11 +198,13 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
+    use crate::cloud_provider::aws::regions::AwsRegion;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use chrono::Duration;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.
@@ -164,10 +213,12 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            Duration::seconds(30),
+            HelmChartResourcesConstraintType::ChartDefault,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -196,10 +247,12 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            Duration::seconds(30),
+            HelmChartResourcesConstraintType::ChartDefault,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -222,17 +275,19 @@ mod tests {
         assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
-    /// Make sure rust code deosn't set a value not declared inside values file.
+    /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn aws_iam_eks_user_mapper_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            Duration::seconds(30),
+            HelmChartResourcesConstraintType::ChartDefault,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
