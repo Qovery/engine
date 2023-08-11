@@ -1,19 +1,26 @@
-# Default values for iam-eks-user-mapper.
+# Default values for iam-eks-user.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-image:
-  repository: ygrene/iam-eks-user-mapper
-  pullPolicy: IfNotPresent
-  tag: "latest"
+iamK8sGroups: "" # "group1,group2"
+refreshIntervalSeconds: 60
 
 aws:
-  accessKey: ""
-  secretKey: ""
-  region: ""
+  defaultRegion: ""
+  roleArn: ""
 
-syncIamGroup: ""
+labels:
+  app: iam-eks-user-mapper
+selectorLabels:
+  app: iam-eks-user-mapper
 
+image:
+  repository: ""
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
@@ -24,26 +31,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: "iam-eks-user-mapper"
-
-labels:
-  app: iam-eks-user-mapper
-
-selectorLabels:
-  app: iam-eks-user-mapper
-
-podAnnotations: {}
-
-podSecurityContext: {}
-  # fsGroup: 2000
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  name: ""
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -56,10 +44,3 @@ resources: {}
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
-
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}

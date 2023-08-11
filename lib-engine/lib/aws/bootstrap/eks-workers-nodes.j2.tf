@@ -5,7 +5,7 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
     http_endpoint = "enabled"
     http_tokens = var.ec2_metadata_imds_version
     # https://github.com/kubernetes/autoscaler/issues/3592
-    # http_put_response_hop_limit = 2
+    http_put_response_hop_limit = 2
   }
 
   block_device_mappings {
