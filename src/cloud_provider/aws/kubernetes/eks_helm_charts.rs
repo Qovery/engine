@@ -20,6 +20,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
+use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -36,6 +37,7 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::models::aws::AwsStorageType;
 use crate::models::third_parties::LetsEncryptConfig;
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -46,8 +48,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
-    pub aws_iam_eks_user_mapper_key: String,
-    pub aws_iam_eks_user_mapper_secret: String,
+    pub aws_iam_eks_user_mapper_role_arn: String,
     pub aws_iam_cluster_autoscaler_role_arn: String,
     pub aws_iam_cloudwatch_role_arn: String,
     pub aws_iam_loki_role_arn: String,
@@ -60,7 +61,7 @@ pub struct EksChartsConfigPrerequisites {
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
-    pub region: String,
+    pub region: AwsRegion,
     pub cluster_name: String,
     pub cpu_architectures: Vec<CpuArchitecture>,
     pub cloud_provider: String,
@@ -148,13 +149,17 @@ pub fn eks_aws_helm_charts(
     // AWS IAM EKS user mapper
     let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
         chart_prefix_path,
-        chart_config_prerequisites.region.to_string(),
-        qovery_terraform_config.aws_iam_eks_user_mapper_key,
-        qovery_terraform_config.aws_iam_eks_user_mapper_secret,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_iam_user_mapper_group_name
-            .to_string(),
+        chart_config_prerequisites.region.clone(),
+        "iam-eks-user-mapper".to_string(),
+        qovery_terraform_config.aws_iam_eks_user_mapper_role_arn,
+        format!(
+            "{}->system:masters",
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_iam_user_mapper_group_name
+        ),
+        Duration::seconds(30), // TODO(benjaminch): might be a parameter
+        HelmChartResourcesConstraintType::ChartDefault,
     )
     .to_common_helm_chart()?;
 
@@ -168,7 +173,7 @@ pub fn eks_aws_helm_charts(
     let cluster_autoscaler = ClusterAutoscalerChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cloud_provider.to_string(),
-        chart_config_prerequisites.region.to_string(),
+        chart_config_prerequisites.region.clone(),
         chart_config_prerequisites.cluster_name.to_string(),
         qovery_terraform_config.aws_iam_cluster_autoscaler_role_arn.to_string(),
         prometheus_namespace,
@@ -220,7 +225,7 @@ pub fn eks_aws_helm_charts(
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
                 LokiS3BucketConfiguration {
-                    region: Some(chart_config_prerequisites.region.to_string()),
+                    region: Some(chart_config_prerequisites.region.to_aws_format().to_string()), // TODO(benjaminch): region to be struct instead of String
                     bucketname: Some(qovery_terraform_config.aws_s3_loki_bucket_name),
                     s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
                     aws_iam_loki_role_arn: Some(qovery_terraform_config.aws_iam_loki_role_arn),
@@ -320,7 +325,7 @@ pub fn eks_aws_helm_charts(
                     loki_chart_name: LokiChart::chart_name(),
                     loki_namespace: loki_namespace.to_string(),
                     cloudwatch_config: Some(CloudWatchConfig::new(
-                        chart_config_prerequisites.region.to_string(),
+                        chart_config_prerequisites.region.to_aws_format().to_string(), // TODO(benjaminch): region to be struct instead of String
                         qovery_terraform_config.aws_iam_cloudwatch_role_arn,
                     )),
                 },
@@ -472,7 +477,7 @@ pub fn eks_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
+                    value: chart_config_prerequisites.region.to_aws_format().to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LIB_ROOT_DIR".to_string(),

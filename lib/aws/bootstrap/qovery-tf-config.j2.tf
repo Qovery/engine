@@ -1,8 +1,7 @@
 locals {
   qovery_tf_config = <<TF_CONFIG
 {
-  "aws_iam_eks_user_mapper_key": "${aws_iam_access_key.iam_eks_user_mapper.id}",
-  "aws_iam_eks_user_mapper_secret": "${aws_iam_access_key.iam_eks_user_mapper.secret}",
+  "aws_iam_eks_user_mapper_role_arn": "${aws_iam_role.iam_eks_user_mapper.arn}",
   "aws_iam_cluster_autoscaler_role_arn": "${aws_iam_role.iam_eks_cluster_autoscaler.arn}",
   "aws_iam_cloudwatch_role_arn": "${aws_iam_role.iam_grafana_cloudwatch.arn}",
   "loki_storage_config_aws_s3": "s3://${var.region}/${aws_s3_bucket.loki_bucket.bucket}",

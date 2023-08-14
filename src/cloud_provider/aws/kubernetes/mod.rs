@@ -736,7 +736,7 @@ fn get_rusoto_eks_client(
             return Err(Box::new(EngineError::new_unsupported_region(
                 event_details,
                 kubernetes.region().to_string(),
-                CommandError::new_from_safe_message(error.to_string()),
+                Some(CommandError::new_from_safe_message(error.to_string())),
             )));
         }
     };
@@ -1273,7 +1273,9 @@ fn create(
                 infra_options: options.clone(),
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
-                region: kubernetes.region().to_string(),
+                region: AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
+                    EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
+                })?,
                 cluster_name: kubernetes.cluster_name(),
                 cpu_architectures,
                 cloud_provider: "aws".to_string(),

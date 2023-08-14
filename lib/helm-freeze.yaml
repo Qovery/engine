@@ -105,6 +105,10 @@ charts:
   - name: pleco
     version: 0.11.1
     repo_name: pleco
+  - name: iam-eks-user-mapper
+    version: 0.1.3
+    repo_name: iam-eks-user-mapper
+    dest: aws-bootstrap
   - name: datadog
     repo_name: datadog
     version: 2.22.17
@@ -126,6 +130,8 @@ repos:
     url: https://grafana.github.io/helm-charts
   - name: pleco
     url: https://qovery.github.io/pleco/
+  - name: iam-eks-user-mapper
+    url: https://qovery.github.io/iam-eks-user-mapper/
   - name: cluster-autoscaler
     url: https://kubernetes.github.io/autoscaler
   - name: do-k8s-token-rotate

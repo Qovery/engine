@@ -1446,14 +1446,14 @@ impl EngineError {
     pub fn new_unsupported_region(
         event_details: EventDetails,
         requested_region: String,
-        error_message: CommandError,
+        error_message: Option<CommandError>,
     ) -> EngineError {
         let message = format!("`{requested_region}` region is not supported");
         EngineError::new(
             event_details,
             Tag::UnsupportedRegion,
             message,
-            Some(error_message),
+            error_message,
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected region is not supported, please check provider's documentation.".to_string()),
         )

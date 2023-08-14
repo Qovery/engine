@@ -1,65 +1,50 @@
-apiVersion: apps/v1
 kind: Deployment
+apiVersion: apps/v1
 metadata:
-  name: {{ include "iam-eks-user-mapper.fullname" . }}
   namespace: kube-system
+  name: {{ include "iam-eks-user.fullname" . }}
   labels:
-    {{- include "iam-eks-user-mapper.labels" . | nindent 4 }}
+    {{- include "iam-eks-user.labels" . | nindent 4 }}
+  {{- with .Values.extraLabels }}
+  {{ toYaml . | indent 4 }}
+  {{- end }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate # avoid collision (even if k8s should have lock mechanism)
   selector:
     matchLabels:
-      {{- include "iam-eks-user-mapper.selectorLabels" . | nindent 6 }}
+      {{- include "iam-eks-user.selectorLabels" . | nindent 8 }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
       annotations:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
       labels:
-        {{- include "iam-eks-user-mapper.selectorLabels" . | nindent 8 }}
+        {{- include "iam-eks-user.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "iam-eks-user-mapper.serviceAccountName" . }}
-      automountServiceAccountToken: true
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-          - name: AWS_REGION
-            value: {{ .Values.aws.region }}
-          - name: AWS_ACCESS_KEY_ID
-            value: {{ .Values.aws.accessKey }}
-          - name: AWS_SECRET_ACCESS_KEY
-            valueFrom:
-              secretKeyRef:
-                key: awsKey
-                name: {{ include "iam-eks-user-mapper.fullname" . }}
-          command:
-            - ./app
-            - --aws-iam-group
-            - {{ .Values.syncIamGroup }}
-            - --k8s-cap
-            - system:masters
+            - name: "IAM_K8S_GROUPS"
+              value: "{{ .Values.iamK8sGroups }}"
+            - name: "REFRESH_INTERVAL_SECONDS"
+              value: "{{ .Values.refreshIntervalSeconds }}"
+            - name: "AWS_STS_REGIONAL_ENDPOINTS"
+              value: "regional"
+            - name: "AWS_REGION"
+              value: "{{ .Values.aws.defaultRegion }}"
+            - name: "AWS_DEFAULT_REGION"
+              value: "{{ .Values.aws.defaultRegion }}"
+            - name: "AWS_ROLE_ARN"
+              value: "{{ .Values.aws.roleArn }}"
+            - name: "SERVICE_ACCOUNT_NAME"
+              value: "{{ .Values.serviceAccount.name }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+          command:
+            - ./usr/bin/iam-eks-user-mapper
+      automountServiceAccountToken: true
+      serviceAccountName: {{ .Values.serviceAccount.name }}
