@@ -261,8 +261,23 @@ impl EnvironmentTask {
                 Ok(())
             }
             Err(err @ BuildError::Aborted { .. }) => {
-                let msg = format!("🚫 Container image {} build has been canceled", &image_name);
+                let msg = format!(
+                    "🚫 Container image {} build has been canceled. Either due to timeout or at user request",
+                    &image_name
+                );
+                info!("{}", err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
+                let build_result = build_platform::to_engine_error(event_details, err, msg);
+                logger.send_error(build_result.clone());
+                Err(Box::new(build_result))
+            }
+            Err(err @ BuildError::DockerError { .. }) => {
+                let msg = format!(
+                    "❌ Container image {} failed to be build: Look at the build logs to understand the error",
+                    &image_name
+                );
+                info!("{}", err);
+                let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
                 let build_result = build_platform::to_engine_error(event_details, err, msg);
                 logger.send_error(build_result.clone());
                 Err(Box::new(build_result))
