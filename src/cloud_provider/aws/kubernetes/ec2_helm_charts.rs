@@ -194,7 +194,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "image.tag".to_string(),
-                    value: "2023-08-03T09-51-05".to_string(),
+                    value: "2023-08-16T09-23-02".to_string(),
                 },
                 ChartSetValue {
                     key: "ecr.enabled".to_string(),
