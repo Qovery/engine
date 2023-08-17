@@ -8,6 +8,8 @@ metadata:
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
   annotations:
