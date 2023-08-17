@@ -373,8 +373,7 @@ function update_engine_protobuf() {
 }
 
 function deploy_all_clusters() {
-  token=$(curl -X POST -H 'Content-Type: application/json' --data-raw "{\"username\": \"qovery-admin\", \"password\": \"$CI_ADMIN_PASSWORD\"}" https://api-admin.qovery.com/auth)
-  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
+  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $CI_ADMIN_TOKEN" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
 }
 
 function install_hook() { ## install git hook
