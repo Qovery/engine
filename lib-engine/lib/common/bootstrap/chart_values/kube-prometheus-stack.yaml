@@ -59,6 +59,8 @@ prometheus:
               storage: "50Gi"
 
 prometheusOperator:
+  kubeletService:
+    enabled: false
   resources:
     limits:
       cpu: "1"
