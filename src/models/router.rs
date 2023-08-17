@@ -153,6 +153,8 @@ impl<T: CloudProvider> Router<T> {
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
                 // advanced settings
                 context.insert("advanced_settings", &application.advanced_settings());
+                context.insert("associated_service_long_id", &service_id);
+                context.insert("associated_service_type", "application");
                 (application.kube_name(), application.public_ports())
             } else {
                 let container = environment
@@ -163,6 +165,8 @@ impl<T: CloudProvider> Router<T> {
 
                 // advanced settings
                 context.insert("advanced_settings", &container.advanced_settings());
+                context.insert("associated_service_long_id", &service_id);
+                context.insert("associated_service_type", "container");
 
                 (container.kube_name(), container.public_ports())
             };
