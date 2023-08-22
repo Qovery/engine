@@ -254,7 +254,7 @@ impl FuncTestsSecrets {
 
         Ok(VaultConfig {
             address: vault_addr,
-            token: vault_token.to_string(),
+            token: vault_token,
         })
     }
 
