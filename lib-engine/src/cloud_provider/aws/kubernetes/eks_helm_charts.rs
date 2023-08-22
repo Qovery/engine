@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
-    ChartSetValue, ClusterAgentContext, CommonChart, HelmChart, HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
+    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart,
+    HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
@@ -33,8 +33,10 @@ use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConf
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::QoveryIdentifier;
 use crate::models::aws::AwsStorageType;
 use crate::models::third_parties::LetsEncryptConfig;
 use chrono::Duration;
@@ -45,6 +47,7 @@ use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
@@ -413,26 +416,31 @@ pub fn eks_aws_helm_charts(
         }),
     };
 
-    let cluster_agent_context = ClusterAgentContext {
-        version: qovery_api
+    // Qovery cluster agent
+    let cluster_agent = QoveryClusterAgentChart::new(
+        chart_prefix_path,
+        qovery_api
             .service_version(EngineServiceType::ClusterAgent)
-            .map_err(|e| {
-                CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None)
-            })?,
-        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        organization_long_id: &chart_config_prerequisites.organization_long_id,
-        cluster_id: &chart_config_prerequisites.cluster_id,
-        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
-        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
-        loki_url: if chart_config_prerequisites.ff_log_history_enabled {
-            Some("http://loki.logging.svc.cluster.local:3100")
-        } else {
-            None
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        Url::parse(&chart_config_prerequisites.infra_options.qovery_grpc_url)
+            .map_err(|e| CommandError::new("cannot parse GRPC url".to_string(), Some(e.to_string()), None))?,
+        match chart_config_prerequisites.ff_log_history_enabled {
+            true => Some(
+                Url::parse("http://loki.logging.svc.cluster.local:3100")
+                    .map_err(|e| CommandError::new("cannot parse Loki url".to_string(), Some(e.to_string()), None))?,
+            ),
+            false => None,
         },
-    };
-    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
+        &chart_config_prerequisites.infra_options.jwt_token,
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        HelmChartResourcesConstraintType::ChartDefault,
+        true,
+    )
+    .to_common_helm_chart()?;
 
+    // Qovery shell agent
     let shell_context = ShellAgentContext {
         version: qovery_api
             .service_version(EngineServiceType::ShellAgent)

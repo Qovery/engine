@@ -211,7 +211,7 @@ impl HelmChart for CoreDNSConfigChart {
             },
             Err(e) => return Err(e),
         };
-        if let Err(e) = self.exec(kubernetes_config, envs, None, cmd_killer.clone()) {
+        if let Err(e) = self.exec(kubernetes_config, envs, None, cmd_killer) {
             error!(
                 "Error while deploying chart: {:?}",
                 e.message(ErrorMessageVerbosity::FullDetails)
