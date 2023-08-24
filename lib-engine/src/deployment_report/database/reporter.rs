@@ -4,14 +4,15 @@ use crate::deployment_report::database::renderer::render_database_deployment_rep
 use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::database::DatabaseService;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::sync::Arc;
 use std::time::Instant;
-
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -93,6 +94,7 @@ pub struct DatabaseDeploymentReporter {
     version: String,
     kube_client: kube::Client,
     logger: EnvLogger,
+    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
     action: Action,
 }
 
@@ -110,6 +112,7 @@ impl DatabaseDeploymentReporter {
             version: db.version(),
             kube_client: deployment_target.kube.clone(),
             logger: deployment_target.env_logger(db, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
             action,
         }
     }
@@ -129,6 +132,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
+        self.metrics_registry
+            .start_record(self.long_id, StepLabel::Service, StepName::Deployment);
         // managed db
         if self.is_managed {
             self.logger.send_progress(format!(
@@ -205,6 +210,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     ) {
         let error = match result {
             Ok(_) => {
+                self.metrics_registry
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
                 if self.is_managed {
                     self.logger
                         .send_success(format!("✅ {} of managed database succeeded", self.action));
@@ -218,6 +225,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         if error.tag().is_cancel() {
+            self.metrics_registry
+                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(
@@ -232,8 +241,9 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             ));
             return;
         }
-
         //self.logger.send_error(*error.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!(r#"

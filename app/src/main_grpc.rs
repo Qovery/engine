@@ -50,6 +50,7 @@ use qovery_engine::events::{
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
+use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 
 use crate::constants::ASCII_BANNER;
 use crate::deployment_manager::DeploymentManager;
@@ -90,6 +91,7 @@ fn to_engine_task(
     task_selector: &TaskSelector,
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
 ) -> Result<Box<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
         match task_selector {
@@ -105,6 +107,7 @@ fn to_engine_task(
                     lib_root_dir.to_string(),
                     docker,
                     logger,
+                    metrics_registry,
                     qovery_api,
                 )))
             }
@@ -120,6 +123,7 @@ fn to_engine_task(
                     lib_root_dir.to_string(),
                     docker,
                     logger,
+                    metrics_registry,
                     qovery_api,
                 )))
             }
@@ -218,6 +222,7 @@ pub fn main() -> io::Result<()> {
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
     let logger = Box::new(StdIoLogger::new());
+    let metrics_registry = Box::new(StdMetricsRegistry::new());
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_callback = {
@@ -367,7 +372,8 @@ pub fn main() -> io::Result<()> {
         let mut current_deployment = DeploymentManager::new();
         let payload_to_engine_task = |payload: String,
                                       grpc_client: &GrpcEngineClient,
-                                      logger: Box<dyn Logger>|
+                                      logger: Box<dyn Logger>,
+                                      metrics_registry: Box<dyn MetricsRegistry>|
          -> Result<Box<dyn Task>, serde_json::Error> {
             to_engine_task(
                 payload,
@@ -377,6 +383,7 @@ pub fn main() -> io::Result<()> {
                 &task_selector,
                 grpc_client,
                 logger,
+                metrics_registry,
             )
         };
 
@@ -387,6 +394,7 @@ pub fn main() -> io::Result<()> {
                 &mut current_deployment,
                 payload_to_engine_task,
                 logger.clone(),
+                metrics_registry.clone(),
                 task_selector,
             )
             .await;
@@ -428,8 +436,14 @@ async fn fetch_new_deployment(
 async fn fetch_and_exec_deployments(
     engine_client: &mut GrpcEngineClient,
     mut current_deployment: &mut DeploymentManager,
-    to_engine_task: impl Fn(String, &GrpcEngineClient, Box<dyn Logger>) -> Result<Box<dyn Task>, serde_json::Error>,
+    to_engine_task: impl Fn(
+        String,
+        &GrpcEngineClient,
+        Box<dyn Logger>,
+        Box<dyn MetricsRegistry>,
+    ) -> Result<Box<dyn Task>, serde_json::Error>,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     task_selector: TaskSelector,
 ) -> Result<(), anyhow::Error> {
     let deployment_type = match task_selector {
@@ -525,6 +539,7 @@ async fn fetch_and_exec_deployments(
                                 payload,
                                 engine_client,
                                 logger_for_task.clone_dyn(),
+                                metrics_registry.clone(),
                             );
 
                             match task {

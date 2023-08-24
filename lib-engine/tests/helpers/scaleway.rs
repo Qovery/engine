@@ -23,6 +23,7 @@ use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 
 use crate::helpers::common::{Cluster, ClusterDomain};
@@ -75,12 +76,17 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     .unwrap()
 }
 
-pub fn scw_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
+pub fn scw_default_infra_config(
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+) -> InfrastructureContext {
     let secrets = FuncTestsSecrets::new();
 
     Scaleway::docker_cr_engine(
         context,
         logger,
+        metrics_registry,
         secrets
             .SCALEWAY_TEST_CLUSTER_REGION
             .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
@@ -102,6 +108,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
         kubernetes_version: KubernetesVersion,
@@ -129,6 +136,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
+            metrics_registry.clone(),
             localisation,
             vpc_network_mode,
             min_nodes,

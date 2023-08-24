@@ -44,6 +44,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::StringPath;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
@@ -292,6 +293,7 @@ pub trait Kubernetes: Send + Sync {
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
+    fn metrics_registry(&self) -> &dyn MetricsRegistry;
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;

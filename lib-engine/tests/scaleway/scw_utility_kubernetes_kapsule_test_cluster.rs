@@ -1,5 +1,7 @@
 use crate::helpers::scaleway::scw_default_infra_config;
-use crate::helpers::utilities::{context_for_cluster, engine_run_test, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_cluster, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
+};
 use ::function_name::named;
 use tracing::{span, Level};
 
@@ -30,8 +32,9 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
-        let engine = scw_default_infra_config(&context, logger.clone());
+        let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 
         // Deploy
@@ -70,8 +73,9 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
-        let engine = scw_default_infra_config(&context, logger.clone());
+        let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 
         // Destroy

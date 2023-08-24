@@ -4,7 +4,9 @@ use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{
     test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db, StorageSize,
 };
-use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -42,6 +44,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
@@ -51,9 +54,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
@@ -89,6 +93,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
@@ -98,9 +103,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
@@ -150,6 +156,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
@@ -159,9 +166,10 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -220,6 +228,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
@@ -230,11 +239,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let infra_ctx_for_redeploy = aws_default_infra_config(&context_for_redeploy, logger.clone());
+        let infra_ctx_for_redeploy =
+            aws_default_infra_config(&context_for_redeploy, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
@@ -369,6 +380,7 @@ fn test_oversized_volume() {
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             "13",
@@ -439,6 +451,7 @@ pub fn test_postgresql_configuration(
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -482,6 +495,7 @@ pub fn test_postgresql_pause(
         test_pause_managed_db(
             context.clone(),
             logger(),
+            metrics_registry(),
             environment,
             secrets.clone(),
             version,
@@ -694,6 +708,7 @@ pub fn test_mongodb_configuration(
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -842,6 +857,7 @@ pub fn test_mysql_configuration(
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -971,6 +987,7 @@ pub fn test_redis_configuration(
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,

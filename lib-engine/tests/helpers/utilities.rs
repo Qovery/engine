@@ -47,6 +47,7 @@ use qovery_engine::io_models::database::DatabaseMode::MANAGED;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
+use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::models::database::DatabaseInstanceType;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
@@ -151,6 +152,10 @@ pub fn logger() -> Box<dyn Logger> {
     Box::new(StdIoLogger::new())
 }
 
+pub fn metrics_registry() -> Box<dyn MetricsRegistry> {
+    Box::new(StdMetricsRegistry::new())
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(non_snake_case)]
 pub struct FuncTestsSecrets {
@@ -249,7 +254,7 @@ impl FuncTestsSecrets {
 
         Ok(VaultConfig {
             address: vault_addr,
-            token: vault_token,
+            token: vault_token.to_string(),
         })
     }
 

@@ -27,12 +27,14 @@ use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, S
 use qovery_engine::engine_task::Task;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::logger::{Logger, StdIoLogger};
+use qovery_engine::metrics_registry::MetricsRegistry;
 
 use crate::constants::ASCII_BANNER;
 use crate::logger::composite_logger::CompositeLogger;
 
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, check_versions_from};
+use qovery_engine::metrics_registry::StdMetricsRegistry;
 use reqwest::header;
 use serde::Deserialize;
 
@@ -72,6 +74,7 @@ pub fn main() -> io::Result<()> {
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
 
     let logger: Box<dyn Logger> = Box::new(CompositeLogger::new(vec![Box::new(StdIoLogger::new())]));
+    let metrics_registry = Box::new(StdMetricsRegistry::new());
 
     info!("engine id: {}", engine_id.as_str());
     info!(
@@ -130,6 +133,7 @@ pub fn main() -> io::Result<()> {
                 test_cluster,
                 TaskSelector::Infrastructure(""),
                 docker,
+                metrics_registry,
             ),
             "env" => using_json_path_parameter(
                 logger,
@@ -139,6 +143,7 @@ pub fn main() -> io::Result<()> {
                 test_cluster,
                 TaskSelector::Environment(""),
                 docker,
+                metrics_registry,
             ),
             _ => {
                 println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
@@ -161,6 +166,7 @@ pub fn using_json_path_parameter(
     test_cluster: bool,
     deployment_type: TaskSelector,
     docker: Arc<Docker>,
+    metrics_registry: Box<dyn MetricsRegistry>,
 ) -> Result<(), Error> {
     // check if file json config file exist
     if !Path::new(&deploy_from_file).exists() {
@@ -186,6 +192,7 @@ pub fn using_json_path_parameter(
                 lib_root_dir,
                 docker,
                 logger,
+                metrics_registry,
                 Box::new(FakeQoveryApi {}),
             ))
         }
@@ -203,6 +210,7 @@ pub fn using_json_path_parameter(
                 lib_root_dir,
                 docker,
                 logger,
+                metrics_registry,
                 Box::new(StaticQoveryApi {
                     versions: get_qovery_app_version("api.qovery.com").unwrap(),
                 }),

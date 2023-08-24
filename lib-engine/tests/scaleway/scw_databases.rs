@@ -1,6 +1,6 @@
 use crate::helpers::utilities::{
     context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    logger, FuncTestsSecrets,
+    logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
@@ -47,6 +47,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
@@ -66,9 +67,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             None,
@@ -108,6 +110,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
@@ -127,9 +130,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
@@ -189,6 +193,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
@@ -200,9 +205,10 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             cluster_id,
         );
 
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -269,6 +275,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
@@ -289,11 +296,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             cluster_id,
         );
 
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let infra_ctx_for_redeploy = scw_default_infra_config(&context_for_redeploy, logger.clone());
+        let infra_ctx_for_redeploy =
+            scw_default_infra_config(&context_for_redeploy, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -435,6 +444,7 @@ fn test_oversized_volume() {
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             "13",
@@ -486,6 +496,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -678,6 +689,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -759,6 +771,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,
@@ -858,6 +871,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             version,

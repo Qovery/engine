@@ -24,6 +24,7 @@ use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 use std::str::FromStr;
@@ -54,6 +55,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     dns_provider: Arc<Box<dyn DnsProvider>>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     min_nodes: i32,
     max_nodes: i32,
     cpu_archi: CpuArchitecture,
@@ -81,6 +83,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
+                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
                         ..Default::default()
@@ -112,6 +115,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
+                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 7200,
                         ..Default::default()
@@ -133,6 +137,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                 Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                 logger,
+                metrics_registry,
                 ClusterAdvancedSettings {
                     pleco_resources_ttl: 14400,
                     ..Default::default()
@@ -152,6 +157,7 @@ pub fn cluster_test(
     kubernetes_kind: KubernetesKind,
     context: Context,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     test_type: ClusterTestType,
@@ -186,6 +192,7 @@ pub fn cluster_test(
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
+            metrics_registry.clone(),
             localisation,
             kubernetes_kind,
             kubernetes_boot_version.clone(),
@@ -199,6 +206,7 @@ pub fn cluster_test(
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
+            metrics_registry.clone(),
             localisation,
             kubernetes_kind,
             kubernetes_boot_version.clone(),
@@ -270,6 +278,7 @@ pub fn cluster_test(
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation,
                     KubernetesKind::Eks,
                     upgrade_to_version,
@@ -283,6 +292,7 @@ pub fn cluster_test(
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation,
                     KubernetesKind::ScwKapsule,
                     upgrade_to_version,
@@ -318,6 +328,7 @@ pub fn cluster_test(
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation,
                     KubernetesKind::Eks,
                     kubernetes_boot_version,
@@ -331,6 +342,7 @@ pub fn cluster_test(
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation,
                     KubernetesKind::ScwKapsule,
                     kubernetes_boot_version,
@@ -392,6 +404,7 @@ pub fn get_environment_test_kubernetes(
     kubernetes_version: KubernetesVersion,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     min_nodes: i32,
@@ -423,6 +436,7 @@ pub fn get_environment_test_kubernetes(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
+                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
                         aws_vpc_enable_flow_logs: true,
@@ -455,6 +469,7 @@ pub fn get_environment_test_kubernetes(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
+                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 7200,
                         aws_vpc_enable_flow_logs: false,
@@ -479,6 +494,7 @@ pub fn get_environment_test_kubernetes(
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                     logger,
+                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: 14400,
                         ..Default::default()

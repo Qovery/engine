@@ -20,6 +20,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::transaction::DeploymentOption;
 use itertools::Itertools;
 use std::cmp::{max, min};
@@ -40,6 +41,7 @@ pub struct EnvironmentTask {
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
     span: tracing::Span,
 }
@@ -51,6 +53,7 @@ impl EnvironmentTask {
         lib_root_dir: String,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
         let span = info_span!(
@@ -66,6 +69,7 @@ impl EnvironmentTask {
             docker,
             request,
             logger,
+            metrics_registry,
             cancel_requested: Arc::new(AtomicBool::from(false)),
             qovery_api: Arc::new(qovery_api),
             span,
@@ -91,8 +95,12 @@ impl EnvironmentTask {
     // FIXME: Remove EngineConfig type, there is no use for it
     // merge it with DeploymentTarget type
     fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
-        self.request
-            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
+        self.request.engine(
+            &self.info_context(),
+            self.request.event_details(),
+            self.logger.clone(),
+            self.metrics_registry.clone(),
+        )
     }
 
     fn _is_canceled(&self) -> bool {
@@ -114,6 +122,7 @@ impl EnvironmentTask {
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_builpacks = false;
+        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
         let services = services
             .into_iter()
             .filter(|srv| {
@@ -132,7 +141,6 @@ impl EnvironmentTask {
             Some(srv) => srv,
         };
 
-        // Provision necessary builder for being able to build in parallel
         let builder_handle = {
             let nb_builder = if build_needs_builpacks {
                 env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
@@ -212,6 +220,7 @@ impl EnvironmentTask {
                         img_retention_time_sec,
                         cr_to_engine_error,
                         &mk_logger,
+                        metrics_registry.clone(),
                         &should_abort,
                     )
                 }
@@ -230,6 +239,7 @@ impl EnvironmentTask {
         image_retention_time_sec: u32,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
+        _metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
@@ -298,6 +308,8 @@ impl EnvironmentTask {
         env_logger: impl Fn(String),
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
+        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
+        let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
         let run_deploy = || -> Result<(), Box<EngineError>> {
@@ -343,7 +355,10 @@ impl EnvironmentTask {
         };
 
         let deployment_err = match run_deploy() {
-            Ok(_) => return Ok(()), // return early if no error
+            Ok(_) => {
+                record.stop(StepStatus::Ok);
+                return Ok(());
+            } // return early if no error
             Err(err) => err,
         };
 
@@ -365,6 +380,7 @@ impl EnvironmentTask {
             ));
         }
 
+        record.stop(StepStatus::Error);
         Err(deployment_err)
     }
 }
