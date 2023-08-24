@@ -19,6 +19,7 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::runtime::block_on;
 use crate::utilities::create_kube_client;
 
@@ -121,6 +122,7 @@ pub struct DeploymentTarget<'a> {
     pub helm: Helm,
     pub should_abort: &'a (dyn Fn() -> bool + Send + Sync),
     logger: Arc<Box<dyn Logger>>,
+    pub metrics_registry: Arc<Box<dyn MetricsRegistry>>,
     pub is_dry_run_deploy: bool,
     pub is_test_cluster: bool,
 }
@@ -163,6 +165,7 @@ impl<'a> DeploymentTarget<'a> {
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),
+            metrics_registry: Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn()),
         })
     }
 

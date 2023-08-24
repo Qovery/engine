@@ -1,5 +1,6 @@
 use crate::helpers::utilities::{
-    context_for_ec2, engine_run_test, generate_cluster_id, generate_id, init, logger, FuncTestsSecrets,
+    context_for_ec2, engine_run_test, generate_cluster_id, generate_id, init, logger, metrics_registry,
+    FuncTestsSecrets,
 };
 use function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
@@ -35,6 +36,7 @@ fn test_ec2_database(
         let secrets = FuncTestsSecrets::new();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let organization_id = generate_id();
         let localisation = match database_mode {
             DatabaseMode::MANAGED => secrets
@@ -62,6 +64,7 @@ fn test_ec2_database(
         let infra_ctx = AWS::docker_cr_engine(
             &context,
             logger.clone(),
+            metrics_registry.clone(),
             &localisation,
             Kind::Ec2,
             KubernetesVersion::V1_26 {
@@ -85,6 +88,7 @@ fn test_ec2_database(
         test_db(
             context,
             logger.clone(),
+            metrics_registry.clone(),
             environment,
             secrets,
             db_version,

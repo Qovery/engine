@@ -5,6 +5,7 @@ use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::application::ApplicationService;
 use crate::models::container::ContainerService;
 use crate::runtime::block_on;
@@ -12,6 +13,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::sync::Arc;
 
 use std::time::Instant;
 use uuid::Uuid;
@@ -24,6 +26,7 @@ pub struct ApplicationDeploymentReporter<T> {
     kube_client: kube::Client,
     selector: String,
     logger: EnvLogger,
+    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
     _tag: std::marker::PhantomData<T>,
     action: Action,
 }
@@ -42,6 +45,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             kube_client: deployment_target.kube.clone(),
             selector: app.kube_label_selector(),
             logger: deployment_target.env_logger(app, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
             _tag: Default::default(),
             action,
         }
@@ -60,6 +64,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             kube_client: deployment_target.kube.clone(),
             selector: container.kube_label_selector(),
             logger: deployment_target.env_logger(container, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
             _tag: Default::default(),
             action,
         }
@@ -86,6 +91,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             &self.selector,
             &self.namespace,
         )) {
+            self.metrics_registry
+                .start_record(self.long_id, StepLabel::Service, StepName::Deployment);
             self.logger.send_progress(format!(
                 "🚀 {} of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
                 self.action,
@@ -144,6 +151,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     ) {
         let error = match result {
             Ok(_) => {
+                self.metrics_registry
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
                 self.logger
                     .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type.to_string()));
                 return;
@@ -153,6 +162,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {
+            self.metrics_registry
+                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(
@@ -167,6 +178,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 None,
             ));
         } else {
+            self.metrics_registry
+                .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
             //self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),

@@ -5,6 +5,7 @@ use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPO
 use crate::errors::EngineError;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use k8s_openapi::api::core::v1::{Event, Pod};
 use kube::api::ListParams;
@@ -14,6 +15,7 @@ use crate::deployment_report::job::renderer::render_job_deployment_report;
 use crate::deployment_report::utils::to_job_render_context;
 use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::job::JobService;
 use crate::runtime::block_on;
 use itertools::Itertools;
@@ -47,6 +49,7 @@ pub struct JobDeploymentReporter<T> {
     kube_client: kube::Client,
     selector: String,
     logger: EnvLogger,
+    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
     send_final_deleted_status: bool,
     _phantom: PhantomData<T>,
 }
@@ -77,6 +80,7 @@ impl<T> JobDeploymentReporter<T> {
             kube_client: deployment_target.kube.clone(),
             selector: job.kube_label_selector(),
             logger: deployment_target.env_logger(job, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
             send_final_deleted_status: send_final_delete_status,
             _phantom: PhantomData,
         }
@@ -124,6 +128,8 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         // If job should be force trigerred, display a specific message saying so
+        self.metrics_registry
+            .start_record(self.long_id, StepLabel::Service, StepName::Deployment);
         if self.is_force_trigger {
             match &self.job_type {
                 JobType::CronJob(schedule) => self.logger.send_progress(format!(
@@ -207,6 +213,8 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     ) {
         let error = match result {
             Ok(_) => {
+                self.metrics_registry
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
                 if self.action == Action::Delete && !self.send_final_deleted_status {
                     return;
                 }
@@ -219,6 +227,8 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         };
 
         if error.tag().is_cancel() {
+            self.metrics_registry
+                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!("🚫 {} has been cancelled.", self.action),
@@ -226,7 +236,8 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             ));
             return;
         }
-
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
         // Retrieve last state of the job to display it in the final message.
         let job_failure_message = match block_on(fetch_job_deployment_report(
             &self.kube_client,

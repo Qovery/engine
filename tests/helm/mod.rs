@@ -1,6 +1,6 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
@@ -99,6 +99,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
+            metrics_registry(),
             ClusterAdvancedSettings {
                 load_balancer_size: "my_load_balancer_size".to_string(),
                 registry_image_retention_time_sec: 1,
@@ -579,6 +580,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
     AWS::docker_cr_engine(
         test_kube.context(),
         logger(),
+        metrics_registry(),
         test_kube.region(),
         test_kube.kind(),
         test_kube.version(),

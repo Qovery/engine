@@ -14,6 +14,7 @@ use qovery_engine::io_models::context::Context;
 
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::transaction::TransactionResult;
 
 pub enum RegionActivationStatus {
@@ -32,6 +33,7 @@ pub trait Cluster<T, U> {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
         kubernetes_version: KubernetesVersion,

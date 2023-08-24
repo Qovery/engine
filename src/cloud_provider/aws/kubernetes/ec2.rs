@@ -20,6 +20,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
@@ -58,6 +59,7 @@ pub struct EC2 {
     options: Options,
     instance: InstanceEc2,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
@@ -76,6 +78,7 @@ impl EC2 {
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
@@ -116,6 +119,7 @@ impl EC2 {
             instance,
             template_directory,
             logger,
+            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
         })
@@ -282,6 +286,10 @@ impl Kubernetes for EC2 {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
+    }
+
+    fn metrics_registry(&self) -> &dyn MetricsRegistry {
+        self.metrics_registry.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {

@@ -31,6 +31,7 @@ use crate::io_models::context::{Context, Features};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -143,6 +144,7 @@ pub struct Kapsule {
     template_directory: String,
     options: KapsuleOptions,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
@@ -159,6 +161,7 @@ impl Kapsule {
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Kapsule, Box<EngineError>> {
@@ -235,6 +238,7 @@ impl Kapsule {
             template_directory,
             options,
             logger,
+            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
         })
@@ -1554,6 +1558,10 @@ impl Kubernetes for Kapsule {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
+    }
+
+    fn metrics_registry(&self) -> &dyn MetricsRegistry {
+        self.metrics_registry.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {

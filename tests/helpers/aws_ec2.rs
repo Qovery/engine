@@ -9,6 +9,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use std::string::ToString;
 use std::sync::Arc;
 use tracing::error;
@@ -50,12 +51,17 @@ pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, re
     .unwrap()
 }
 
-pub fn aws_ec2_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
+pub fn aws_ec2_default_infra_config(
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+) -> InfrastructureContext {
     let secrets = FuncTestsSecrets::new();
 
     AWS::docker_cr_engine(
         context,
         logger,
+        metrics_registry,
         secrets
             .AWS_EC2_TEST_CLUSTER_REGION
             .expect("AWS_EC2_TEST_CLUSTER_REGION is not set")

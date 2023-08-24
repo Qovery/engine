@@ -2,7 +2,7 @@ use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
@@ -50,6 +50,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             KKind::Eks,
             context.clone(),
             logger(),
+            metrics_registry(),
             region,
             Some(aws_zones),
             ClusterTestType::Classic,
@@ -95,6 +96,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             KKind::Eks,
             context.clone(),
             logger(),
+            metrics_registry(),
             region,
             Some(aws_zones),
             ClusterTestType::WithNodesResize,
@@ -141,6 +143,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             KKind::Eks,
             context.clone(),
             logger(),
+            metrics_registry(),
             region,
             Some(aws_zones),
             ClusterTestType::WithPause,
@@ -187,6 +190,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             KKind::Eks,
             context.clone(),
             logger(),
+            metrics_registry(),
             region,
             Some(aws_zones),
             ClusterTestType::WithUpgrade,

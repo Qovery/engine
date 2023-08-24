@@ -1,4 +1,6 @@
-use crate::helpers::utilities::{context_for_ec2, engine_run_test, generate_organization_id, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_ec2, engine_run_test, generate_organization_id, logger, metrics_registry, FuncTestsSecrets,
+};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use std::str::FromStr;
@@ -37,6 +39,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             KKind::Ec2,
             context_for_ec2(organization_id, cluster_id),
             logger(),
+            metrics_registry(),
             localisation.to_aws_format(),
             Some(zones),
             test_type,
