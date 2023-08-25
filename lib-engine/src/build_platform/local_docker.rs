@@ -2,6 +2,7 @@
 
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 
@@ -21,6 +22,7 @@ use crate::deployment_report::logger::EnvLogger;
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::io_models::context::Context;
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
@@ -116,12 +118,13 @@ impl LocalDocker {
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         logger: &EnvLogger,
+        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
-            application: build.image.application_id.clone(),
+            application: build.image.service_id.clone(),
             action_description: "reading dockerfile content".to_string(),
             raw_error: err,
         })?;
@@ -129,7 +132,7 @@ impl LocalDocker {
             Ok(dockerfile_args) => dockerfile_args,
             Err(err) => {
                 return Err(BuildError::InvalidConfig {
-                    application: build.image.application_id.clone(),
+                    application: build.image.service_id.clone(),
                     raw_error_message: format!("Cannot extract env vars from your dockerfile {err}"),
                 });
             }
@@ -161,7 +164,8 @@ impl LocalDocker {
         }
 
         logger.send_progress(format!("⛏️ Building image. It does not exist remotely {image_name}"));
-
+        let build_record =
+            metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
@@ -187,7 +191,12 @@ impl LocalDocker {
             &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
-        exit_status.map_err(|err| to_build_error(build.image.application_id.clone(), err))
+        if let Err(err) = exit_status {
+            build_record.stop(StepStatus::Error);
+            return Err(to_build_error(build.image.service_id.clone(), err));
+        }
+        build_record.stop(StepStatus::Ok);
+        Ok(())
     }
 
     fn build_image_with_buildpacks(
@@ -243,7 +252,7 @@ impl LocalDocker {
                     }
                     _ => {
                         return Err(BuildError::InvalidConfig {
-                            application: build.image.application_id.clone(),
+                            application: build.image.service_id.clone(),
                             raw_error_message: format!(
                                 "Invalid buildpacks language format: expected `builder[@version]` got {buildpacks_language}"
                             ),
@@ -281,10 +290,10 @@ impl LocalDocker {
         match exit_status {
             Ok(_) => Ok(()),
             Err(Killed(_)) => Err(BuildError::Aborted {
-                application: build.image.application_id.clone(),
+                application: build.image.service_id.clone(),
             }),
             Err(err) => Err(BuildError::BuildpackError {
-                application: build.image.application_id.clone(),
+                application: build.image.service_id.clone(),
                 raw_error: err,
             }),
         }
@@ -297,7 +306,7 @@ impl LocalDocker {
             format!("build/{}", build.image.name.as_str()),
         )
         .map_err(|err| BuildError::IoError {
-            application: build.image.application_id.clone(),
+            application: build.image.service_id.clone(),
             action_description: "when creating build workspace".to_string(),
             raw_error: err,
         })
@@ -325,12 +334,13 @@ impl BuildPlatform for LocalDocker {
         &self,
         build: &mut Build,
         logger: &EnvLogger,
+        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // check if we should already abort the task
         if is_task_canceled() {
             return Err(BuildError::Aborted {
-                application: build.image.application_id.clone(),
+                application: build.image.service_id.clone(),
             });
         }
 
@@ -378,7 +388,7 @@ impl BuildPlatform for LocalDocker {
         // Cleanup, mono repo can require to clone multiple time the same repo
         // FIXME: re-use the same repo and just checkout at the correct commit
         if repository_root_path.exists() {
-            let app_id = build.image.application_id.clone();
+            let app_id = build.image.service_id.clone();
             fs::remove_dir_all(&repository_root_path).map_err(|err| BuildError::IoError {
                 application: app_id,
                 action_description: "cleaning old repository".to_string(),
@@ -387,17 +397,22 @@ impl BuildPlatform for LocalDocker {
         }
 
         // Do the real git clone
+        let git_clone_record =
+            metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::GitClone);
         if let Err(clone_error) = git::clone_at_commit(
             &build.git_repository.url,
             &build.git_repository.commit_id,
             &repository_root_path,
             &get_credentials,
         ) {
+            git_clone_record.stop(StepStatus::Error);
             return Err(BuildError::GitError {
-                application: build.image.application_id.clone(),
+                application: build.image.service_id.clone(),
                 raw_error: clone_error,
             });
         }
+        git_clone_record.stop(StepStatus::Ok);
+
         let _git_cleanup = scopeguard::guard(&repository_root_path, |path| {
             info!("Removing git repository at path: {:?}", path);
             let _ = fs::remove_dir_all(path);
@@ -405,7 +420,7 @@ impl BuildPlatform for LocalDocker {
 
         if is_task_canceled() {
             return Err(BuildError::Aborted {
-                application: build.image.application_id.clone(),
+                application: build.image.service_id.clone(),
             });
         }
 
@@ -413,7 +428,7 @@ impl BuildPlatform for LocalDocker {
         // ex: this cause regular cleanup on CI, leading to random tests errors
         self.reclaim_space_if_needed();
 
-        let app_id = build.image.application_id.clone();
+        let app_id = build.image.service_id.clone();
 
         // Fetch git-lfs/big files for the repository if necessary
         let git_lfs = if let Some(creds) = git_user_creds {
@@ -510,17 +525,26 @@ impl BuildPlatform for LocalDocker {
                 dockerfile_absolute_path.to_str().unwrap_or_default(),
                 build_context_path.to_str().unwrap_or_default(),
                 logger,
+                metrics_registry.clone(),
                 is_task_canceled,
             )
         } else {
             // build container with Buildpacks
-            self.build_image_with_buildpacks(
+            let build_record =
+                metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
+            let build_result = self.build_image_with_buildpacks(
                 build,
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
                 logger,
                 is_task_canceled,
-            )
+            );
+            build_record.stop(if build_result.is_ok() {
+                StepStatus::Ok
+            } else {
+                StepStatus::Error
+            });
+            build_result
         }
     }
 }

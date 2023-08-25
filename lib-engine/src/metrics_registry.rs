@@ -6,6 +6,10 @@ use uuid::Uuid;
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum StepName {
     Total,
+    ProvisionBuilder,
+    RegistryCreateRepository,
+    GitClone,
+    Build,
     Deployment,
 }
 
@@ -95,11 +99,11 @@ impl Drop for StepRecordHandle {
 }
 
 type StepRecordMap = HashMap<StepName, StepRecord>;
-type MetricsRegistryMap = Arc<Mutex<HashMap<Uuid, StepRecordMap>>>;
+type MetricsRegistryMap = HashMap<Uuid, StepRecordMap>;
 
 #[derive(Clone)]
 pub struct StdMetricsRegistry {
-    registry: MetricsRegistryMap,
+    registry: Arc<Mutex<MetricsRegistryMap>>,
 }
 
 impl StdMetricsRegistry {

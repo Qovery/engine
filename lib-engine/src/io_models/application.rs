@@ -363,9 +363,9 @@ impl Application {
 
     fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
-            application_id: to_short_id(&self.long_id),
-            application_long_id: self.long_id,
-            application_name: self.name.clone(),
+            service_id: to_short_id(&self.long_id),
+            service_long_id: self.long_id,
+            service_name: self.name.clone(),
             name: (cr_info.get_image_name)(&self.name),
             tag: "".to_string(), // It needs to be compute after creation
             commit_id: self.commit_id.clone(),

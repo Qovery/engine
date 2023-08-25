@@ -157,20 +157,64 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
         let records = metrics_registry.get_records(environment.applications.first().unwrap().long_id);
-        assert_eq!(records.len(), 1);
-        assert_eq!(records.first().unwrap().step_name, StepName::Deployment);
-        assert_eq!(records.first().unwrap().label, StepLabel::Service);
-        assert_eq!(records.first().unwrap().id, environment.applications.first().unwrap().long_id);
-        assert_eq!(records.first().unwrap().status, Some(StepStatus::Ok));
-        assert!(records.first().unwrap().duration.is_some());
+        assert_eq!(records.len(), 4);
+
+        let record_provision_repo = records
+            .iter()
+            .find(|step| step.step_name == StepName::RegistryCreateRepository)
+            .unwrap();
+        assert_eq!(record_provision_repo.step_name, StepName::RegistryCreateRepository);
+        assert_eq!(record_provision_repo.label, StepLabel::Service);
+        assert_eq!(record_provision_repo.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(record_provision_repo.status, Some(StepStatus::Ok));
+        assert!(record_provision_repo.duration.is_some());
+
+        let record_git_clone = records
+            .iter()
+            .find(|step| step.step_name == StepName::GitClone)
+            .unwrap();
+        assert_eq!(record_git_clone.step_name, StepName::GitClone);
+        assert_eq!(record_git_clone.label, StepLabel::Service);
+        assert_eq!(record_git_clone.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(record_git_clone.status, Some(StepStatus::Ok));
+        assert!(record_git_clone.duration.is_some());
+
+        let record_build = records.iter().find(|step| step.step_name == StepName::Build).unwrap();
+        assert_eq!(record_build.step_name, StepName::Build);
+        assert_eq!(record_build.label, StepLabel::Service);
+        assert_eq!(record_build.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(record_build.status, Some(StepStatus::Ok));
+        assert!(record_build.duration.is_some());
+
+        let record_deployment = records
+            .iter()
+            .find(|step| step.step_name == StepName::Deployment)
+            .unwrap();
+        assert_eq!(record_deployment.step_name, StepName::Deployment);
+        assert_eq!(record_deployment.label, StepLabel::Service);
+        assert_eq!(record_deployment.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(record_deployment.status, Some(StepStatus::Ok));
+        assert!(record_deployment.duration.is_some());
 
         let records = metrics_registry.get_records(environment.long_id);
-        assert_eq!(records.len(), 1);
-        assert_eq!(records.first().unwrap().step_name, StepName::Total);
-        assert_eq!(records.first().unwrap().label, StepLabel::Environment);
-        assert_eq!(records.first().unwrap().id, environment.long_id);
-        assert_eq!(records.first().unwrap().status, Some(StepStatus::Ok));
-        assert!(records.first().unwrap().duration.is_some());
+        assert_eq!(records.len(), 2);
+
+        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        assert_eq!(record_total.step_name, StepName::Total);
+        assert_eq!(record_total.label, StepLabel::Environment);
+        assert_eq!(record_total.id, environment.long_id);
+        assert_eq!(record_total.status, Some(StepStatus::Ok));
+        assert!(record_total.duration.is_some());
+
+        let record_provision = records
+            .iter()
+            .find(|step| step.step_name == StepName::ProvisionBuilder)
+            .unwrap();
+        assert_eq!(record_provision.step_name, StepName::ProvisionBuilder);
+        assert_eq!(record_provision.label, StepLabel::Environment);
+        assert_eq!(record_provision.id, environment.long_id);
+        assert_eq!(record_provision.status, Some(StepStatus::Ok));
+        assert!(record_provision.duration.is_some());
 
         let ret = environment_for_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

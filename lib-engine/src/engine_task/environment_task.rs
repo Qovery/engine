@@ -7,7 +7,7 @@ use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
-use crate::cmd::docker::Docker;
+use crate::cmd::docker::{BuilderHandle, Docker};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
@@ -112,6 +112,7 @@ impl EnvironmentTask {
     }
 
     pub fn build_and_push_services(
+        environment_id: Uuid,
         services: Vec<&mut dyn Service>,
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
@@ -141,49 +142,24 @@ impl EnvironmentTask {
             Some(srv) => srv,
         };
 
-        let builder_handle = {
-            let nb_builder = if build_needs_builpacks {
-                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-                env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
-                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-                NonZeroUsize::new(1).unwrap()
-            } else {
-                NonZeroUsize::new(max(min(max_build_in_parallel, services.len()), 1)).unwrap()
-            };
-
-            // Compute max resources needed for the builders
-            let (max_cpu, max_ram) = services.iter().fold((2000u32, 2u32), |(cpu, ram), s| {
-                s.build()
-                    .map(|b| (max(cpu, b.max_cpu_in_milli), max(ram, b.max_ram_in_gib)))
-                    .unwrap_or((cpu, ram))
-            });
-
-            env_logger(format!(
-                "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
-            ));
-            match infra_ctx.context().docker.spawn_builder(
-                nb_builder,
-                infra_ctx
-                    .kubernetes()
-                    .cpu_architectures()
-                    .iter()
-                    .map(docker::Architecture::from)
-                    .collect_vec()
-                    .as_slice(),
-                (max_cpu - 1000, max_cpu),
-                (max_ram - 1, max_ram),
-                &CommandKiller::from_cancelable(should_abort),
-            ) {
-                Ok(build_handle) => build_handle,
-                Err(err) => {
-                    let build_error = to_build_error(first_service.long_id().to_string(), err);
-                    let engine_error = build_platform::to_engine_error(
-                        first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
-                        build_error,
-                        "Cannot provision docker builder. Please retry later.".to_string(),
-                    );
-                    return Err(Box::new(engine_error));
-                }
+        let provision_builder =
+            metrics_registry.start_record(environment_id, StepLabel::Environment, StepName::ProvisionBuilder);
+        let builder_handle = match Self::provision_builder(
+            infra_ctx,
+            max_build_in_parallel,
+            env_logger,
+            &should_abort,
+            build_needs_builpacks,
+            &services,
+            first_service,
+        ) {
+            Ok(handle) => {
+                provision_builder.stop(StepStatus::Ok);
+                handle
+            }
+            Err(engine_error) => {
+                provision_builder.stop(StepStatus::Error);
+                return Err(engine_error);
             }
         };
 
@@ -231,6 +207,63 @@ impl EnvironmentTask {
         builder_threadpool.run(build_tasks, builder_handle.nb_builder, &should_abort_flag, should_abort)
     }
 
+    fn provision_builder(
+        infra_ctx: &InfrastructureContext,
+        max_build_in_parallel: usize,
+        env_logger: impl Fn(String),
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
+        build_needs_builpacks: bool,
+        services: &Vec<&mut dyn Service>,
+        first_service: &&mut dyn Service,
+    ) -> Result<BuilderHandle, Box<EngineError>> {
+        let builder_handle = {
+            let nb_builder = if build_needs_builpacks {
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+                env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
+                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+                NonZeroUsize::new(1).unwrap()
+            } else {
+                NonZeroUsize::new(max(min(max_build_in_parallel, services.len()), 1)).unwrap()
+            };
+
+            // Compute max resources needed for the builders
+            let (max_cpu, max_ram) = services.iter().fold((2000u32, 2u32), |(cpu, ram), s| {
+                s.build()
+                    .map(|b| (max(cpu, b.max_cpu_in_milli), max(ram, b.max_ram_in_gib)))
+                    .unwrap_or((cpu, ram))
+            });
+
+            env_logger(format!(
+                "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
+            ));
+            match infra_ctx.context().docker.spawn_builder(
+                nb_builder,
+                infra_ctx
+                    .kubernetes()
+                    .cpu_architectures()
+                    .iter()
+                    .map(docker::Architecture::from)
+                    .collect_vec()
+                    .as_slice(),
+                (max_cpu - 1000, max_cpu),
+                (max_ram - 1, max_ram),
+                &CommandKiller::from_cancelable(should_abort),
+            ) {
+                Ok(build_handle) => build_handle,
+                Err(err) => {
+                    let build_error = to_build_error(first_service.long_id().to_string(), err);
+                    let engine_error = build_platform::to_engine_error(
+                        first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
+                        build_error,
+                        "Cannot provision docker builder. Please retry later.".to_string(),
+                    );
+                    return Err(Box::new(engine_error));
+                }
+            }
+        };
+        Ok(builder_handle)
+    }
+
     fn build_and_push_service(
         service: &mut dyn Service,
         option: &DeploymentOption,
@@ -239,7 +272,7 @@ impl EnvironmentTask {
         image_retention_time_sec: u32,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
-        _metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
@@ -258,12 +291,25 @@ impl EnvironmentTask {
 
         // Be sure that our repository exist before trying to pull/push images from it
         logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
-        cr_registry
-            .create_repository(build.image.repository_name(), image_retention_time_sec)
-            .map_err(cr_to_engine_error)?;
+        let provision_registry_record = metrics_registry.start_record(
+            build.image.service_long_id,
+            StepLabel::Service,
+            StepName::RegistryCreateRepository,
+        );
+        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec) {
+            Err(err) => {
+                provision_registry_record.stop(StepStatus::Error);
+                return Err(Box::new(cr_to_engine_error(err)));
+            }
+            Ok(repository_info) => provision_registry_record.stop(if repository_info.created {
+                StepStatus::Ok
+            } else {
+                StepStatus::Skip
+            }),
+        }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result = build_platform.build(build, &logger, should_abort);
+        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), should_abort);
         match build_result {
             Ok(_) => {
                 let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -326,6 +372,7 @@ impl EnvironmentTask {
                 .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
                 .collect();
             Self::build_and_push_services(
+                environment.long_id,
                 services_to_build,
                 &DeploymentOption {
                     force_build: false,

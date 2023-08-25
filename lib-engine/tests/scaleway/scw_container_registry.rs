@@ -365,9 +365,9 @@ fn test_get_or_create_registry_namespace() {
             assert!(result.is_ok());
 
             let result = result.unwrap();
-            assert!(result.status.is_some());
+            assert!(result.0.status.is_some());
 
-            let status = result.status.unwrap();
+            let status = result.0.status.unwrap();
             assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
             let added_registry_result = container_registry.get_registry_namespace(&image);
@@ -383,9 +383,9 @@ fn test_get_or_create_registry_namespace() {
             assert!(result.is_ok());
 
             let result = result.unwrap();
-            assert!(result.status.is_some());
+            assert!(result.0.status.is_some());
 
-            let status = result.status.unwrap();
+            let status = result.0.status.unwrap();
             assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
             let added_registry_result = container_registry.get_registry_namespace(&image);

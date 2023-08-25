@@ -4,7 +4,7 @@ use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, RepositoryInfo};
 use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
@@ -259,16 +259,17 @@ impl ScalewayCR {
     pub fn get_or_create_registry_namespace(
         &self,
         namespace_name: &str,
-    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, ContainerRegistryError> {
+    ) -> Result<(scaleway_api_rs::models::ScalewayRegistryV1Namespace, RepositoryInfo), ContainerRegistryError> {
         info!("Get/Create repository for {}", namespace_name);
 
         // check if the repository already exists
         let registry_namespace = self.get_registry_namespace(namespace_name);
         if let Some(namespace) = registry_namespace {
-            return Ok(namespace);
+            return Ok((namespace, RepositoryInfo { created: false }));
         }
 
-        self.create_registry_namespace(namespace_name)
+        let namespace = self.create_registry_namespace(namespace_name)?;
+        Ok((namespace, RepositoryInfo { created: true }))
     }
 
     fn get_docker_json_config_raw(login: &str, secret_token: &str, region: &str) -> String {
@@ -317,9 +318,9 @@ impl ContainerRegistry for ScalewayCR {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
-    ) -> Result<(), ContainerRegistryError> {
-        self.get_or_create_registry_namespace(name)?;
-        Ok(())
+    ) -> Result<RepositoryInfo, ContainerRegistryError> {
+        let (_, repository_info) = self.get_or_create_registry_namespace(name)?;
+        Ok(repository_info)
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
