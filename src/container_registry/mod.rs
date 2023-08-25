@@ -38,7 +38,7 @@ pub trait ContainerRegistry: Send + Sync {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-    ) -> Result<(), ContainerRegistryError>;
+    ) -> Result<RepositoryInfo, ContainerRegistryError>;
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;
@@ -83,4 +83,9 @@ pub struct ContainerRegistryInfo {
 pub enum Kind {
     Ecr,
     ScalewayCr,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct RepositoryInfo {
+    pub created: bool,
 }

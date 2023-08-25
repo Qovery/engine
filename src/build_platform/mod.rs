@@ -9,10 +9,12 @@ use crate::errors::EngineError;
 use crate::events::EventDetails;
 
 use crate::cloud_provider::models::CpuArchitecture;
+use crate::metrics_registry::MetricsRegistry;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -85,6 +87,7 @@ pub trait BuildPlatform: Send + Sync {
         &self,
         build: &mut Build,
         logger: &EnvLogger,
+        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError>;
 }
@@ -151,9 +154,9 @@ impl GitRepository {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Image {
-    pub application_id: String,
-    pub application_long_id: Uuid,
-    pub application_name: String,
+    pub service_id: String,
+    pub service_long_id: Uuid,
+    pub service_name: String,
     pub name: String,
     pub tag: String,
     pub commit_id: String,
@@ -210,9 +213,9 @@ impl Image {
 impl Default for Image {
     fn default() -> Self {
         Image {
-            application_id: "".to_string(),
-            application_long_id: Default::default(),
-            application_name: "".to_string(),
+            service_id: "".to_string(),
+            service_long_id: Default::default(),
+            service_name: "".to_string(),
             name: "".to_string(),
             tag: "".to_string(),
             commit_id: "".to_string(),
@@ -229,7 +232,7 @@ impl Display for Image {
         write!(
             f,
             "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
-            self.name, self.tag, self.commit_id, self.application_id, self.registry_name, self.registry_url
+            self.name, self.tag, self.commit_id, self.service_id, self.registry_name, self.registry_url
         )
     }
 }
