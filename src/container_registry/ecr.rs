@@ -15,7 +15,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, RepositoryInfo};
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
@@ -319,14 +319,15 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-    ) -> Result<Repository, ContainerRegistryError> {
+    ) -> Result<RepositoryInfo, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
-        if let Some(repo) = repository {
-            return Ok(repo);
+        if repository.is_some() {
+            return Ok(RepositoryInfo { created: false });
         }
 
-        self.create_repository(repository_name, image_retention_time_in_seconds)
+        self.create_repository(repository_name, image_retention_time_in_seconds)?;
+        Ok(RepositoryInfo { created: true })
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -407,9 +408,9 @@ impl ContainerRegistry for ECR {
         &self,
         name: &str,
         image_retention_time_in_seconds: u32,
-    ) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
-        Ok(())
+    ) -> Result<RepositoryInfo, ContainerRegistryError> {
+        let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
+        Ok(repository_info)
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {

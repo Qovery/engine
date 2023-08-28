@@ -394,17 +394,6 @@ pub fn ec2_aws_helm_charts(
     ];
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, Some(shell_agent_resources))?;
 
-    let qovery_agent = CommonChart {
-        chart_info: ChartInfo {
-            name: "qovery-agent".to_string(),
-            path: chart_path("common/charts/qovery/qovery-agent"),
-            namespace: HelmChartNamespaces::Qovery,
-            action: HelmAction::Destroy,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
@@ -514,7 +503,6 @@ pub fn ec2_aws_helm_charts(
         Box::new(nginx_ingress),
         Box::new(nginx_ingress_wildcard_dns_record),
         Box::new(cert_manager_config),
-        Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
         Box::new(qovery_engine),
         Box::new(cluster_agent),
         Box::new(shell_agent),

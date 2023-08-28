@@ -3,7 +3,9 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_default_infra_config;
-use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+};
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use bstr::ByteSlice;
@@ -43,6 +45,7 @@ fn scaleway_test_build_phase() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -52,7 +55,7 @@ fn scaleway_test_build_phase() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
@@ -82,6 +85,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -100,9 +104,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut environment_for_delete = environment.clone();
@@ -137,6 +142,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -155,9 +161,10 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
@@ -194,6 +201,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -212,9 +220,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
@@ -237,7 +246,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone());
+        let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
@@ -270,6 +279,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -288,9 +298,10 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
@@ -343,6 +354,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -352,9 +364,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -425,6 +438,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -442,9 +456,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -511,6 +526,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
@@ -519,9 +535,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -594,6 +611,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -603,9 +621,10 @@ fn deploy_a_working_environment_and_pause_it() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
@@ -628,7 +647,7 @@ fn deploy_a_working_environment_and_pause_it() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone());
+        let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
@@ -655,6 +674,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -673,11 +693,12 @@ fn scaleway_kapsule_redeploy_same_app() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_bis = context.clone_not_same_execution_id();
-        let infra_ctx_bis = scw_default_infra_config(&context_bis, logger.clone());
+        let infra_ctx_bis = scw_default_infra_config(&context_bis, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -766,6 +787,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -784,11 +806,13 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working = scw_default_infra_config(&context_for_not_working, logger.clone());
+        let infra_ctx_for_not_working =
+            scw_default_infra_config(&context_for_not_working, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         // env part generation
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -845,7 +869,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-
+        let metrics_registry = metrics_registry();
         // working env
 
         let secrets = FuncTestsSecrets::new();
@@ -866,12 +890,13 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working_1 = scw_default_infra_config(&context_for_not_working_1, logger.clone());
+        let infra_ctx_for_not_working_1 =
+            scw_default_infra_config(&context_for_not_working_1, logger.clone(), metrics_registry.clone());
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -887,12 +912,14 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working_2 = scw_default_infra_config(&context_for_not_working_2, logger.clone());
+        let infra_ctx_for_not_working_2 =
+            scw_default_infra_config(&context_for_not_working_2, logger.clone(), metrics_registry.clone());
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -940,7 +967,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let _enter = span.enter();
 
         let logger = logger();
-
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -959,11 +986,12 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -999,6 +1027,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1017,9 +1046,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
                 .as_str(),
         )
         .expect("Unknown SCW region");
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -1113,6 +1143,7 @@ fn deploy_container_with_no_router_on_scw() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1122,9 +1153,10 @@ fn deploy_container_with_no_router_on_scw() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1227,6 +1259,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1236,9 +1269,10 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1382,6 +1416,7 @@ fn deploy_container_with_router_on_scw() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1391,9 +1426,10 @@ fn deploy_container_with_router_on_scw() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1498,6 +1534,7 @@ fn deploy_job_on_scw_kapsule() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1507,9 +1544,10 @@ fn deploy_job_on_scw_kapsule() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1591,6 +1629,7 @@ fn deploy_cronjob_on_scw_kapsule() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1600,9 +1639,10 @@ fn deploy_cronjob_on_scw_kapsule() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1682,6 +1722,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1691,9 +1732,10 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1773,6 +1815,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1782,9 +1825,10 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1864,6 +1908,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1873,9 +1918,10 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -1998,6 +2044,7 @@ fn deploy_container_with_tcp_public_port() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2007,9 +2054,10 @@ fn deploy_container_with_tcp_public_port() {
                 .SCALEWAY_TEST_CLUSTER_LONG_ID
                 .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 

@@ -9,7 +9,7 @@ use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
 };
 
 #[cfg(feature = "test-scw-whole-enchilada")]
@@ -17,6 +17,7 @@ use crate::helpers::utilities::{
 #[test]
 fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
+    let metrics_registry = metrics_registry();
     let zone = ScwZone::Paris2;
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
@@ -42,6 +43,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             KKind::ScwKapsule,
             context.clone(),
             logger,
+            metrics_registry,
             zone.as_str(),
             None,
             ClusterTestType::Classic,
@@ -59,6 +61,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
 #[test]
 fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
+    let metrics_registry = metrics_registry();
     let zone = ScwZone::Paris2;
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
@@ -84,6 +87,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             KKind::ScwKapsule,
             context.clone(),
             logger,
+            metrics_registry,
             zone.as_str(),
             None,
             ClusterTestType::WithPause,
@@ -101,6 +105,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
 #[test]
 fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
+    let metrics_registry = metrics_registry();
     let zone = ScwZone::Paris2;
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
@@ -126,6 +131,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             KKind::ScwKapsule,
             context.clone(),
             logger,
+            metrics_registry,
             zone.as_str(),
             None,
             ClusterTestType::WithUpgrade,

@@ -1,7 +1,9 @@
 use crate::helpers;
 use crate::helpers::aws_ec2::aws_ec2_default_infra_config;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::utilities::{context_for_resource, engine_run_test, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_resource, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
+};
 use ::function_name::named;
 use bstr::ByteSlice;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
@@ -32,6 +34,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -40,9 +43,10 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
                 .AWS_EC2_TEST_CLUSTER_LONG_ID
                 .expect("AWS_EC2_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_ec2_default_infra_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion =
+            aws_ec2_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -114,6 +118,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -123,9 +128,10 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 .AWS_EC2_TEST_CLUSTER_LONG_ID
                 .expect("AWS_EC2_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_ec2_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            aws_ec2_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -267,6 +273,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         let _enter = span.enter();
 
         let logger = logger();
+        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -276,9 +283,10 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
                 .AWS_EC2_TEST_CLUSTER_LONG_ID
                 .expect("AWS_EC2_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone());
+        let infra_ctx = aws_ec2_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_ec2_default_infra_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete =
+            aws_ec2_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {

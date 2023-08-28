@@ -4,7 +4,7 @@ use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use crate::helpers::utilities::{
     context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id, generate_password,
-    get_pvc, get_svc, get_svc_name, init, logger, FuncTestsSecrets,
+    get_pvc, get_svc, get_svc_name, init, logger, metrics_registry, FuncTestsSecrets,
 };
 use chrono::Utc;
 use core::default::Default;
@@ -35,6 +35,7 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
@@ -73,6 +74,7 @@ impl Infrastructure for EnvironmentRequest {
             .collect();
 
         let ret = EnvironmentTask::build_and_push_services(
+            environment.long_id,
             services_to_build,
             &deployment_option,
             infra_ctx,
@@ -603,6 +605,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
 pub fn test_db(
     context: Context,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     mut environment: EnvironmentRequest,
     secrets: FuncTestsSecrets,
     version: &str,
@@ -756,6 +759,7 @@ pub fn test_db(
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
                     kubernetes_version.clone(),
@@ -769,6 +773,7 @@ pub fn test_db(
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
                     kubernetes_version.clone(),
@@ -782,6 +787,7 @@ pub fn test_db(
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
                     kubernetes_version.clone(),
@@ -872,6 +878,7 @@ pub fn test_db(
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
                     kubernetes_version,
@@ -885,6 +892,7 @@ pub fn test_db(
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
                     kubernetes_version,
@@ -898,6 +906,7 @@ pub fn test_db(
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
                     kubernetes_version,
@@ -931,6 +940,7 @@ pub fn test_db(
 pub fn test_pause_managed_db(
     context: Context,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     mut environment: EnvironmentRequest,
     secrets: FuncTestsSecrets,
     version: &str,
@@ -1051,6 +1061,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
                     kubernetes_version.clone(),
@@ -1064,6 +1075,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
                     kubernetes_version.clone(),
@@ -1077,6 +1089,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
                     kubernetes_version.clone(),
@@ -1156,6 +1169,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
                     kubernetes_version,
@@ -1169,6 +1183,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
                     kubernetes_version,
@@ -1182,6 +1197,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
+                    metrics_registry.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
                     kubernetes_version,
@@ -1209,6 +1225,7 @@ pub fn test_pause_managed_db(
 pub fn test_db_on_upgrade(
     context: Context,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     mut environment: EnvironmentRequest,
     secrets: FuncTestsSecrets,
     version: &str,
@@ -1335,6 +1352,7 @@ pub fn test_db_on_upgrade(
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
+            metrics_registry.clone(),
             localisation.as_str(),
             KubernetesKind::Eks,
             kubernetes_version.clone(),
@@ -1350,6 +1368,7 @@ pub fn test_db_on_upgrade(
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
+            metrics_registry.clone(),
             localisation.as_str(),
             KubernetesKind::ScwKapsule,
             kubernetes_version.clone(),
@@ -1420,6 +1439,7 @@ pub fn test_db_on_upgrade(
         Kind::Aws => AWS::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
+            metrics_registry.clone(),
             localisation.as_str(),
             KubernetesKind::Eks,
             kubernetes_version,
@@ -1435,6 +1455,7 @@ pub fn test_db_on_upgrade(
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
+            metrics_registry.clone(),
             localisation.as_str(),
             KubernetesKind::ScwKapsule,
             kubernetes_version,
@@ -1488,6 +1509,7 @@ pub fn test_deploy_an_environment_with_db_and_resize_disk(
         test_db(
             context,
             logger(),
+            metrics_registry(),
             environment,
             secrets,
             db_version,

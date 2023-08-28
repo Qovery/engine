@@ -10,6 +10,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::transaction::{Transaction, TransactionResult};
 use std::sync::Arc;
 use std::{env, fs};
@@ -20,6 +21,7 @@ pub struct InfrastructureTask {
     docker: Arc<Docker>,
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
     span: tracing::Span,
 }
@@ -31,6 +33,7 @@ impl InfrastructureTask {
         lib_root_dir: String,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
         let span = info_span!(
@@ -46,6 +49,7 @@ impl InfrastructureTask {
             docker,
             request,
             logger,
+            metrics_registry,
             qovery_api: Arc::new(qovery_api),
             span,
         }
@@ -156,10 +160,12 @@ impl Task for InfrastructureTask {
             ));
         });
 
-        let engine = match self
-            .request
-            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
-        {
+        let engine = match self.request.engine(
+            &self.info_context(),
+            self.request.event_details(),
+            self.logger.clone(),
+            self.metrics_registry.clone(),
+        ) {
             Ok(engine) => engine,
             Err(err) => {
                 self.send_infrastructure_progress(self.logger.clone(), Some(*err));

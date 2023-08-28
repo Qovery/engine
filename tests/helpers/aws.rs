@@ -14,6 +14,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
@@ -58,12 +59,17 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
-pub fn aws_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
+pub fn aws_default_infra_config(
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+) -> InfrastructureContext {
     let secrets = FuncTestsSecrets::new();
 
     AWS::docker_cr_engine(
         context,
         logger,
+        metrics_registry,
         secrets
             .AWS_TEST_CLUSTER_REGION
             .expect("AWS_TEST_CLUSTER_REGION is not set")
@@ -85,6 +91,7 @@ impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         localisation: &str,
         kubernetes_kind: KubernetesKind,
         kubernetes_version: KubernetesVersion,
@@ -116,6 +123,7 @@ impl Cluster<AWS, Options> for AWS {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
+            metrics_registry.clone(),
             localisation,
             vpc_network_mode,
             min_nodes,

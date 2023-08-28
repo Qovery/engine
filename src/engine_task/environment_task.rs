@@ -7,7 +7,7 @@ use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
-use crate::cmd::docker::Docker;
+use crate::cmd::docker::{BuilderHandle, Docker};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
@@ -20,6 +20,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::transaction::DeploymentOption;
 use itertools::Itertools;
 use std::cmp::{max, min};
@@ -40,6 +41,7 @@ pub struct EnvironmentTask {
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
     span: tracing::Span,
 }
@@ -51,6 +53,7 @@ impl EnvironmentTask {
         lib_root_dir: String,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
     ) -> Self {
         let span = info_span!(
@@ -66,6 +69,7 @@ impl EnvironmentTask {
             docker,
             request,
             logger,
+            metrics_registry,
             cancel_requested: Arc::new(AtomicBool::from(false)),
             qovery_api: Arc::new(qovery_api),
             span,
@@ -91,8 +95,12 @@ impl EnvironmentTask {
     // FIXME: Remove EngineConfig type, there is no use for it
     // merge it with DeploymentTarget type
     fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
-        self.request
-            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
+        self.request.engine(
+            &self.info_context(),
+            self.request.event_details(),
+            self.logger.clone(),
+            self.metrics_registry.clone(),
+        )
     }
 
     fn _is_canceled(&self) -> bool {
@@ -104,6 +112,7 @@ impl EnvironmentTask {
     }
 
     pub fn build_and_push_services(
+        environment_id: Uuid,
         services: Vec<&mut dyn Service>,
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
@@ -114,6 +123,7 @@ impl EnvironmentTask {
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_builpacks = false;
+        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
         let services = services
             .into_iter()
             .filter(|srv| {
@@ -132,7 +142,80 @@ impl EnvironmentTask {
             Some(srv) => srv,
         };
 
-        // Provision necessary builder for being able to build in parallel
+        let provision_builder =
+            metrics_registry.start_record(environment_id, StepLabel::Environment, StepName::ProvisionBuilder);
+        let builder_handle = match Self::provision_builder(
+            infra_ctx,
+            max_build_in_parallel,
+            env_logger,
+            &should_abort,
+            build_needs_builpacks,
+            &services,
+            first_service,
+        ) {
+            Ok(handle) => {
+                provision_builder.stop(StepStatus::Ok);
+                handle
+            }
+            Err(engine_error) => {
+                provision_builder.stop(StepStatus::Error);
+                return Err(engine_error);
+            }
+        };
+
+        // To convert ContainerError to EngineError
+        let cr_registry = infra_ctx.container_registry();
+        let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
+            let event_details = cr_registry.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+            to_engine_error(event_details, err)
+        };
+
+        // Do setup of registry and be sure we are login to the registry
+        cr_registry.create_registry().map_err(cr_to_engine_error)?;
+
+        // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
+        let should_abort_flag = AtomicBool::new(false);
+        let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
+
+        // Prepare our tasks
+        let img_retention_time_sec = infra_ctx
+            .kubernetes()
+            .advanced_settings()
+            .registry_image_retention_time_sec;
+        let cr_registry = infra_ctx.container_registry();
+        let build_platform = infra_ctx.build_platform();
+        let build_tasks = services
+            .into_iter()
+            .map(|service| {
+                || {
+                    Self::build_and_push_service(
+                        service,
+                        option,
+                        cr_registry,
+                        build_platform,
+                        img_retention_time_sec,
+                        cr_to_engine_error,
+                        &mk_logger,
+                        metrics_registry.clone(),
+                        &should_abort,
+                    )
+                }
+            })
+            .collect_vec();
+
+        let builder_threadpool = BuilderThreadPool::new();
+        builder_threadpool.run(build_tasks, builder_handle.nb_builder, &should_abort_flag, should_abort)
+    }
+
+    fn provision_builder(
+        infra_ctx: &InfrastructureContext,
+        max_build_in_parallel: usize,
+        env_logger: impl Fn(String),
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
+        build_needs_builpacks: bool,
+        services: &Vec<&mut dyn Service>,
+        first_service: &&mut dyn Service,
+    ) -> Result<BuilderHandle, Box<EngineError>> {
         let builder_handle = {
             let nb_builder = if build_needs_builpacks {
                 env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
@@ -178,48 +261,7 @@ impl EnvironmentTask {
                 }
             }
         };
-
-        // To convert ContainerError to EngineError
-        let cr_registry = infra_ctx.container_registry();
-        let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
-            let event_details = cr_registry.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
-            to_engine_error(event_details, err)
-        };
-
-        // Do setup of registry and be sure we are login to the registry
-        cr_registry.create_registry().map_err(cr_to_engine_error)?;
-
-        // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
-        let should_abort_flag = AtomicBool::new(false);
-        let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
-
-        // Prepare our tasks
-        let img_retention_time_sec = infra_ctx
-            .kubernetes()
-            .advanced_settings()
-            .registry_image_retention_time_sec;
-        let cr_registry = infra_ctx.container_registry();
-        let build_platform = infra_ctx.build_platform();
-        let build_tasks = services
-            .into_iter()
-            .map(|service| {
-                || {
-                    Self::build_and_push_service(
-                        service,
-                        option,
-                        cr_registry,
-                        build_platform,
-                        img_retention_time_sec,
-                        cr_to_engine_error,
-                        &mk_logger,
-                        &should_abort,
-                    )
-                }
-            })
-            .collect_vec();
-
-        let builder_threadpool = BuilderThreadPool::new();
-        builder_threadpool.run(build_tasks, builder_handle.nb_builder, &should_abort_flag, should_abort)
+        Ok(builder_handle)
     }
 
     fn build_and_push_service(
@@ -230,6 +272,7 @@ impl EnvironmentTask {
         image_retention_time_sec: u32,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
+        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
@@ -248,12 +291,25 @@ impl EnvironmentTask {
 
         // Be sure that our repository exist before trying to pull/push images from it
         logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
-        cr_registry
-            .create_repository(build.image.repository_name(), image_retention_time_sec)
-            .map_err(cr_to_engine_error)?;
+        let provision_registry_record = metrics_registry.start_record(
+            build.image.service_long_id,
+            StepLabel::Service,
+            StepName::RegistryCreateRepository,
+        );
+        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec) {
+            Err(err) => {
+                provision_registry_record.stop(StepStatus::Error);
+                return Err(Box::new(cr_to_engine_error(err)));
+            }
+            Ok(repository_info) => provision_registry_record.stop(if repository_info.created {
+                StepStatus::Ok
+            } else {
+                StepStatus::Skip
+            }),
+        }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result = build_platform.build(build, &logger, should_abort);
+        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), should_abort);
         match build_result {
             Ok(_) => {
                 let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -298,6 +354,8 @@ impl EnvironmentTask {
         env_logger: impl Fn(String),
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
+        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
+        let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
         let run_deploy = || -> Result<(), Box<EngineError>> {
@@ -314,6 +372,7 @@ impl EnvironmentTask {
                 .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
                 .collect();
             Self::build_and_push_services(
+                environment.long_id,
                 services_to_build,
                 &DeploymentOption {
                     force_build: false,
@@ -343,7 +402,10 @@ impl EnvironmentTask {
         };
 
         let deployment_err = match run_deploy() {
-            Ok(_) => return Ok(()), // return early if no error
+            Ok(_) => {
+                record.stop(StepStatus::Ok);
+                return Ok(());
+            } // return early if no error
             Err(err) => err,
         };
 
@@ -365,6 +427,7 @@ impl EnvironmentTask {
             ));
         }
 
+        record.stop(StepStatus::Error);
         Err(deployment_err)
     }
 }

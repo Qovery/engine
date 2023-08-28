@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger,
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
 use ::function_name::named;
 
@@ -33,6 +33,7 @@ fn create_and_destroy_eks_cluster(
             KKind::Eks,
             context_for_cluster(organization_id, cluster_id, Some(KKind::Eks)),
             logger(),
+            metrics_registry(),
             region.to_aws_format(),
             Some(zones),
             test_type,
@@ -64,6 +65,7 @@ fn create_and_destroy_arm64_eks_cluster(
             KKind::Eks,
             context_for_cluster(organization_id, cluster_id, Some(KKind::Eks)),
             logger(),
+            metrics_registry(),
             region.to_aws_format(),
             Some(zones),
             test_type,

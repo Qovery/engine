@@ -1,6 +1,8 @@
 use crate::helpers::aws::aws_default_infra_config;
 use crate::helpers::database::StorageSize::NormalSize;
-use crate::helpers::utilities::{context_for_resource, generate_id, get_svc_name, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_resource, generate_id, get_svc_name, logger, metrics_registry, FuncTestsSecrets,
+};
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::engine::InfrastructureContext;
@@ -44,7 +46,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
     );
 
     let logger = logger();
-    let infra_ctx = aws_default_infra_config(&context, logger.clone());
+    let metrics_registry = metrics_registry();
+    let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
 
     let env_id = Uuid::new_v4();
     let mut environment = EnvironmentRequest {

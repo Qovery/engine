@@ -33,6 +33,7 @@ use aws_sdk_eks::error::{
 };
 use aws_types::SdkConfig;
 
+use crate::metrics_registry::MetricsRegistry;
 use aws_sdk_eks::output::{
     DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
 };
@@ -68,6 +69,7 @@ pub struct EKS {
     template_directory: String,
     options: Options,
     logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
@@ -86,6 +88,7 @@ impl EKS {
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
@@ -119,6 +122,7 @@ impl EKS {
             nodes_groups,
             template_directory,
             logger,
+            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
         })
@@ -249,6 +253,10 @@ impl Kubernetes for EKS {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
+    }
+
+    fn metrics_registry(&self) -> &dyn MetricsRegistry {
+        self.metrics_registry.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {

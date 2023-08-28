@@ -23,6 +23,7 @@ use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
+use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::Domain;
 use crate::models::scaleway::ScwZone;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
@@ -62,6 +63,7 @@ impl<T> EngineRequest<T> {
         context: &Context,
         event_details: EventDetails,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
     ) -> Result<InfrastructureContext, Box<EngineError>> {
         let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
@@ -133,6 +135,7 @@ impl<T> EngineRequest<T> {
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
+            metrics_registry.clone(),
         ) {
             Ok(x) => x,
             Err(e) => {
@@ -289,6 +292,7 @@ impl Kubernetes {
         cloud_provider: Arc<Box<dyn cloud_provider::CloudProvider>>,
         dns_provider: Arc<Box<dyn dns_provider::DnsProvider>>,
         logger: Box<dyn Logger>,
+        metrics_registry: Box<dyn MetricsRegistry>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
         let event_details =
             event_details(&**cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
@@ -333,6 +337,7 @@ impl Kubernetes {
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
                 logger,
+                metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
             ) {
@@ -357,6 +362,7 @@ impl Kubernetes {
                 serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
+                metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
             ) {
@@ -389,6 +395,7 @@ impl Kubernetes {
                         .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
                     logger,
+                    metrics_registry,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
                 ) {

@@ -1,6 +1,6 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
@@ -99,6 +99,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
+            metrics_registry(),
             ClusterAdvancedSettings {
                 load_balancer_size: "my_load_balancer_size".to_string(),
                 registry_image_retention_time_sec: 1,
@@ -244,9 +245,9 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
                 buildpack_language: Some("my_language".to_string()),
             },
             image: Image {
-                application_id: "my_application_id".to_string(),
-                application_long_id: long_id,
-                application_name: "my_application_name".to_string(),
+                service_id: "my_application_id".to_string(),
+                service_long_id: long_id,
+                service_name: "my_application_name".to_string(),
                 name: "my_image_name".to_string(),
                 tag: "my_image_tag".to_string(),
                 commit_id: "my_image_commit".to_string(),
@@ -579,6 +580,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
     AWS::docker_cr_engine(
         test_kube.context(),
         logger(),
+        metrics_registry(),
         test_kube.region(),
         test_kube.kind(),
         test_kube.version(),
