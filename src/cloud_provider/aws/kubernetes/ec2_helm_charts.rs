@@ -1,8 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
-    ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
-    UpdateStrategy,
+    ChartSetValue, ClusterAgentContext, CommonChart, HelmChart, HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;

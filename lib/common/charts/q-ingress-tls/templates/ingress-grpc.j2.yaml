@@ -40,7 +40,7 @@ metadata:
     {%- if advanced_settings.network_ingress_denylist_source_range %}
     nginx.ingress.kubernetes.io/denylist-source-range: "{{ advanced_settings.network_ingress_denylist_source_range }}"
     {%- endif %}
-    {%- if advanced_settings.basic_auth %}
+    {%- if advanced_settings.network_ingress_basic_auth_env_var %}
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ sanitized_name }}
     nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
