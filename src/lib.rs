@@ -33,6 +33,7 @@ mod secret_manager;
 pub mod services;
 mod string;
 mod template;
+pub mod tera_utils;
 pub mod transaction;
 mod unit_conversion;
 pub mod utilities;

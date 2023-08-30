@@ -226,6 +226,9 @@ pub enum Tag {
     VaultSecretCouldNotBeDeleted,
     VaultSecretCouldNotBeRetrieved,
     VersionNumberParsingError,
+    RouterInvalidConfiguration,
+    RouterBasicAuthEnvVarCannotDecodeBase64Error,
+    RouterBasicAuthEnvVarNotFound,
 }
 
 impl From<errors::Tag> for Tag {
@@ -455,6 +458,11 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CompressionError => Tag::CompressionError,
             errors::Tag::UncompressError => Tag::UncompressError,
             errors::Tag::JsonSerializationError => Tag::JsonSerializationError,
+            errors::Tag::RouterInvalidConfiguration => Tag::RouterInvalidConfiguration,
+            errors::Tag::RouterBasicAuthEnvVarCannotDecodeBase64Error => {
+                Tag::RouterBasicAuthEnvVarCannotDecodeBase64Error
+            }
+            errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
         }
     }
 }
