@@ -19,10 +19,13 @@ use uuid::Uuid;
 pub enum RouterError {
     #[error("Router invalid configuration: {0}")]
     InvalidConfig(String),
-    #[error("Error decoding base64 secret: {0}")]
-    Base64DecodeError(String),
-    #[error("Basic Auth environment variable not found but defined in the advanced settings")]
-    BasicAuthEnvVarNotFound,
+    #[error("Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`")]
+    BasicAuthEnvVarBase64DecodeError {
+        env_var_name: String,
+        env_var_value: String,
+    },
+    #[error("Basic Auth environment variable `{env_var_name}` not found but defined in the advanced settings")]
+    BasicAuthEnvVarNotFound { env_var_name: String },
 }
 
 pub struct RouterAdvancedSettings {
@@ -155,6 +158,7 @@ impl<T: CloudProvider> Router<T> {
                 context.insert("advanced_settings", &application.advanced_settings());
                 context.insert("associated_service_long_id", &service_id);
                 context.insert("associated_service_type", "application");
+
                 (application.kube_name(), application.public_ports())
             } else {
                 let container = environment
@@ -170,6 +174,9 @@ impl<T: CloudProvider> Router<T> {
 
                 (container.kube_name(), container.public_ports())
             };
+
+        // inject basic auth data
+        context.insert("basic_auth_htaccess", &self.advanced_settings.basic_auth);
 
         // Get the alternative names we need to generate for the certificate
         // For custom domain, we need to generate a subdomain for each port. p80.mydomain.com, p443.mydomain.com
