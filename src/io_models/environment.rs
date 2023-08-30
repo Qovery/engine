@@ -129,13 +129,25 @@ impl EnvironmentRequest {
                                 .get(&app.advanced_settings.network_ingress_basic_auth_env_var)
                             {
                                 Some(value) => {
-                                    let secret = base64_replace_comma_to_new_line(
-                                        value.clone(),
-                                    )
-                                    .map_err(|_| DomainError::RouterError(RouterError::Base64DecodeError("couldn't decode environment variable inside 'basic auth' declared in the 'advanced settings'".to_string())))?;
+                                    let secret = base64_replace_comma_to_new_line(value.clone()).map_err(|_| {
+                                        DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                                            env_var_name: app
+                                                .advanced_settings
+                                                .network_ingress_basic_auth_env_var
+                                                .to_string(),
+                                            env_var_value: value.clone(),
+                                        })
+                                    })?;
                                     router_advanced_settings.basic_auth = Some(secret);
                                 }
-                                None => return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound)),
+                                None => {
+                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
+                                        env_var_name: app
+                                            .advanced_settings
+                                            .network_ingress_basic_auth_env_var
+                                            .to_string(),
+                                    }))
+                                }
                             }
                         }
                     }
@@ -176,13 +188,25 @@ impl EnvironmentRequest {
                                 .get(&container.advanced_settings.network_ingress_basic_auth_env_var)
                             {
                                 Some(value) => {
-                                    let secret = base64_replace_comma_to_new_line(
-                                        value.clone(),
-                                    )
-                                    .map_err(|_| DomainError::RouterError(RouterError::Base64DecodeError("couldn't decode environment variable inside 'basic auth' declared in the 'advanced settings'".to_string())))?;
+                                    let secret = base64_replace_comma_to_new_line(value.clone()).map_err(|_| {
+                                        DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                                            env_var_name: container
+                                                .advanced_settings
+                                                .network_ingress_basic_auth_env_var
+                                                .to_string(),
+                                            env_var_value: value.clone(),
+                                        })
+                                    })?;
                                     router_advanced_settings.basic_auth = Some(secret);
                                 }
-                                None => return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound)),
+                                None => {
+                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
+                                        env_var_name: container
+                                            .advanced_settings
+                                            .network_ingress_basic_auth_env_var
+                                            .to_string(),
+                                    }))
+                                }
                             }
                         }
                     }

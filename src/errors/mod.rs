@@ -17,6 +17,7 @@ use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::{command, terraform};
 use crate::events::{EventDetails, Stage};
 use crate::models::database::DatabaseError;
+use crate::models::router::RouterError;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use aws_sdk_docdb::error::DescribeDBClustersError;
@@ -602,6 +603,30 @@ impl From<KubernetesError> for CommandError {
     }
 }
 
+impl From<RouterError> for CommandError {
+    fn from(router_error: RouterError) -> Self {
+        match &router_error {
+            RouterError::InvalidConfig(_) => CommandError::new(
+                "Router error: invalid configuration".to_string(),
+                Some(router_error.to_string()),
+                None,
+            ),
+
+            RouterError::BasicAuthEnvVarBase64DecodeError {env_var_name, env_var_value} => CommandError::new(
+                format!("Router error: Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`"),
+                Some(router_error.to_string()),
+                None,
+            ),
+
+            RouterError::BasicAuthEnvVarNotFound {env_var_name } => CommandError::new(
+                format!("Router error: basic auth env var `{env_var_name}` not found"),
+                Some(router_error.to_string()),
+                None,
+            ),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
@@ -1013,6 +1038,12 @@ pub enum Tag {
     UncompressError,
     /// JsonSerializeIssue: represents an error while trying to serialize a json
     JsonSerializationError,
+    /// RouterInvalidConfiguration: represents an error with a router having an invalid configuration
+    RouterInvalidConfiguration,
+    /// RouterBasicAuthEnvVarCannotDecodeBase64Error: represents an error with a router having an issue while trying to base 64 decode a value
+    RouterBasicAuthEnvVarCannotDecodeBase64Error,
+    /// RouterBasicAuthEnvVarNotFound: represents an error with a router not able to find value of basic auth env variable
+    RouterBasicAuthEnvVarNotFound,
 }
 
 impl Tag {
@@ -4733,6 +4764,41 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Creates new error for service's router
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `router_error`: Raw router error.
+    pub fn new_router_error(event_details: EventDetails, router_error: RouterError) -> EngineError {
+        match &router_error {
+            RouterError::InvalidConfig(_) => EngineError::new(
+                event_details,
+                Tag::RouterInvalidConfiguration,
+                "Error, router has invalid configuration".to_string(),
+                Some(router_error.into()),
+                None,
+                None,
+            ),
+            RouterError::BasicAuthEnvVarBase64DecodeError{env_var_name, ..} => EngineError::new(
+                event_details,
+                Tag::RouterBasicAuthEnvVarCannotDecodeBase64Error,
+                format!("Error, router cannot decode base 64 value from basic auth environment variable `{env_var_name}`"),
+                Some(router_error.into()),
+                None,
+                None,
+            ),
+            RouterError::BasicAuthEnvVarNotFound{env_var_name} => EngineError::new(
+                event_details,
+                Tag::RouterBasicAuthEnvVarNotFound,
+                format!("Error, router cannot find basic auth environment variable `{env_var_name}`"),
+                Some(router_error.into()),
+                Some(Url::parse("https://hub.qovery.com/docs/using-qovery/configuration/advanced-settings/#networkingressbasic_auth_env_var").expect("Error while trying to parse error link helper for `Tag::RouterBasicAuthEnvVarNotFound`, URL is not valid.")),
+                Some("Make sure the environment variable set in `network.ingress.basic_auth_env_var` is set".to_string()),
+            ),
+        }
     }
 }
 impl Display for EngineError {
