@@ -152,7 +152,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
         let error = match result {
             Ok(_) => {
                 self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type.to_string()));
                 return;

@@ -35,6 +35,7 @@ use crate::logger::composite_logger::CompositeLogger;
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, check_versions_from};
 use qovery_engine::metrics_registry::StdMetricsRegistry;
+use qovery_engine::msg_publisher::StdMsgPublisher;
 use reqwest::header;
 use serde::Deserialize;
 
@@ -74,7 +75,7 @@ pub fn main() -> io::Result<()> {
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
 
     let logger: Box<dyn Logger> = Box::new(CompositeLogger::new(vec![Box::new(StdIoLogger::new())]));
-    let metrics_registry = Box::new(StdMetricsRegistry::new());
+    let metrics_registry = Box::new(StdMetricsRegistry::new(Box::new(StdMsgPublisher::new())));
 
     info!("engine id: {}", engine_id.as_str());
     info!(

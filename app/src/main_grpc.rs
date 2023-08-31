@@ -66,6 +66,7 @@ use crate::utils::{check_libs_directory, check_versions_from};
 mod constants;
 mod custom_error;
 mod deployment_manager;
+mod engine_helper;
 mod grpc;
 mod logger;
 mod metrics;
@@ -222,7 +223,6 @@ pub fn main() -> io::Result<()> {
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
     let logger = Box::new(StdIoLogger::new());
-    let metrics_registry = Box::new(StdMetricsRegistry::new());
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_callback = {
@@ -394,7 +394,6 @@ pub fn main() -> io::Result<()> {
                 &mut current_deployment,
                 payload_to_engine_task,
                 logger.clone(),
-                metrics_registry.clone(),
                 task_selector,
             )
             .await;
@@ -443,7 +442,6 @@ async fn fetch_and_exec_deployments(
         Box<dyn MetricsRegistry>,
     ) -> Result<Box<dyn Task>, serde_json::Error>,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     task_selector: TaskSelector,
 ) -> Result<(), anyhow::Error> {
     let deployment_type = match task_selector {
@@ -468,8 +466,11 @@ async fn fetch_and_exec_deployments(
     };
 
     // Now we retrieved a deployment, claim it and execute it
-    let (engine_tx, msg_stream, mut abort_deployment_tx) = current_deployment.get_message_stream().await;
-    let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(engine_tx.clone())]);
+    let (log_tx, msg_tx, msg_stream, abort_deployment_tx) = current_deployment.get_message_stream().await;
+    let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(log_tx.clone())]);
+    let msg_publisher = Box::new(msg_tx.clone());
+
+    let metrics_registry = Box::new(StdMetricsRegistry::new(msg_publisher.clone()));
 
     let msg_stream = stream::iter(vec![EngineMessageTx {
         message_id: None,
@@ -563,11 +564,11 @@ async fn fetch_and_exec_deployments(
                                     let msg = format!("Engine received an invalid deployment request for execution_id = {execution_id}");
                                     let message = EventMessage::new_from_safe(msg.to_string());
                                     let err = EngineEvent::Error(EngineError::new_invalid_engine_payload(event_details.clone(), msg.as_str(), Some(CommandError::new(msg.clone(), Some(format!("{err}")), None))), Some(message));
-                                    let _ = engine_tx.send(err);
+                                    let _ = log_tx.send(err);
 
                                     let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Terminated));
                                     let err = EngineEvent::Info(event_details, EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None));
-                                    let _ = engine_tx.send(err);
+                                    let _ = log_tx.send(err);
                                 }
                             }
                         }

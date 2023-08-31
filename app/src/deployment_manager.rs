@@ -1,3 +1,5 @@
+use crate::grpc::engine::Metrics;
+use crate::grpc::engine::StepRecord as GrpcStepRecord;
 use crate::grpc::engine::{engine_message_tx, DeploymentInfo, DeploymentType, EngineMessageTx};
 use crate::metrics::METRICS_NB_RUNNING_TASKS;
 use crate::tokio_utils;
@@ -5,7 +7,7 @@ use futures_util::{stream, Stream};
 use prost_types::Timestamp;
 use qovery_engine::engine_task::Task;
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
-use qovery_engine::events::EngineEvent;
+use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
 use std::future::Future;
 use std::ops::DerefMut;
 use std::pin::Pin;
@@ -13,7 +15,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::{mpsc, oneshot, Mutex, OwnedMutexGuard};
+use tokio::sync::{mpsc, watch, Mutex, OwnedMutexGuard};
 use tokio::task::{JoinError, JoinHandle};
 
 // A single deployment can receive N tasks.
@@ -30,8 +32,11 @@ pub struct DeploymentManager {
     // The channel to send engine events to the gateway/receiver
     // The same channel is re-used across all tasks, so even in case of cnx loss
     // We can resume the connection with the gateway without losing events
-    tx: UnboundedSender<EngineEvent>,
-    rx: Arc<Mutex<EngineMessageStreamContext>>,
+    log_tx: UnboundedSender<EngineEvent>,
+    log_rx: Arc<Mutex<EngineLogStreamContext>>,
+
+    msg_tx: UnboundedSender<EngineMsg>,
+    msg_rx: Arc<Mutex<EngineMsgStreamContext>>,
 }
 
 struct TaskContext {
@@ -39,21 +44,39 @@ struct TaskContext {
     task_handle: JoinHandle<()>, // the handle for the "thread"/tokio task where is runinng the task
 }
 
-// Represent the context of the stream that the engine use to communicate with the gateway
-struct EngineMessageStreamContext {
-    receiver: UnboundedReceiver<EngineEvent>,
-    msg_buffer: Vec<EngineEventIo>,
-    buffer_duration: Duration,
-    should_stop: Option<oneshot::Receiver<()>>,
+struct EngineMsgStreamContext {
+    msg_receiver: UnboundedReceiver<EngineMsg>,
+    msg_buffer: Option<EngineMsg>,
+    should_stop: Option<watch::Receiver<()>>,
     first_time_called: bool,
 }
 
-impl EngineMessageStreamContext {
-    fn new(receiver: UnboundedReceiver<EngineEvent>) -> Self {
-        EngineMessageStreamContext {
-            receiver,
-            msg_buffer: Vec::with_capacity(16),
-            buffer_duration: Duration::from_secs(1),
+// Represent the context of the stream that the engine use to communicate with the gateway
+struct EngineLogStreamContext {
+    log_receiver: UnboundedReceiver<EngineEvent>,
+    log_buffer: Vec<EngineEventIo>,
+    log_buffer_duration: Duration,
+    should_stop: Option<watch::Receiver<()>>,
+    first_time_called: bool,
+}
+
+impl EngineLogStreamContext {
+    fn new(log_receiver: UnboundedReceiver<EngineEvent>) -> Self {
+        EngineLogStreamContext {
+            log_receiver,
+            log_buffer: Vec::with_capacity(16),
+            log_buffer_duration: Duration::from_secs(1),
+            should_stop: None,
+            first_time_called: true,
+        }
+    }
+}
+
+impl EngineMsgStreamContext {
+    fn new(msg_receiver: UnboundedReceiver<EngineMsg>) -> Self {
+        EngineMsgStreamContext {
+            msg_receiver,
+            msg_buffer: None,
             should_stop: None,
             first_time_called: true,
         }
@@ -63,13 +86,17 @@ impl EngineMessageStreamContext {
 impl DeploymentManager {
     pub fn new() -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
-        let (engine_tx, engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
+        let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
+        let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
         Self {
             deployment_info: Default::default(),
             task: None,
             waker: None,
-            tx: engine_tx,
-            rx: Arc::new(Mutex::new(EngineMessageStreamContext::new(engine_rx))),
+            log_tx: log_engine_tx,
+            log_rx: Arc::new(Mutex::new(EngineLogStreamContext::new(log_engine_rx))),
+
+            msg_tx: msg_engine_tx,
+            msg_rx: Arc::new(Mutex::new(EngineMsgStreamContext::new(msg_engine_rx))),
         }
     }
 
@@ -119,8 +146,11 @@ impl DeploymentManager {
         METRICS_NB_RUNNING_TASKS.dec();
         self.deployment_info = Default::default();
         let (tx, rx) = mpsc::unbounded_channel::<EngineEvent>();
-        self.tx = tx;
-        self.rx = Arc::new(Mutex::new(EngineMessageStreamContext::new(rx)));
+        let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMsg>();
+        self.log_tx = tx;
+        self.log_rx = Arc::new(Mutex::new(EngineLogStreamContext::new(rx)));
+        self.msg_tx = msg_tx;
+        self.msg_rx = Arc::new(Mutex::new(EngineMsgStreamContext::new(msg_rx)));
         self.remove_task();
     }
 
@@ -147,11 +177,13 @@ impl DeploymentManager {
         &mut self,
     ) -> (
         UnboundedSender<EngineEvent>,                         // To feed the stream
-        impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent
-        oneshot::Sender<()>, // To know/stop the stream and release the rx side of the channel
+        UnboundedSender<EngineMsg>,                           // To feed the stream
+        impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent and the EngineMsg
+        watch::Sender<()>, // To know/stop the stream and release the rx side of the channel
     ) {
-        let (stream, abort_handle) = EngineMessageStream::new(self.rx.clone().lock_owned().await);
-        (self.tx.clone(), stream, abort_handle)
+        let (stream, abort_handle) =
+            EngineMessageStream::new(self.log_rx.clone().lock_owned().await, self.msg_rx.clone().lock_owned().await);
+        (self.log_tx.clone(), self.msg_tx.clone(), stream, abort_handle)
     }
 }
 
@@ -177,19 +209,27 @@ struct EngineMessageStream {
 }
 
 impl EngineMessageStream {
-    pub fn new(mut context: OwnedMutexGuard<EngineMessageStreamContext>) -> (Self, oneshot::Sender<()>) {
-        let (abort_handle_tx, abort_handle_rx) = oneshot::channel::<()>();
-        context.should_stop = Some(abort_handle_rx);
-        context.first_time_called = true;
+    pub fn new(
+        mut log_stream_context: OwnedMutexGuard<EngineLogStreamContext>,
+        mut msg_stream_context: OwnedMutexGuard<EngineMsgStreamContext>,
+    ) -> (Self, watch::Sender<()>) {
+        let (abort_handle_tx, abort_handle_rx) = watch::channel(());
+        log_stream_context.should_stop = Some(abort_handle_rx);
+        log_stream_context.first_time_called = true;
+        msg_stream_context.should_stop = Some(abort_handle_tx.subscribe());
+        msg_stream_context.first_time_called = true;
 
         let s = Self {
-            stream: Box::new(stream::unfold(context, Self::on_next)),
+            stream: Box::new(stream::select(
+                stream::unfold(log_stream_context, Self::on_next_log),
+                stream::unfold(msg_stream_context, Self::on_next_msg),
+            )),
         };
 
         (s, abort_handle_tx)
     }
 
-    fn to_grpc_message(buffer: &Vec<EngineEventIo>) -> EngineMessageTx {
+    fn convert_logs_to_grpc_message(buffer: &Vec<EngineEventIo>) -> EngineMessageTx {
         let Some(last_msg) = buffer.last() else {
             return EngineMessageTx::default();
         };
@@ -206,40 +246,89 @@ impl EngineMessageStream {
         }
     }
 
-    async fn on_next(
-        mut ctx: OwnedMutexGuard<EngineMessageStreamContext>,
-    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineMessageStreamContext>)> {
+    fn convert_msg_to_grpc_message(msg: &EngineMsg) -> EngineMessageTx {
+        let ts = msg.timestamp;
+
+        match &msg.payload {
+            EngineMsgPayload::Metrics(step_record) => EngineMessageTx {
+                message_id: Some(Timestamp {
+                    seconds: ts.timestamp(),
+                    nanos: ts.timestamp_subsec_nanos() as i32,
+                }),
+                message: Some(engine_message_tx::Message::Metrics(Metrics {
+                    step_record: Some(GrpcStepRecord::from_record(step_record)),
+                })),
+            },
+        }
+    }
+
+    async fn on_next_msg(
+        mut ctx: OwnedMutexGuard<EngineMsgStreamContext>,
+    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineMsgStreamContext>)> {
         // We re-send previous messages that may not have been received, gateway is responsible for dedup them
         if ctx.first_time_called {
             ctx.first_time_called = false;
-            if !ctx.msg_buffer.is_empty() {
-                return Some((Self::to_grpc_message(&ctx.msg_buffer), ctx));
+            if let Some(msg_buffer) = &ctx.msg_buffer {
+                return Some((Self::convert_msg_to_grpc_message(msg_buffer), ctx));
             }
         }
 
         let mut should_stop = ctx.should_stop.take().unwrap();
-        tokio::select! {
+        let opt_engine_message_tx = tokio::select! {
             biased;
 
-            msg = ctx.receiver.recv() => match msg {
+            msg = ctx.msg_receiver.recv() => match msg  {
+                Some(engine_msg) => {
+                    ctx.msg_buffer = Some(engine_msg.clone());
+                    Some(Self::convert_msg_to_grpc_message(&engine_msg))
+                },
+                None => None
+            },
+
+             // Deployment asked to be aborted, we leave to release the mutex of the channel
+            _ = should_stop.changed() => None
+        };
+        ctx.should_stop = Some(should_stop);
+
+        opt_engine_message_tx.map(|engine_message_tx| (engine_message_tx, ctx))
+    }
+
+    async fn on_next_log(
+        mut ctx: OwnedMutexGuard<EngineLogStreamContext>,
+    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineLogStreamContext>)> {
+        // We re-send previous messages that may not have been received, gateway is responsible for dedup them
+        if ctx.first_time_called {
+            ctx.first_time_called = false;
+            if !ctx.log_buffer.is_empty() {
+                return Some((Self::convert_logs_to_grpc_message(&ctx.log_buffer), ctx));
+            }
+        }
+
+        let mut should_stop = ctx.should_stop.take().unwrap();
+        let opt_engine_message_tx = tokio::select! {
+            biased;
+
+            msg = ctx.log_receiver.recv() => match msg {
                 Some(engine_event) => {
                     // Buffer msg to avoid flooding the gateway
-                    ctx.msg_buffer.clear();
-                    ctx.msg_buffer.push(EngineEventIo::from(engine_event));
-                    tokio::time::sleep(ctx.buffer_duration).await;
-                    while let Ok(engine_event) = ctx.receiver.try_recv() {
-                        ctx.msg_buffer.push(EngineEventIo::from(engine_event));
+                    ctx.log_buffer.clear();
+                    ctx.log_buffer.push(EngineEventIo::from(engine_event));
+                    tokio::time::sleep(ctx.log_buffer_duration).await;
+                    while let Ok(engine_event) = ctx.log_receiver.try_recv() {
+                        ctx.log_buffer.push(EngineEventIo::from(engine_event));
                     }
 
-                    ctx.should_stop = Some(should_stop);
-                    Some((Self::to_grpc_message(&ctx.msg_buffer), ctx))
+                    Some(Self::convert_logs_to_grpc_message(&ctx.log_buffer))
                 }
                 None => None,
             },
 
             // Deployment asked to be aborted, we leave to release the mutex of the channel
-            _ = &mut should_stop => None
-        }
+            _ = should_stop.changed() => None
+        };
+        ctx.should_stop = Some(should_stop);
+
+        opt_engine_message_tx.map(|engine_message_tx| (engine_message_tx, ctx))
     }
 }
 
@@ -263,8 +352,9 @@ mod test {
     use futures_util::StreamExt;
     use qovery_engine::errors::EngineError;
     use qovery_engine::events;
-    use qovery_engine::events::{EngineEvent, EnvironmentStep, Stage, Transmitter};
+    use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
     use qovery_engine::io_models::QoveryIdentifier;
+    use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
@@ -285,20 +375,26 @@ mod test {
         let deployment = DeploymentManager::new();
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        deployment.rx.clone().lock().await.buffer_duration = buffer_duration;
+        deployment.log_rx.clone().lock().await.log_buffer_duration = buffer_duration;
 
         // Dropping the handle should terminate the stream
-        let (mut stream, abort_handle) = EngineMessageStream::new(deployment.rx.clone().lock_owned().await);
+        let (mut stream, abort_handle) = EngineMessageStream::new(
+            deployment.log_rx.clone().lock_owned().await,
+            deployment.msg_rx.clone().lock_owned().await,
+        );
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
         drop(abort_handle);
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(None)));
 
-        // Message sent should be received and buffered
-        let msg_tx = deployment.tx.clone();
-        let (mut stream, abort_handle) = EngineMessageStream::new(deployment.rx.clone().lock_owned().await);
+        // Log sent should be received and buffered
+        let log_tx = deployment.log_tx.clone();
+        let (mut stream, abort_handle) = EngineMessageStream::new(
+            deployment.log_rx.clone().lock_owned().await,
+            deployment.msg_rx.clone().lock_owned().await,
+        );
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
-        let _ = msg_tx.send(engine_event.clone());
-        let ret = msg_tx.send(engine_event.clone());
+        let _ = log_tx.send(engine_event.clone());
+        let ret = log_tx.send(engine_event.clone());
         assert!(ret.is_ok());
 
         // We should receive one batch
@@ -311,9 +407,9 @@ mod test {
             let barrier = barrier.clone();
             async move {
                 barrier.wait().await;
-                let _ = msg_tx.send(engine_event.clone());
+                let _ = log_tx.send(engine_event.clone());
                 tokio::time::sleep(buffer_deadline).await;
-                let ret = msg_tx.send(engine_event.clone());
+                let ret = log_tx.send(engine_event.clone());
                 assert!(ret.is_ok());
             }
         });
@@ -327,7 +423,10 @@ mod test {
         // Resuming the stream should re-send the previous messages
         drop(abort_handle);
         drop(stream);
-        let (mut stream, _abort_handle) = EngineMessageStream::new(deployment.rx.clone().lock_owned().await);
+        let (mut stream, _abort_handle) = EngineMessageStream::new(
+            deployment.log_rx.clone().lock_owned().await,
+            deployment.msg_rx.clone().lock_owned().await,
+        );
         assert!(matches!(
             timeout(buffer_deadline, stream.next()).await,
             Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
@@ -337,5 +436,40 @@ mod test {
         // Terminating the deployment should terminate the stream
         drop(deployment);
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(None)));
+    }
+
+    #[tokio::test]
+    async fn test_engine_message_stream_msg() {
+        let engine_msg = EngineMsg::new(EngineMsgPayload::Metrics(StepRecord::new(
+            StepName::Deployment,
+            StepLabel::Service,
+            Uuid::new_v4(),
+        )));
+        let deployment = DeploymentManager::new();
+        let buffer_duration = Duration::from_millis(100);
+        let buffer_deadline = buffer_duration + Duration::from_millis(50);
+        let msg_tx = deployment.msg_tx.clone();
+        let (mut stream, abort_handle) = EngineMessageStream::new(
+            deployment.log_rx.clone().lock_owned().await,
+            deployment.msg_rx.clone().lock_owned().await,
+        );
+
+        let _ = msg_tx.send(engine_msg.clone());
+        let msg = timeout(buffer_deadline * 2, stream.next()).await;
+        assert!(matches!(msg, Ok(Some(_))));
+        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+
+        // Resuming the stream should re-send the previous messages
+        drop(abort_handle);
+        drop(stream);
+        let (mut stream, _abort_handle) = EngineMessageStream::new(
+            deployment.log_rx.clone().lock_owned().await,
+            deployment.msg_rx.clone().lock_owned().await,
+        );
+        assert!(matches!(
+            timeout(buffer_deadline, stream.next()).await,
+            Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
+        ));
+        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
     }
 }

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 
 option go_package = "qovery-engine/proto";
@@ -29,6 +30,31 @@ message DeploymentRequest {
   DeploymentType deployment_type = 1;
 }
 
+enum StepLabel {
+  Step_Label_Service = 0;
+  Step_Label_Environment = 1;
+}
+
+enum StepStatus {
+    NotSet = 0;
+    Success = 1;
+    Error = 2;
+    Cancel = 3;
+    Skip = 4;
+}
+
+message StepRecord {
+  string step_name = 1;
+  StepLabel step_label = 2;
+  string id = 3;
+  google.protobuf.Duration duration = 4;
+  StepStatus status = 5;
+}
+
+message Metrics {
+  StepRecord step_record = 1;
+}
+
 message DeploymentInfo {
   string organization_id = 1;
   string cluster_id = 2;
@@ -43,6 +69,7 @@ message EngineMessageTx {
   oneof message {
     DeploymentInfo deployment_request = 1;
     string log = 2;
+    Metrics metrics = 4;
   }
 }
 
