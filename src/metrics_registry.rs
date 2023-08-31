@@ -1,3 +1,5 @@
+use crate::events::{EngineMsg, EngineMsgPayload};
+use crate::msg_publisher::{MsgPublisher, StdMsgPublisher};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,6 +15,19 @@ pub enum StepName {
     Deployment,
 }
 
+impl ToString for StepName {
+    fn to_string(&self) -> String {
+        match self {
+            StepName::Total => "Total".to_string(),
+            StepName::ProvisionBuilder => "ProvisionBuilder".to_string(),
+            StepName::RegistryCreateRepository => "RegistryCreateRepository".to_string(),
+            StepName::GitClone => "GitClone".to_string(),
+            StepName::Build => "Build".to_string(),
+            StepName::Deployment => "Deployment".to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum StepLabel {
     Service,
@@ -21,7 +36,7 @@ pub enum StepLabel {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StepStatus {
-    Ok,
+    Success,
     Error,
     Cancel,
     Skip,
@@ -50,6 +65,7 @@ pub trait MetricsRegistry: Send + Sync {
     fn stop_record(&self, id: Uuid, deployment_step: StepName, status: StepStatus);
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
     fn get_records(&self, service_id: Uuid) -> Vec<StepRecord>;
+    fn clear(&self);
     fn clone_dyn(&self) -> Box<dyn MetricsRegistry>;
 }
 
@@ -60,7 +76,7 @@ impl Clone for Box<dyn MetricsRegistry> {
 }
 
 impl StepRecord {
-    fn new(step_name: StepName, label: StepLabel, id: Uuid) -> Self {
+    pub fn new(step_name: StepName, label: StepLabel, id: Uuid) -> Self {
         StepRecord {
             step_name,
             label,
@@ -104,19 +120,21 @@ type MetricsRegistryMap = HashMap<Uuid, StepRecordMap>;
 #[derive(Clone)]
 pub struct StdMetricsRegistry {
     registry: Arc<Mutex<MetricsRegistryMap>>,
+    message_publisher: Arc<Box<dyn MsgPublisher>>,
 }
 
 impl StdMetricsRegistry {
-    pub fn new() -> Self {
+    pub fn new(message_publisher: Box<dyn MsgPublisher>) -> Self {
         StdMetricsRegistry {
             registry: Arc::new(Mutex::new(HashMap::new())),
+            message_publisher: Arc::new(message_publisher),
         }
     }
 }
 
 impl Default for StdMetricsRegistry {
     fn default() -> Self {
-        Self::new()
+        Self::new(Box::<StdMsgPublisher>::default())
     }
 }
 
@@ -144,6 +162,9 @@ impl MetricsRegistry for StdMetricsRegistry {
         if let Some(deployment_step_record) = metrics_per_id.get_mut(&step_name) {
             deployment_step_record.duration = Some(deployment_step_record.start_time.elapsed());
             deployment_step_record.status = Some(status);
+
+            self.message_publisher
+                .send(EngineMsg::new(EngineMsgPayload::Metrics(deployment_step_record.clone())));
         } else {
             error!(
                 "stop record deployment step {:#?} for service {} that has not been started",
@@ -175,6 +196,12 @@ impl MetricsRegistry for StdMetricsRegistry {
             .collect()
     }
 
+    fn clear(&self) {
+        debug!("clear the registry");
+        let mut registry = self.registry.lock().unwrap();
+        registry.clear()
+    }
+
     fn clone_dyn(&self) -> Box<dyn MetricsRegistry> {
         Box::new(self.clone())
     }
@@ -183,12 +210,13 @@ impl MetricsRegistry for StdMetricsRegistry {
 #[cfg(test)]
 mod tests {
     use crate::metrics_registry::{MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
+    use crate::msg_publisher::StdMsgPublisher;
     use uuid::Uuid;
 
     #[test]
     fn test_get_records_when_registry_is_empty() {
         let service_id = Uuid::new_v4();
-        let metrics_register = StdMetricsRegistry::new();
+        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         let record_infos = metrics_register.get_records(service_id);
         assert_eq!(record_infos, vec![]);
@@ -199,8 +227,8 @@ mod tests {
         let service_id = Uuid::new_v4();
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
-        let step_status = StepStatus::Ok;
-        let metrics_register = StdMetricsRegistry::new();
+        let step_status = StepStatus::Success;
+        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop
@@ -221,8 +249,8 @@ mod tests {
         let service_id = Uuid::new_v4();
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
-        let step_status = StepStatus::Ok;
-        let metrics_register = StdMetricsRegistry::new();
+        let step_status = StepStatus::Success;
+        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop
@@ -244,7 +272,7 @@ mod tests {
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
         let step_status = StepStatus::NotSet;
-        let metrics_register = StdMetricsRegistry::new();
+        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop

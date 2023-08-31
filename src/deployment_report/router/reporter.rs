@@ -61,7 +61,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         let error = match result {
             Ok(_) => {
                 self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of router succeeded", self.action));
                 return;
