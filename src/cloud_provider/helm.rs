@@ -19,7 +19,6 @@ use thiserror::Error;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::deploy_helm::default_helm_timeout;
 use std::{fs, thread};
-use uuid::Uuid;
 
 use super::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
 use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -851,99 +850,6 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
         EngineLocation::ClientSide => Deploy,
         EngineLocation::QoverySide => HelmAction::Destroy,
     }
-}
-
-// Shell Agent
-
-pub struct ShellAgentContext<'a> {
-    pub version: String,
-    pub api_url: &'a str,
-    pub organization_long_id: &'a Uuid,
-    pub cluster_id: &'a str,
-    pub cluster_long_id: &'a Uuid,
-    pub cluster_jwt_token: &'a str,
-    pub grpc_url: &'a str,
-}
-
-pub fn get_chart_for_shell_agent(
-    context: ShellAgentContext,
-    chart_path: impl Fn(&str) -> String,
-    custom_resources: Option<Vec<ChartSetValue>>,
-) -> Result<CommonChart, CommandError> {
-    let mut shell_agent = CommonChart {
-        chart_info: ChartInfo {
-            name: "shell-agent".to_string(),
-            path: chart_path("common/charts/qovery/qovery-shell-agent"),
-            namespace: HelmChartNamespaces::Qovery,
-            values: vec![
-                ChartSetValue {
-                    key: "image.tag".to_string(),
-                    value: context.version,
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.RUST_BACKTRACE".to_string(),
-                    value: "full".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "h2::codec::framed_write=INFO\\,INFO".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.GRPC_SERVER".to_string(),
-                    value: context.grpc_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
-                    value: context.cluster_jwt_token.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_ID".to_string(),
-                    value: context.cluster_long_id.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
-                    value: context.organization_long_id.to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    // resources limits
-    match custom_resources {
-        None => {
-            let mut default_resources = vec![
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "500Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "100Mi".to_string(),
-                },
-            ];
-            shell_agent.chart_info.values.append(&mut default_resources)
-        }
-        Some(custom_resources) => {
-            let mut custom_resources_tmp = custom_resources;
-            shell_agent.chart_info.values.append(&mut custom_resources_tmp)
-        }
-    }
-
-    Ok(shell_agent)
 }
 
 #[cfg(test)]
