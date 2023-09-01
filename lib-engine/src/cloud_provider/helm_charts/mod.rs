@@ -22,6 +22,7 @@ pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_cluster_agent_chart;
+pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
 pub mod vertical_pod_autoscaler;
 
