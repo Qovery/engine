@@ -511,6 +511,7 @@ async fn fetch_and_exec_deployments(
             // Before we check if the deployment is still valid
             _ = tokio::time::sleep(Duration::from_secs(15)), if current_deployment.is_task_terminated() => {
                 info!("No new message after 15s, assuming deployment is terminated");
+                let _ = abort_deployment_tx.send(());
                 break;
             }
 
@@ -581,6 +582,7 @@ async fn fetch_and_exec_deployments(
                         Some(engine_message_rx::Request::Terminated(_)) => {
                             info!("Received terminated message for deployment: {:?}", msg);
                             current_deployment.remove_current_deployment();
+                            let _ = abort_deployment_tx.send(());
                             break;
                         }
                         None => {
