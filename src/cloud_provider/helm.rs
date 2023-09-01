@@ -21,6 +21,9 @@ use crate::deployment_action::deploy_helm::default_helm_timeout;
 use std::{fs, thread};
 use uuid::Uuid;
 
+use super::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
+use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+
 #[derive(Error, Debug, Clone)]
 pub enum HelmChartError {
     #[error("Error while creating template: {chart_name:?}: {msg:?}")]
@@ -100,6 +103,145 @@ impl ChartValuesGenerated {
 }
 
 #[derive(Clone, Debug)]
+pub struct VpaConfig {
+    pub target_ref: VpaTargetRef,
+    pub container_policy: VpaContainerPolicy,
+}
+
+#[derive(Clone, Debug)]
+pub struct VpaTargetRef {
+    pub api_version: VpaTargetRefApiVersion,
+    pub kind: VpaTargetRefKind,
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum VpaTargetRefKind {
+    Deployment,
+    StatefulSet,
+    DaemonSet,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum VpaTargetRefApiVersion {
+    AppsV1,
+}
+
+impl Display for VpaTargetRefApiVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            VpaTargetRefApiVersion::AppsV1 => "apps/v1",
+        };
+        f.write_str(str)
+    }
+}
+
+impl VpaTargetRef {
+    pub fn new(api_version: VpaTargetRefApiVersion, kind: VpaTargetRefKind, name: String) -> Self {
+        VpaTargetRef {
+            api_version,
+            kind,
+            name,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct VpaContainerPolicy {
+    pub name: String,
+    pub min_allowed_cpu: Option<KubernetesCpuResourceUnit>,
+    pub max_allowed_cpu: Option<KubernetesCpuResourceUnit>,
+    pub min_allowed_memory: Option<KubernetesMemoryResourceUnit>,
+    pub max_allowed_memory: Option<KubernetesMemoryResourceUnit>,
+}
+
+impl VpaContainerPolicy {
+    pub fn new(
+        name: String,
+        min_allowed_cpu: Option<KubernetesCpuResourceUnit>,
+        max_allowed_cpu: Option<KubernetesCpuResourceUnit>,
+        min_allowed_memory: Option<KubernetesMemoryResourceUnit>,
+        max_allowed_memory: Option<KubernetesMemoryResourceUnit>,
+    ) -> Self {
+        VpaContainerPolicy {
+            name,
+            min_allowed_cpu,
+            max_allowed_cpu,
+            min_allowed_memory,
+            max_allowed_memory,
+        }
+    }
+}
+
+impl VpaConfig {
+    pub fn new(target_ref: VpaTargetRef, container_policy: VpaContainerPolicy) -> Self {
+        VpaConfig {
+            target_ref,
+            container_policy,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VpaConfigHelmChart {
+    pub target_ref_name: String,
+    pub target_ref_api_version: String,
+    pub target_ref_kind: VpaTargetRefKind,
+    pub container_name: String,
+    pub min_allowed_cpu: Option<String>,
+    pub min_allowed_memory: Option<String>,
+    pub max_allowed_cpu: Option<String>,
+    pub max_allowed_memory: Option<String>,
+    pub controlled_resources: Vec<VpaControllerResources>,
+}
+
+impl VpaConfigHelmChart {
+    pub fn new(vpa_config: VpaConfig) -> Self {
+        let mut controlled_resources = Vec::with_capacity(2);
+        if vpa_config.container_policy.min_allowed_cpu.is_some()
+            || vpa_config.container_policy.max_allowed_cpu.is_some()
+        {
+            controlled_resources.push(VpaControllerResources::Cpu);
+        }
+        if vpa_config.container_policy.min_allowed_memory.is_some()
+            || vpa_config.container_policy.max_allowed_memory.is_some()
+        {
+            controlled_resources.push(VpaControllerResources::Memory);
+        }
+
+        VpaConfigHelmChart {
+            target_ref_name: vpa_config.target_ref.name,
+            target_ref_api_version: vpa_config.target_ref.api_version.to_string(),
+            target_ref_kind: vpa_config.target_ref.kind,
+            container_name: vpa_config.container_policy.name,
+            min_allowed_cpu: vpa_config.container_policy.min_allowed_cpu.map(|x| x.to_string()),
+            min_allowed_memory: vpa_config.container_policy.min_allowed_memory.map(|x| x.to_string()),
+            max_allowed_cpu: vpa_config.container_policy.max_allowed_cpu.map(|x| x.to_string()),
+            max_allowed_memory: vpa_config.container_policy.max_allowed_memory.map(|x| x.to_string()),
+            controlled_resources,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum VpaControllerResources {
+    Cpu,
+    Memory,
+}
+
+impl Display for VpaControllerResources {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            VpaControllerResources::Cpu => "cpu",
+            VpaControllerResources::Memory => "memory",
+        };
+        f.write_str(str)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ChartInfo {
     pub name: String,
     pub path: String,
@@ -168,6 +310,19 @@ impl ChartInfo {
                 .unwrap_or_else(|| self.namespace.to_string()),
             _ => self.namespace.to_string(),
         }
+    }
+
+    pub fn generate_vpa_helm_config(vpa_configs: Vec<VpaConfig>) -> String {
+        let vpa_helm_config = vpa_configs
+            .iter()
+            .map(|x| VpaConfigHelmChart::new(x.clone()))
+            .collect::<Vec<VpaConfigHelmChart>>();
+
+        format!(
+            "vpa_config:\n{}",
+            // this theorically can't fail
+            serde_yaml::to_string(&vpa_helm_config).expect("couldn't serialize VPA helm config")
+        )
     }
 }
 
@@ -262,7 +417,7 @@ pub trait HelmChart: Send {
                 return Err(e);
             }
         };
-        let payload = self.post_exec(kube_client, kubernetes_config, envs, payload)?;
+        let payload = self.post_exec(kube_client, kubernetes_config, envs, payload, cmd_killer)?;
         Ok(payload)
     }
 
@@ -347,7 +502,7 @@ pub trait HelmChart: Send {
 
                         return Err(e);
                     }
-                }
+                };
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
@@ -361,6 +516,8 @@ pub trait HelmChart: Send {
                         }
                     }
                 }
+
+                // uninstall current chart
                 helm.uninstall(chart_info, &[]).map_err(to_command_error)?;
             }
             HelmAction::Skip => {}
@@ -374,6 +531,7 @@ pub trait HelmChart: Send {
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
         payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
         Ok(payload)
     }
@@ -398,6 +556,33 @@ pub trait HelmChart: Send {
             }
         };
         Ok(payload)
+    }
+
+    fn get_vpa_chart_info(&self, vpa_config: Option<CommonChartVpa>) -> ChartInfo {
+        let current_chart = self.get_chart_info();
+        let chart_name = format!("vpa-{}", current_chart.name);
+        ChartInfo {
+            name: chart_name.clone(),
+            path: match vpa_config.clone() {
+                Some(x) => x.helm_path.to_string(),
+                None => ".".to_string(),
+            },
+            action: match vpa_config {
+                Some(_) => HelmAction::Deploy,
+                None => HelmAction::Destroy,
+            },
+            namespace: current_chart.namespace,
+            custom_namespace: current_chart.custom_namespace.clone(),
+            yaml_files_content: match vpa_config {
+                Some(config) => vec![ChartValuesGenerated::new(
+                    chart_name,
+                    ChartInfo::generate_vpa_helm_config(config.vpa),
+                )],
+                None => vec![],
+            },
+            timeout_in_seconds: 15,
+            ..Default::default()
+        }
     }
 }
 
@@ -539,16 +724,40 @@ impl Clone for Box<dyn ChartInstallationChecker> {
 }
 
 #[derive(Default, Clone)]
+pub struct CommonChartVpa {
+    pub helm_path: HelmPath,
+    pub vpa: Vec<VpaConfig>,
+}
+
+impl CommonChartVpa {
+    pub fn new(chart_prefix: String, vpa: Vec<VpaConfig>) -> Self {
+        let helm_path = HelmPath::new(
+            HelmPathType::Chart,
+            Some(chart_prefix.as_str()),
+            HelmChartDirectoryLocation::CommonFolder,
+            "vertical-pod-autoscaler-configs".to_string(),
+        );
+        CommonChartVpa { helm_path, vpa }
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
     pub chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
+    pub vertical_pod_autoscaler: Option<CommonChartVpa>,
 }
 
 impl CommonChart {
-    pub fn new(chart_info: ChartInfo, chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>) -> Self {
+    pub fn new(
+        chart_info: ChartInfo,
+        chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
+        vertical_pod_autoscaler: Option<CommonChartVpa>,
+    ) -> Self {
         CommonChart {
             chart_info,
             chart_installation_checker,
+            vertical_pod_autoscaler,
         }
     }
 }
@@ -581,18 +790,43 @@ impl HelmChart for CommonChart {
     fn post_exec(
         &self,
         kube_client: &kube::Client,
-        _kubernetes_config: &Path,
-        _envs: &[(String, String)],
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
         payload: Option<ChartPayload>,
+        cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
-        match &self.chart_installation_checker {
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
+        let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
+
+        // installation checker
+        let chart_payload_res = match &self.chart_installation_checker {
             Some(checker) => match checker.verify_installation(kube_client) {
                 Ok(_) => Ok(payload),
                 Err(e) => Err(e),
             },
             // If no checker set, then consider it's ok
             None => Ok(payload),
+        };
+
+        // deploy VPA if exists or uninstall it if not wanted
+        let vpa_chart = match &self.vertical_pod_autoscaler {
+            Some(vpa) => self.get_vpa_chart_info(Some(vpa.clone())),
+            None => self.get_vpa_chart_info(None),
+        };
+        warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
+        match vpa_chart.action {
+            HelmAction::Deploy => {
+                warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
+                helm.upgrade(&vpa_chart, &[], cmd_killer).map_err(to_command_error)?;
+            }
+            HelmAction::Destroy => {
+                warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
+                helm.uninstall(&vpa_chart, &[]).map_err(to_command_error)?;
+            }
+            HelmAction::Skip => {}
         }
+
+        chart_payload_res
     }
 }
 
@@ -712,113 +946,16 @@ pub fn get_chart_for_shell_agent(
     Ok(shell_agent)
 }
 
-// Cluster Agent
-
-pub struct ClusterAgentContext<'a> {
-    pub version: String,
-    pub api_url: &'a str,
-    pub organization_long_id: &'a Uuid,
-    pub cluster_id: &'a str,
-    pub cluster_long_id: &'a Uuid,
-    pub cluster_jwt_token: &'a str,
-    pub grpc_url: &'a str,
-    pub loki_url: Option<&'a str>,
-}
-
-// This one is the new agent in rust
-pub fn get_chart_for_cluster_agent(
-    context: ClusterAgentContext,
-    chart_path: impl Fn(&str) -> String,
-    custom_resources: Option<Vec<ChartSetValue>>,
-) -> Result<CommonChart, CommandError> {
-    let mut cluster_agent = CommonChart {
-        chart_info: ChartInfo {
-            name: "cluster-agent".to_string(),
-            path: chart_path("common/charts/qovery/qovery-cluster-agent"),
-            namespace: HelmChartNamespaces::Qovery,
-            values: vec![
-                ChartSetValue {
-                    key: "image.tag".to_string(),
-                    value: context.version,
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.RUST_BACKTRACE".to_string(),
-                    value: "full".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "h2::codec::framed_write=INFO\\,INFO".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.GRPC_SERVER".to_string(),
-                    value: context.grpc_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
-                    value: context.cluster_jwt_token.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_ID".to_string(),
-                    value: context.cluster_long_id.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
-                    value: context.organization_long_id.to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    // If log history is enabled, add the loki url to the values
-    if let Some(url) = context.loki_url {
-        cluster_agent.chart_info.values.push(ChartSetValue {
-            key: "environmentVariables.LOKI_URL".to_string(),
-            value: url.to_string(),
-        });
-    }
-
-    // resources limits
-    match custom_resources {
-        None => {
-            let mut default_resources = vec![
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "100Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "500Mi".to_string(),
-                },
-            ];
-            cluster_agent.chart_info.values.append(&mut default_resources)
-        }
-        Some(custom_resources) => {
-            let mut custom_resources_tmp = custom_resources;
-            cluster_agent.chart_info.values.append(&mut custom_resources_tmp)
-        }
-    }
-
-    Ok(cluster_agent)
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::get_latest_successful_deployment;
+    use crate::cloud_provider::helm::{
+        CommonChart, CommonChartVpa, HelmChart, VpaConfigHelmChart, VpaTargetRefApiVersion, VpaTargetRefKind,
+    };
+    use crate::cloud_provider::models::KubernetesMemoryResourceUnit;
+    use crate::cloud_provider::{helm::get_latest_successful_deployment, models::KubernetesCpuResourceUnit};
     use crate::cmd::structs::HelmHistoryRow;
+
+    use super::{ChartInfo, VpaConfig, VpaContainerPolicy, VpaTargetRef};
 
     #[test]
     fn test_last_succeeded_deployment() {
@@ -854,5 +991,81 @@ mod tests {
         let results = serde_json::from_str::<Vec<HelmHistoryRow>>(payload).unwrap();
         let final_succeed = get_latest_successful_deployment(&results).unwrap();
         assert_eq!(results[1].updated, final_succeed.updated);
+    }
+
+    #[test]
+    fn test_vpa() {
+        let vpa_config = VpaConfig {
+            target_ref: VpaTargetRef {
+                api_version: VpaTargetRefApiVersion::AppsV1,
+                kind: VpaTargetRefKind::Deployment,
+                name: "test".to_string(),
+            },
+            container_policy: VpaContainerPolicy {
+                name: "test".to_string(),
+                min_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                min_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
+                max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
+            },
+        };
+
+        // install
+        let chart = ChartInfo::new_from_release_name("vpa_test", "qovery");
+        let common_chart_vpa = CommonChartVpa::new("./".to_string(), vec![vpa_config.clone()]);
+        let common_chart = CommonChart::new(chart, None, Some(common_chart_vpa.clone()));
+        let vpa_chart = common_chart.get_vpa_chart_info(Some(common_chart_vpa));
+
+        assert_eq!(vpa_chart.name, "vpa-vpa_test".to_string());
+        assert_eq!(vpa_chart.path, "./common/charts/vertical-pod-autoscaler-configs");
+        assert_eq!(vpa_chart.action, super::HelmAction::Deploy);
+
+        // test Helm generated config
+        let vpa_config_string = ChartInfo::generate_vpa_helm_config(vec![vpa_config.clone()]);
+        assert_eq!(vpa_config_string, "vpa_config:\n- targetRefName: test\n  targetRefApiVersion: apps/v1\n  targetRefKind: Deployment\n  containerName: test\n  minAllowedCpu: 100m\n  minAllowedMemory: 100Mi\n  maxAllowedCpu: 100m\n  maxAllowedMemory: 100Mi\n  controlledResources:\n  - cpu\n  - memory\n".to_string());
+
+        // uninstall vpa chart if nothing is set
+        let vpa_chart = common_chart.get_vpa_chart_info(None);
+        assert_eq!(vpa_chart.action, super::HelmAction::Destroy);
+
+        // check vpa all resources are deployed
+        let vpa_config_all_resources = VpaConfigHelmChart::new(vpa_config);
+        assert_eq!(format!("{:?}", vpa_config_all_resources.controlled_resources), "[Cpu, Memory]");
+
+        // only vpa cpu set
+        let vpa_config_no_mem = VpaConfig {
+            target_ref: VpaTargetRef {
+                api_version: VpaTargetRefApiVersion::AppsV1,
+                kind: VpaTargetRefKind::Deployment,
+                name: "test".to_string(),
+            },
+            container_policy: VpaContainerPolicy {
+                name: "test".to_string(),
+                min_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                min_allowed_memory: None,
+                max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                max_allowed_memory: None,
+            },
+        };
+        let vpa_config = VpaConfigHelmChart::new(vpa_config_no_mem);
+        assert_eq!(format!("{:?}", vpa_config.controlled_resources), "[Cpu]");
+
+        // only vpa memory set
+        let vpa_config_no_cpu = VpaConfig {
+            target_ref: VpaTargetRef {
+                api_version: VpaTargetRefApiVersion::AppsV1,
+                kind: VpaTargetRefKind::Deployment,
+                name: "test".to_string(),
+            },
+            container_policy: VpaContainerPolicy {
+                name: "test".to_string(),
+                min_allowed_cpu: None,
+                min_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
+                max_allowed_cpu: None,
+                max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
+            },
+        };
+        let vpa_config = VpaConfigHelmChart::new(vpa_config_no_cpu);
+        assert_eq!(format!("{:?}", vpa_config.controlled_resources), "[Memory]");
     }
 }

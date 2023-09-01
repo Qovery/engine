@@ -93,7 +93,7 @@ impl DeploymentAction for HelmDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_helm_chart()?;
 
-        let common_chart = CommonChart::new(self.helm_chart.clone(), None);
+        let common_chart = CommonChart::new(self.helm_chart.clone(), None, None);
         let chart: Box<dyn HelmChart> = Box::new(common_chart);
         let kubeconfig_string = target.kubernetes.get_kubeconfig_file_path()?;
         let kubeconfig = Path::new(kubeconfig_string.as_str());

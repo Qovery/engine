@@ -1,10 +1,11 @@
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
-    ChartSetValue, ClusterAgentContext, CommonChart, HelmChart, HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
+    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart,
+    HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::CustomerHelmChartsOverride;
@@ -26,7 +27,9 @@ use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChar
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -35,6 +38,7 @@ use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScalewayQoveryTerraformConfig {
@@ -195,6 +199,16 @@ pub fn scw_helm_charts(
             .to_string(),
     );
 
+    // Vertical pod autoscaler
+    let vpa = VpaChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        true,
+    )
+    .to_common_helm_chart()?;
+
     // External DNS
     let external_dns = ExternalDNSChart::new(
         chart_prefix_path,
@@ -205,6 +219,7 @@ pub fn scw_helm_charts(
         false,
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -212,7 +227,7 @@ pub fn scw_helm_charts(
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
-            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone())
+            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone(), true)
                 .to_common_helm_chart()?,
         ),
     };
@@ -235,6 +250,7 @@ pub fn scw_helm_charts(
                     ..Default::default()
                 },
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -261,6 +277,7 @@ pub fn scw_helm_charts(
                 prometheus_namespace,
                 true,
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -275,6 +292,7 @@ pub fn scw_helm_charts(
                 prometheus_internal_url.clone(),
                 prometheus_namespace,
                 get_chart_overrride_fn.clone(),
+                true,
             )
             .to_common_helm_chart()?,
         ),
@@ -325,6 +343,7 @@ pub fn scw_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         get_chart_overrride_fn.clone(),
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -391,26 +410,31 @@ pub fn scw_helm_charts(
         }),
     };
 
-    let cluster_agent_context = ClusterAgentContext {
-        version: qovery_api
+    // Qovery cluster agent
+    let cluster_agent = QoveryClusterAgentChart::new(
+        chart_prefix_path,
+        qovery_api
             .service_version(EngineServiceType::ClusterAgent)
-            .map_err(|e| {
-                CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None)
-            })?,
-        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        organization_long_id: &chart_config_prerequisites.organization_long_id,
-        cluster_id: &chart_config_prerequisites.cluster_id,
-        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
-        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
-        loki_url: if chart_config_prerequisites.ff_log_history_enabled {
-            Some("http://loki.logging.svc.cluster.local:3100")
-        } else {
-            None
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        Url::parse(&chart_config_prerequisites.infra_options.qovery_grpc_url)
+            .map_err(|e| CommandError::new("cannot parse GRPC url".to_string(), Some(e.to_string()), None))?,
+        match chart_config_prerequisites.ff_log_history_enabled {
+            true => Some(
+                Url::parse("http://loki.logging.svc.cluster.local:3100")
+                    .map_err(|e| CommandError::new("cannot parse Loki url".to_string(), Some(e.to_string()), None))?,
+            ),
+            false => None,
         },
-    };
-    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
+        &chart_config_prerequisites.infra_options.jwt_token,
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        HelmChartResourcesConstraintType::ChartDefault,
+        true,
+    )
+    .to_common_helm_chart()?;
 
+    // Qovery shell agent
     let shell_context = ShellAgentContext {
         version: qovery_api
             .service_version(EngineServiceType::ShellAgent)
@@ -517,7 +541,7 @@ pub fn scw_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config), Box::new(vpa)];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 

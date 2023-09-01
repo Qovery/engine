@@ -49,6 +49,7 @@ use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::models::database::DatabaseInstanceType;
+use qovery_engine::msg_publisher::StdMsgPublisher;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -153,7 +154,7 @@ pub fn logger() -> Box<dyn Logger> {
 }
 
 pub fn metrics_registry() -> Box<dyn MetricsRegistry> {
-    Box::new(StdMetricsRegistry::new())
+    Box::new(StdMetricsRegistry::new(Box::new(StdMsgPublisher::new())))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -254,7 +255,7 @@ impl FuncTestsSecrets {
 
         Ok(VaultConfig {
             address: vault_addr,
-            token: vault_token.to_string(),
+            token: vault_token,
         })
     }
 

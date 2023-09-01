@@ -27,6 +27,7 @@ pub mod kubers_utils;
 pub mod logger;
 pub mod metrics_registry;
 pub mod models;
+pub mod msg_publisher;
 pub mod object_storage;
 pub mod runtime;
 mod secret_manager;

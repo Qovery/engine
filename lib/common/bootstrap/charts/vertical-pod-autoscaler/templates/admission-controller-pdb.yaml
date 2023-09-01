@@ -1,0 +1,13 @@
+---
+{{- if and .Values.admissionController.podDisruptionBudget (gt (int .Values.admissionController.replicaCount) 1) .Values.admissionController.enabled }}
+apiVersion: {{ ternary "policy/v1" "policy/v1beta1" (semverCompare ">=1.21.0-0" .Capabilities.KubeVersion.Version) }}
+kind: PodDisruptionBudget
+metadata:
+  name: "{{ template "vpa.fullname" . }}-admission-controller-pdb"
+spec:
+  {{- toYaml .Values.admissionController.podDisruptionBudget | nindent 2 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: admission-controller
+      app.kubernetes.io/name: {{ template "vpa.fullname" . }}
+{{- end }}

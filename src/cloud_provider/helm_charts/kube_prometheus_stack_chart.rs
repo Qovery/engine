@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::cloud_provider::models::CustomerHelmChartsOverride;
+use crate::cloud_provider::models::{
+    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::errors::CommandError;
 use kube::Client;
@@ -15,6 +18,7 @@ use semver::Version;
 pub type StorageClassName = String;
 
 pub struct KubePrometheusStackChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     storage_class_name: StorageClassName,
@@ -22,6 +26,7 @@ pub struct KubePrometheusStackChart {
     prometheus_namespace: HelmChartNamespaces,
     kubelet_service_monitor_resource_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    enable_vpa: bool,
 }
 
 impl KubePrometheusStackChart {
@@ -32,8 +37,10 @@ impl KubePrometheusStackChart {
         prometheus_namespace: HelmChartNamespaces,
         kubelet_service_monitor_resource_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        enable_vpa: bool,
     ) -> Self {
         KubePrometheusStackChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -49,6 +56,7 @@ impl KubePrometheusStackChart {
             prometheus_namespace,
             kubelet_service_monitor_resource_enabled,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            enable_vpa,
         }
     }
 
@@ -104,6 +112,70 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KubePrometheusStackChartChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![
+                    VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::Deployment,
+                            "kube-prometheus-stack-operator".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(384)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(4)),
+                        ),
+                    },
+                    VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::Deployment,
+                            "kube-state-metrics".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(64)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                        ),
+                    },
+                    VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::DaemonSet,
+                            "kube-prometheus-stack-prometheus-node-exporter".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(150)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(16)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                        ),
+                    },
+                    VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::StatefulSet,
+                            "prometheus-kube-prometheus-stack-prometheus".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(8)),
+                        ),
+                    },
+                    ],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -164,6 +236,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
             get_prometheus_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -194,6 +267,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
             get_prometheus_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -228,6 +302,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
             get_prometheus_chart_override(),
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -1,0 +1,55 @@
+{{- if and .Values.admissionController.enabled .Values.admissionController.generateCertificate }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name:  {{ include "vpa.fullname" . }}-admission-certgen-patch
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/component: admission-certgen
+    {{- include "vpa.labels" . | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      name: {{ include "vpa.fullname" . }}-admission-certgen-patch
+      labels:
+        app.kubernetes.io/component: admission-certgen
+        {{- include "vpa.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "vpa.fullname" . }}-admission-certgen
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: patch
+          image: {{ printf "%s:%s" .Values.admissionController.certGen.image.repository .Values.admissionController.certGen.image.tag }}
+          args:
+            - patch
+            - --webhook-name={{ include "vpa.fullname" . }}-webhook-config
+            - --namespace={{ .Release.Namespace }}
+            - --secret-name={{ include "vpa.webhook.secret" . }}
+            - --patch-validating=false
+            - --log-level=debug
+          resources:
+            {{- toYaml .Values.admissionController.certGen.resources | nindent 12 }}
+      {{- with .Values.admissionController.certGen.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admissionController.certGen.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admissionController.certGen.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admissionController.certGen.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

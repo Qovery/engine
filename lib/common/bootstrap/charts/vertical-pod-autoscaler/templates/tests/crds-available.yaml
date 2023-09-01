@@ -1,0 +1,30 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "vpa.fullname" . }}-test-crds-available
+  labels:
+    {{- include "vpa.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+    "helm.sh/hook-weight": "10"
+spec:
+  serviceAccountName:  {{ include "vpa.fullname" . }}-test
+  containers:
+    - name: test
+      {{- if .Values.tests.securityContext }}
+      securityContext:
+      {{- toYaml .Values.tests.securityContext | nindent 8 }}
+      {{- end }}
+      image: {{ include "vpa.test.image" . }}
+      {{- if .Values.tests.image }}
+      imagePullPolicy: {{ .Values.tests.image.pullPolicy }}
+      {{- end }}
+      command: ['kubectl']
+      args:
+        - get
+        - crd
+        - verticalpodautoscalercheckpoints.autoscaling.k8s.io
+        - verticalpodautoscalers.autoscaling.k8s.io
+  restartPolicy: Never

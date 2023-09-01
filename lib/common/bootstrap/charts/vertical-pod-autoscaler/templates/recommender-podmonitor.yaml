@@ -1,0 +1,28 @@
+{{- if .Values.recommender.podMonitor }}
+{{- if and .Values.recommender.enabled .Values.recommender.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "vpa.fullname" . }}-recommender
+  {{- with .Values.recommender.podMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.recommender.podMonitor.labels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  podMetricsEndpoints:
+  - interval: 30s
+    path: /metrics
+    port: metrics
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: recommender
+      {{- include "vpa.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

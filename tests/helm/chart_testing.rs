@@ -109,6 +109,7 @@ fn q_ingress_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
 
     let resources = get_kube_resources(
@@ -151,6 +152,7 @@ fn q_container_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -193,6 +195,7 @@ fn q_application_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -234,6 +237,7 @@ fn q_container_psql_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/services/{}", lib_dir(), chart_name).as_str(),
@@ -275,6 +279,7 @@ fn q_managed_psql_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -316,6 +321,7 @@ fn q_job_test() {
             crds_update: None,
         },
         chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),

@@ -219,7 +219,7 @@ impl HelmChart for CoreDNSConfigChart {
             self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
-        self.post_exec(kube_client, kubernetes_config, envs, Some(payload))?;
+        self.post_exec(kube_client, kubernetes_config, envs, Some(payload), cmd_killer)?;
         Ok(None)
     }
 
@@ -229,6 +229,7 @@ impl HelmChart for CoreDNSConfigChart {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, CommandError> {
         let mut environment_variables = Vec::new();
         for env in envs {

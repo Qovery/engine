@@ -154,7 +154,7 @@ impl EnvironmentTask {
             first_service,
         ) {
             Ok(handle) => {
-                provision_builder.stop(StepStatus::Ok);
+                provision_builder.stop(StepStatus::Success);
                 handle
             }
             Err(engine_error) => {
@@ -302,7 +302,7 @@ impl EnvironmentTask {
                 return Err(Box::new(cr_to_engine_error(err)));
             }
             Ok(repository_info) => provision_registry_record.stop(if repository_info.created {
-                StepStatus::Ok
+                StepStatus::Success
             } else {
                 StepStatus::Skip
             }),
@@ -403,7 +403,7 @@ impl EnvironmentTask {
 
         let deployment_err = match run_deploy() {
             Ok(_) => {
-                record.stop(StepStatus::Ok);
+                record.stop(StepStatus::Success);
                 return Ok(());
             } // return early if no error
             Err(err) => err,

@@ -195,7 +195,7 @@ impl LocalDocker {
             build_record.stop(StepStatus::Error);
             return Err(to_build_error(build.image.service_id.clone(), err));
         }
-        build_record.stop(StepStatus::Ok);
+        build_record.stop(StepStatus::Success);
         Ok(())
     }
 
@@ -411,7 +411,7 @@ impl BuildPlatform for LocalDocker {
                 raw_error: clone_error,
             });
         }
-        git_clone_record.stop(StepStatus::Ok);
+        git_clone_record.stop(StepStatus::Success);
 
         let _git_cleanup = scopeguard::guard(&repository_root_path, |path| {
             info!("Removing git repository at path: {:?}", path);
@@ -540,7 +540,7 @@ impl BuildPlatform for LocalDocker {
                 is_task_canceled,
             );
             build_record.stop(if build_result.is_ok() {
-                StepStatus::Ok
+                StepStatus::Success
             } else {
                 StepStatus::Error
             });

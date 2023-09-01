@@ -3,6 +3,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
+use chrono::Utc;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
@@ -98,31 +99,27 @@ async fn restart_service(
     let pods_list_params = ListParams::default().labels(selector);
     let service_pods_before_restart = pods_api.list(&pods_list_params).await?.items;
 
+    // prepare predicate to wait after resource restart
+    let most_recent_pod_start_time_before_restart = service_pods_before_restart
+        .into_iter()
+        .filter_map(|pod| pod.status.and_then(|it| it.start_time))
+        .reduce(|acc, current| if acc.gt(&current) { acc } else { current })
+        // If no pod exists, returns current date
+        .or_else(|| Some(Time(Utc::now())))
+        .expect("Should retrieve either most recent pod.status.time.date_time or use DateTime<Utc> now");
+
     // restart either deployment or statefulset
-    if is_statefulset {
+    let expected_number_of_replicas = if is_statefulset {
         restart_statefulset(kube, namespace, &pods_list_params).await?
     } else {
         restart_deployment(kube, namespace, &pods_list_params).await?
     };
 
-    // prepare predicate to wait after resource restart
-    let pods_length_before_restart = service_pods_before_restart.len();
-    let most_recent_pod_start_time_before_restart = service_pods_before_restart
-        .into_iter()
-        .map(|pod| {
-            pod.status
-                .expect("pod.status should always be filled")
-                .start_time
-                .expect("pod.status.time should always be filled")
-        })
-        .reduce(|acc, current| if acc.gt(&current) { acc } else { current })
-        .expect("Should always retrieve most recent pod.status.time.date_time");
-
     // wait
     wait_until_service_pods_are_restarted(
         &pods_api,
         &pods_list_params,
-        pods_length_before_restart,
+        expected_number_of_replicas,
         &most_recent_pod_start_time_before_restart,
     )
     .await?;
@@ -134,7 +131,7 @@ async fn restart_deployment(
     kube: &kube::Client,
     namespace: &str,
     pods_list_params: &ListParams,
-) -> Result<(), kube::Error> {
+) -> Result<i32, kube::Error> {
     let deployments_api: Api<Deployment> = Api::namespaced(kube.clone(), namespace);
     let deployments = deployments_api.list(pods_list_params).await?;
 
@@ -148,17 +145,28 @@ async fn restart_deployment(
     }
 
     let deployment = deployments.items.first().unwrap();
+
+    let number_of_replicas = match deployment.spec.as_ref().and_then(|it| it.replicas) {
+        None => {
+            let undefined_number_of_replicas = kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(
+                "Undefined number of replicas (deployment.spec.replicas)",
+            ));
+            return Err(undefined_number_of_replicas);
+        }
+        Some(replicas) => replicas,
+    };
+
     let deployment_name = deployment.metadata.clone().name.unwrap_or_default();
     deployments_api.restart(&deployment_name).await?;
 
-    Ok(())
+    Ok(number_of_replicas)
 }
 
 async fn restart_statefulset(
     kube: &kube::Client,
     namespace: &str,
     pods_list_params: &ListParams,
-) -> Result<(), kube::Error> {
+) -> Result<i32, kube::Error> {
     let statefulset_api: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
     let statefulsets = statefulset_api.list(pods_list_params).await?;
 
@@ -171,22 +179,32 @@ async fn restart_statefulset(
     }
 
     let statefulset = statefulsets.items.first().unwrap();
+
+    let number_of_replicas = match statefulset.spec.as_ref().and_then(|it| it.replicas) {
+        None => {
+            let undefined_number_of_replicas = kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(
+                "Undefined number of replicas (statefulset.spec.replicas)",
+            ));
+            return Err(undefined_number_of_replicas);
+        }
+        Some(replicas) => replicas,
+    };
     let statefulset_name = statefulset.metadata.clone().name.unwrap_or_default();
     statefulset_api.restart(&statefulset_name).await?;
 
-    Ok(())
+    Ok(number_of_replicas)
 }
 
 async fn wait_until_service_pods_are_restarted(
     pods_api: &Api<Pod>,
     pods_list_params: &ListParams,
-    pods_length_before_restart: usize,
+    pods_length_before_restart: i32,
     most_recent_pod_start_time_before_restart: &Time,
 ) -> Result<(), kube::Error> {
     loop {
         let running_service_pods = pods_api.list(pods_list_params).await?;
 
-        let number_of_pods_running = running_service_pods
+        let number_of_pods_running: i32 = running_service_pods
             .into_iter()
             .filter_map(|pod| pod.status)
             .filter(|status| match status.clone().start_time {
@@ -204,7 +222,7 @@ async fn wait_until_service_pods_are_restarted(
                     is_running && container_status.ready
                 })
             })
-            .count();
+            .count() as i32;
 
         if number_of_pods_running == pods_length_before_restart {
             break;

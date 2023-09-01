@@ -1,0 +1,103 @@
+{{- if .Values.admissionController.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vpa.fullname" . }}-admission-controller
+  labels:
+    app.kubernetes.io/component: admission-controller
+    {{- include "vpa.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.admissionController.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: admission-controller
+      {{- include "vpa.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.admissionController.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+      {{- with .Values.admissionController.podLabels }}
+          {{- toYaml . | nindent 8 }}
+      {{- end }}
+        app.kubernetes.io/component: admission-controller
+        {{- include "vpa.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      serviceAccountName: {{ include "vpa.serviceAccountName" . }}-admission-controller
+      securityContext:
+        {{- toYaml .Values.admissionController.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.admissionController.securityContext | nindent 12 }}
+          image: {{ printf "%s:%s" .Values.admissionController.image.repository (.Values.admissionController.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.admissionController.image.pullPolicy }}
+          args:
+            - --register-webhook=false
+            - --webhook-service={{ include "vpa.fullname" . }}-webhook
+          {{- if .Values.admissionController.generateCertificate }}
+            - --client-ca-file=/etc/tls-certs/ca
+            - --tls-cert-file=/etc/tls-certs/cert
+            - --tls-private-key=/etc/tls-certs/key
+          {{- end }}
+          {{- if .Values.admissionController.extraArgs }}
+          {{- range $key, $value := .Values.admissionController.extraArgs }}
+            - --{{ $key }}={{ $value }}
+          {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: "/etc/tls-certs"
+              readOnly: true
+          {{- if .Values.admissionController.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.admissionController.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.admissionController.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.admissionController.readinessProbe | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 8944
+              protocol: TCP
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {{- toYaml .Values.admissionController.resources | nindent 12 }}
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: {{ include "vpa.webhook.secret" . }}
+            {{- with .Values.admissionController.tlsSecretKeys }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      {{- with .Values.admissionController.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admissionController.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.admissionController.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

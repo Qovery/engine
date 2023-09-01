@@ -214,7 +214,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         let error = match result {
             Ok(_) => {
                 self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
                 if self.action == Action::Delete && !self.send_final_deleted_status {
                     return;
                 }

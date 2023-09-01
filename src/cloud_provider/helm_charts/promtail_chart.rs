@@ -1,21 +1,26 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::cloud_provider::models::CustomerHelmChartsOverride;
+use crate::cloud_provider::models::{
+    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::errors::CommandError;
 use kube::Client;
 use semver::Version;
 
 pub struct PromtailChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     loki_kube_dns_name: String,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    enable_vpa: bool,
 }
 
 impl PromtailChart {
@@ -23,8 +28,10 @@ impl PromtailChart {
         chart_prefix_path: Option<&str>,
         loki_kube_dns_name: String,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        enable_vpa: bool,
     ) -> Self {
         PromtailChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -37,6 +44,7 @@ impl PromtailChart {
             ),
             loki_kube_dns_name,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            enable_vpa,
         }
     }
 
@@ -76,6 +84,26 @@ impl ToCommonHelmChart for PromtailChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
+                            VpaTargetRefApiVersion::AppsV1,
+                            VpaTargetRefKind::DaemonSet,
+                            "promtail".to_string(),
+                        ),
+                        container_policy: VpaContainerPolicy::new(
+                            "*".to_string(),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                        ),
+                    }],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -130,7 +158,7 @@ mod tests {
     #[test]
     fn promtail_chart_directory_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -153,7 +181,7 @@ mod tests {
     #[test]
     fn promtail_chart_values_file_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -180,7 +208,7 @@ mod tests {
     #[test]
     fn promtail_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override());
+        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

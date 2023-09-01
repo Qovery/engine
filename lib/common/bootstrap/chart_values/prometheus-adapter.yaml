@@ -4,7 +4,7 @@ prometheus:
   url: set-by-engine-code
 
 podDisruptionBudget:
-  enabled: true
+  enabled: false
   maxUnavailable: 1
 
 resources:
@@ -14,4 +14,3 @@ resources:
   requests:
     cpu: 250m
     memory: 384Mi
-

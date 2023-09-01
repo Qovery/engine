@@ -1,0 +1,25 @@
+{{- range $config := .Values.vpa_config }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: vpa-{{ $config.targetRefName }}
+spec:
+  targetRef:
+    apiVersion: "{{ $config.targetRefApiVersion }}"
+    kind: {{ $config.targetRefKind}}
+    name: {{ $config.targetRefName }}
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "{{ $config.containerName }}"
+        minAllowed:
+          cpu: {{ $config.minAllowedCpu }}
+          memory: {{ $config.minAllowedMemory }}
+        maxAllowed:
+          cpu: {{ $config.maxAllowedCpu }}
+          memory: {{ $config.maxAllowedMemory }}
+        controlledResources:
+          {{- range $config.controlledResources }}
+          - {{ . -}}
+          {{- end }}
+{{- end}}

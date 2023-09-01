@@ -21,7 +21,9 @@ pub mod nginx_ingress_chart;
 pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
+pub mod qovery_cluster_agent_chart;
 pub mod qovery_storage_class_chart;
+pub mod vertical_pod_autoscaler;
 
 pub enum HelmChartResourcesConstraintType {
     /// Let helm chart defines what it wants
@@ -106,7 +108,7 @@ pub enum HelmPathType {
 }
 
 /// Represents chart directory where chart is defined.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct HelmPath {
     path: String,
 }

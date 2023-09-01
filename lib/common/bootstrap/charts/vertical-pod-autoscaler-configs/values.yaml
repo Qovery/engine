@@ -1,0 +1,11 @@
+vpa_config:
+  []
+  #- targetRefName: "xxx"
+  #  targetRefApiVersion: "apps/v1"
+  #  targetRefKind: "Deployment"
+  #  containerName: "*"
+  #  minAllowedCpu: "50m"
+  #  minAllowedMemory: "200Mi"
+  #  maxAllowedCpu: "50m"
+  #  maxAllowedMemory: "200Mi"
+  #  controlledResources: ["cpu", "memory"]

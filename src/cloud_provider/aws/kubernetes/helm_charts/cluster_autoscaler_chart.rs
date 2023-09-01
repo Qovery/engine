@@ -92,6 +92,7 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(ClusterAutoscalerChartChecker::new())),
+            vertical_pod_autoscaler: None, // enabled in the chart configuration
         })
     }
 }

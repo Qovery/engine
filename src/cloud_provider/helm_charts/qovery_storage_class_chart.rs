@@ -72,6 +72,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
             chart_installation_checker: Some(Box::new(QoveryStorageClassChartInstallationChecker::new(
                 self.storage_types_to_be_checked_after_install.clone(),
             ))),
+            vertical_pod_autoscaler: None,
         })
     }
 }

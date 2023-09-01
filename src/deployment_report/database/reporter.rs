@@ -211,7 +211,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         let error = match result {
             Ok(_) => {
                 self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Ok);
+                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
                 if self.is_managed {
                     self.logger
                         .send_success(format!("✅ {} of managed database succeeded", self.action));

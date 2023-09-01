@@ -221,7 +221,7 @@ fn should_have_mounted_files_as_volume() {
         container.command_args = vec![
             "/bin/sh".to_string(),
             "-c".to_string(),
-            "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
+            "apt-get update; apt-get install -y netcat-openbsd; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
         ];
         //container.mounted_files = vec![mounted_file];
         container.environment_vars = BTreeMap::from([

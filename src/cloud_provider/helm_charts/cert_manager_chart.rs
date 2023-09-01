@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
-    UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, UpdateStrategy, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -15,6 +16,7 @@ use kube::Client;
 use semver::Version;
 
 pub struct CertManagerChart {
+    chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     ff_metrics_history_enabled: bool,
@@ -23,6 +25,7 @@ pub struct CertManagerChart {
     ca_injector_resources: HelmChartResources,
     update_strategy: UpdateStrategy,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    enable_vpa: bool,
 }
 
 impl CertManagerChart {
@@ -34,8 +37,10 @@ impl CertManagerChart {
         ca_injector_resources: HelmChartResourcesConstraintType,
         update_strategy: UpdateStrategy,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        enable_vpa: bool,
     ) -> CertManagerChart {
         CertManagerChart {
+            chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
@@ -76,6 +81,7 @@ impl CertManagerChart {
             ff_metrics_history_enabled,
             update_strategy,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            enable_vpa,
         }
     }
 
@@ -170,6 +176,70 @@ impl ToCommonHelmChart for CertManagerChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(CertManagerChartChecker::new())),
+            vertical_pod_autoscaler: match self.enable_vpa {
+                true => Some(CommonChartVpa::new(
+                    self.chart_prefix_path.clone().unwrap_or(".".to_string()),
+                    vec![
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "cert-manager".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(192)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(3)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "cert-manager-cainjector".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(192)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(3)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "cert-manager-webhook".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(512)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "qovery-cert-manager-webhook-qovery-webhook".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(64)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(512)),
+                            ),
+                        },
+                    ],
+                )),
+                false => None,
+            },
         })
     }
 }
@@ -233,6 +303,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -264,6 +335,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -299,6 +371,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

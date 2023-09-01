@@ -65,6 +65,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KubeStateMetricsChartChecker::new())),
+            vertical_pod_autoscaler: None,
         })
     }
 }
