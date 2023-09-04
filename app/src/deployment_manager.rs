@@ -382,7 +382,7 @@ mod test {
             deployment.log_rx.clone().lock_owned().await,
             deployment.msg_rx.clone().lock_owned().await,
         );
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
         drop(abort_handle);
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(None)));
 
@@ -392,14 +392,14 @@ mod test {
             deployment.log_rx.clone().lock_owned().await,
             deployment.msg_rx.clone().lock_owned().await,
         );
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
         let _ = log_tx.send(engine_event.clone());
         let ret = log_tx.send(engine_event.clone());
         assert!(ret.is_ok());
 
         // We should receive one batch
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(Some(_))));
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // We should receive 2 batch as message have been sent after the buffer duration
         let barrier = Arc::new(tokio::sync::Barrier::new(2));
@@ -418,7 +418,7 @@ mod test {
         assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(Some(_))));
         let msg = timeout(buffer_deadline * 2, stream.next()).await;
         assert!(matches!(msg, Ok(Some(_))));
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // Resuming the stream should re-send the previous messages
         drop(abort_handle);
@@ -431,7 +431,7 @@ mod test {
             timeout(buffer_deadline, stream.next()).await,
             Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
         ));
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // Terminating the deployment should terminate the stream
         drop(deployment);
@@ -457,7 +457,7 @@ mod test {
         let _ = msg_tx.send(engine_msg.clone());
         let msg = timeout(buffer_deadline * 2, stream.next()).await;
         assert!(matches!(msg, Ok(Some(_))));
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // Resuming the stream should re-send the previous messages
         drop(abort_handle);
@@ -470,6 +470,6 @@ mod test {
             timeout(buffer_deadline, stream.next()).await,
             Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
         ));
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Err(_)));
+        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
     }
 }

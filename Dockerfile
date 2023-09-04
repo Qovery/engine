@@ -1,16 +1,16 @@
 # To find the version do an `apt list -a xxxx` helm inside the CI image
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
-ARG KUBECTL_VERSION="1.26.6-00"
-ARG HELM_VERSION="3.12.1-1"
+ARG KUBECTL_VERSION="1.26.8-00"
+ARG HELM_VERSION="3.12.3-1"
 ARG TERRAFORM_VERSION="1.3.3"
 ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.8.1"
 ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
-ARG DOCKER_VERSION="5:24.0.1-1~debian.12~bookworm"
-ARG CONTAINERD_VERSION="1.6.21-1"
+ARG DOCKER_VERSION="5:24.0.5-1~debian.12~bookworm"
+ARG CONTAINERD_VERSION="1.6.22-1"
 
 ARG BIN_DEST_FOLDER="/binaries"
 
@@ -20,7 +20,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.70-2023-06-21T09-03-38 as engine_ci
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.72-2023-09-04T08-03-00 as engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -109,7 +109,7 @@ RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-fr
 #  ENGINE FINAL IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm as run
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim as run
 
 ARG BIN_DEST_FOLDER
 

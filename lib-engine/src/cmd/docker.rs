@@ -385,7 +385,7 @@ impl Docker {
             &CommandKiller::never(),
         );
 
-        Ok(matches!(ret, Ok(_)))
+        Ok(ret.is_ok())
     }
 
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
@@ -718,7 +718,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Err(_)));
+        assert!(ret.is_err());
 
         // Valid image should be ok
         let image = ContainerImage::new(
@@ -733,7 +733,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         // Should timeout
         let ret = docker.pull(
@@ -775,7 +775,7 @@ mod tests {
             &CommandKiller::never(),
         );
 
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         let ret = docker.build_with_buildkit(
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
@@ -790,7 +790,7 @@ mod tests {
             &CommandKiller::never(),
         );
 
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         let ret = docker.does_image_exist_locally(&image_to_build);
         assert!(matches!(ret, Ok(true)));
@@ -836,7 +836,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         let ret = docker.does_image_exist_remotely(&image_to_build);
         assert!(matches!(ret, Ok(true)));
@@ -847,7 +847,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
     }
 
     #[test]
@@ -874,7 +874,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         let ret = docker.pull(
             &image_dest,
@@ -882,7 +882,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
         );
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
     }
 
     #[cfg(feature = "test-local-kube")]
@@ -943,6 +943,6 @@ mod tests {
             &CommandKiller::never(),
         );
 
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
     }
 }

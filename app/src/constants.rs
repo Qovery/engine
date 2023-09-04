@@ -1,4 +1,4 @@
-pub const ASCII_BANNER: &str = r#"
+pub const ASCII_BANNER: &str = r"
                       _               
    __    ___     __  (_)  ___     __  
  /'__`\/' _ `\ /'_ `\| |/' _ `\ /'__`\
@@ -6,4 +6,4 @@ pub const ASCII_BANNER: &str = r#"
 `\____)(_) (_)`\__  |(_)(_) (_)`\____)
               ( )_) |                 
                \___/'                 
-"#;
+";
