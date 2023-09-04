@@ -21,25 +21,25 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../lib-engine" }
-crossbeam-channel = "0.5.4"
-serde_json = "1.0.81"
-uuid = { version = "1.0.0", features = ["v4", "serde"] }
-chrono = "0.4.19"
-ctrlc = { version = "3.2.2", features = ["termination"] } # sig term handler wrapper
+crossbeam-channel = "0.5.8"
+serde_json = "1.0.105"
+uuid = { version = "1.4.1", features = ["v4", "serde"] }
+chrono = "0.4.28"
+ctrlc = { version = "3.4.1", features = ["termination"] } # sig term handler wrapper
 retry = "1.3.1"
 dirs = "4.0.0"
-url = "2.2.2"
+url = "2.4.1"
 regex = "1"
-anyhow = "1.0.68"
-scopeguard = "1.1.0"
-reqwest = { version = "0.11.14", features = ["blocking", "json", "gzip"] }
-serde = "1.0.152"
-clap = { version = "4.1.8", features = ["derive", "env"]}
+anyhow = "1.0.75"
+scopeguard = "1.2.0"
+reqwest = { version = "0.11.20", features = ["blocking", "json", "gzip"] }
+serde = "1.0.188"
+clap = { version = "4.4.2", features = ["derive", "env"]}
 
 # Webserver (For Prometheus, Healthcheck, ...)
-tokio = { version = "1.23.0", features = ["full"] }
-tokio-stream = "0.1.11"
-warp = "0.3.2"
+tokio = { version = "1.32.0", features = ["full"] }
+tokio-stream = "0.1.14"
+warp = "0.3.5"
 lazy_static = "1.4.0"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 
@@ -49,20 +49,20 @@ k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_22
 
 # GRPC
 tonic = { version = "0.8.3", features = ["tls", "tls-roots", "gzip", "transport"] }
-prost = "0.11.5"
-prost-types = "0.11.5"
+prost = "0.11.9"
+prost-types = "0.11.9"
 tower = "0.4.13"
-futures-util = "0.3.25"
+futures-util = "0.3.28"
 
 # tracing
-tracing = { version = "0.1.26", features = ["log"] }
-tracing-subscriber = { version = "0.2.18", features = ["env-filter"] }
+tracing = { version = "0.1.37", features = ["log"] }
+tracing-subscriber = { version = "0.2.25", features = ["env-filter"] }
 
 # To load .env file into env variables
 dotenv = "0.15.0"
 
 [dev-dependencies]
-reqwest = { version = "0.11.10", features = ["blocking"] }
+reqwest = { version = "0.11.20", features = ["blocking"] }
 
 
 [build-dependencies]
