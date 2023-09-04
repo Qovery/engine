@@ -56,6 +56,14 @@ metadata:
       grpc_read_timeout "{{ advanced_settings.network_ingress_grpc_read_timeout_seconds }}s";
       grpc_send_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
       client_body_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+
+    {%- if advanced_settings.network_ingress_extra_headers %}
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      {%- for key, value in advanced_settings.network_ingress_extra_headers %}
+      add_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+    {%- endif %}
+
 spec:
   tls:
     {%- if certificate_alternative_names|length > 0 %}

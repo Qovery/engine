@@ -119,12 +119,18 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_keepalive_timeout_seconds: u32,
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.extra_headers")]
+    pub network_ingress_extra_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
     pub network_ingress_proxy_send_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_read_timeout_seconds")]
     pub network_ingress_proxy_read_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_request_buffering")]
+    pub network_ingress_proxy_request_buffering: String,
+    #[serde(alias = "network.ingress.proxy_buffering")]
+    pub network_ingress_proxy_buffering: String,
     #[serde(alias = "network.ingress.proxy_buffer_size_kb")]
     pub network_ingress_proxy_buffer_size_kb: u32,
     #[serde(alias = "network.ingress.whitelist_source_range")]
@@ -167,9 +173,12 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_keepalive_time_seconds: 3600,
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
+            network_ingress_extra_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
             network_ingress_proxy_send_timeout_seconds: 60,
             network_ingress_proxy_read_timeout_seconds: 60,
+            network_ingress_proxy_request_buffering: "on".to_string(),
+            network_ingress_proxy_buffering: "on".to_string(),
             network_ingress_proxy_buffer_size_kb: 4,
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
@@ -203,9 +212,12 @@ impl ApplicationAdvancedSettings {
             network_ingress_keepalive_time_seconds: self.network_ingress_keepalive_time_seconds,
             network_ingress_keepalive_timeout_seconds: self.network_ingress_keepalive_timeout_seconds,
             network_ingress_send_timeout_seconds: self.network_ingress_send_timeout_seconds,
+            network_ingress_extra_headers: self.network_ingress_extra_headers.clone(),
             network_ingress_proxy_connect_timeout_seconds: self.network_ingress_proxy_connect_timeout_seconds,
             network_ingress_proxy_send_timeout_seconds: self.network_ingress_proxy_send_timeout_seconds,
             network_ingress_proxy_read_timeout_seconds: self.network_ingress_proxy_read_timeout_seconds,
+            network_ingress_proxy_request_buffering: self.network_ingress_proxy_request_buffering.clone(),
+            network_ingress_proxy_buffering: self.network_ingress_proxy_buffering.clone(),
             network_ingress_proxy_buffer_size_kb: self.network_ingress_proxy_buffer_size_kb,
             network_ingress_whitelist_source_range: self.network_ingress_whitelist_source_range.clone(),
             network_ingress_denylist_source_range: self.network_ingress_denylist_source_range.clone(),

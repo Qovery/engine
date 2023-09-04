@@ -43,6 +43,8 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "{{ advanced_settings.network_ingress_proxy_connect_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "{{ advanced_settings.network_ingress_proxy_send_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "{{ advanced_settings.network_ingress_proxy_read_timeout_seconds }}"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "{{ advanced_settings.network_ingress_proxy_request_buffering }}"
+    nginx.ingress.kubernetes.io/proxy-buffering: "{{ advanced_settings.network_ingress_proxy_buffering }}"
     {%- if advanced_settings.network_ingress_whitelist_source_range %}
     nginx.ingress.kubernetes.io/whitelist-source-range: "{{ advanced_settings.network_ingress_whitelist_source_range }}"
     {%- endif %}
@@ -58,6 +60,12 @@ metadata:
       send_timeout "{{ advanced_settings.network_ingress_send_timeout_seconds }}s";
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
+
+      {%- if advanced_settings.network_ingress_extra_headers %}
+      {%- for key, value in advanced_settings.network_ingress_extra_headers %}
+      add_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+      {%- endif %}
 spec:
   tls:
     {%- if certificate_alternative_names|length > 0 %}
