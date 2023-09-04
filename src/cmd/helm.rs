@@ -886,7 +886,7 @@ mod tests {
 
         // check now it exists
         let ret = helm.check_release_exist(&charts[0], &[]);
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
     }
 
     #[test]
@@ -942,7 +942,7 @@ mod tests {
         }];
         barrier.wait();
         let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
-        assert!(matches!(ret, Err(_)));
+        assert!(ret.is_err());
 
         // Release should be locked
         let ret = helm.check_release_exist(&charts[0], &[]);
@@ -992,7 +992,7 @@ mod tests {
         }];
         barrier.wait();
         let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
-        assert!(matches!(ret, Err(_)));
+        assert!(ret.is_err());
 
         // Release should be locked
         let ret = helm.check_release_exist(&charts[0], &[]);
@@ -1025,7 +1025,7 @@ mod tests {
 
         // check now it exists
         let ret = helm.check_release_exist(&charts[0], &[]);
-        assert!(matches!(ret, Ok(_)));
+        assert!(ret.is_ok());
 
         // Delete it
         let ret = helm.uninstall(&charts[0], &[]);
