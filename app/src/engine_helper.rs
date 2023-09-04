@@ -4,7 +4,7 @@ use crate::grpc::engine::StepStatus as GrpcStepStatus;
 use qovery_engine::metrics_registry::{StepLabel, StepRecord, StepStatus};
 
 impl GrpcStepRecord {
-    pub fn from_record(step_record: &StepRecord) -> Self {
+    pub fn from_record(step_record: StepRecord) -> Self {
         GrpcStepRecord {
             id: step_record.id.to_string(),
             step_label: match step_record.label {

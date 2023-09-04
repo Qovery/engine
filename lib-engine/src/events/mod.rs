@@ -11,7 +11,6 @@ use crate::cloud_provider::Kind;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::io_models::QoveryIdentifier;
 use crate::metrics_registry::StepRecord;
-use chrono::{DateTime, Utc};
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -23,16 +22,12 @@ pub enum EngineMsgPayload {
 
 #[derive(Debug, Clone)]
 pub struct EngineMsg {
-    pub timestamp: DateTime<Utc>,
     pub payload: EngineMsgPayload,
 }
 
 impl EngineMsg {
     pub fn new(payload: EngineMsgPayload) -> Self {
-        EngineMsg {
-            timestamp: Utc::now(),
-            payload,
-        }
+        EngineMsg { payload }
     }
 }
 
