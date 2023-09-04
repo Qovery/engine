@@ -34,6 +34,28 @@ impl<'a> TeraFilter<'a> for Base64EncodeFilter {
     }
 }
 
+/// Encodes string value to base 64.
+pub struct NginxHeaderValueEscapeFilter {}
+
+impl NginxHeaderValueEscapeFilter {
+    fn escape_chars(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('\"', "\\\"").replace('\'', "\\'")
+    }
+}
+
+impl<'a> TeraFilter<'a> for NginxHeaderValueEscapeFilter {
+    fn name() -> &'a str {
+        "nginx_header_value_escape"
+    }
+
+    fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error> {
+        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, tera::Error> {
+            let s = try_get_value!("nginx_header_value_escape", "value", String, value);
+            Ok(Value::String(NginxHeaderValueEscapeFilter::escape_chars(&s)))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -76,5 +98,48 @@ mod tests {
 
         // verify:
         assert_eq!(Base64EncodeFilter::base64_encode(TEST_STR), result);
+    }
+
+    #[test]
+    fn test_nginx_header_value_escape_filter() {
+        // setup:
+        let mut input_with_expected = HashMap::new();
+        input_with_expected.insert("no escape needed", "no escape needed");
+        input_with_expected.insert("\"", "\\\"");
+        input_with_expected.insert("\\", "\\\\");
+        input_with_expected.insert("'", "\\'");
+
+        for (input, expected) in input_with_expected {
+            // execute:
+            let result = NginxHeaderValueEscapeFilter::implementation()(&to_value(input).unwrap(), &HashMap::new());
+
+            // verify:
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), to_value(expected).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_nginx_header_value_escape_filter_injection() {
+        // setup:
+        const INPUT: &str = "some value to escape \\ \" '";
+        const EXPECTED: &str = "some value to escape \\\\ \\\" \\'";
+
+        let mut tera = Tera::default();
+        tera.add_raw_template("test", "{{ input | nginx_header_value_escape }}")
+            .expect("Failed to add Tera raw template");
+        tera.register_filter(
+            NginxHeaderValueEscapeFilter::name(),
+            NginxHeaderValueEscapeFilter::implementation(),
+        );
+
+        let mut context = Context::new();
+        context.insert("input", INPUT);
+
+        // execute:
+        let result = tera.render("test", &context).expect("Failed to render Tera template");
+
+        // verify:
+        assert_eq!(result, EXPECTED);
     }
 }
