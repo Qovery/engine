@@ -791,7 +791,7 @@ mod tests {
             &mut |_line| {},
             &CommandKiller::never(),
         );
-        assert!(output.contains("Version:\"v3.12.1\""));
+        assert!(output.contains("Version:\"v3.12.3\""));
     }
 
     #[test]
