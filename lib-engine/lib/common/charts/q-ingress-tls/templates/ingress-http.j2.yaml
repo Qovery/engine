@@ -61,8 +61,8 @@ metadata:
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
 
-      {%- if advanced_settings.ingress_extra_headers %}
-      {%- for key, value in advanced_settings.ingress_extra_headers %}
+      {%- if advanced_settings.network_ingress_extra_headers %}
+      {%- for key, value in advanced_settings.network_ingress_extra_headers %}
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}
       {%- endif %}
