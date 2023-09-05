@@ -355,6 +355,16 @@ impl EnvironmentTask {
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
+        let services = std::iter::empty()
+            .chain(environment.applications.iter().map(|x| x.as_service()))
+            .chain(environment.containers.iter().map(|x| x.as_service()))
+            .chain(environment.routers.iter().map(|x| x.as_service()))
+            .chain(environment.databases.iter().map(|x| x.as_service()))
+            .chain(environment.jobs.iter().map(|x| x.as_service()));
+
+        for service in services.clone() {
+            metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
+        }
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
