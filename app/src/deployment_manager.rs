@@ -233,23 +233,21 @@ impl EngineMessageStream {
             };
 
         // Normal flow were we dequeue engine message
-        let normal_flow: Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>> = Box::pin(
-            stream::select(
-                stream::unfold(log_stream_context, Self::on_next_log),
-                stream::unfold(msg_stream_context, Self::on_next_msg),
-            )
-            // We inspect each message to store the last_msg to re-emit it in case of failure
-            // We set the message id of each msg to have a global order of the message
-            .map(move |mut msg| {
-                let ts = Utc::now();
-                msg.message_id = Some(Timestamp {
-                    seconds: ts.timestamp(),
-                    nanos: ts.timestamp_subsec_nanos() as i32,
-                });
-                last_msg_memento.replace(msg.clone());
-                msg
-            }),
-        );
+        let normal_flow = stream::select(
+            stream::unfold(log_stream_context, Self::on_next_log),
+            stream::unfold(msg_stream_context, Self::on_next_msg),
+        )
+        // We inspect each message to store the last_msg to re-emit it in case of failure
+        // We set the message id of each msg to have a global order of the message
+        .map(move |mut msg| {
+            let ts = Utc::now();
+            msg.message_id = Some(Timestamp {
+                seconds: ts.timestamp(),
+                nanos: ts.timestamp_subsec_nanos() as i32,
+            });
+            last_msg_memento.replace(msg.clone());
+            msg
+        });
 
         let s = Self {
             stream: Box::new(remit_last_msg.chain(normal_flow)),
