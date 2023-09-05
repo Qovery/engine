@@ -282,7 +282,7 @@ mod tests {
         let commit = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
         assert_ne!(repo.head().unwrap().target().unwrap().to_string(), commit);
         let check = checkout(&repo, commit);
-        assert!(matches!(check, Ok(_)));
+        assert!(check.is_ok());
         assert_eq!(repo.head().unwrap().target().unwrap().to_string(), commit);
     }
 
@@ -345,7 +345,7 @@ mod tests {
             clone_dir.path(),
             &get_credentials,
         );
-        assert!(matches!(repo, Ok(_)));
+        assert!(repo.is_ok());
         assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
     }
 }

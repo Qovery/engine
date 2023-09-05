@@ -614,7 +614,7 @@ impl TerraformError {
         // AWS
         // InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
         if let Ok(managed_db_upgrade_error_re) = Regex::new(
-            r#"Error: Failed to modify [\w\W]+ \((?P<database_name>.+?)\): InvalidParameterCombination: Cannot upgrade (?P<database_type>[\w\W]+) from (?P<version_from>[\d\.]+) to (?P<version_to>[\d\.]+)"#,
+            r"Error: Failed to modify [\w\W]+ \((?P<database_name>.+?)\): InvalidParameterCombination: Cannot upgrade (?P<database_type>[\w\W]+) from (?P<version_from>[\d\.]+) to (?P<version_to>[\d\.]+)",
         ) {
             if let Some(cap) = managed_db_upgrade_error_re.captures(raw_terraform_error_output.as_str()) {
                 if let (Some(database_name), Some(database_type), Some(version_from), Some(version_to)) = (
@@ -637,7 +637,7 @@ impl TerraformError {
         }
         // InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported
         if let Ok(managed_db_version_instance_type_incompatible_error_re) = Regex::new(
-            r#"InvalidParameterCombination: The combination of [\w\s]+ '(?P<database_instance_type>.+?)', [\w\s]+ '(?P<database_type>.+?)' and [\w\s]+ version '(?P<database_engine_version>.+?)' is not supported"#,
+            r"InvalidParameterCombination: The combination of [\w\s]+ '(?P<database_instance_type>.+?)', [\w\s]+ '(?P<database_type>.+?)' and [\w\s]+ version '(?P<database_engine_version>.+?)' is not supported",
         ) {
             if let Some(cap) =
                 managed_db_version_instance_type_incompatible_error_re.captures(raw_terraform_error_output.as_str())
@@ -1516,7 +1516,7 @@ obtain schema: the cached package for registry.terraform.io/hashicorp/time
 in the dependency lock file
         "#;
 
-        let terraform_args = vec!["apply"];
+        let terraform_args = ["apply"];
 
         let could_not_load_plugin_error = TerraformError::Unknown {
             terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),

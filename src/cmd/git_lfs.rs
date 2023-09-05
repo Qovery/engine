@@ -78,8 +78,12 @@ impl GitLfs {
 
         let mut total_size: u64 = 0;
         for line in output {
-            let Some(size) = line.split('(').last().map(|x| x.trim_end_matches(')')) else { continue };
-            let Some((size, unit)) = size.split(' ').collect_tuple() else { continue };
+            let Some(size) = line.split('(').last().map(|x| x.trim_end_matches(')')) else {
+                continue;
+            };
+            let Some((size, unit)) = size.split(' ').collect_tuple() else {
+                continue;
+            };
 
             let size: u64 = size.parse::<f32>().unwrap().round() as u64;
             match unit {
@@ -247,7 +251,7 @@ mod tests {
                 "9df822462e3e7215548e492bc2c15a50a92fed39",
                 &CommandKiller::never(),
             );
-            matches!(ret, Ok(_));
+            assert!(ret.is_ok());
         }
 
         // Repo that support lfs, should properly get the files
@@ -268,7 +272,7 @@ mod tests {
 
             let cmd = GitLfs::default();
             let ret = cmd.checkout_files_for_commit(&repo_path, VALID_COMMIT, &CommandKiller::never());
-            matches!(ret, Ok(_));
+            assert!(ret.is_ok());
             let file = std::fs::read(format!("{repo_path}/31eovo.mp4")).unwrap();
             assert_eq!(file.len(), 4048871);
         }
@@ -292,7 +296,7 @@ mod tests {
                 "ffffffffffffffffffffffffffffffffffffffff",
                 &CommandKiller::never(),
             );
-            matches!(ret, Err(_));
+            assert!(ret.is_err());
             let file = std::fs::read(format!("{repo_path}/31eovo.mp4")).unwrap();
             assert_ne!(file.len(), 4048871);
         }
