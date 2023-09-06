@@ -210,8 +210,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     ) {
         let error = match result {
             Ok(_) => {
-                self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
+                self.stop_records(StepStatus::Success);
                 if self.is_managed {
                     self.logger
                         .send_success(format!("✅ {} of managed database succeeded", self.action));
@@ -225,8 +224,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         if error.tag().is_cancel() {
-            self.metrics_registry
-                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
+            self.stop_records(StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(
@@ -242,8 +240,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             return;
         }
         //self.logger.send_error(*error.clone());
-        self.metrics_registry
-            .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
+        self.stop_records(StepStatus::Error);
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!(r#"
@@ -255,5 +252,14 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 "#, self.action).trim().to_string(),
             None,
         ));
+    }
+}
+
+impl DatabaseDeploymentReporter {
+    pub(crate) fn stop_records(&self, step_status: StepStatus) {
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, step_status.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Total, step_status);
     }
 }

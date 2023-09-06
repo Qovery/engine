@@ -157,7 +157,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
         let records = metrics_registry.get_records(environment.applications.first().unwrap().long_id);
-        assert_eq!(records.len(), 4);
+        assert_eq!(records.len(), 5);
 
         let record_provision_repo = records
             .iter()
@@ -194,6 +194,13 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_deployment.label, StepLabel::Service);
         assert_eq!(record_deployment.id, environment.applications.first().unwrap().long_id);
         assert_eq!(record_deployment.status, Some(StepStatus::Success));
+        assert!(record_deployment.duration.is_some());
+
+        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        assert_eq!(record_total.step_name, StepName::Total);
+        assert_eq!(record_total.label, StepLabel::Service);
+        assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(record_total.status, Some(StepStatus::Success));
         assert!(record_deployment.duration.is_some());
 
         let records = metrics_registry.get_records(environment.long_id);

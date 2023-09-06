@@ -213,8 +213,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     ) {
         let error = match result {
             Ok(_) => {
-                self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
+                self.stop_record(StepStatus::Success);
                 if self.action == Action::Delete && !self.send_final_deleted_status {
                     return;
                 }
@@ -227,8 +226,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         };
 
         if error.tag().is_cancel() {
-            self.metrics_registry
-                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
+            self.stop_record(StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!("🚫 {} has been cancelled.", self.action),
@@ -236,8 +234,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             ));
             return;
         }
-        self.metrics_registry
-            .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
+        self.stop_record(StepStatus::Error);
         // Retrieve last state of the job to display it in the final message.
         let job_failure_message = match block_on(fetch_job_deployment_report(
             &self.kube_client,
@@ -288,6 +285,15 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 None,
             ));
         }
+    }
+}
+
+impl<T> JobDeploymentReporter<T> {
+    pub(crate) fn stop_record(&self, step_status: StepStatus) {
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, step_status.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Total, step_status);
     }
 }
 

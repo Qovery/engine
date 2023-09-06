@@ -54,10 +54,10 @@ pub struct StepRecord {
 }
 
 #[derive(Clone)]
-pub struct StepRecordHandle {
+pub struct StepRecordHandle<'a> {
     id: Uuid,
     name: StepName,
-    metrics_registry: Box<dyn MetricsRegistry>,
+    metrics_registry: &'a dyn MetricsRegistry,
 }
 
 pub trait MetricsRegistry: Send + Sync {
@@ -88,8 +88,8 @@ impl StepRecord {
     }
 }
 
-impl StepRecordHandle {
-    pub fn new(id: Uuid, name: StepName, metrics_registry: Box<dyn MetricsRegistry>) -> Self {
+impl<'a> StepRecordHandle<'a> {
+    pub fn new(id: Uuid, name: StepName, metrics_registry: &'a dyn MetricsRegistry) -> Self {
         StepRecordHandle {
             id,
             name,
@@ -106,7 +106,7 @@ impl StepRecordHandle {
     }
 }
 
-impl Drop for StepRecordHandle {
+impl<'a> Drop for StepRecordHandle<'a> {
     fn drop(&mut self) {
         if !self.is_stopped() {
             self.stop(StepStatus::NotSet)
@@ -150,7 +150,7 @@ impl MetricsRegistry for StdMetricsRegistry {
         }
 
         metrics_per_id.insert(step_name.clone(), StepRecord::new(step_name.clone(), label, id));
-        StepRecordHandle::new(id, step_name, Box::new(self.clone()))
+        StepRecordHandle::new(id, step_name, self)
     }
 
     fn stop_record(&self, id: Uuid, step_name: StepName, status: StepStatus) {
@@ -163,8 +163,10 @@ impl MetricsRegistry for StdMetricsRegistry {
             deployment_step_record.duration = Some(deployment_step_record.start_time.elapsed());
             deployment_step_record.status = Some(status);
 
-            self.message_publisher
-                .send(EngineMsg::new(EngineMsgPayload::Metrics(deployment_step_record.clone())));
+            if deployment_step_record.status != Some(StepStatus::NotSet) {
+                self.message_publisher
+                    .send(EngineMsg::new(EngineMsgPayload::Metrics(deployment_step_record.clone())))
+            };
         } else {
             error!(
                 "stop record deployment step {:#?} for service {} that has not been started",
@@ -207,6 +209,22 @@ impl MetricsRegistry for StdMetricsRegistry {
     }
 }
 
+impl Drop for StdMetricsRegistry {
+    fn drop(&mut self) {
+        let registry = self.registry.lock().unwrap();
+        registry.iter().for_each(|(id, step_record_map)| {
+            step_record_map.values().for_each(|step_record| {
+                if step_record.status.is_none() || step_record.status == Some(StepStatus::NotSet) {
+                    warn!(
+                        "step record {:?} for service {} has not been stopped correctly",
+                        step_record.step_name, *id
+                    );
+                }
+            })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::metrics_registry::{MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
@@ -216,9 +234,9 @@ mod tests {
     #[test]
     fn test_get_records_when_registry_is_empty() {
         let service_id = Uuid::new_v4();
-        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
-        let record_infos = metrics_register.get_records(service_id);
+        let record_infos = metrics_registry.get_records(service_id);
         assert_eq!(record_infos, vec![]);
     }
 
@@ -228,15 +246,15 @@ mod tests {
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
         let step_status = StepStatus::Success;
-        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop
-            metrics_register.start_record(service_id, step_label, step_name.clone());
-            metrics_register.stop_record(service_id, step_name.clone(), step_status.clone());
+            metrics_registry.start_record(service_id, step_label, step_name.clone());
+            metrics_registry.stop_record(service_id, step_name.clone(), step_status.clone());
         }
 
-        let records = metrics_register.get_records(service_id);
+        let records = metrics_registry.get_records(service_id);
         assert_eq!(records.len(), 1);
         assert_eq!(records.first().unwrap().step_name, step_name);
         assert_eq!(records.first().unwrap().id, service_id);
@@ -250,15 +268,15 @@ mod tests {
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
         let step_status = StepStatus::Success;
-        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop
-            let record = metrics_register.start_record(service_id, step_label, step_name.clone());
+            let record = metrics_registry.start_record(service_id, step_label, step_name.clone());
             record.stop(step_status.clone());
         }
 
-        let records = metrics_register.get_records(service_id);
+        let records = metrics_registry.get_records(service_id);
         assert_eq!(records.len(), 1);
         assert_eq!(records.first().unwrap().step_name, step_name);
         assert_eq!(records.first().unwrap().id, service_id);
@@ -272,14 +290,14 @@ mod tests {
         let step_name = StepName::Deployment;
         let step_label = StepLabel::Service;
         let step_status = StepStatus::NotSet;
-        let metrics_register = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         {
             // to trigger the record drop
-            let _record = metrics_register.start_record(service_id, step_label, step_name.clone());
+            let _record = metrics_registry.start_record(service_id, step_label, step_name.clone());
         }
 
-        let records = metrics_register.get_records(service_id);
+        let records = metrics_registry.get_records(service_id);
         assert_eq!(records.len(), 1);
         assert_eq!(records.first().unwrap().step_name, step_name);
         assert_eq!(records.first().unwrap().id, service_id);

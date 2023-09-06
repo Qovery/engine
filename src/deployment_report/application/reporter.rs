@@ -151,8 +151,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     ) {
         let error = match result {
             Ok(_) => {
-                self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
+                self.stop_records(StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type.to_string()));
                 return;
@@ -162,8 +161,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {
-            self.metrics_registry
-                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
+            self.stop_records(StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(
@@ -178,8 +176,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 None,
             ));
         } else {
-            self.metrics_registry
-                .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
+            self.stop_records(StepStatus::Error);
             //self.logger.send_error(*error.clone());
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
@@ -193,6 +190,15 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 None,
             ));
         }
+    }
+}
+
+impl<T: Send + Sync> ApplicationDeploymentReporter<T> {
+    fn stop_records(&self, deployment_status: StepStatus) {
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, deployment_status.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Total, deployment_status);
     }
 }
 

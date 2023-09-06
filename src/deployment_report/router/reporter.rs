@@ -60,8 +60,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
     ) {
         let error = match result {
             Ok(_) => {
-                self.metrics_registry
-                    .stop_record(self.long_id, StepName::Deployment, StepStatus::Success);
+                self.stop_record(StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of router succeeded", self.action));
                 return;
@@ -70,8 +69,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         };
 
         if error.tag().is_cancel() {
-            self.metrics_registry
-                .stop_record(self.long_id, StepName::Deployment, StepStatus::Cancel);
+            self.stop_record(StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(
@@ -87,8 +85,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
             return;
         }
         //self.logger.send_error(*error.clone());
-        self.metrics_registry
-            .stop_record(self.long_id, StepName::Deployment, StepStatus::Error);
+        self.stop_record(StepStatus::Error);
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!("
@@ -100,5 +97,14 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 ", self.action),
             None,
         ));
+    }
+}
+
+impl RouterDeploymentReporter {
+    pub(crate) fn stop_record(&self, step_status: StepStatus) {
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Deployment, step_status.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Total, step_status);
     }
 }
