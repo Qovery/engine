@@ -69,12 +69,11 @@ pub struct GitCredentials {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct ApplicationAdvancedSettings {
-    #[deprecated(
-        note = "please use `readiness_probe.initial_delay_seconds` and `liveness_probe.initial_delay_seconds` instead"
-    )]
     // Security
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
+    #[serde(alias = "security.read_only_root_filesystem")]
+    pub security_read_only_root_filesystem: bool,
 
     // Deployment
     #[serde(alias = "deployment.termination_grace_period_seconds")]
@@ -154,6 +153,7 @@ impl Default for ApplicationAdvancedSettings {
     fn default() -> Self {
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
@@ -194,6 +194,7 @@ impl ApplicationAdvancedSettings {
     pub fn to_container_advanced_settings(&self) -> ContainerAdvancedSettings {
         ContainerAdvancedSettings {
             security_service_account_name: self.security_service_account_name.clone(),
+            security_read_only_root_filesystem: self.security_read_only_root_filesystem,
             deployment_custom_domain_check_enabled: self.deployment_custom_domain_check_enabled,
             deployment_termination_grace_period_seconds: self.deployment_termination_grace_period_seconds,
             deployment_update_strategy_type: self.deployment_update_strategy_type,
