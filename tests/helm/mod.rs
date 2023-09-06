@@ -291,6 +291,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         }),
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
@@ -410,6 +411,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 41,
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -554,6 +556,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
         },
         Some(Probe {
             r#type: ProbeType::Http {

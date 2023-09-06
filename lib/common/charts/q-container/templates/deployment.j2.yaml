@@ -101,7 +101,6 @@ spec:
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
-      securityContext: {}
       {%- if registry.secret_name %}
       imagePullSecrets:
         - name: {{ registry.secret_name }}
@@ -189,6 +188,8 @@ spec:
             successThreshold: {{ service.liveness_probe.success_threshold }}
             failureThreshold: {{ service.liveness_probe.failure_threshold }}
           {%- endif %}
+          securityContext:
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
               cpu: {{ service.cpu_limit_in_mili }}

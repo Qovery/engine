@@ -56,6 +56,8 @@ pub struct JobAdvancedSettings {
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
+    #[serde(alias = "security.read_only_root_filesystem")]
+    pub security_read_only_root_filesystem: bool,
 }
 
 impl Default for JobAdvancedSettings {
@@ -71,6 +73,7 @@ impl Default for JobAdvancedSettings {
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
         }
     }
 }

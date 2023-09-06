@@ -159,6 +159,8 @@ pub struct ContainerAdvancedSettings {
     // Security
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
+    #[serde(alias = "security.read_only_root_filesystem")]
+    pub security_read_only_root_filesystem: bool,
 
     // Deployment
     #[serde(alias = "deployment.custom_domain_check_enabled")]
@@ -230,6 +232,7 @@ impl Default for ContainerAdvancedSettings {
     fn default() -> Self {
         ContainerAdvancedSettings {
             security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
