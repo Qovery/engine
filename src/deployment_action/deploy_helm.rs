@@ -1,7 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, CommonChart, HelmChart};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::HelmError;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
@@ -102,23 +101,10 @@ impl DeploymentAction for HelmDeployment {
             .run(
                 &target.kube,
                 kubeconfig,
-                // &[],
-                &target
-                    .cloud_provider
-                    .credentials_environment_variables()
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>(),
+                target.cloud_provider.credentials_environment_variables().as_slice(),
                 &CommandKiller::from_cancelable(target.should_abort),
             )
-            .map_err(|e| {
-                let helm_error = HelmError::CmdError(
-                    format!("Error on {} helm upgrade", self.helm_chart.name),
-                    crate::cmd::helm::HelmCommand::UPGRADE,
-                    e,
-                );
-                Box::new(EngineError::new_helm_error(self.event_details.clone(), helm_error))
-            })?;
+            .map_err(|e| Box::new(EngineError::new_helm_chart_error(self.event_details.clone(), e)))?;
         Ok(())
     }
 

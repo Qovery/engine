@@ -1,13 +1,13 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cmd::helm::{to_command_error, Helm};
+use crate::cmd::helm::{Helm, HelmError};
 use crate::cmd::helm_utils::{
     apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade, update_crds_on_upgrade,
     BackupStatus, CRDSUpdate,
 };
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
 use crate::cmd::structs::HelmHistoryRow;
-use crate::errors::{CommandError, ErrorMessageVerbosity};
+use crate::errors::CommandError;
 
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
@@ -29,6 +29,12 @@ pub enum HelmChartError {
     CreateTemplateError { chart_name: String, msg: String },
     #[error("Error while rendering template: {chart_name:?}: {msg:?}")]
     RenderingError { chart_name: String, msg: String },
+
+    #[error("Error while executing helm command")]
+    HelmError(#[from] HelmError),
+
+    #[error("Error while executing command")]
+    CommandError(#[from] CommandError),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -355,15 +361,15 @@ impl Default for ChartInfo {
 pub trait HelmChart: Send {
     fn clone_dyn(&self) -> Box<dyn HelmChart>;
 
-    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, CommandError> {
+    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             if let Err(e) = fs::metadata(file) {
-                return Err(CommandError::new(
+                return Err(HelmChartError::CommandError(CommandError::new(
                     format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,),
                     Some(e.to_string()),
                     None,
-                ));
+                )));
             }
         }
         Ok(None)
@@ -382,16 +388,16 @@ pub trait HelmChart: Send {
     fn pre_exec(
         &self,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, CommandError> {
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
             kubectl_delete_crash_looping_pods(
                 kubernetes_config,
                 Some(self.get_chart_info().get_namespace_string().as_str()),
                 Some(selector.as_str()),
-                envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
+                envs.to_vec(),
             )?;
         }
 
@@ -402,16 +408,16 @@ pub trait HelmChart: Send {
         &self,
         kube_client: &kube::Client,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
         let payload = self.pre_exec(kubernetes_config, envs, payload)?;
         let payload = match self.exec(kubernetes_config, envs, payload.clone(), cmd_killer) {
             Ok(payload) => payload,
             Err(e) => {
-                error!("Error while deploying chart: {}", e.message(ErrorMessageVerbosity::FullDetails));
+                error!("Error while deploying chart: {:?}", e);
                 self.on_deploy_failure(kubernetes_config, envs, payload)?;
                 return Err(e);
             }
@@ -423,13 +429,12 @@ pub trait HelmChart: Send {
     fn exec(
         &self,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
+        let helm = Helm::new(kubernetes_config, envs)?;
 
         match chart_info.action {
             Deploy => {
@@ -443,7 +448,7 @@ pub trait HelmChart: Send {
                 let installed_chart_version = match helm.get_chart_version(
                     &chart_info.name,
                     Some(chart_info.get_namespace_string().as_str()),
-                    environment_variables.as_slice(),
+                    envs,
                 ) {
                     Ok(versions) => match versions {
                         None => None,
@@ -458,7 +463,7 @@ pub trait HelmChart: Send {
                 let upgrade_status = match prepare_chart_backup_on_upgrade(
                     kubernetes_config,
                     chart_info.clone(),
-                    environment_variables.as_slice(),
+                    envs,
                     installed_chart_version,
                 ) {
                     Ok(status) => status,
@@ -472,16 +477,15 @@ pub trait HelmChart: Send {
                 };
 
                 // Verify that we don't need to upgrade the CRDS
-                update_crds_on_upgrade(kubernetes_config, chart_info.clone(), environment_variables.as_slice(), &helm)
-                    .map_err(to_command_error)?;
+                update_crds_on_upgrade(kubernetes_config, chart_info.clone(), envs, &helm)?;
 
-                match helm.upgrade(chart_info, &[], cmd_killer).map_err(to_command_error) {
+                match helm.upgrade(chart_info, &[], cmd_killer) {
                     Ok(_) => {
                         if upgrade_status.is_backupable {
                             if let Err(e) = apply_chart_backup(
                                 kubernetes_config,
                                 upgrade_status.backup_path.as_path(),
-                                environment_variables.as_slice(),
+                                envs,
                                 chart_info,
                             ) {
                                 warn!("error while trying to apply backup: {:?}", e);
@@ -490,16 +494,12 @@ pub trait HelmChart: Send {
                     }
                     Err(e) => {
                         if upgrade_status.is_backupable {
-                            if let Err(e) = delete_unused_chart_backup(
-                                kubernetes_config,
-                                environment_variables.as_slice(),
-                                chart_info,
-                            ) {
+                            if let Err(e) = delete_unused_chart_backup(kubernetes_config, envs, chart_info) {
                                 warn!("error while trying to delete backup: {:?}", e);
                             }
                         }
 
-                        return Err(e);
+                        return Err(HelmChartError::HelmError(e));
                     }
                 };
             }
@@ -508,16 +508,14 @@ pub trait HelmChart: Send {
                 if let Some(crds_update) = &chart_info.crds_update {
                     // FIXME: This can't work as crd as .yaml in the string
                     for crd in &crds_update.resources {
-                        if let Err(e) =
-                            kubectl_exec_delete_crd(kubernetes_config, crd.as_str(), environment_variables.clone())
-                        {
+                        if let Err(e) = kubectl_exec_delete_crd(kubernetes_config, crd.as_str(), envs.to_vec()) {
                             warn!("error while trying to delete crd {}: {:?}", crd, e);
                         }
                     }
                 }
 
                 // uninstall current chart
-                helm.uninstall(chart_info, &[]).map_err(to_command_error)?;
+                helm.uninstall(chart_info, &[])?;
             }
             HelmAction::Skip => {}
         }
@@ -528,25 +526,24 @@ pub trait HelmChart: Send {
         &self,
         _kube_client: &kube::Client,
         _kubernetes_config: &Path,
-        _envs: &[(String, String)],
+        _envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         _cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         Ok(payload)
     }
 
     fn on_deploy_failure(
         &self,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, CommandError> {
         // print events for future investigation
-        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
         match kubectl_exec_get_events(
             kubernetes_config,
             Some(self.get_chart_info().get_namespace_string().as_str()),
-            environment_variables,
+            envs.to_vec(),
         ) {
             Ok(ok_line) => info!("{}", ok_line),
             Err(err) => {
@@ -621,26 +618,25 @@ pub struct ChartReleaseTemplate {
 fn deploy_parallel_charts(
     kube_client: &kube::Client,
     kubernetes_config: &Path,
-    envs: &[(String, String)],
+    envs: &[(&str, &str)],
     charts: Vec<Box<dyn HelmChart>>,
-) -> Result<(), CommandError> {
+) -> Result<(), HelmChartError> {
     thread::scope(|s| {
         let mut handles = vec![];
 
         for chart in charts.into_iter() {
-            let environment_variables = envs.to_owned();
             let path = kubernetes_config.to_path_buf();
             let current_span = tracing::Span::current();
             let handle = s.spawn(move || {
                 // making sure to pass the current span to the new thread not to lose any tracing info
                 let _ = current_span.enter();
-                chart.run(kube_client, path.as_path(), &environment_variables, &CommandKiller::never())
+                chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
             });
 
             handles.push(handle);
         }
 
-        let mut errors: Vec<Result<(), CommandError>> = vec![];
+        let mut errors: Vec<Result<(), HelmChartError>> = vec![];
         for handle in handles {
             match handle.join() {
                 Ok(helm_run_ret) => {
@@ -656,11 +652,11 @@ fn deploy_parallel_charts(
                         },
                         Some(s) => *s,
                     };
-                    let error = Err(CommandError::new(
+                    let error = Err(HelmChartError::CommandError(CommandError::new(
                         "Thread panicked during parallel charts deployments.".to_string(),
                         Some(err.to_string()),
                         None,
-                    ));
+                    )));
                     errors.push(error);
                 }
             }
@@ -678,13 +674,12 @@ fn deploy_parallel_charts(
 pub fn deploy_charts_levels(
     kube_client: &kube::Client,
     kubernetes_config: &Path,
-    envs: &[(String, String)],
+    envs: &[(&str, &str)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
-) -> Result<(), CommandError> {
+) -> Result<(), HelmChartError> {
     // first show diff
-    let envs_ref: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
-    let helm = Helm::new(kubernetes_config, &envs_ref).map_err(to_command_error)?;
+    let helm = Helm::new(kubernetes_config, envs)?;
 
     for level in charts {
         // Show diff for all chart in this state
@@ -790,18 +785,17 @@ impl HelmChart for CommonChart {
         &self,
         kube_client: &kube::Client,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
-        let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
+        let helm = Helm::new(kubernetes_config, envs)?;
 
         // installation checker
         let chart_payload_res = match &self.chart_installation_checker {
             Some(checker) => match checker.verify_installation(kube_client) {
                 Ok(_) => Ok(payload),
-                Err(e) => Err(e),
+                Err(e) => Err(HelmChartError::CommandError(e)),
             },
             // If no checker set, then consider it's ok
             None => Ok(payload),
@@ -816,11 +810,11 @@ impl HelmChart for CommonChart {
         match vpa_chart.action {
             HelmAction::Deploy => {
                 warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
-                helm.upgrade(&vpa_chart, &[], cmd_killer).map_err(to_command_error)?;
+                helm.upgrade(&vpa_chart, &[], cmd_killer)?;
             }
             HelmAction::Destroy => {
                 warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
-                helm.uninstall(&vpa_chart, &[]).map_err(to_command_error)?;
+                helm.uninstall(&vpa_chart, &[])?;
             }
             HelmAction::Skip => {}
         }
