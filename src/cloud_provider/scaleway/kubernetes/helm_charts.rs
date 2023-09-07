@@ -439,7 +439,7 @@ pub fn scw_helm_charts(
     let qovery_shell_agent = QoveryShellAgentChart::new(
         chart_prefix_path,
         qovery_api
-            .service_version(EngineServiceType::ClusterAgent)
+            .service_version(EngineServiceType::ShellAgent)
             .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
             .as_str(),
         chart_config_prerequisites.infra_options.jwt_token.clone(),
