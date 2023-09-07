@@ -15,19 +15,6 @@ metadata:
 spec:
   backoffLimit: {{ service.max_nb_restart }}
   activeDeadlineSeconds: {{ service.max_duration_in_sec }}
-  affinity:
-    {%- if service.advanced_settings.deployment_affinity_node_required %}
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-    {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-        - matchExpressions:
-          - key: "{{ key }}"
-            operator: In
-            values:
-            - {{ value }}
-    {%- endfor %}
-    {%- endif %}
   {%- if service.advanced_settings.delete_ttl_seconds_after_finished %}
   ttlSecondsAfterFinished: {{ service.advanced_settings.delete_ttl_seconds_after_finished }}
   {%- endif %}
@@ -43,6 +30,19 @@ spec:
       annotations:
         qovery.com/service-version: {{ service.version }}
     spec:
+      affinity:
+        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+        - matchExpressions:
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - {{ value }}
+        {%- endfor %}
+        {%- endif %}
       restartPolicy: Never
       shareProcessNamespace: true
       automountServiceAccountToken: false
@@ -50,7 +50,6 @@ spec:
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
-      securityContext: {}
       {%- if registry %}
       imagePullSecrets:
         - name: {{ registry.secret_name }}
@@ -163,6 +162,8 @@ spec:
             successThreshold: {{ service.liveness_probe.success_threshold }}
             failureThreshold: {{ service.liveness_probe.failure_threshold }}
           {%- endif %}
+          securityContext:
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
               cpu: {{ service.cpu_limit_in_milli }}

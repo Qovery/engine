@@ -177,6 +177,8 @@ spec:
             successThreshold: {{ service.liveness_probe.success_threshold }}
             failureThreshold: {{ service.liveness_probe.failure_threshold }}
           {%- endif %}
+          securityContext:
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
               cpu: {{ service.cpu_limit_in_mili }}

@@ -1,9 +1,10 @@
 use crate::cloud_provider::helm::{
-    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart,
-    HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
+use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
@@ -411,7 +412,7 @@ pub fn scw_helm_charts(
     };
 
     // Qovery cluster agent
-    let cluster_agent = QoveryClusterAgentChart::new(
+    let qovery_cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
         qovery_api
             .service_version(EngineServiceType::ClusterAgent)
@@ -435,18 +436,19 @@ pub fn scw_helm_charts(
     .to_common_helm_chart()?;
 
     // Qovery shell agent
-    let shell_context = ShellAgentContext {
-        version: qovery_api
+    let qovery_shell_agent = QoveryShellAgentChart::new(
+        chart_prefix_path,
+        qovery_api
             .service_version(EngineServiceType::ShellAgent)
-            .map_err(|e| CommandError::new("cannot get shell agent version".to_string(), Some(e.to_string()), None))?,
-        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        organization_long_id: &chart_config_prerequisites.organization_long_id,
-        cluster_id: &chart_config_prerequisites.cluster_id,
-        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
-        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
-    };
-    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, None)?;
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        chart_config_prerequisites.infra_options.jwt_token.clone(),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
+        HelmChartResourcesConstraintType::ChartDefault,
+    )
+    .to_common_helm_chart()?;
 
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
@@ -559,8 +561,8 @@ pub fn scw_helm_charts(
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
-        Box::new(cluster_agent),
-        Box::new(shell_agent),
+        Box::new(qovery_cluster_agent),
+        Box::new(qovery_shell_agent),
         Box::new(qovery_engine),
     ];
 

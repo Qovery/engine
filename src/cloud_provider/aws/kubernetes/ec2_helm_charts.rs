@@ -1,10 +1,11 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart,
-    HelmChartNamespaces, ShellAgentContext, UpdateStrategy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -347,7 +348,7 @@ pub fn ec2_aws_helm_charts(
     };
 
     // Qovery cluster agent
-    let cluster_agent = QoveryClusterAgentChart::new(
+    let qovery_cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
         qovery_api
             .service_version(EngineServiceType::ClusterAgent)
@@ -362,7 +363,7 @@ pub fn ec2_aws_helm_charts(
             ),
             false => None,
         },
-        &chart_config_prerequisites.infra_options.jwt_token,
+        &chart_config_prerequisites.infra_options.jwt_token.clone(),
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
         HelmChartResourcesConstraintType::Constrained(HelmChartResources {
@@ -376,28 +377,24 @@ pub fn ec2_aws_helm_charts(
     .to_common_helm_chart()?;
 
     // Qovery shell agent
-    let shell_context = ShellAgentContext {
-        version: qovery_api
+    let qovery_shell_agent = QoveryShellAgentChart::new(
+        chart_prefix_path,
+        qovery_api
             .service_version(EngineServiceType::ShellAgent)
-            .map_err(|e| CommandError::new("cannot get shell agent version".to_string(), Some(e.to_string()), None))?,
-        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
-        organization_long_id: &chart_config_prerequisites.organization_long_id,
-        cluster_id: &chart_config_prerequisites.cluster_id,
-        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
-        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
-    };
-    let shell_agent_resources = vec![
-        ChartSetValue {
-            key: "resources.requests.memory".to_string(),
-            value: "50Mi".to_string(),
-        },
-        ChartSetValue {
-            key: "resources.limits.memory".to_string(),
-            value: "100Mi".to_string(),
-        },
-    ];
-    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, Some(shell_agent_resources))?;
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        chart_config_prerequisites.infra_options.jwt_token.clone(),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(100),
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(50),
+        }),
+    )
+    .to_common_helm_chart()?;
 
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
@@ -509,8 +506,8 @@ pub fn ec2_aws_helm_charts(
         Box::new(nginx_ingress_wildcard_dns_record),
         Box::new(cert_manager_config),
         Box::new(qovery_engine),
-        Box::new(cluster_agent),
-        Box::new(shell_agent),
+        Box::new(qovery_cluster_agent),
+        Box::new(qovery_shell_agent),
     ]);
 
     info!("charts configuration preparation finished");
