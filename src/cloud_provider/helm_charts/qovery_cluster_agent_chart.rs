@@ -98,7 +98,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                         value: match &self.loki_url {
                             // If log history is enabled, add the loki url to the values
                             Some(loki_url) => loki_url.to_string(),
-                            None => "''".to_string(),
+                            None => "".to_string(), // empty value is handled by the chart
                         },
                     },
                     ChartSetValue {
