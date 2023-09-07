@@ -7,7 +7,6 @@ environmentVariables:
   RUST_BACKTRACE: full
   RUST_LOG: h2::codec::framed_write=INFO,INFO
   GRPC_SERVER: set-by-engine-code
-  LOKI_URL: set-by-engine-code
   CLUSTER_JWT_TOKEN: set-by-engine-code
   CLUSTER_ID: set-by-engine-code
   ORGANIZATION_ID: set-by-engine-code
