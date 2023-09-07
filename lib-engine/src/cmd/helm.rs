@@ -33,7 +33,7 @@ impl Timeout<u32> {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum HelmError {
     #[error("Kubernetes config file path is not valid or does not exist: {0}")]
     InvalidKubeConfig(PathBuf),
@@ -718,10 +718,6 @@ where
         Err(err) => Err(err),
         _ => Ok(()),
     }
-}
-
-pub fn to_command_error(error: HelmError) -> errors::CommandError {
-    errors::CommandError::new("Error while executing Helm command.".to_string(), Some(error.to_string()), None)
 }
 
 pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> EngineError {

@@ -25,7 +25,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartError};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -60,6 +60,7 @@ use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use chrono::Duration as ChronoDuration;
+use itertools::Itertools;
 use tokio::time::Duration;
 
 use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
@@ -1381,7 +1382,11 @@ fn create(
             match deploy_charts_levels(
                 kube_client,
                 kubeconfig_path,
-                &credentials_environment_variables,
+                credentials_environment_variables
+                    .iter()
+                    .map(|(l, r)| (l.as_str(), r.as_str()))
+                    .collect_vec()
+                    .as_slice(),
                 helm_charts_to_deploy.clone(),
                 kubernetes.context().is_dry_run_deploy(),
             ) {
@@ -1401,22 +1406,26 @@ fn create(
         match result {
             Ok(_) => Ok(()),
             Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(e)) => Err(CommandError::new(
+            Err(Error::Internal(e)) => Err(HelmChartError::CommandError(CommandError::new(
                 "Didn't manage to update Helm charts after 5 min.".to_string(),
                 Some(e),
                 None,
-            )),
+            ))),
         }
-        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
         return deploy_charts_levels(
             &kubernetes.kube_client()?,
             kubeconfig_path,
-            &credentials_environment_variables,
+            credentials_environment_variables
+                .iter()
+                .map(|(l, r)| (l.as_str(), r.as_str()))
+                .collect_vec()
+                .as_slice(),
             helm_charts_to_deploy,
             kubernetes.context().is_dry_run_deploy(),
         )
-        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)));
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)));
     }
 }
 
