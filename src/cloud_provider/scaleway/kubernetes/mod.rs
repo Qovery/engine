@@ -44,6 +44,7 @@ use crate::string::terraform_list_format;
 use crate::utilities::to_short_id;
 use crate::{cmd, secret_manager};
 use ::function_name::named;
+use itertools::Itertools;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -1000,11 +1001,15 @@ impl Kapsule {
         deploy_charts_levels(
             &self.kube_client()?,
             kubeconfig_path,
-            &credentials_environment_variables,
+            credentials_environment_variables
+                .iter()
+                .map(|(l, r)| (l.as_str(), r.as_str()))
+                .collect_vec()
+                .as_slice(),
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
         )
-        .map_err(|e| Box::new(EngineError::new_helm_charts_deploy_error(event_details.clone(), e)))
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
     fn create_error(&self) -> Result<(), Box<EngineError>> {

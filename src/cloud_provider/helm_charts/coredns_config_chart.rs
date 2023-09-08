@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath};
 use crate::cmd::command::CommandKiller;
@@ -7,7 +8,7 @@ use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
     kubectl_exec_with_output,
 };
-use crate::errors::{CommandError, ErrorMessageVerbosity};
+use crate::errors::CommandError;
 use crate::runtime::block_on;
 use crate::utilities::calculate_hash;
 use k8s_openapi::api::core::v1::Pod;
@@ -100,12 +101,12 @@ impl HelmChart for CoreDNSConfigChart {
     fn pre_exec(
         &self,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         _payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, CommandError> {
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         let kind = "configmap";
-        let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
+        let mut envs = envs.to_vec();
+        envs.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
 
         let chart_infos = self.get_chart_info();
 
@@ -115,7 +116,7 @@ impl HelmChart for CoreDNSConfigChart {
                 kubernetes_config,
                 Some(chart_infos.get_namespace_string().as_str()),
                 Some(selector.as_str()),
-                environment_variables.clone(),
+                envs.to_vec(),
             )?;
         }
 
@@ -124,17 +125,17 @@ impl HelmChart for CoreDNSConfigChart {
             kubernetes_config,
             &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
-            environment_variables.clone(),
+            envs.to_vec(),
         ) {
             Ok(cm) => {
                 if cm.data.corefile.is_none() {
-                    return Err(CommandError::new_from_safe_message(
+                    return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "Corefile data structure is not found in CoreDNS configmap".to_string(),
-                    ));
+                    )));
                 };
                 calculate_hash(&cm.data.corefile.unwrap())
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(HelmChartError::CommandError(e)),
         };
         let mut configmap_hash = HashMap::new();
         configmap_hash.insert("checksum".to_string(), current_configmap_hash.to_string());
@@ -153,7 +154,7 @@ impl HelmChart for CoreDNSConfigChart {
                     &self.chart_info.name,
                     format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
                 ],
-                environment_variables.clone(),
+                envs.to_vec(),
                 &mut |_| {},
                 &mut |_| {},
             )?;
@@ -167,7 +168,7 @@ impl HelmChart for CoreDNSConfigChart {
                     &self.chart_info.name,
                     "meta.helm.sh/release-namespace=kube-system",
                 ],
-                environment_variables.clone(),
+                envs.to_vec(),
                 &mut |_| {},
                 &mut |_| {},
             )?;
@@ -181,7 +182,7 @@ impl HelmChart for CoreDNSConfigChart {
                     &self.chart_info.name,
                     "app.kubernetes.io/managed-by=Helm",
                 ],
-                environment_variables.clone(),
+                envs.to_vec(),
                 &mut |_| {},
                 &mut |_| {},
             )?;
@@ -195,27 +196,24 @@ impl HelmChart for CoreDNSConfigChart {
         &self,
         kube_client: &kube::Client,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
         let payload = match self.pre_exec(kubernetes_config, envs, None) {
             Ok(p) => match p {
                 None => {
-                    return Err(CommandError::new_from_safe_message(
+                    return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
-                    ))
+                    )))
                 }
                 Some(p) => p,
             },
             Err(e) => return Err(e),
         };
         if let Err(e) = self.exec(kubernetes_config, envs, None, cmd_killer) {
-            error!(
-                "Error while deploying chart: {:?}",
-                e.message(ErrorMessageVerbosity::FullDetails)
-            );
+            error!("Error while deploying chart: {:?}", e);
             self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
@@ -227,27 +225,22 @@ impl HelmChart for CoreDNSConfigChart {
         &self,
         kube_client: &kube::Client,
         kubernetes_config: &Path,
-        envs: &[(String, String)],
+        envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         _cmd_killer: &CommandKiller,
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        let mut environment_variables = Vec::new();
-        for env in envs {
-            environment_variables.push((env.0.as_str(), env.1.as_str()));
-        }
-
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
         // detect configmap data change
         let previous_configmap_checksum = match &payload {
             None => {
-                return Err(CommandError::new_from_safe_message(
+                return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                     "Missing payload, can't check coredns update".to_string(),
-                ))
+                )))
             }
             Some(x) => match x.data().get("checksum") {
                 None => {
-                    return Err(CommandError::new_from_safe_message(
+                    return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "Missing configmap checksum, can't check coredns diff".to_string(),
-                    ))
+                    )))
                 }
                 Some(c) => c.clone(),
             },
@@ -256,17 +249,17 @@ impl HelmChart for CoreDNSConfigChart {
             kubernetes_config,
             &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
-            environment_variables.clone(),
+            envs.to_vec(),
         ) {
             Ok(cm) => {
                 if cm.data.corefile.is_none() {
-                    return Err(CommandError::new_from_safe_message(
+                    return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "Corefile data structure is not found in CoreDNS configmap".to_string(),
-                    ));
+                    )));
                 };
                 calculate_hash(&cm.data.corefile.unwrap()).to_string()
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(HelmChartError::CommandError(e)),
         };
         if previous_configmap_checksum == current_configmap_checksum {
             info!("no coredns config change detected, nothing to restart");
@@ -279,7 +272,7 @@ impl HelmChart for CoreDNSConfigChart {
             kubernetes_config,
             &self.chart_info.name,
             self.namespace().as_str(),
-            &environment_variables,
+            envs,
         )?;
 
         self.chart_installation_checker.verify_installation(kube_client)?;

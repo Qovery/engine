@@ -72,19 +72,10 @@ impl From<kube::Error> for CommandError {
 }
 
 impl From<HelmChartError> for CommandError {
+    // Do not use this method, it makes no senses to cast a richeful information error into
+    // a generic CommandError where all info has been lost
     fn from(err: HelmChartError) -> Self {
-        CommandError::new(
-            match err.clone() {
-                HelmChartError::CreateTemplateError { chart_name, msg: _ } => {
-                    format!("error while creating helm template for chart {chart_name}")
-                }
-                HelmChartError::RenderingError { chart_name, msg: _ } => {
-                    format!("error while rendering helm template for chart {chart_name}")
-                }
-            },
-            Some(format!("{err:?}")),
-            None,
-        )
+        CommandError::new(err.to_string(), Some(format!("{err:?}")), None)
     }
 }
 
@@ -3114,6 +3105,28 @@ impl EngineError {
         };
 
         EngineError::new(event_details, tag, error.to_string(), cmd_error, None, None)
+    }
+
+    /// Creates new error from an HelmChart error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_helm_chart_error(event_details: EventDetails, error: HelmChartError) -> EngineError {
+        if let HelmChartError::HelmError(helm_error) = error {
+            return EngineError::new_helm_error(event_details, helm_error);
+        }
+
+        let error_msg = error.to_string();
+        let cmd_error = match error {
+            HelmChartError::CommandError(cmd_error) => Some(cmd_error),
+            HelmChartError::CreateTemplateError { .. }
+            | HelmChartError::RenderingError { .. }
+            | HelmChartError::HelmError(_) => None,
+        };
+
+        EngineError::new(event_details, Tag::HelmChartsDeployError, error_msg, cmd_error, None, None)
     }
 
     /// Creates new error while uninstalling Helm chart.
