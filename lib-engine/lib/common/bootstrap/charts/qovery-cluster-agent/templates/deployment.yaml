@@ -12,6 +12,8 @@ spec:
   selector:
     matchLabels:
       {{- include "qovery-cluster-agent.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: {{ .Values.rolloutStrategy}}
   template:
     metadata:
       annotations:
