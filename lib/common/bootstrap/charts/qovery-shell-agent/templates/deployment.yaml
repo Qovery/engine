@@ -9,6 +9,8 @@ spec:
 {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
 {{- end }}
+  strategy:
+    type: {{ .Values.rolloutStrategy}}
   selector:
     matchLabels:
       {{- include "qovery-shell-agent.selectorLabels" . | nindent 6 }}

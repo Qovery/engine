@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -17,6 +18,7 @@ pub struct QoveryShellAgentChart {
     cluster_id: QoveryIdentifier,
     organization_long_id: QoveryIdentifier,
     chart_resources: HelmChartResourcesConstraintType,
+    update_strategy: UpdateStrategy,
 }
 
 impl QoveryShellAgentChart {
@@ -28,6 +30,7 @@ impl QoveryShellAgentChart {
         cluster_id: QoveryIdentifier,
         grpc_url: String,
         chart_resources: HelmChartResourcesConstraintType,
+        update_strategy: UpdateStrategy,
     ) -> Self {
         Self {
             chart_path: HelmChartPath::new(
@@ -41,6 +44,7 @@ impl QoveryShellAgentChart {
             cluster_id,
             organization_long_id,
             chart_resources,
+            update_strategy,
         }
     }
 
@@ -76,6 +80,10 @@ impl ToCommonHelmChart for QoveryShellAgentChart {
                     ChartSetValue {
                         key: "replicaCount".to_string(),
                         value: "1".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "rolloutStrategy".to_string(),
+                        value: self.update_strategy.to_string(),
                     },
                     ChartSetValue {
                         key: "environmentVariables.RUST_BACKTRACE".to_string(),
@@ -154,6 +162,7 @@ impl ChartInstallationChecker for QoveryShellAgentChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, HelmChartResourcesConstraintType, HelmChartType,
@@ -173,6 +182,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             "http://grpc.qovery.com:443".to_string(),
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");

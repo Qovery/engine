@@ -3,6 +3,7 @@
 # Declare variables to be passed into your templates.
 
 replicaCount: 1
+rolloutStrategy: RollingUpdate
 
 image:
   repository: public.ecr.aws/r3m4q3r9/cluster-agent
@@ -15,7 +16,8 @@ namespace: "qovery"
 labels:
   app: qovery-cluster-agent
 
-environmentVariables: {}
+environmentVariables:
+  {}
   #CLOUD_PROVIDER: ""
   #CLOUD_REGION: ""
   #AGENT_ID: ""
@@ -37,10 +39,12 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
-securityContext: {}
+securityContext:
+  {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -48,7 +52,8 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-resources: {}
+resources:
+  {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following

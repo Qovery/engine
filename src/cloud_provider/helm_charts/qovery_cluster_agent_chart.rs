@@ -1,6 +1,7 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
-    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    HelmChartNamespaces, UpdateStrategy, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -23,6 +24,7 @@ pub struct QoveryClusterAgentChart {
     cluster_jwt_token: String,
     cluster_id: QoveryIdentifier,
     organization_id: QoveryIdentifier,
+    update_strategy: UpdateStrategy,
     enable_vpa: bool,
 }
 
@@ -36,6 +38,7 @@ impl QoveryClusterAgentChart {
         cluster_id: QoveryIdentifier,
         organization_id: QoveryIdentifier,
         chart_resources: HelmChartResourcesConstraintType,
+        update_strategy: UpdateStrategy,
         enable_vpa: bool,
     ) -> Self {
         Self {
@@ -65,6 +68,7 @@ impl QoveryClusterAgentChart {
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(100),
                 },
             },
+            update_strategy,
             enable_vpa,
         }
     }
@@ -88,6 +92,10 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     ChartSetValue {
                         key: "image.tag".to_string(),
                         value: self.chart_image_version_tag.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "rolloutStrategy".to_string(),
+                        value: self.update_strategy.to_string(),
                     },
                     ChartSetValue {
                         key: "environmentVariables.GRPC_SERVER".to_string(),
@@ -186,6 +194,7 @@ impl ChartInstallationChecker for QoveryClusterAgentChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::UpdateStrategy;
     use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, HelmChartResourcesConstraintType, HelmChartType,
@@ -207,6 +216,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
             false,
         );
 
@@ -240,6 +250,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
             false,
         );
 

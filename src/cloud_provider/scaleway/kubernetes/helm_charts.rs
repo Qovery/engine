@@ -431,6 +431,7 @@ pub fn scw_helm_charts(
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
         HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
         true,
     )
     .to_common_helm_chart()?;
@@ -447,6 +448,7 @@ pub fn scw_helm_charts(
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
         HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
     )
     .to_common_helm_chart()?;
 

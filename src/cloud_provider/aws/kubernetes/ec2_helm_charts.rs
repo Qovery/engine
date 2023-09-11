@@ -372,6 +372,7 @@ pub fn ec2_aws_helm_charts(
             request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
             request_memory: KubernetesMemoryResourceUnit::MebiByte(50),
         }),
+        UpdateStrategy::Recreate,
         false,
     )
     .to_common_helm_chart()?;
@@ -393,6 +394,7 @@ pub fn ec2_aws_helm_charts(
             request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
             request_memory: KubernetesMemoryResourceUnit::MebiByte(50),
         }),
+        UpdateStrategy::Recreate,
     )
     .to_common_helm_chart()?;
 
