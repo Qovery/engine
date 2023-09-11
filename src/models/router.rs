@@ -426,6 +426,8 @@ pub trait RouterService: Service + DeploymentAction + ToTeraContext + Send {
     fn has_custom_domains(&self) -> bool;
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+
+    fn associated_service_id(&self) -> Option<Uuid>;
 }
 
 impl<T: CloudProvider> RouterService for Router<T>
@@ -438,6 +440,10 @@ where
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+
+    fn associated_service_id(&self) -> Option<Uuid> {
+        self.routes.first().map(|route| route.service_long_id)
     }
 }
 
