@@ -360,7 +360,8 @@ impl EnvironmentTask {
             .chain(environment.containers.iter().map(|x| x.as_service()))
             .chain(environment.routers.iter().map(|x| x.as_service()))
             .chain(environment.databases.iter().map(|x| x.as_service()))
-            .chain(environment.jobs.iter().map(|x| x.as_service()));
+            .chain(environment.jobs.iter().map(|x| x.as_service()))
+            .chain(environment.helm_charts.iter().map(|x| x.as_service()));
 
         for service in services.clone() {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
@@ -425,7 +426,8 @@ impl EnvironmentTask {
             .chain(environment.containers.iter().map(|x| x.as_service()))
             .chain(environment.routers.iter().map(|x| x.as_service()))
             .chain(environment.databases.iter().map(|x| x.as_service()))
-            .chain(environment.jobs.iter().map(|x| x.as_service()));
+            .chain(environment.jobs.iter().map(|x| x.as_service()))
+            .chain(environment.helm_charts.iter().map(|x| x.as_service()));
 
         for service in services {
             if deployed_services.contains(service.long_id()) {
