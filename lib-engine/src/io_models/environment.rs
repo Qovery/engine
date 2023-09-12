@@ -38,6 +38,7 @@ pub struct EnvironmentRequest {
     pub jobs: Vec<Job>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
+    #[serde(default)]
     pub helm_charts: Vec<HelmChart>,
 }
 
