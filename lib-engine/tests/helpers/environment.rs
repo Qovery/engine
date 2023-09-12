@@ -100,6 +100,7 @@ pub fn working_environment(
         jobs: vec![],
         routers: vec![],
         databases: vec![],
+        helm_charts: vec![],
     };
 
     if with_router {
@@ -399,6 +400,7 @@ pub fn environment_2_app_2_routers_1_psql(
         ],
         max_parallel_build: 1,
         max_parallel_deploy: 1,
+        helm_charts: vec![],
     }
 }
 
@@ -507,6 +509,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             }],
         }],
         databases: vec![],
+        helm_charts: vec![],
     }
 }
 
@@ -596,6 +599,7 @@ pub fn environment_only_http_server(
         jobs: vec![],
         routers: vec![],
         databases: vec![],
+        helm_charts: vec![],
     };
 
     if with_router {

@@ -105,6 +105,7 @@ enum ServiceType {
   UNKNOWN_SRV = 0; // empty value in proto map to 0
   APPLICATION = 1;
   JOB = 2;
+  HELM_CHART = 3;
 }
 
 message GitTokenRequest {

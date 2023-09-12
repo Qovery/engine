@@ -5,6 +5,7 @@ pub mod container;
 pub mod database;
 pub(crate) mod database_utils;
 pub mod domain;
+pub mod helm_chart;
 pub mod job;
 pub mod kubernetes;
 pub mod probe;
