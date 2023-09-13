@@ -7,7 +7,7 @@ use crate::cmd::helm_utils::{
 };
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
 use crate::cmd::structs::HelmHistoryRow;
-use crate::errors::CommandError;
+use crate::errors::{CommandError, EngineError};
 
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ use thiserror::Error;
 
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::deploy_helm::default_helm_timeout;
+use crate::events::EventDetails;
 use std::{fs, thread};
 
 use super::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
@@ -27,6 +28,7 @@ use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 pub enum HelmChartError {
     #[error("Error while creating template: {chart_name:?}: {msg:?}")]
     CreateTemplateError { chart_name: String, msg: String },
+
     #[error("Error while rendering template: {chart_name:?}: {msg:?}")]
     RenderingError { chart_name: String, msg: String },
 
@@ -35,6 +37,15 @@ pub enum HelmChartError {
 
     #[error("Error while executing command")]
     CommandError(#[from] CommandError),
+}
+
+impl<E> From<(EventDetails, E)> for Box<EngineError>
+where
+    HelmChartError: From<E>,
+{
+    fn from((event, err): (EventDetails, E)) -> Self {
+        Box::new(EngineError::new_helm_chart_error(event, HelmChartError::from(err)))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

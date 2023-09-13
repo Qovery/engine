@@ -17,6 +17,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmValueSource};
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
@@ -29,6 +30,7 @@ use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use tracing::{span, Level};
@@ -2983,6 +2985,74 @@ fn deploy_container_with_udp_tcp_public_ports() {
             // exit loop
             break;
         }
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_helm_chart() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete =
+            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helm_charts = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Repository {
+                url: Url::parse("https://kubernetes.github.io/ingress-nginx").unwrap(),
+                credentials: None,
+                skip_tls_verify: false,
+                chart_name: "ingress-nginx".to_string(),
+                chart_version: "4.4.2".to_string(),
+            },
+            // chart_values: HelmValueSource::Raw {
+            //     values: vec![HelmRawValues { name: "toto.yaml".to_string(), content: "toto: tata".to_string() }],
+            // },
+            chart_values: HelmValueSource::Git {
+                git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+                git_credentials: None,
+                commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+                values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+            },
+            arguments: vec![],
+            allow_cluster_wide_resources: false,
+            environment_vars: btreemap! { "TOTO".to_string() => "Salut".to_string() },
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

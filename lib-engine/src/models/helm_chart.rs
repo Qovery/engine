@@ -1,13 +1,16 @@
-use crate::build_platform::Build;
-use crate::cloud_provider::models::EnvironmentVariable;
+use crate::build_platform::{Build, SshKey};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
-use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmRepository};
+use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
 use crate::models::types::CloudProvider;
 use crate::utilities::to_short_id;
+use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::path::{Path, PathBuf};
+use url::Url;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
@@ -26,13 +29,15 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) name: String,
     pub(super) kube_name: String,
     pub(super) action: Action,
-    pub(super) repository: HelmRepository,
-    pub(super) chart_name: String,
-    pub(super) chart_version: String,
-    pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) chart_source: HelmChartSource,
+    pub(super) chart_values: HelmValueSource,
+    pub(super) allow_cluster_wide_resources: bool,
+    pub(super) arguments: Vec<String>,
+    pub(super) environment_variables: HashMap<String, String>,
     pub(super) advanced_settings: HelmChartAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
+    pub(super) chart_workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
 }
 
@@ -44,10 +49,11 @@ impl<T: CloudProvider> HelmChart<T> {
         name: String,
         kube_name: String,
         action: Action,
-        repository: HelmRepository,
-        chart_name: String,
-        chart_version: String,
-        environment_variables: Vec<EnvironmentVariable>,
+        chart_source: HelmChartSource,
+        chart_values: HelmValueSource,
+        arguments: Vec<String>,
+        allow_cluster_wide_resources: bool,
+        environment_variables: HashMap<String, String>,
         advanced_settings: HelmChartAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -61,6 +67,7 @@ impl<T: CloudProvider> HelmChart<T> {
 
         let event_details = mk_event_details(Transmitter::HelmChart(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
+        let workspace_directory = PathBuf::from(workspace_directory);
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),
@@ -69,12 +76,14 @@ impl<T: CloudProvider> HelmChart<T> {
             action,
             name,
             kube_name,
-            repository,
-            chart_name,
-            chart_version,
+            chart_source,
+            chart_values,
+            arguments,
+            allow_cluster_wide_resources,
             environment_variables,
             advanced_settings,
             _extra_settings: extra_settings,
+            chart_workspace_directory: workspace_directory.join("chart"),
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
         })
@@ -88,8 +97,12 @@ impl<T: CloudProvider> HelmChart<T> {
         format!("helmchart-{}", self.long_id)
     }
 
-    pub fn repository(&self) -> &HelmRepository {
-        &self.repository
+    pub fn chart_source(&self) -> &HelmChartSource {
+        &self.chart_source
+    }
+
+    pub fn chart_values(&self) -> &HelmValueSource {
+        &self.chart_values
     }
 
     pub fn service_type(&self) -> ServiceType {
@@ -109,11 +122,29 @@ impl<T: CloudProvider> HelmChart<T> {
     }
 
     pub fn service_version(&self) -> String {
-        self.chart_version.to_string()
+        match &self.chart_source {
+            HelmChartSource::Repository { chart_version, .. } => chart_version.clone(),
+            HelmChartSource::Git { commit_id, .. } => commit_id.clone(),
+        }
+    }
+
+    pub fn environment_variables(&self) -> &HashMap<String, String> {
+        &self.environment_variables
     }
 
     pub fn kube_label_selector(&self) -> String {
         format!("qovery.com/service-id={}", self.long_id)
+    }
+
+    pub fn workspace_directory(&self) -> &Path {
+        &self.workspace_directory
+    }
+    pub fn chart_workspace_directory(&self) -> &Path {
+        &self.chart_workspace_directory
+    }
+
+    pub fn is_cluster_wide_ressources_allowed(&self) -> bool {
+        self.allow_cluster_wide_resources
     }
 }
 
@@ -182,4 +213,35 @@ where
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
     }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum HelmChartSource {
+    Repository {
+        url: Url,
+        credentials: Option<HelmCredentials>,
+        skip_tls_verify: bool,
+        chart_name: String,
+        chart_version: String,
+    },
+    Git {
+        git_url: Url,
+        git_credentials: Option<GitCredentials>,
+        commit_id: String,
+        root_path: String,
+        ssh_keys: Vec<SshKey>,
+    },
+}
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum HelmValueSource {
+    Raw {
+        values: Vec<HelmRawValues>,
+    },
+    Git {
+        git_url: Url,
+        git_credentials: Option<GitCredentials>,
+        commit_id: String,
+        values_path: Vec<PathBuf>,
+        ssh_keys: Vec<SshKey>,
+    },
 }
