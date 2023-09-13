@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmCommand::{FETCH, LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
@@ -15,6 +15,7 @@ use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
 use std::str::FromStr;
+use url::Url;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
@@ -75,6 +76,7 @@ pub enum HelmCommand {
     LIST,
     DIFF,
     TEMPLATE,
+    FETCH,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -350,6 +352,136 @@ impl Helm {
 
         // found nothing ;'(
         Ok(None)
+    }
+
+    pub fn download_chart(
+        &self,
+        repository: &Url,
+        chart_name: &str,
+        chart_version: &str,
+        target_directory: &Path,
+        skip_tls_verification: bool,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<(), HelmError> {
+        if !target_directory.is_dir() {
+            return Err(CmdError(
+                chart_name.to_string(),
+                FETCH,
+                errors::CommandError::new(
+                    "Target directory where to download the chart does not exist or is not a directory".to_string(),
+                    None,
+                    Some(vec![]),
+                ),
+            ));
+        }
+
+        let tmpdir = tempfile::tempdir().map_err(|err| {
+            CmdError(
+                chart_name.to_string(),
+                FETCH,
+                errors::CommandError::new(
+                    "Cannot create tmp dir to fetch chart".to_string(),
+                    Some(err.to_string()),
+                    Some(vec![]),
+                ),
+            )
+        })?;
+
+        let mut helm_args = vec![
+            "fetch",
+            "--debug", // there is no debug log but if someday they appear
+            "--repo",
+            repository.as_str(),
+            chart_name,
+            "--version",
+            chart_version,
+            "--untar",
+            "--untardir",
+            tmpdir.path().to_str().unwrap_or_default(),
+        ];
+
+        if skip_tls_verification {
+            helm_args.push("--insecure-skip-tls-verify");
+        }
+
+        let login = urlencoding::decode(repository.username()).unwrap_or_default();
+        let password = repository
+            .password()
+            .map(|password| urlencoding::decode(password).unwrap_or_default());
+
+        if let Some(password) = &password {
+            helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", password])
+        }
+
+        let mut error_message: Vec<String> = Vec::new();
+        let helm_ret = helm_exec_with_output(
+            helm_args.as_slice(),
+            &self.get_all_envs(envs),
+            &mut |line| {
+                info!("{}", line);
+            },
+            &mut |line| {
+                warn!("chart {}: {}", chart_name, line);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
+                error_message.push(line);
+            },
+            cmd_killer,
+        );
+
+        if let Err(err) = helm_ret {
+            error!("Helm error: {:?}", err);
+
+            // Try do define/specify a bit more the message
+            let stderr_msg: String = error_message.into_iter().collect();
+            let stderr_msg = format!("{stderr_msg}: {err}");
+
+            // If the helm command has been canceled by the user, propagate correctly the killed error
+            match err {
+                CommandError::TimeoutError(_) => {
+                    return Err(HelmError::Timeout(chart_name.to_string(), FETCH, stderr_msg));
+                }
+                CommandError::Killed(_) => {
+                    return Err(HelmError::Killed(chart_name.to_string(), FETCH));
+                }
+                _ => {}
+            }
+            return Err(CmdError(
+                chart_name.to_string(),
+                FETCH,
+                errors::CommandError::new(
+                    format!(
+                        "Helm failed to fetch chart {} at version {} from {}",
+                        chart_name, chart_version, repository
+                    ),
+                    Some(stderr_msg),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                ),
+            ));
+        };
+
+        // Move the chart from tmpdir to the target_directory of the user
+        // Rename must not cross mount point boundaries. It is ok as we don't have a tmpfs inside our container
+        std::fs::rename(tmpdir.path().join(chart_name), target_directory).map_err(|err| {
+            CmdError(
+                chart_name.to_string(),
+                FETCH,
+                errors::CommandError::new(
+                    format!(
+                        "Cannot move chart folder out of the tmpdir from {:?} to {:?}",
+                        tmpdir.path().join(chart_name),
+                        target_directory
+                    ),
+                    Some(err.to_string()),
+                    Some(vec![]),
+                ),
+            )
+        })?;
+
+        Ok(())
     }
 
     pub fn upgrade_diff(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
@@ -732,9 +864,11 @@ mod tests {
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
     use crate::deployment_action::deploy_helm::default_helm_timeout;
     use semver::Version;
+    use std::path::Path;
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
+    use url::Url;
 
     struct HelmTestCtx {
         helm: Helm,
@@ -1041,5 +1175,55 @@ mod tests {
         let _ = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         let releases = helm.list_release(Some(&charts[0].get_namespace_string()), &[]).unwrap();
         assert_eq!(releases[0].clone().chart_version.unwrap(), Version::new(0, 1, 0))
+    }
+
+    #[test]
+    fn test_fetching_chart() {
+        let HelmTestCtx { ref helm, .. } = HelmTestCtx::new("test-download-chart");
+
+        let target_dir = tempfile::tempdir().unwrap();
+        let repository = Url::parse("https://kubernetes.github.io/ingress-nginx").unwrap();
+
+        // Invalid target directory should fail
+        let ret = helm.download_chart(
+            &repository,
+            "ingress-nginx",
+            "4.4.9999",
+            Path::new("/xxxxxxxxxx"),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(matches!(ret, Err(HelmError::CmdError(_, _, _))));
+
+        // Non existing version should fail
+        let ret = helm.download_chart(
+            &repository,
+            "ingress-nginx",
+            "4.4.9999",
+            target_dir.path(),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(
+            matches!(ret, Err(HelmError::CmdError(_, _, ref err)) if err.message_raw().unwrap().contains("version \"4.4.9999\" not found"))
+        );
+
+        // Happy path
+        assert!(!target_dir.path().join("values.yaml").exists());
+        let ret = helm.download_chart(
+            &repository,
+            "ingress-nginx",
+            "4.4.2",
+            target_dir.path(),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(ret.is_ok());
+
+        // Check that the files are there
+        assert!(target_dir.path().join("values.yaml").exists());
     }
 }
