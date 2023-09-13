@@ -16,6 +16,7 @@ pub mod context;
 pub mod database;
 pub mod engine_request;
 pub mod environment;
+pub mod helm_chart;
 pub mod job;
 pub mod probe;
 pub mod router;

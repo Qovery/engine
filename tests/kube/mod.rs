@@ -65,6 +65,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         jobs: vec![],
         routers: vec![],
         databases: vec![],
+        helm_charts: vec![],
     };
 
     match options {

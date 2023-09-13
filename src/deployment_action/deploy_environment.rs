@@ -8,6 +8,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::logger::Logger;
+use crate::models::router::RouterService;
 use crate::runtime::block_on;
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::Namespace;
@@ -75,16 +76,22 @@ impl<'a> EnvironmentDeployment<'a> {
                     .iter()
                     .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
             )
+            .chain(
+                environment
+                    .helm_charts
+                    .iter()
+                    .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
+            )
     }
 
     fn services_routers_iter(
         environment: &Environment,
-    ) -> impl DoubleEndedIterator<Item = (Uuid, &dyn DeploymentAction, Action)> {
+    ) -> impl DoubleEndedIterator<Item = (Uuid, &dyn DeploymentAction, Action, Option<Uuid>)> {
         std::iter::empty().chain(
             environment
                 .routers
                 .iter()
-                .map(|r| (*r.long_id(), r.as_deployment_action(), *r.action())),
+                .map(|r| (*r.long_id(), r.as_deployment_action(), *r.action(), r.associated_service_id())),
         )
     }
 
@@ -124,7 +131,6 @@ impl<'a> EnvironmentDeployment<'a> {
         ns.exec_action(target, target.environment.action)?;
 
         let services_to_deploy = Self::services_without_routers_iter(target.environment);
-        let routers_to_deploy = Self::services_routers_iter(target.environment);
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
         self.logger.log(EngineEvent::Info(
@@ -133,31 +139,23 @@ impl<'a> EnvironmentDeployment<'a> {
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
-        // creating services first
         deployment_threads_pool.run(
             services_to_deploy
                 .into_iter()
                 .map(|(service_id, service, service_action)| {
                     let deployed_services = self.deployed_services.clone();
+                    let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
+                        // creating services first
                         deployed_services.blocking_lock().insert(service_id);
-                        service.exec_action(target, service_action)
-                    }
-                })
-                .collect_vec(),
-            || should_abort().is_err(),
-            NonZeroUsize::new(parallel_deploys)
-                .unwrap_or(NonZeroUsize::new(1).expect("error trying to instantiate NonZeroUsize")),
-        )?;
-        // then routers
-        deployment_threads_pool.run(
-            routers_to_deploy
-                .into_iter()
-                .map(|(router_id, router, router_action)| {
-                    let deployed_services = self.deployed_services.clone();
-                    move || {
-                        deployed_services.blocking_lock().insert(router_id);
-                        router.exec_action(target, router_action)
+                        service.exec_action(target, service_action)?;
+
+                        // then routers
+                        if let Some(router) = opt_router {
+                            deployed_services.blocking_lock().insert(*router.long_id());
+                            return router.exec_action(target, *router.action());
+                        }
+                        Ok(())
                     }
                 })
                 .collect_vec(),
@@ -184,7 +182,6 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // reverse order of the deployment
         let services_to_pause = Self::services_without_routers_iter(target.environment).rev();
-        let routers_to_pause = Self::services_routers_iter(target.environment).rev();
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
         self.logger.log(EngineEvent::Info(
@@ -193,31 +190,21 @@ impl<'a> EnvironmentDeployment<'a> {
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
-        // pausing routers
-        deployment_threads_pool.run(
-            routers_to_pause
-                .into_iter()
-                .map(|(router_id, router, _router_action)| {
-                    let deployed_services = self.deployed_services.clone();
-                    let local_target = target.clone();
-                    move || {
-                        deployed_services.blocking_lock().insert(router_id);
-                        router.on_pause(&local_target)
-                    }
-                })
-                .collect_vec(),
-            || should_abort().is_err(),
-            NonZeroUsize::new(parallel_deploys)
-                .unwrap_or(NonZeroUsize::new(1).expect("error trying to instantiate NonZeroUsize")),
-        )?;
-        // then services
         deployment_threads_pool.run(
             services_to_pause
                 .into_iter()
                 .map(|(service_id, service, _service_action)| {
                     let deployed_services = self.deployed_services.clone();
                     let local_target = target.clone();
+                    let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
+                        // pausing routers
+                        if let Some(router) = opt_router {
+                            deployed_services.blocking_lock().insert(*router.long_id());
+                            router.on_pause(&local_target)?;
+                        }
+
+                        // then services
                         deployed_services.blocking_lock().insert(service_id);
                         service.on_pause(&local_target)
                     }
@@ -278,7 +265,6 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // reverse order of the deployment
         let services_to_delete = Self::services_without_routers_iter(target.environment).rev();
-        let routers_to_delete = Self::services_routers_iter(target.environment).rev();
 
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
@@ -288,29 +274,20 @@ impl<'a> EnvironmentDeployment<'a> {
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
-        // deleting routers
-        deployment_threads_pool.run(
-            routers_to_delete
-                .into_iter()
-                .map(|(router_id, router, _router_action)| {
-                    let deployed_services = self.deployed_services.clone();
-                    move || {
-                        deployed_services.blocking_lock().insert(router_id);
-                        router.on_delete(target)
-                    }
-                })
-                .collect_vec(),
-            || should_abort().is_err(),
-            NonZeroUsize::new(parallel_deploys)
-                .unwrap_or(NonZeroUsize::new(1).expect("error trying to instantiate NonZeroUsize")),
-        )?;
-        // then services
         deployment_threads_pool.run(
             services_to_delete
                 .into_iter()
                 .map(|(service_id, service, _service_action)| {
                     let deployed_services = self.deployed_services.clone();
+                    let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
+                        // deleting routers
+                        if let Some(router) = opt_router {
+                            deployed_services.blocking_lock().insert(*router.long_id());
+                            router.on_delete(target)?;
+                        }
+
+                        // then services
                         deployed_services.blocking_lock().insert(service_id);
                         service.on_delete(target)
                     }
@@ -345,7 +322,6 @@ impl<'a> EnvironmentDeployment<'a> {
         should_abort()?;
 
         let services_to_restart = Self::services_without_routers_iter(target.environment);
-        let routers_to_restart = Self::services_routers_iter(target.environment);
 
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
@@ -355,33 +331,24 @@ impl<'a> EnvironmentDeployment<'a> {
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
-        // restarting services
         deployment_threads_pool.run(
             services_to_restart
                 .into_iter()
                 .map(|(service_id, service, _service_action)| {
                     let deployed_services = self.deployed_services.clone();
                     let local_target = target.clone();
+                    let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
+                        // restarting services
                         deployed_services.blocking_lock().insert(service_id);
-                        service.on_restart(&local_target)
-                    }
-                })
-                .collect_vec(),
-            || should_abort().is_err(),
-            NonZeroUsize::new(parallel_deploys)
-                .unwrap_or(NonZeroUsize::new(1).expect("error trying to instantiate NonZeroUsize")),
-        )?;
-        // then routers
-        deployment_threads_pool.run(
-            routers_to_restart
-                .into_iter()
-                .map(|(router_id, router, _router_action)| {
-                    let deployed_services = self.deployed_services.clone();
-                    let local_target = target.clone();
-                    move || {
-                        deployed_services.blocking_lock().insert(router_id);
-                        router.on_restart(&local_target)
+                        service.on_restart(&local_target)?;
+
+                        // then router
+                        if let Some(router) = opt_router {
+                            deployed_services.blocking_lock().insert(*router.long_id());
+                            return router.on_restart(&local_target);
+                        }
+                        Ok(())
                     }
                 })
                 .collect_vec(),
@@ -391,6 +358,13 @@ impl<'a> EnvironmentDeployment<'a> {
         )?;
 
         Ok(())
+    }
+
+    fn get_associated_router(routers: &'a [Box<dyn RouterService>], service_id: Uuid) -> Option<&'a dyn RouterService> {
+        routers
+            .iter()
+            .find(|router| router.associated_service_id() == Some(service_id))
+            .map(|router| router.as_ref() as &'a dyn RouterService)
     }
 }
 

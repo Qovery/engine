@@ -371,29 +371,29 @@ pub fn cluster_test(
         }
     }
 
-    // // Destroy env if any
-    // if let Some(env) = environment_to_deploy {
-    //     let mut env = env
-    //         .to_environment_domain(
-    //             &context,
-    //             engine.cloud_provider(),
-    //             engine.container_registry(),
-    //             engine.kubernetes(),
-    //         )
-    //         .unwrap();
+    // Destroy env if any
+    if let Some(env) = environment_to_deploy {
+        let mut env = env
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry(),
+                engine.kubernetes(),
+            )
+            .unwrap();
 
-    //     env.action = qovery_engine::cloud_provider::service::Action::Delete;
-    //     if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
-    //         panic!("{ret:?}")
-    //     }
-    // }
+        env.action = qovery_engine::cloud_provider::service::Action::Delete;
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
+            panic!("{ret:?}")
+        }
+    }
 
-    // // Delete
-    // let mut delete_tx = Transaction::new(&engine).unwrap();
-    // if let Err(err) = delete_tx.delete_kubernetes() {
-    //     panic!("{err:?}")
-    // }
-    // assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+    // Delete
+    let mut delete_tx = Transaction::new(&engine).unwrap();
+    if let Err(err) = delete_tx.delete_kubernetes() {
+        panic!("{err:?}")
+    }
+    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
     test_name.to_string()
 }

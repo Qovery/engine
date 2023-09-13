@@ -8,6 +8,7 @@ mod deploy_container;
 mod deploy_database;
 pub mod deploy_environment;
 pub mod deploy_helm;
+mod deploy_helm_chart;
 mod deploy_job;
 pub mod deploy_namespace;
 mod deploy_router;

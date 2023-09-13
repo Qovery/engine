@@ -5,13 +5,15 @@ use crate::io_models::application::Application;
 use crate::io_models::container::Container;
 use crate::io_models::context::Context;
 use crate::io_models::database::Database;
+use crate::io_models::helm_chart::HelmChart;
 use crate::io_models::job::Job;
 use crate::io_models::router::Router;
 use crate::io_models::Action;
-use crate::models::application::ApplicationError;
-use crate::models::container::ContainerError;
-use crate::models::database::DatabaseError;
-use crate::models::job::JobError;
+use crate::models::application::{ApplicationError, ApplicationService};
+use crate::models::container::{ContainerError, ContainerService};
+use crate::models::database::{DatabaseError, DatabaseService};
+use crate::models::helm_chart::{HelmChartError, HelmChartService};
+use crate::models::job::{JobError, JobService};
 use crate::models::router::RouterError;
 use crate::utilities::base64_replace_comma_to_new_line;
 use crate::{cloud_provider::environment::Environment, models::router::RouterAdvancedSettings};
@@ -36,6 +38,8 @@ pub struct EnvironmentRequest {
     pub jobs: Vec<Job>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
+    #[serde(default)]
+    pub helm_charts: Vec<HelmChart>,
 }
 
 fn default_max_parallel_build() -> u32 {
@@ -49,15 +53,17 @@ fn default_max_parallel_deploy() -> u32 {
 #[derive(thiserror::Error, Debug)]
 pub enum DomainError {
     #[error("Invalid application: {0}")]
-    ApplicationError(ApplicationError),
+    ApplicationError(#[from] ApplicationError),
     #[error("Invalid container: {0}")]
-    ContainerError(ContainerError),
+    ContainerError(#[from] ContainerError),
     #[error("Invalid router: {0}")]
-    RouterError(RouterError),
+    RouterError(#[from] RouterError),
     #[error("Invalid database: {0}")]
-    DatabaseError(DatabaseError),
+    DatabaseError(#[from] DatabaseError),
     #[error("Invalid job: {0}")]
-    JobError(JobError),
+    JobError(#[from] JobError),
+    #[error("Invalid helm chart: {0}")]
+    HelmChartError(#[from] HelmChartError),
 }
 
 impl EnvironmentRequest {
@@ -68,36 +74,28 @@ impl EnvironmentRequest {
         container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
     ) -> Result<Environment, DomainError> {
-        let mut applications = Vec::with_capacity(self.applications.len());
-        for app in &self.applications {
-            match app.clone().to_application_domain(
-                context,
-                app.to_build(
+        let applications: Result<Vec<Box<dyn ApplicationService>>, ApplicationError> = self
+            .applications
+            .iter()
+            .cloned()
+            .map(|srv| {
+                let build = srv.to_build(
                     container_registry.registry_info(),
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
-                ),
-                cloud_provider,
-            ) {
-                Ok(app) => applications.push(app),
-                Err(err) => {
-                    return Err(DomainError::ApplicationError(err));
-                }
-            }
-        }
+                );
+                srv.to_application_domain(context, build, cloud_provider)
+            })
+            .collect();
+        let applications = applications?;
 
-        let mut containers = Vec::with_capacity(self.containers.len());
-        for container in &self.containers {
-            match container
-                .clone()
-                .to_container_domain(context, cloud_provider, container_registry)
-            {
-                Ok(app) => containers.push(app),
-                Err(err) => {
-                    return Err(DomainError::ContainerError(err));
-                }
-            }
-        }
+        let containers: Result<Vec<Box<dyn ContainerService>>, ContainerError> = self
+            .containers
+            .iter()
+            .cloned()
+            .map(|srv| srv.to_container_domain(context, cloud_provider, container_registry))
+            .collect();
+        let containers = containers?;
 
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
@@ -221,26 +219,29 @@ impl EnvironmentRequest {
             }
         }
 
-        let mut databases = Vec::with_capacity(self.databases.len());
-        for db in &self.databases {
-            match db.to_database_domain(context, cloud_provider) {
-                Ok(router) => databases.push(router),
-                Err(err) => {
-                    return Err(DomainError::DatabaseError(err));
-                }
-            }
-        }
+        let databases: Result<Vec<Box<dyn DatabaseService>>, DatabaseError> = self
+            .databases
+            .iter()
+            .cloned()
+            .map(|srv| srv.to_database_domain(context, cloud_provider))
+            .collect();
+        let databases = databases?;
 
-        let mut jobs = Vec::with_capacity(self.jobs.len());
-        for job in &self.jobs {
-            match job
-                .clone()
-                .to_job_domain(context, cloud_provider, container_registry, cluster)
-            {
-                Ok(job) => jobs.push(job),
-                Err(err) => return Err(DomainError::JobError(err)),
-            }
-        }
+        let jobs: Result<Vec<Box<dyn JobService>>, JobError> = self
+            .jobs
+            .iter()
+            .cloned()
+            .map(|srv| srv.to_job_domain(context, cloud_provider, container_registry, cluster))
+            .collect();
+        let jobs = jobs?;
+
+        let helm_charts: Result<Vec<Box<dyn HelmChartService>>, HelmChartError> = self
+            .helm_charts
+            .iter()
+            .cloned()
+            .map(|helm_chart| helm_chart.to_helm_chart_domain(context, cloud_provider))
+            .collect();
+        let helm_charts = helm_charts?;
 
         Ok(Environment::new(
             self.long_id,
@@ -257,6 +258,7 @@ impl EnvironmentRequest {
             routers,
             databases,
             jobs,
+            helm_charts,
         ))
     }
 }

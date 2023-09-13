@@ -108,6 +108,7 @@ pub enum ServiceType {
     Router,
     Container,
     Job,
+    HelmChart,
 }
 
 impl ServiceType {
@@ -118,6 +119,7 @@ impl ServiceType {
             ServiceType::Router => "Router".to_string(),
             ServiceType::Container => "Container".to_string(),
             ServiceType::Job => "Job".to_string(),
+            ServiceType::HelmChart => "HelmChart".to_string(),
         }
     }
 }
