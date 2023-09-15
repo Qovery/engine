@@ -12,6 +12,7 @@ defaultRules:
     kubeStateMetrics: false
     nodeExporterAlerting: false
     nodeExporterRecording: false
+    windows: false
 
 alertmanager:
   enabled: false
@@ -59,8 +60,6 @@ prometheus:
               storage: "50Gi"
 
 prometheusOperator:
-  kubeletService:
-    enabled: false
   resources:
     limits:
       cpu: "1"

@@ -57,6 +57,7 @@ autoscaling:
 ## See `kubectl explain poddisruptionbudget.spec` for more
 ## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
 podDisruptionBudget: {}
+#  apiVersion: ""
 #  minAvailable: 1
 #  maxUnavailable: 1
 
@@ -84,7 +85,7 @@ livenessProbe:
 # schedulerName: "default-scheduler"
 
 image:
-  repository: grafana/grafana
+  repository: docker.io/grafana/grafana
   # Overrides the Grafana image tag whose default is the chart appVersion
   tag: ""
   sha: ""
@@ -100,17 +101,24 @@ image:
 
 testFramework:
   enabled: true
-  image: "bats/bats"
+  image: docker.io/bats/bats
   tag: "v1.4.1"
   imagePullPolicy: IfNotPresent
   securityContext: {}
 
 securityContext:
+  runAsNonRoot: true
   runAsUser: 472
   runAsGroup: 472
   fsGroup: 472
 
-containerSecurityContext: {}
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  seccompProfile:
+    type: RuntimeDefault
 
 # Enable creating the grafana configmap
 createConfigmap: true
@@ -137,7 +145,7 @@ extraLabels: {}
 # priorityClassName:
 
 downloadDashboardsImage:
-  repository: curlimages/curl
+  repository: docker.io/curlimages/curl
   tag: 7.85.0
   sha: ""
   pullPolicy: IfNotPresent
@@ -146,7 +154,13 @@ downloadDashboards:
   env: {}
   envFromSecret: ""
   resources: {}
-  securityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    seccompProfile:
+      type: RuntimeDefault
   envValueFrom: {}
   #  ENV_NAME:
   #    configMapKeyRef:
@@ -194,13 +208,13 @@ serviceMonitor:
   tlsConfig: {}
   scrapeTimeout: 30s
   relabelings: []
+  metricRelabelings: []
   targetLabels: []
 
 extraExposePorts: []
  # - name: keycloak
  #   port: 8080
  #   targetPort: 8080
- #   type: ClusterIP
 
 # overrides pod.spec.hostAliases in the grafana deployment's pods
 hostAliases: []
@@ -346,7 +360,7 @@ initChownData:
   ## initChownData container image
   ##
   image:
-    repository: busybox
+    repository: docker.io/library/busybox
     tag: "1.31.1"
     sha: ""
     pullPolicy: IfNotPresent
@@ -364,7 +378,11 @@ initChownData:
   securityContext:
     runAsNonRoot: false
     runAsUser: 0
-
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      add:
+        - CHOWN
 
 # Administrator credentials when not using an existing secret (see below)
 adminUser: admin
@@ -435,7 +453,9 @@ envValueFrom: {}
 envFromSecret: ""
 
 ## Sensible environment variables that will be rendered as new secret object
-## This can be useful for auth tokens, etc
+## This can be useful for auth tokens, etc.
+## If the secret values contains "{{", they'll need to be properly escaped so that they are not interpreted by Helm
+## ref: https://helm.sh/docs/howto/charts_tips_and_tricks/#using-the-tpl-function
 envRenderSecret: {}
 
 ## The names of secrets in the same kubernetes namespace which contain values to be added to the environment
@@ -502,6 +522,7 @@ extraVolumeMounts: []
   #   readOnly: true
   #   hostPath: /usr/shared/
   # - name: grafana-secrets
+  #   mountPath: /mnt/volume2
   #   csi: true
   #   data:
   #     driver: secrets-store.csi.k8s.io
@@ -544,6 +565,8 @@ datasources: {}
 #      jsonData:
 #        authType: default
 #        defaultRegion: us-east-1
+#    deleteDatasources: []
+#    - name: Prometheus
 
 ## Configure grafana alerting (can be templated)
 ## ref: http://docs.grafana.org/administration/provisioning/#alerting
@@ -771,7 +794,7 @@ smtp:
 sidecar:
   image:
     repository: quay.io/kiwigrid/k8s-sidecar
-    tag: 1.22.0
+    tag: 1.25.1
     sha: ""
   imagePullPolicy: IfNotPresent
   resources: {}
@@ -781,7 +804,13 @@ sidecar:
 #   requests:
 #     cpu: 50m
 #     memory: 50Mi
-  securityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    seccompProfile:
+      type: RuntimeDefault
   # skipTlsVerify Set to true to skip tls verification for kube api calls
   # skipTlsVerify: true
   enableUniqueFilenames: false
@@ -825,6 +854,8 @@ sidecar:
     script: null
     skipReload: false
     # Deploy the alert sidecar as an initContainer in addition to a container.
+    # Additional alert sidecar volume mounts
+    extraMounts: []
     # Sets the size limit of the alert sidecar emptyDir volume
     sizeLimit: {}
   dashboards:
@@ -1034,7 +1065,7 @@ imageRenderer:
     behavior: {}
   image:
     # image-renderer Image repository
-    repository: grafana/grafana-image-renderer
+    repository: docker.io/grafana/grafana-image-renderer
     # image-renderer Image tag
     tag: latest
     # image-renderer Image sha (optional)
@@ -1047,12 +1078,29 @@ imageRenderer:
     # RENDERING_ARGS: --no-sandbox,--disable-gpu,--window-size=1280x758
     # RENDERING_MODE: clustered
     # IGNORE_HTTPS_ERRORS: true
+
+  ## "valueFrom" environment variable references that will be added to deployment pods. Name is templated.
+  ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#envvarsource-v1-core
+  ## Renders in container spec as:
+  ##   env:
+  ##     ...
+  ##     - name: <key>
+  ##       valueFrom:
+  ##         <value rendered as YAML>
+  envValueFrom: {}
+    #  ENV_NAME:
+    #    configMapKeyRef:
+    #      name: configmap-name
+    #      key: value_key
+
   # image-renderer deployment serviceAccount
   serviceAccountName: ""
   # image-renderer deployment securityContext
   securityContext: {}
   # image-renderer deployment container securityContext
   containerSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
     capabilities:
       drop: ['ALL']
     allowPrivilegeEscalation: false

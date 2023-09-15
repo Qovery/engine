@@ -20,7 +20,7 @@ charts:
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 45.10.1
+    version: 51.0.2
     comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: aws-node-termination-handler
     repo_name: aws
@@ -44,17 +44,17 @@ charts:
     comment: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases?q=helm-chart&expanded=true
   - name: metrics-server
     repo_name: metrics-server
-    version: 3.9.0
+    version: 3.11.0
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: kube-state-metrics
     repo_name: prometheus-community
-    version: 5.3.0
+    version: 5.13.0
     comment: |
       Chart upgrade will require 1.25+
       https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
   - name: prometheus-adapter
     repo_name: prometheus-community
-    version: 4.1.1
+    version: 4.5.0
     comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: loki
     repo_name: grafana
