@@ -34,6 +34,10 @@ spec:
     relabelings:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+    {{- with .Values.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   jobLabel: "{{ .Release.Name }}"
   selector:
     matchLabels:

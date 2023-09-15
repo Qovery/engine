@@ -1,13 +1,15 @@
 annotations:
   artifacthub.io/changes: |
     - kind: added
-      description: "Added autoscaling support via the addon-resizer."
+      description: "Added default Metrics Server resource requests."
     - kind: changed
       description: "Updated the Metrics Server OCI image to v0.6.3."
-    - kind: fixed
-      description: "Fixed service labels/annotations."
+    - kind: changed
+      description: "Updated the addon resizer OCI image to v1.8.19."
+    - kind: changed
+      description: "Changed the default addon resizer nanny resource configuration to match the documented Metrics Server autoscaling values."
 apiVersion: v2
-appVersion: 0.6.3
+appVersion: 0.6.4
 description: Metrics Server is a scalable, efficient source of container resource
   metrics for Kubernetes built-in autoscaling pipelines.
 home: https://github.com/kubernetes-sigs/metrics-server
@@ -27,4 +29,4 @@ name: metrics-server
 sources:
 - https://github.com/kubernetes-sigs/metrics-server
 type: application
-version: 3.9.0
+version: 3.11.0

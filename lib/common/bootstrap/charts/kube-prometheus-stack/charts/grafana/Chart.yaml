@@ -1,8 +1,18 @@
+annotations:
+  artifacthub.io/license: AGPL-3.0-only
+  artifacthub.io/links: |
+    - name: Chart Source
+      url: https://github.com/grafana/helm-charts
+    - name: Upstream Project
+      url: https://github.com/grafana/grafana
 apiVersion: v2
-appVersion: 9.4.7
+appVersion: 10.1.1
 description: The leading tool for querying and visualizing time series and metrics.
 home: https://grafana.net
 icon: https://raw.githubusercontent.com/grafana/grafana/master/public/img/logo_transparent_400x.png
+keywords:
+- monitoring
+- metric
 kubeVersion: ^1.8.0-0
 maintainers:
 - email: zanhsieh@gmail.com
@@ -18,5 +28,6 @@ maintainers:
 name: grafana
 sources:
 - https://github.com/grafana/grafana
+- https://github.com/grafana/helm-charts
 type: application
-version: 6.52.9
+version: 6.59.4

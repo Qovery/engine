@@ -272,7 +272,7 @@ pub fn eks_aws_helm_charts(
                 AwsStorageType::GP2.to_k8s_storage_class(),
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
-                false,
+                true,
                 get_chart_overrride_fn.clone(),
                 true,
             )
