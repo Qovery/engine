@@ -1,5 +1,5 @@
 {{- if and .Values.rbac.create (not .Values.rbac.useExistingRole) -}}
-apiVersion: {{ include "grafana.rbac.apiVersion" . }}
+apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "grafana.fullname" . }}

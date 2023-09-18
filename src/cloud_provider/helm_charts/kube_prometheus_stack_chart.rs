@@ -72,20 +72,22 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 name: KubePrometheusStackChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: self.prometheus_namespace,
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(45, 10, 1)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(51, 0, 2)),
                 // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
                 // to upgrade because of the CRD and the number of elements it has to deploy
                 timeout_in_seconds: 480,
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
                 crds_update: Some(CRDSUpdate{
-                    path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.63.0/example/prometheus-operator-crd".to_string(),
+                    path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.68.0/example/prometheus-operator-crd".to_string(),
                     resources: vec![
                         "monitoring.coreos.com_alertmanagerconfigs.yaml".to_string(),
                         "monitoring.coreos.com_alertmanagers.yaml".to_string(),
                         "monitoring.coreos.com_podmonitors.yaml".to_string(),
                         "monitoring.coreos.com_probes.yaml".to_string(),
+                        "monitoring.coreos.com_prometheusagents.yaml".to_string(),
                         "monitoring.coreos.com_prometheuses.yaml".to_string(),
                         "monitoring.coreos.com_prometheusrules.yaml".to_string(),
+                        "monitoring.coreos.com_scrapeconfigs.yaml".to_string(),
                         "monitoring.coreos.com_servicemonitors.yaml".to_string(),
                         "monitoring.coreos.com_thanosrulers.yaml".to_string(),
                     ]

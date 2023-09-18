@@ -158,7 +158,9 @@ Return the appropriate apiVersion for Horizontal Pod Autoscaler.
 Return the appropriate apiVersion for podDisruptionBudget.
 */}}
 {{- define "grafana.podDisruptionBudget.apiVersion" -}}
-{{- if $.Capabilities.APIVersions.Has "policy/v1/PodDisruptionBudget" }}
+{{- if $.Values.podDisruptionBudget.apiVersion }}
+{{- print $.Values.podDisruptionBudget.apiVersion }}
+{{- else if $.Capabilities.APIVersions.Has "policy/v1/PodDisruptionBudget" }}
 {{- print "policy/v1" }}
 {{- else }}
 {{- print "policy/v1beta1" }}

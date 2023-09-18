@@ -4,7 +4,8 @@ topologySpreadConstraints: []
 
 image:
   repository: registry.k8s.io/prometheus-adapter/prometheus-adapter
-  tag: v0.10.0
+  # if not set appVersion field from Chart.yaml is used
+  tag: ""
   pullPolicy: IfNotPresent
 
 logLevel: 4
@@ -93,6 +94,25 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+# Configure liveness probe
+# https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Probe
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+
+# Configure readiness probe
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+
 rules:
   default: true
 
@@ -164,7 +184,10 @@ service:
   port: 443
   type: ClusterIP
   # clusterIP: 1.2.3.4
-
+  ipDualStack:
+    enabled: false
+    ipFamilies: ["IPv6", "IPv4"]
+    ipFamilyPolicy: "PreferDualStack"
 tls:
   enable: false
   ca: |-

@@ -92,6 +92,11 @@ spec:
             - name: ENABLE_METRICS
               value: "true"
           {{- end }}
+          {{- range $key, $value := .Values.imageRenderer.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+                {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
           {{- range $key, $value := .Values.imageRenderer.env }}
             - name: {{ $key | quote }}
               value: {{ $value | quote }}

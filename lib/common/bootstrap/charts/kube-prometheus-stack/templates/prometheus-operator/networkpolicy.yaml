@@ -1,4 +1,4 @@
-{{- if .Values.prometheusOperator.networkPolicy.enabled }}
+{{- if and .Values.prometheusOperator.networkPolicy.enabled (eq .Values.prometheusOperator.networkPolicy.flavor "kubernetes") }}
 apiVersion: {{ template "kube-prometheus-stack.prometheus.networkPolicy.apiVersion" . }}
 kind: NetworkPolicy
 metadata:
@@ -24,4 +24,7 @@ spec:
     matchLabels:
       app: {{ template "kube-prometheus-stack.name" . }}-operator
       release: {{ $.Release.Name | quote }}
+      {{- if .Values.prometheusOperator.networkPolicy.matchLabels }}
+      {{ toYaml .Values.prometheusOperator.networkPolicy.matchLabels | nindent 6 }}
+      {{- end }}
 {{- end }}

@@ -42,6 +42,7 @@ spec:
         {{- if .Values.envRenderSecret }}
         checksum/secret-env: {{ include (print $.Template.BasePath "/secret-env.yaml") . | sha256sum }}
         {{- end }}
+        kubectl.kubernetes.io/default-container: {{ .Chart.Name }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -53,6 +53,7 @@ This version requires Helm >= 3.1.0.
 | `replicas`                                | Number of nodes                               | `1`                                                     |
 | `podDisruptionBudget.minAvailable`        | Pod disruption minimum available              | `nil`                                                   |
 | `podDisruptionBudget.maxUnavailable`      | Pod disruption maximum unavailable            | `nil`                                                   |
+| `podDisruptionBudget.apiVersion`          | Pod disruption apiVersion                     | `nil`                                                   |
 | `deploymentStrategy`                      | Deployment strategy                           | `{ "type": "RollingUpdate" }`                           |
 | `livenessProbe`                           | Liveness Probe settings                       | `{ "httpGet": { "path": "/api/health", "port": 3000 } "initialDelaySeconds": 60, "timeoutSeconds": 30, "failureThreshold": 10 }` |
 | `readinessProbe`                          | Readiness Probe settings                      | `{ "httpGet": { "path": "/api/health", "port": 3000 } }`|
@@ -121,7 +122,7 @@ This version requires Helm >= 3.1.0.
 | `envFromSecret`                           | Name of a Kubernetes secret (must be manually created in the same namespace) containing values to be added to the environment. Can be templated | `""` |
 | `envFromSecrets`                          | List of Kubernetes secrets (must be manually created in the same namespace) containing values to be added to the environment. Can be templated | `[]` |
 | `envFromConfigMaps`                       | List of Kubernetes ConfigMaps (must be manually created in the same namespace) containing values to be added to the environment. Can be templated | `[]` |
-| `envRenderSecret`                         | Sensible environment variables passed to pods and stored as secret | `{}`                               |
+| `envRenderSecret`                         | Sensible environment variables passed to pods and stored as secret. (passed through [tpl](https://helm.sh/docs/howto/charts_tips_and_tricks/#using-the-tpl-function))   | `{}`                               |
 | `enableServiceLinks`                      | Inject Kubernetes services as environment variables. | `true`                                           |
 | `extraSecretMounts`                       | Additional grafana server secret mounts       | `[]`                                                    |
 | `extraVolumeMounts`                       | Additional grafana server volume mounts       | `[]`                                                    |
@@ -147,7 +148,7 @@ This version requires Helm >= 3.1.0.
 | `podPortName`                             | Name of the grafana port on the pod           | `grafana`                                               |
 | `lifecycleHooks`                          | Lifecycle hooks for podStart and preStop [Example](https://kubernetes.io/docs/tasks/configure-pod-container/attach-handler-lifecycle-event/#define-poststart-and-prestop-handlers)     | `{}`                                                    |
 | `sidecar.image.repository`                | Sidecar image repository                      | `quay.io/kiwigrid/k8s-sidecar`                          |
-| `sidecar.image.tag`                       | Sidecar image tag                             | `1.22.0`                                                |
+| `sidecar.image.tag`                       | Sidecar image tag                             | `1.24.6`                                                |
 | `sidecar.image.sha`                       | Sidecar image sha (optional)                  | `""`                                                    |
 | `sidecar.imagePullPolicy`                 | Sidecar image pull policy                     | `IfNotPresent`                                          |
 | `sidecar.resources`                       | Sidecar resources                             | `{}`                                                    |
@@ -162,6 +163,7 @@ This version requires Helm >= 3.1.0.
 | `sidecar.alerts.reloadURL`           | Full url of datasource configuration reload API endpoint, to invoke after a config-map change | `"http://localhost:3000/api/admin/provisioning/alerting/reload"` |
 | `sidecar.alerts.skipReload`          | Enabling this omits defining the REQ_URL and REQ_METHOD environment variables | `false` |
 | `sidecar.alerts.initDatasources`     | Set to true to deploy the datasource sidecar as an initContainer in addition to a container. This is needed if skipReload is true, to load any alerts defined at startup time. | `false` |
+| `sidecar.alerts.extraMounts`         | Additional alerts sidecar volume mounts. | `[]`                               |
 | `sidecar.dashboards.enabled`              | Enables the cluster wide search for dashboards and adds/updates/deletes them in grafana | `false`       |
 | `sidecar.dashboards.SCProvider`           | Enables creation of sidecar provider          | `true`                                                  |
 | `sidecar.dashboards.provider.name`        | Unique name of the grafana provider           | `sidecarProvider`                                       |
@@ -181,7 +183,7 @@ This version requires Helm >= 3.1.0.
 | `sidecar.dashboards.searchNamespace`      | Namespaces list. If specified, the sidecar will search for dashboards config-maps  inside these namespaces. Otherwise the namespace in which the sidecar is running will be used. It's also possible to specify ALL to search in all namespaces. | `nil`                                |
 | `sidecar.dashboards.script`               | Absolute path to shell script to execute after a configmap got reloaded. | `nil`                                |
 | `sidecar.dashboards.reloadURL`            | Full url of dashboards configuration reload API endpoint, to invoke after a config-map change | `"http://localhost:3000/api/admin/provisioning/dashboards/reload"` |
-| `sidecar.dashboards.skipReload`           | Enabling this omits defining the REQ_URL and REQ_METHOD environment variables | `false` |
+| `sidecar.dashboards.skipReload`           | Enabling this omits defining the REQ_USERNAME, REQ_PASSWORD, REQ_URL and REQ_METHOD environment variables | `false` |
 | `sidecar.dashboards.resource`             | Should the sidecar looks into secrets, configmaps or both. | `both`                               |
 | `sidecar.dashboards.extraMounts`          | Additional dashboard sidecar volume mounts. | `[]`                               |
 | `sidecar.datasources.enabled`             | Enables the cluster wide search for datasources and adds/updates/deletes them in grafana |`false`       |
@@ -244,7 +246,8 @@ This version requires Helm >= 3.1.0.
 | `serviceMonitor.tlsConfig`                | TLS configuration block for the endpoint      | `{}`                                                    |
 | `serviceMonitor.labels`                   | Labels for the servicemonitor passed to Prometheus Operator      |  `{}`                                |
 | `serviceMonitor.scrapeTimeout`            | Timeout after which the scrape is ended       | `30s`                                                   |
-| `serviceMonitor.relabelings`              | MetricRelabelConfigs to apply to samples before ingestion.  | `[]`                                      |
+| `serviceMonitor.relabelings`              | RelabelConfigs to apply to samples before scraping.     | `[]`                                      |
+| `serviceMonitor.metricRelabelings`        | MetricRelabelConfigs to apply to samples before ingestion.  | `[]`                                      |
 | `revisionHistoryLimit`                    | Number of old ReplicaSets to retain           | `10`                                                    |
 | `imageRenderer.enabled`                    | Enable the image-renderer deployment & service                                     | `false`                          |
 | `imageRenderer.image.repository`           | image-renderer Image repository                                                    | `grafana/grafana-image-renderer` |
@@ -252,6 +255,7 @@ This version requires Helm >= 3.1.0.
 | `imageRenderer.image.sha`                  | image-renderer Image sha (optional)                                                | `""`                             |
 | `imageRenderer.image.pullPolicy`           | image-renderer ImagePullPolicy                                                     | `Always`                         |
 | `imageRenderer.env`                        | extra env-vars for image-renderer                                                  | `{}`                             |
+| `imageRenderer.envValueFrom`               | Environment variables for image-renderer from alternate sources. See the API docs on [EnvVarSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core) for format details. Can be templated | `{}` |
 | `imageRenderer.serviceAccountName`         | image-renderer deployment serviceAccountName                                       | `""`                             |
 | `imageRenderer.securityContext`            | image-renderer deployment securityContext                                          | `{}`                             |
 | `imageRenderer.hostAliases`                | image-renderer deployment Host Aliases                                             | `[]`                             |
@@ -266,7 +270,7 @@ This version requires Helm >= 3.1.0.
 | `imageRenderer.revisionHistoryLimit`       | number of image-renderer replica sets to keep                                      | `10`                             |
 | `imageRenderer.networkPolicy.limitIngress` | Enable a NetworkPolicy to limit inbound traffic from only the created grafana pods | `true`                           |
 | `imageRenderer.networkPolicy.limitEgress`  | Enable a NetworkPolicy to limit outbound traffic to only the created grafana pods  | `false`                          |
-| `imageRenderer.resources`                  | Set resource limits for image-renderer pdos                                        | `{}`                             |
+| `imageRenderer.resources`                  | Set resource limits for image-renderer pods                                        | `{}`                             |
 | `imageRenderer.nodeSelector`               | Node labels for pod assignment                | `{}`                                                    |
 | `imageRenderer.tolerations`                | Toleration labels for pod assignment          | `[]`                                                    |
 | `imageRenderer.affinity`                   | Affinity settings for pod assignment          | `{}`                                                    |

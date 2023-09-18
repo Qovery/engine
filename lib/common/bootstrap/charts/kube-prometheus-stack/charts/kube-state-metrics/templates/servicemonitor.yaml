@@ -24,6 +24,13 @@ spec:
     {{- toYaml . | trim | nindent 4 }}
   {{- end }}
   {{- include "servicemonitor.scrapeLimits" .Values.prometheus.monitor | indent 2 }}
+  {{- if .Values.prometheus.monitor.namespaceSelector }}
+  namespaceSelector:
+    matchNames:
+    {{- with .Values.prometheus.monitor.namespaceSelector }}
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
   selector:
     matchLabels:
     {{- with .Values.prometheus.monitor.selectorOverride }}
@@ -95,6 +102,13 @@ spec:
     {{- if .Values.prometheus.monitor.tlsConfig }}
       tlsConfig:
         {{- toYaml .Values.prometheus.monitor.tlsConfig | nindent 8 }}
+    {{- end }}
+    {{- if .Values.prometheus.monitor.bearerTokenFile }}
+      bearerTokenFile: {{ .Values.prometheus.monitor.bearerTokenFile }}
+    {{- end }}
+    {{- with .Values.prometheus.monitor.bearerTokenSecret }}
+      bearerTokenSecret:
+        {{- toYaml . | nindent 8 }}
     {{- end }}
   {{- end }}
 {{- end }}

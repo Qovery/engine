@@ -376,17 +376,24 @@ impl Helm {
             ));
         }
 
-        let tmpdir = tempfile::tempdir().map_err(|err| {
-            CmdError(
-                chart_name.to_string(),
-                FETCH,
-                errors::CommandError::new(
-                    "Cannot create tmp dir to fetch chart".to_string(),
-                    Some(err.to_string()),
-                    Some(vec![]),
-                ),
-            )
-        })?;
+        // Try to use the parent directory to create a tmp dir, because later moving directory
+        // does work across mount point. In test, on our laptop, /tmp is always on a separate mount point using tmpfs
+        // So use same target dir, to avoid issues
+        let tmpdir = target_directory
+            .parent()
+            .map(tempfile::tempdir_in)
+            .unwrap_or_else(tempfile::tempdir)
+            .map_err(|err| {
+                CmdError(
+                    chart_name.to_string(),
+                    FETCH,
+                    errors::CommandError::new(
+                        "Cannot create tmp dir to fetch chart".to_string(),
+                        Some(err.to_string()),
+                        Some(vec![]),
+                    ),
+                )
+            })?;
 
         let mut helm_args = vec![
             "fetch",
@@ -440,31 +447,26 @@ impl Helm {
             let stderr_msg = format!("{stderr_msg}: {err}");
 
             // If the helm command has been canceled by the user, propagate correctly the killed error
-            match err {
-                CommandError::TimeoutError(_) => {
-                    return Err(HelmError::Timeout(chart_name.to_string(), FETCH, stderr_msg));
-                }
-                CommandError::Killed(_) => {
-                    return Err(HelmError::Killed(chart_name.to_string(), FETCH));
-                }
-                _ => {}
-            }
-            return Err(CmdError(
-                chart_name.to_string(),
-                FETCH,
-                errors::CommandError::new(
-                    format!(
-                        "Helm failed to fetch chart {} at version {} from {}",
-                        chart_name, chart_version, repository
+            return match err {
+                CommandError::TimeoutError(_) => Err(HelmError::Timeout(chart_name.to_string(), FETCH, stderr_msg)),
+                CommandError::Killed(_) => Err(HelmError::Killed(chart_name.to_string(), FETCH)),
+                _ => Err(CmdError(
+                    chart_name.to_string(),
+                    FETCH,
+                    errors::CommandError::new(
+                        format!(
+                            "Helm failed to fetch chart {} at version {} from {}",
+                            chart_name, chart_version, repository
+                        ),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
                     ),
-                    Some(stderr_msg),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                ),
-            ));
+                )),
+            };
         };
 
         // Move the chart from tmpdir to the target_directory of the user
-        // Rename must not cross mount point boundaries. It is ok as we don't have a tmpfs inside our container
+        // Rename must not cross mount point boundaries. It is ok as we don't have a tmpfs inside our container and we use user provided target_dir
         std::fs::rename(tmpdir.path().join(chart_name), target_directory).map_err(|err| {
             CmdError(
                 chart_name.to_string(),

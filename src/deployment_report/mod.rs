@@ -7,6 +7,7 @@ use std::time::Duration;
 
 pub mod application;
 pub mod database;
+pub mod helm_chart;
 pub mod job;
 pub mod logger;
 pub mod router;
