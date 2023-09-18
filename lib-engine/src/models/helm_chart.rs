@@ -31,8 +31,11 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) action: Action,
     pub(super) chart_source: HelmChartSource,
     pub(super) chart_values: HelmValueSource,
-    pub(super) allow_cluster_wide_resources: bool,
+    pub(super) set_values: Vec<String>,
+    pub(super) set_string_values: Vec<String>,
+    pub(super) set_json_values: Vec<String>,
     pub(super) arguments: Vec<String>,
+    pub(super) allow_cluster_wide_resources: bool,
     pub(super) environment_variables: HashMap<String, String>,
     pub(super) advanced_settings: HelmChartAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
@@ -51,6 +54,9 @@ impl<T: CloudProvider> HelmChart<T> {
         action: Action,
         chart_source: HelmChartSource,
         chart_values: HelmValueSource,
+        set_values: Vec<String>,
+        set_string_values: Vec<String>,
+        set_json_values: Vec<String>,
         arguments: Vec<String>,
         allow_cluster_wide_resources: bool,
         environment_variables: HashMap<String, String>,
@@ -78,6 +84,9 @@ impl<T: CloudProvider> HelmChart<T> {
             kube_name,
             chart_source,
             chart_values,
+            set_values,
+            set_string_values,
+            set_json_values,
             arguments,
             allow_cluster_wide_resources,
             environment_variables,
@@ -94,7 +103,7 @@ impl<T: CloudProvider> HelmChart<T> {
     }
 
     pub fn helm_release_name(&self) -> String {
-        format!("helmchart-{}", self.long_id)
+        format!("qovery-helmchart-{}", self.long_id)
     }
 
     pub fn chart_source(&self) -> &HelmChartSource {
@@ -143,8 +152,20 @@ impl<T: CloudProvider> HelmChart<T> {
         &self.chart_workspace_directory
     }
 
-    pub fn is_cluster_wide_ressources_allowed(&self) -> bool {
+    pub fn is_cluster_wide_resources_allowed(&self) -> bool {
         self.allow_cluster_wide_resources
+    }
+
+    pub fn kube_namespace(&self) -> &str {
+        &self.kube_name
+    }
+
+    pub fn helm_template_arguments(&self) -> impl Iterator<Item = &str> {
+        self.set_values
+            .iter()
+            .flat_map(|v| ["--set", v.as_str()])
+            .chain(self.set_string_values.iter().flat_map(|v| ["--set-string", v.as_str()]))
+            .chain(self.set_json_values.iter().flat_map(|v| ["--set-json", v.as_str()]))
     }
 }
 

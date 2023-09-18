@@ -16,6 +16,8 @@ use crate::models::types::CloudProvider;
 use anyhow::anyhow;
 use git2::{Cred, CredentialType};
 use itertools::Itertools;
+use kube::api::PartialObjectMeta;
+use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
@@ -32,16 +34,10 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
         let pre_run = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             prepare_helm_chart_directory(self, target, event_details.clone(), logger)?;
-
             // Now the chart is ready at self.chart_workspace_directory()
 
-            // Check users does not bypass restrictions
-            if !self.is_cluster_wide_ressources_allowed() {
-                // * Cannot install CRDS
-                // * Cannot install in another namespaces
-                // * Cannot install cluster wide resources (i.e: ClusterIssuer)
-            }
-
+            // Check users does not bypass restrictions (i.e: install cluster wide resources, or not in the correct namesapce)
+            check_resources_are_allowed_to_install(self, target, event_details.clone(), logger)?;
             Ok(())
         };
 
@@ -310,6 +306,77 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
     Ok(())
 }
 
+fn check_resources_are_allowed_to_install<T: CloudProvider>(
+    this: &HelmChart<T>,
+    target: &DeploymentTarget,
+    event_details: EventDetails,
+    logger: &EnvProgressLogger,
+) -> Result<(), Box<EngineError>> {
+    if this.is_cluster_wide_resources_allowed() {
+        return Ok(());
+    }
+
+    logger.info("Checking deployed resources do not cross namespace boundary".to_string());
+    let template_args: Vec<&str> = this.helm_template_arguments().collect();
+    let template = target
+        .helm
+        .template_raw(
+            &this.helm_release_name(),
+            this.chart_workspace_directory(),
+            this.kube_namespace(),
+            &template_args,
+            &[],
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+        )
+        .map_err(|e| (event_details.clone(), e))?;
+
+    for document in serde_yaml::Deserializer::from_str(&template) {
+        let kube_obj: PartialObjectMeta<()> = PartialObjectMeta::deserialize(document).map_err(|err| {
+            error!("Cannot deserialize yaml into kube resource {:?}", err);
+            (
+                event_details.clone(),
+                HelmChartError::RenderingError {
+                    chart_name: this.name().to_string(),
+                    msg: format!("Cannot deserialize helm template into kube object: {}", err),
+                },
+            )
+        })?;
+
+        // Check that the user is allowed to deploy what he is requesting to install
+        is_allowed_namespaced_resource(this.kube_namespace(), &kube_obj).map_err(|err| {
+            error!("{} {:?}", &err, kube_obj);
+            (
+                event_details.clone(),
+                HelmChartError::RenderingError {
+                    chart_name: this.name().to_string(),
+                    msg: err,
+                },
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+// * Cannot install CRDS
+// * Cannot install in another namespaces
+// * Cannot install cluster wide resources (i.e: ClusterIssuer)
+fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<()>) -> Result<(), String> {
+    // If object is a CRD it will not get any namespace
+    // Same if it is a cluster wide resource
+    if kube_obj.metadata.namespace.as_deref() != Some(namespace) {
+        return Err(format!(
+            "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}",
+            kube_obj.types.as_ref().map(|x| x.kind.as_str()).unwrap_or(""),
+            kube_obj.metadata.name.as_deref().unwrap_or(""),
+            &kube_obj.metadata.namespace,
+            namespace
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,5 +403,100 @@ mod tests {
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("qovery.env.QOVERY_"), &envs);
         assert!(ret.is_err());
+    }
+
+    #[test]
+    fn test_is_allowed_namespced_resource() {
+        let resource = r#"
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: "2023-07-12T19:41:43Z"
+  labels:
+    kubernetes.io/metadata.name: ze27e5943-z8bb2cdcb
+    qovery.com/environment-id: 8bb2cdcb-16d1-45ed-aef3-20436791c0a6
+    qovery.com/project-id: e27e5943-04ac-4cb7-97ee-d772622e9f95
+  name: ze27e5943-z8bb2cdcb
+  resourceVersion: "159811376"
+  uid: 597e0308-2a05-4b12-b2ad-6708a9bdb80a
+spec: []
+       "#;
+
+        // Creating the namespace should not be allowed
+        let ns: PartialObjectMeta<()> =
+            PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
+        assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
+
+        let resource = r#"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "69"
+    meta.helm.sh/release-name: grpc-gateway
+    meta.helm.sh/release-namespace: qovery-dev
+  creationTimestamp: "2022-12-21T15:25:09Z"
+  generation: 71
+  labels:
+    app: grpc-gateway
+    app.kubernetes.io/managed-by: Helm
+  name: grpc-gateway
+  namespace: qovery-dev
+  resourceVersion: "177248910"
+  uid: 61a22418-2d14-40e3-8148-34f612f65baf
+spec: []
+       "#;
+
+        // Wrong namespace should not be nok
+        let ns: PartialObjectMeta<()> =
+            PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
+        assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
+
+        let resource = r#"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "69"
+    meta.helm.sh/release-name: grpc-gateway
+    meta.helm.sh/release-namespace: qovery-dev
+  creationTimestamp: "2022-12-21T15:25:09Z"
+  generation: 71
+  labels:
+    app: grpc-gateway
+    app.kubernetes.io/managed-by: Helm
+  name: grpc-gateway
+  namespace: tesotron
+  resourceVersion: "177248910"
+  uid: 61a22418-2d14-40e3-8148-34f612f65baf
+spec: []
+       "#;
+
+        // Wrong namespace should not be ok
+        let ns: PartialObjectMeta<()> =
+            PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
+        assert!(is_allowed_namespaced_resource("tesotron", &ns).is_ok());
+
+        let resource = r#"
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  annotations:
+    meta.helm.sh/release-name: cert-manager-configs
+    meta.helm.sh/release-namespace: cert-manager
+  creationTimestamp: "2023-07-07T08:57:41Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: letsencrypt-qovery
+  resourceVersion: "154912174"
+  uid: 2785c950-bd20-432d-b6bc-0eb680090362
+spec:
+       "#;
+
+        // Cluster wide resources are NOK
+        let ns: PartialObjectMeta<()> =
+            PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
+        assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
     }
 }
