@@ -68,7 +68,7 @@ pub async fn create_kube_client<P: AsRef<Path>>(
 
     // Inject our env variables if needed
     for auth in kubeconfig.auth_infos.iter_mut() {
-        if let Some(exec_config) = &mut auth.auth_info.exec {
+        if let Some(exec_config) = &mut auth.auth_info.as_mut().and_then(|auth| auth.exec.as_mut()) {
             let exec_envs = exec_config.env.get_or_insert(vec![]);
             for (k, v) in envs {
                 let mut hash_map = HashMap::with_capacity(2);
