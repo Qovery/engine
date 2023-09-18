@@ -38,8 +38,8 @@ libc = "0.2.147"
 anyhow = "1.0.75"
 tempfile = "3"
 
-kube = { version = "0.73.1", features = ["default", "runtime", "derive", "ws"] }
-k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_22"] }
+kube = { version = "0.86.0", features = ["default", "runtime", "derive", "ws"] }
+k8s-openapi = { version = "0.20.0", default-features = false, features = ["v1_26"] }
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
