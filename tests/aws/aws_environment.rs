@@ -3042,8 +3042,11 @@ fn deploy_helm_chart() {
                 commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
                 values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
             },
+            set_values: vec!["toto=tata".to_string()],
+            set_string_values: vec!["my-string=1".to_string()],
+            set_json_values: vec!["my-json={\"json\": \"value\"}".to_string()],
             arguments: vec![],
-            allow_cluster_wide_resources: false,
+            allow_cluster_wide_resources: true,
             environment_vars: btreemap! { "TOTO".to_string() => "Salut".to_string() },
             advanced_settings: Default::default(),
         }];
