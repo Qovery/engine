@@ -743,6 +743,55 @@ impl Helm {
         Ok(())
     }
 
+    pub fn template_raw(
+        &self,
+        release_name: &str,
+        chart_path: &Path,
+        namespace: &str,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<String, HelmError> {
+        let chart_path = chart_path.to_string_lossy();
+        let args: Vec<&str> = [
+            "template",
+            release_name,
+            chart_path.as_ref(),
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "-n",
+            namespace,
+        ]
+        .into_iter()
+        .chain(args.iter().copied())
+        .collect();
+
+        let mut stdout = String::new();
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| {
+                stdout.push_str(&line);
+                stdout.push('\n');
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", release_name, line);
+            },
+            cmd_killer,
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(stdout),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+                Err(CmdError(release_name.to_string(), HelmCommand::TEMPLATE, err.into()))
+            }
+        }
+    }
+
     pub fn template_validate(
         &self,
         chart: &ChartInfo,

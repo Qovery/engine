@@ -2,6 +2,7 @@ use crate::cloud_provider::models::InvalidPVCStorage;
 use crate::errors::CommandError;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use k8s_openapi::NamespaceResourceScope;
 use kube::api::{DeleteParams, ListParams, ObjectList, Patch, PatchParams, PostParams};
 use kube::{Api, Resource};
 use serde::de::DeserializeOwned;
@@ -20,7 +21,7 @@ pub async fn kube_delete_all_from_selector<K>(
     delete_mode: KubeDeleteMode,
 ) -> Result<(), kube::Error>
 where
-    K: Clone + DeserializeOwned + Debug + Resource,
+    K: Clone + DeserializeOwned + Debug + Resource<Scope = NamespaceResourceScope>,
     <K as Resource>::DynamicType: Default,
 {
     let obj_name = K::kind(&K::DynamicType::default()).to_string();
@@ -81,7 +82,7 @@ pub async fn kube_get_resources_by_selector<K>(
     selector: &str,
 ) -> Result<ObjectList<K>, CommandError>
 where
-    K: Clone + DeserializeOwned + Debug + Resource,
+    K: Clone + DeserializeOwned + Debug + Resource<Scope = NamespaceResourceScope>,
     <K as Resource>::DynamicType: Default,
 {
     let obj_name = K::kind(&K::DynamicType::default()).to_string();
@@ -106,7 +107,7 @@ pub async fn kube_create_from_resource<K>(
     resource: K,
 ) -> Result<(), CommandError>
 where
-    K: Clone + DeserializeOwned + Debug + Resource + Serialize,
+    K: Clone + DeserializeOwned + Debug + Resource<Scope = NamespaceResourceScope> + Serialize,
     <K as Resource>::DynamicType: Default,
 {
     let obj_name = K::kind(&K::DynamicType::default()).to_string();

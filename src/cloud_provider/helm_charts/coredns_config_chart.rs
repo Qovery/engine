@@ -320,7 +320,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
                         err = Err(CommandError::new(
                             format!(
                                 "CoreDNS pod `{}` is not running but `{}`",
-                                &coredns_pod.name(),
+                                &coredns_pod.name_any(),
                                 pod_status_string
                             ),
                             None,
