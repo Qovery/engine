@@ -68,6 +68,8 @@ use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use lazy_static::lazy_static;
 
+use super::models::QoveryAwsSdkConfigEks;
+
 mod addons;
 pub mod ec2;
 mod ec2_helm_charts;
@@ -1131,6 +1133,7 @@ fn create(
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
+
             if let Err(e) = block_on(delete_eks_nodegroups(
                 aws_conn.clone(),
                 kubernetes.cluster_name(),
@@ -1138,8 +1141,13 @@ fn create(
                 NodeGroupsDeletionType::FailedOnly,
                 event_details.clone(),
             )) {
+                let is_the_only_nodegroup_available =
+                    match block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name())) {
+                        Ok(x) => matches!(x.nodegroups(), Some(n) if n.len() == 1),
+                        Err(_) => false,
+                    };
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
-                if e.tag() != &Tag::CannotGetCluster {
+                if e.tag() != &Tag::CannotGetCluster && !is_the_only_nodegroup_available {
                     return Err(e);
                 }
             }
