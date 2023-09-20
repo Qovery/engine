@@ -20,7 +20,7 @@ pub trait QoveryAwsSdkConfigLoadBalancer {
         &self,
     ) -> Result<
         aws_sdk_elasticloadbalancingv2::output::DescribeLoadBalancersOutput,
-        aws_smithy_client::SdkError<aws_sdk_elasticloadbalancingv2::error::DescribeLoadBalancersError>,
+        SdkError<aws_sdk_elasticloadbalancingv2::error::DescribeLoadBalancersError>,
     >;
     async fn get_aws_load_balancers_tags(
         &self,
@@ -47,7 +47,7 @@ pub trait QoveryAwsSdkConfigEks {
         &self,
         cluster_id: String,
         nodegroup_id: String,
-    ) -> Result<DescribeNodegroupOutput, SdkError<aws_sdk_eks::error::DescribeNodegroupError>>;
+    ) -> Result<DescribeNodegroupOutput, SdkError<DescribeNodegroupError>>;
     async fn describe_nodegroups(
         &self,
         cluster_id: String,
@@ -65,24 +65,18 @@ pub trait QoveryAwsSdkConfigManagedDatabase {
     async fn find_managed_rds_database(
         &self,
         db_id: &str,
-    ) -> Result<
-        aws_sdk_rds::output::DescribeDbInstancesOutput,
-        aws_smithy_client::SdkError<aws_sdk_rds::error::DescribeDBInstancesError>,
-    >;
+    ) -> Result<aws_sdk_rds::output::DescribeDbInstancesOutput, SdkError<aws_sdk_rds::error::DescribeDBInstancesError>>;
     async fn find_managed_elasticache_database(
         &self,
         db_id: &str,
     ) -> Result<
         aws_sdk_elasticache::output::DescribeCacheClustersOutput,
-        aws_smithy_client::SdkError<aws_sdk_elasticache::error::DescribeCacheClustersError>,
+        SdkError<aws_sdk_elasticache::error::DescribeCacheClustersError>,
     >;
     async fn find_managed_doc_db_database(
         &self,
         db_id: &str,
-    ) -> Result<
-        aws_sdk_docdb::output::DescribeDbClustersOutput,
-        aws_smithy_client::SdkError<aws_sdk_docdb::error::DescribeDBClustersError>,
-    >;
+    ) -> Result<aws_sdk_docdb::output::DescribeDbClustersOutput, SdkError<aws_sdk_docdb::error::DescribeDBClustersError>>;
 }
 
 #[async_trait]

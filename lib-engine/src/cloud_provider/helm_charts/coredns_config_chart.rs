@@ -193,7 +193,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn run(
         &self,
-        kube_client: &kube::Client,
+        kube_client: &Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
@@ -222,7 +222,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn post_exec(
         &self,
-        kube_client: &kube::Client,
+        kube_client: &Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,

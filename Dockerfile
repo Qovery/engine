@@ -93,7 +93,7 @@ RUN for i in $(find lib-engine/lib -name "tf-providers*") ; do \
 RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"; \
   if [ -z "${SCCACHE_REDIS}" ]; \
   then \
-  unset SCCACHE_REDIS; \ 
+  unset SCCACHE_REDIS; \
   cargo build --release; \
   else \
   echo "USING SSCACHE" ; \

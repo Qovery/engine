@@ -716,10 +716,6 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
-        &self.advanced_settings
-    }
-
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -761,6 +757,10 @@ impl Kubernetes for EKS {
             EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
         ));
         Ok(())
+    }
+
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {

@@ -575,7 +575,7 @@ pub trait HelmChart: Send {
                 None => ".".to_string(),
             },
             action: match vpa_config {
-                Some(_) => HelmAction::Deploy,
+                Some(_) => Deploy,
                 None => HelmAction::Destroy,
             },
             namespace: current_chart.namespace,
@@ -819,7 +819,7 @@ impl HelmChart for CommonChart {
         };
         warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
         match vpa_chart.action {
-            HelmAction::Deploy => {
+            Deploy => {
                 warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.upgrade(&vpa_chart, &[], cmd_killer)?;
             }

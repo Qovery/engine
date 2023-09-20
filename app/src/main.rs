@@ -16,7 +16,7 @@ use std::{io, process};
 use dirs::home_dir;
 use dotenv::dotenv;
 use tracing::error;
-use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
+use tracing_subscriber::{fmt::time::UtcTime, prelude::*, EnvFilter};
 use url::Url;
 use uuid::Uuid;
 
@@ -63,7 +63,7 @@ pub fn main() -> io::Result<()> {
                 .delimited(", "),
         )
         .with_ansi(true)
-        .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
+        .with_timer(UtcTime::rfc_3339())
         .init();
 
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());

@@ -367,7 +367,7 @@ impl<'a> EnvironmentDeployment<'a> {
         routers
             .iter()
             .find(|router| router.associated_service_id() == Some(service_id))
-            .map(|router| router.as_ref() as &'a dyn RouterService)
+            .map(|router| router.as_ref())
     }
 }
 

@@ -9,7 +9,7 @@ use tera::{try_get_value, Error};
 
 pub trait TeraFilter<'a> {
     fn name() -> &'a str;
-    fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, tera::Error>;
+    fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error>;
 }
 
 /// Encodes string value to base 64.
@@ -27,7 +27,7 @@ impl<'a> TeraFilter<'a> for Base64EncodeFilter {
     }
 
     fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error> {
-        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, tera::Error> {
+        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, Error> {
             let s = try_get_value!("base64_encode", "value", String, value);
             Ok(Value::String(Base64EncodeFilter::base64_encode(&s)))
         }
@@ -49,7 +49,7 @@ impl<'a> TeraFilter<'a> for NginxHeaderValueEscapeFilter {
     }
 
     fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error> {
-        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, tera::Error> {
+        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, Error> {
             let s = try_get_value!("nginx_header_value_escape", "value", String, value);
             Ok(Value::String(NginxHeaderValueEscapeFilter::escape_chars(&s)))
         }

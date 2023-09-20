@@ -27,14 +27,15 @@ use futures_util::{pin_mut, stream, StreamExt};
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::api::{DeleteParams, ListParams};
-use kube::{Api, ResourceExt};
+use kube::Api;
 use qovery_engine::cmd::docker;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
 use tonic::Code;
 use tracing::error;
-use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
+use tracing_subscriber::fmt::time::UtcTime;
+use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use uuid::Uuid;
 use warp::http::Uri;
@@ -218,7 +219,7 @@ pub fn main() -> io::Result<()> {
                 .delimited(", "),
         )
         .with_ansi(false)
-        .with_timer(ChronoUtc::with_format("%Y-%m-%dT%H:%M:%SZ".to_string()))
+        .with_timer(UtcTime::rfc_3339())
         .init();
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
@@ -308,23 +309,13 @@ pub fn main() -> io::Result<()> {
                 });
 
                 match result {
-                    Err(err) => match err {
-                        retry::Error::Operation {
-                            error: e,
-                            total_delay: _,
-                            tries: _,
-                        } => {
-                            error!(
-                                "docker host is not reachable, disable the check with {} is you need: {}",
-                                disable_check_env_var, e
-                            );
-                            process::exit(1)
-                        }
-                        retry::Error::Internal(err) => {
-                            error!("internal error while checking if docker host is not reachable, disable the check with {} is you need: {}", disable_check_env_var, err);
-                            process::exit(1)
-                        }
-                    },
+                    Err(retry::Error { error, .. }) => {
+                        error!(
+                            "docker host is not reachable, disable the check with {} is you need: {}",
+                            disable_check_env_var, error
+                        );
+                        process::exit(1)
+                    }
                     Ok(_) => info!("docker host is reachable"),
                 }
             }
@@ -624,7 +615,7 @@ async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) 
             .items
             .into_iter()
             .filter_map(|deployment| {
-                let deployment_name = deployment.name();
+                let deployment_name = deployment.metadata.name.unwrap_or_default();
 
                 if deployment_name.starts_with(builder_name)
                     && Utc::now() - deployment.metadata.creation_timestamp.unwrap_or(Time(Utc::now())).0

@@ -347,7 +347,7 @@ impl Kapsule {
         }
 
         // create sanitized nodegroup pools
-        let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
+        let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0f32) as usize);
         for ng in pools.pools.unwrap() {
             if ng.id.is_none() {
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(
@@ -1865,10 +1865,6 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
-        &self.advanced_settings
-    }
-
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -1904,6 +1900,10 @@ impl Kubernetes for Kapsule {
             let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details);
         };
         Ok(())
+    }
+
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {

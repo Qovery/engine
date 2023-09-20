@@ -384,8 +384,16 @@ impl<T: CloudProvider> Service for Router<T> {
         &self.name
     }
 
+    fn version(&self) -> String {
+        "".to_string()
+    }
+
     fn kube_name(&self) -> &str {
         &self.kube_name
+    }
+
+    fn kube_label_selector(&self) -> String {
+        self.kube_label_selector()
     }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -394,10 +402,6 @@ impl<T: CloudProvider> Service for Router<T> {
 
     fn action(&self) -> &Action {
         &self.action
-    }
-
-    fn kube_label_selector(&self) -> String {
-        self.kube_label_selector()
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -414,10 +418,6 @@ impl<T: CloudProvider> Service for Router<T> {
 
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
-    }
-
-    fn version(&self) -> String {
-        "".to_string()
     }
 }
 
