@@ -36,11 +36,11 @@ enum StepLabel {
 }
 
 enum StepStatus {
-    NotSet = 0;
-    Success = 1;
-    Error = 2;
-    Cancel = 3;
-    Skip = 4;
+  NotSet = 0;
+  Success = 1;
+  Error = 2;
+  Cancel = 3;
+  Skip = 4;
 }
 
 message StepRecord {
@@ -98,6 +98,8 @@ message ServiceVersionRequest {
 message ServiceVersionResponse {
   string version = 1;
 }
+
+
 
 enum ServiceType {
   UNKNOWN_SRV = 0; // empty value in proto map to 0

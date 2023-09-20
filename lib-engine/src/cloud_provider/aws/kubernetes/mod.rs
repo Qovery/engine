@@ -65,6 +65,7 @@ use tokio::time::Duration;
 use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
+use crate::cmd::command::CommandKiller;
 use lazy_static::lazy_static;
 
 use super::models::QoveryAwsSdkConfigEks;
@@ -2018,7 +2019,7 @@ fn delete(
         )
         .map_err(|e| to_engine_error(&event_details, e))?;
         let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-        if let Err(e) = helm.uninstall(&chart, &[]) {
+        if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
             // this error is not blocking
             kubernetes.logger().log(EngineEvent::Warning(
                 event_details.clone(),
@@ -2056,7 +2057,7 @@ fn delete(
 
             for chart in charts_to_delete {
                 let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                match helm.uninstall(&chart_info, &[]) {
+                match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                     Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                         event_details.clone(),
                         EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
@@ -2105,7 +2106,7 @@ fn delete(
             Ok(helm_charts) => {
                 for chart in helm_charts {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[]) {
+                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),

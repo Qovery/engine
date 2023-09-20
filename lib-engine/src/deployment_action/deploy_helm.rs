@@ -115,11 +115,18 @@ impl DeploymentAction for HelmDeployment {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         target
             .helm
-            .uninstall(&self.helm_chart, &[])
+            .uninstall(
+                &self.helm_chart,
+                &[],
+                &CommandKiller::from_cancelable(&target.should_abort),
+                &mut |_| {},
+                &mut |_| {},
+            )
             .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))?;
 
         // helm does not wait for pod to terminate https://github.com/helm/helm/issues/10586
         // So wait for
+        // FIXME (helm): Check this is still needed as helm uninstall has a --cascade=foreground flag now
         if let Some(pod_selector) = &self.helm_chart.k8s_selector {
             block_on(async {
                 let started = Instant::now();

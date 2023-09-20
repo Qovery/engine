@@ -1,15 +1,16 @@
-use crate::build_platform::{Build, SshKey};
+use crate::build_platform::{Build, Credentials, SshKey};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
 use crate::models::types::CloudProvider;
 use crate::utilities::to_short_id;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -35,6 +36,7 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) set_string_values: Vec<String>,
     pub(super) set_json_values: Vec<String>,
     pub(super) arguments: Vec<String>,
+    pub(super) timeout: Duration,
     pub(super) allow_cluster_wide_resources: bool,
     pub(super) environment_variables: HashMap<String, String>,
     pub(super) advanced_settings: HelmChartAdvancedSettings,
@@ -52,12 +54,13 @@ impl<T: CloudProvider> HelmChart<T> {
         name: String,
         kube_name: String,
         action: Action,
-        chart_source: HelmChartSource,
-        chart_values: HelmValueSource,
+        mut chart_source: HelmChartSource,
+        mut chart_values: HelmValueSource,
         set_values: Vec<String>,
         set_string_values: Vec<String>,
         set_json_values: Vec<String>,
         arguments: Vec<String>,
+        timeout: Duration,
         allow_cluster_wide_resources: bool,
         environment_variables: HashMap<String, String>,
         advanced_settings: HelmChartAdvancedSettings,
@@ -70,6 +73,27 @@ impl<T: CloudProvider> HelmChart<T> {
             format!("helm_charts/{long_id}"),
         )
         .map_err(|_| HelmChartError::InvalidConfig("Can't create workspace directory".to_string()))?;
+
+        // Normalize paths to be relative paths in order to concat them easily
+        match &mut chart_source {
+            HelmChartSource::Repository { .. } => {}
+            HelmChartSource::Git { ref mut root_path, .. } => {
+                if root_path.is_absolute() {
+                    *root_path = to_relative_path(root_path)?;
+                }
+            }
+        }
+
+        match &mut chart_values {
+            HelmValueSource::Raw { .. } => {}
+            HelmValueSource::Git {
+                ref mut values_path, ..
+            } => {
+                for path in values_path {
+                    *path = to_relative_path(path)?;
+                }
+            }
+        }
 
         let event_details = mk_event_details(Transmitter::HelmChart(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
@@ -88,6 +112,7 @@ impl<T: CloudProvider> HelmChart<T> {
             set_string_values,
             set_json_values,
             arguments,
+            timeout,
             allow_cluster_wide_resources,
             environment_variables,
             advanced_settings,
@@ -103,7 +128,7 @@ impl<T: CloudProvider> HelmChart<T> {
     }
 
     pub fn helm_release_name(&self) -> String {
-        format!("qovery-helmchart-{}", self.long_id)
+        format!("qovery-{}-{}", self.id(), self.kube_name)
     }
 
     pub fn chart_source(&self) -> &HelmChartSource {
@@ -156,16 +181,57 @@ impl<T: CloudProvider> HelmChart<T> {
         self.allow_cluster_wide_resources
     }
 
-    pub fn kube_namespace(&self) -> &str {
-        &self.kube_name
+    pub fn helm_timeout(&self) -> Duration {
+        self.timeout
     }
 
-    pub fn helm_template_arguments(&self) -> impl Iterator<Item = &str> {
-        self.set_values
-            .iter()
-            .flat_map(|v| ["--set", v.as_str()])
-            .chain(self.set_string_values.iter().flat_map(|v| ["--set-string", v.as_str()]))
-            .chain(self.set_json_values.iter().flat_map(|v| ["--set-json", v.as_str()]))
+    fn helm_values_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> {
+        let chart_dir = self.chart_workspace_directory();
+        let values: Vec<Cow<'_, str>> = match &self.chart_values {
+            HelmValueSource::Raw { values, .. } => values
+                .iter()
+                .map(|v| Cow::from(chart_dir.join(&v.name).to_string_lossy().to_string()))
+                .collect(),
+            HelmValueSource::Git { values_path, .. } => values_path
+                .iter()
+                .map(|v| {
+                    let filename = v.file_name().unwrap_or_default().to_str().unwrap_or_default();
+                    Cow::from(chart_dir.join(filename).to_string_lossy().to_string())
+                })
+                .collect(),
+        };
+
+        values
+            .into_iter()
+            .flat_map(|v| [Cow::from("--values"), v])
+            .chain(
+                self.set_values
+                    .iter()
+                    .flat_map(|v| [Cow::from("--set"), Cow::from(v.as_str())]),
+            )
+            .chain(
+                self.set_string_values
+                    .iter()
+                    .flat_map(|v| [Cow::from("--set-string"), Cow::from(v.as_str())]),
+            )
+            .chain(
+                self.set_json_values
+                    .iter()
+                    .flat_map(|v| [Cow::from("--set-json"), Cow::from(v.as_str())]),
+            )
+    }
+
+    pub fn helm_template_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> {
+        self.helm_values_arguments()
+    }
+
+    pub fn helm_upgrade_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> {
+        self.helm_values_arguments()
+            .chain([
+                Cow::from("--timeout"),
+                Cow::from(format!("{}s", self.timeout.as_secs())),
+            ])
+            .chain(self.arguments.iter().map(|v| Cow::from(v.as_str())))
     }
 }
 
@@ -236,7 +302,6 @@ where
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum HelmChartSource {
     Repository {
         url: Url,
@@ -247,22 +312,32 @@ pub enum HelmChartSource {
     },
     Git {
         git_url: Url,
-        git_credentials: Option<GitCredentials>,
+        get_credentials: Box<dyn Fn() -> anyhow::Result<Option<Credentials>> + Send + Sync>,
         commit_id: String,
-        root_path: String,
+        root_path: PathBuf,
         ssh_keys: Vec<SshKey>,
     },
 }
-#[derive(Clone, Eq, PartialEq, Hash)]
+
 pub enum HelmValueSource {
     Raw {
         values: Vec<HelmRawValues>,
     },
     Git {
         git_url: Url,
-        git_credentials: Option<GitCredentials>,
+        get_credentials: Box<dyn Fn() -> anyhow::Result<Option<Credentials>> + Send + Sync>,
         commit_id: String,
         values_path: Vec<PathBuf>,
         ssh_keys: Vec<SshKey>,
     },
+}
+
+fn to_relative_path(path: &Path) -> Result<PathBuf, HelmChartError> {
+    if path.is_relative() {
+        return Ok(path.to_path_buf());
+    }
+    Ok(path
+        .strip_prefix("/")
+        .map_err(|err| HelmChartError::InvalidConfig(format!("Can't convert to relative path: {path:?} {err}")))?
+        .to_path_buf())
 }

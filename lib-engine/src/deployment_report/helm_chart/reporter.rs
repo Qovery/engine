@@ -49,8 +49,7 @@ impl DeploymentReporter for HelmChartDeploymentReporter {
     }
 
     fn deployment_in_progress(&self, _: &mut Self::DeploymentState) {
-        self.logger
-            .send_progress(format!("⌛️ {} of helm chart in progress ...", self.action));
+        // We use the output of helm directly
     }
 
     fn deployment_terminated(
