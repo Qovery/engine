@@ -2,7 +2,6 @@ use crate::build_platform::Image;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
-use crate::cmd::docker::DockerError::InternalRetryError;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
@@ -17,7 +16,6 @@ use k8s_openapi::api::core::v1::Service;
 use kube::api::ListParams;
 use kube::Api;
 use retry::delay::Fixed;
-use retry::Error;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -112,18 +110,12 @@ pub fn mirror_image(
             &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
         )
     }) {
-        let err = match err {
-            Error::Operation { error, .. } => EngineError::new_docker_error(event_details, error),
-            Error::Internal(_) => EngineError::new_docker_error(event_details, InternalRetryError {}),
-        };
-        let user_err = EngineError::new_engine_error(
-            err.clone(),
-            format!("❌ Failed to mirror image {image_name}/{tag}: {err}"),
-            None,
-        );
+        let msg = format!("❌ Failed to mirror image {image_name}/{tag}: {err}");
+        let user_err = EngineError::new_docker_error(event_details, err.error);
 
-        return Err(Box::new(user_err));
+        return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
     }
+
     Ok(())
 }
 

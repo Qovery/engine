@@ -411,14 +411,7 @@ fn common_chart_check<P>(
         interval * (retries as u64) / 60
     );
     match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: e,
-                total_delay: _,
-                tries: _,
-            } => Err(CommandError::new(error_message_safe, Some(e), None)),
-            retry::Error::Internal(e) => Err(CommandError::new(error_message_safe, Some(e), None)),
-        },
+        Err(retry::Error { error, .. }) => Err(CommandError::new(error_message_safe, Some(error), None)),
         Ok(_) => Ok(()),
     }
 }

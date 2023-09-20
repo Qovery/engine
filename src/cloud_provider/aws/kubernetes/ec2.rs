@@ -31,7 +31,6 @@ use aws_types::SdkConfig;
 use chrono::Duration;
 use function_name::named;
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -231,10 +230,7 @@ impl EC2 {
 
         match result {
             Ok(x) => Ok(x),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(_)) => Err(Box::new(
-                EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details),
-            )),
+            Err(Error { error, .. }) => Err(error),
         }
     }
 }

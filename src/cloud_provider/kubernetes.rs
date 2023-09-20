@@ -3,7 +3,6 @@ use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
-use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -442,7 +441,7 @@ pub trait Kubernetes: Send + Sync {
                 }
             }) {
                 Ok((path, file)) => (path, file),
-                Err(Operation { error, .. }) => {
+                Err(retry::Error { error, .. }) => {
                     // If existing cluster, it should be a warning.
                     if self.context().is_first_cluster_deployment() {
                         // if cluster first deployment, this case if normal, hence we do not log anything to end user
@@ -460,16 +459,6 @@ pub trait Kubernetes: Send + Sync {
                     ));
 
                     return Err(Box::new(error));
-                }
-                Err(retry::Error::Internal(msg)) => {
-                    return Err(Box::new(EngineError::new_cannot_retrieve_cluster_config_file(
-                        self.get_event_details(stage),
-                        CommandError::new(
-                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
-                            Some(msg),
-                            None,
-                        ),
-                    )));
                 }
             },
         };
@@ -862,25 +851,12 @@ where
             },
         ) {
             Ok(_) => {}
-            Err(Operation { error, .. }) => {
+            Err(retry::Error { error, .. }) => {
                 let engine_error = EngineError::new_cannot_uninstall_helm_chart(
                     event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
-                );
-
-                logger.log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_engine_error(engine_error),
-                ));
-            }
-            Err(retry::Error::Internal(msg)) => {
-                let engine_error = EngineError::new_cannot_uninstall_helm_chart(
-                    event_details.clone(),
-                    "Cert-Manager".to_string(),
-                    object.to_string(),
-                    CommandError::new_from_safe_message(msg),
                 );
 
                 logger.log(EngineEvent::Warning(
@@ -950,20 +926,7 @@ where
 
     let masters_version = match version_result {
         Ok(v) => v,
-        Err(Operation { error, .. }) => return Err(Box::new(error)),
-        Err(retry::Error::Internal(e)) => {
-            return Err(Box::new(EngineError::new_unknown(
-                event_details,
-                "Unable to get cluster version.".to_string(),
-                Some(CommandError::new(
-                    "Unable to get cluster version.".to_string(),
-                    Some(e),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                )),
-                None,
-                None,
-            )))
-        }
+        Err(retry::Error { error, .. }) => return Err(Box::new(error)),
     };
 
     // check workers versions
@@ -1059,8 +1022,7 @@ where
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         },
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
+        Err(retry::Error { error, .. }) => Err(error),
     };
 }
 
@@ -1091,8 +1053,7 @@ where
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1118,8 +1079,7 @@ where
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 

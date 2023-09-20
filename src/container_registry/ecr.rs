@@ -21,8 +21,7 @@ use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::runtime::block_on;
 use retry::delay::Fixed;
-use retry::Error::Operation;
-use retry::{Error, OperationResult};
+use retry::OperationResult;
 use serde_json::json;
 use url::Url;
 use uuid::Uuid;
@@ -235,12 +234,7 @@ impl ECR {
         });
 
         match repo_created {
-            Err(Operation { error, .. }) => error,
-            Err(Error::Internal(e)) => Err(ContainerRegistryError::CannotCreateRepository {
-                registry_name: self.name.to_string(),
-                repository_name: repository_name.to_string(),
-                raw_error_message: e,
-            }),
+            Err(retry::Error { error, .. }) => error,
             Ok(repos) => {
                 // apply retention policy
                 if let Some(repos) = repos {
