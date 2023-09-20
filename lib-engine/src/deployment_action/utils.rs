@@ -2,6 +2,7 @@ use crate::build_platform::Image;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
+use crate::cmd::docker::DockerError::InternalRetryError;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
@@ -15,6 +16,8 @@ use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Service;
 use kube::api::ListParams;
 use kube::Api;
+use retry::delay::Fixed;
+use retry::Error;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -99,14 +102,20 @@ pub fn mirror_image(
         (registry_info.get_image_name)(&mirror_repo_name),
         vec![tag_for_mirror],
     );
-    if let Err(err) = target.docker.mirror(
-        &source_image,
-        &dest_image,
-        &mut |line| info!("{}", line),
-        &mut |line| warn!("{}", line),
-        &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
-    ) {
-        let err = EngineError::new_docker_error(event_details, err);
+
+    if let Err(err) = retry::retry(Fixed::from_millis(1000).take(2), || {
+        target.docker.mirror(
+            &source_image,
+            &dest_image,
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
+        )
+    }) {
+        let err = match err {
+            Error::Operation { error, .. } => EngineError::new_docker_error(event_details, error),
+            Error::Internal(_) => EngineError::new_docker_error(event_details, InternalRetryError {}),
+        };
         let user_err = EngineError::new_engine_error(
             err.clone(),
             format!("❌ Failed to mirror image {image_name}/{tag}: {err}"),

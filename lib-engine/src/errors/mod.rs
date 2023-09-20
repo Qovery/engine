@@ -566,6 +566,9 @@ impl From<DockerError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            DockerError::InternalRetryError {} => {
+                CommandError::new("Something went wrong in the internal retry logic".to_string(), None, None)
+            }
         }
     }
 }
