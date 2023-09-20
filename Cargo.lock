@@ -152,7 +152,7 @@ dependencies = [
  "qovery-engine",
  "regex",
  "reqwest",
- "retry",
+ "retry 1.3.1",
  "scopeguard",
  "serde",
  "serde_json",
@@ -3046,7 +3046,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest",
- "retry",
+ "retry 2.0.0",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_ecr",
@@ -3367,6 +3367,15 @@ name = "retry"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac95c60a949a63fd2822f4964939662d8f2c16c4fa0624fd954bc6e703b9a3f6"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "retry"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9166d72162de3575f950507683fac47e30f6f2c3836b71b7fbc61aa517c9c5f4"
 dependencies = [
  "rand 0.8.5",
 ]

@@ -47,7 +47,6 @@ use ::function_name::named;
 use itertools::Itertools;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
@@ -913,13 +912,7 @@ impl Kapsule {
             );
             match res {
                 Ok(_) => {}
-                Err(Operation { error, .. }) => return Err(Box::new(error)),
-                Err(retry::Error::Internal(msg)) => {
-                    return Err(Box::new(EngineError::new_k8s_node_not_ready(
-                        event_details,
-                        CommandError::new("Waiting for too long worker nodes to be ready".to_string(), Some(msg), None),
-                    )))
-                }
+                Err(retry::Error { error, .. }) => return Err(Box::new(error)),
             }
         }
         self.logger.log(EngineEvent::Info(
@@ -1164,11 +1157,8 @@ impl Kapsule {
                         Ok(_) => {
                             self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
-                        Err(Operation { error, .. }) => {
+                        Err(retry::Error { error, .. }) => {
                             return Err(Box::new(error))
-                        }
-                        Err(retry::Error::Internal(msg)) => {
-                            return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))))
                         }
                     }
                 }

@@ -28,9 +28,6 @@ pub enum DockerError {
 
     #[error("Docker command terminated due to timeout: {raw_error_message:?}")]
     Timeout { raw_error_message: String },
-
-    #[error("Something went wrong in the internal retry logic")]
-    InternalRetryError,
 }
 
 lazy_static! {

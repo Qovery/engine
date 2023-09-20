@@ -22,7 +22,6 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
-use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -633,14 +632,7 @@ fn get_active_job_pod_by_selector(
     });
     match list_job_pods_result {
         Ok(active_pod_name) => Ok(active_pod_name),
-        Err(Operation { error, .. }) => Err(Box::new(error)),
-        Err(Error::Internal(message)) => Err(Box::new(EngineError::new_job_error(
-            event_details.clone(),
-            format!(
-                "Internal error when listing pods having label {} through Kube API: {}",
-                &job_pod_selector, message
-            ),
-        ))),
+        Err(Error { error, .. }) => Err(Box::new(error)),
     }
 }
 

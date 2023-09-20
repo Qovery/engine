@@ -9,7 +9,6 @@ use std::path::Path;
 use std::str::FromStr;
 
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
@@ -25,7 +24,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartError};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -1110,14 +1109,7 @@ fn create(
 
         match tf_apply_result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(e)) => Err(Box::new(EngineError::new_terraform_error(
-                event_details.clone(),
-                TerraformError::Unknown {
-                    terraform_args: vec![],
-                    raw_message: e,
-                },
-            ))),
+            Err(Error { error, .. }) => Err(error),
         }
     };
 
@@ -1413,12 +1405,7 @@ fn create(
         });
         match result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(e)) => Err(HelmChartError::CommandError(CommandError::new(
-                "Didn't manage to update Helm charts after 5 min.".to_string(),
-                Some(e),
-                None,
-            ))),
+            Err(Error { error, .. }) => Err(error),
         }
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
@@ -1636,11 +1623,8 @@ fn pause(
                     Ok(_) => {
                         kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                     }
-                    Err(Operation { error, .. }) => {
+                    Err(Error { error, .. }) => {
                         return Err(Box::new(error));
-                    }
-                    Err(Error::Internal(msg)) => {
-                        return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))));
                     }
                 }
             }
@@ -1939,12 +1923,7 @@ fn delete(
 
             match result {
                 Ok(x) => x,
-                Err(Operation { error, .. }) => return Err(error),
-                Err(Error::Internal(_)) => {
-                    return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                        event_details,
-                    )))
-                }
+                Err(Error { error, .. }) => return Err(error),
             }
         }
         _ => {

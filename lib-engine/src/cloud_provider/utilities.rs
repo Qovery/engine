@@ -189,10 +189,7 @@ pub fn wait_until_port_is_open(
 
     match check_result {
         Ok(_) => Ok(()),
-        Err(e) => match e {
-            Error::Operation { error, .. } => Err(error),
-            Error::Internal(_) => Err(TcpCheckErrors::UnknownError),
-        },
+        Err(Error { error, .. }) => Err(error),
     }
 }
 
