@@ -16,6 +16,7 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cloud_provider::CloudProvider;
+use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
@@ -1339,7 +1340,7 @@ impl Kapsule {
                 .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
-            if let Err(e) = helm.uninstall(&chart, &[]) {
+            if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                 // this error is not blocking
                 self.logger().log(EngineEvent::Warning(
                     event_details.clone(),
@@ -1377,7 +1378,7 @@ impl Kapsule {
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[]) {
+                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => self.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
@@ -1429,7 +1430,7 @@ impl Kapsule {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &[]) {
+                        match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),

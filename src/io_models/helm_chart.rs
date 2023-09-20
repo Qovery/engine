@@ -1,8 +1,10 @@
 use crate::build_platform::SshKey;
+use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
-use crate::io_models::{ssh_keys_from_env_vars, Action};
+use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
@@ -12,6 +14,7 @@ use crate::models::types::{AWSEc2, AWS, SCW};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
 
@@ -40,7 +43,7 @@ pub enum HelmChartSource {
         git_url: Url,
         git_credentials: Option<GitCredentials>,
         commit_id: String,
-        root_path: String,
+        root_path: PathBuf,
     },
 }
 
@@ -77,6 +80,7 @@ pub struct HelmChart {
     pub set_string_values: Vec<String>,
     pub set_json_values: Vec<String>,
     pub arguments: Vec<String>,
+    pub timeout_sec: u64,
     pub allow_cluster_wide_resources: bool,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
@@ -85,7 +89,12 @@ pub struct HelmChart {
 }
 
 impl HelmChart {
-    fn to_chart_source_domain(src: HelmChartSource, ssh_keys: &[SshKey]) -> models::helm_chart::HelmChartSource {
+    fn to_chart_source_domain(
+        src: HelmChartSource,
+        ssh_keys: &[SshKey],
+        qovery_api: Arc<Box<dyn QoveryApi>>,
+        service_id: Uuid,
+    ) -> models::helm_chart::HelmChartSource {
         match src {
             HelmChartSource::Repository {
                 url,
@@ -107,7 +116,11 @@ impl HelmChart {
                 root_path,
             } => models::helm_chart::HelmChartSource::Git {
                 git_url,
-                git_credentials,
+                get_credentials: if git_credentials.is_none() {
+                    Box::new(|| Ok(None))
+                } else {
+                    Box::new(move || fetch_git_token(&**qovery_api, ServiceType::HelmChart, &service_id).map(Some))
+                },
                 commit_id,
                 root_path,
                 ssh_keys: ssh_keys.to_owned(),
@@ -115,7 +128,12 @@ impl HelmChart {
         }
     }
 
-    fn to_chart_value_domain(src: HelmValueSource, ssh_keys: &[SshKey]) -> models::helm_chart::HelmValueSource {
+    fn to_chart_value_domain(
+        src: HelmValueSource,
+        ssh_keys: &[SshKey],
+        qovery_api: Arc<Box<dyn QoveryApi>>,
+        service_id: Uuid,
+    ) -> models::helm_chart::HelmValueSource {
         match src {
             HelmValueSource::Raw { values } => models::helm_chart::HelmValueSource::Raw { values },
             HelmValueSource::Git {
@@ -125,7 +143,11 @@ impl HelmChart {
                 values_path,
             } => models::helm_chart::HelmValueSource::Git {
                 git_url,
-                git_credentials,
+                get_credentials: if git_credentials.is_none() {
+                    Box::new(|| Ok(None))
+                } else {
+                    Box::new(move || fetch_git_token(&**qovery_api, ServiceType::HelmChart, &service_id).map(Some))
+                },
                 commit_id,
                 values_path,
                 ssh_keys: ssh_keys.to_owned(),
@@ -148,12 +170,18 @@ impl HelmChart {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
-                Self::to_chart_source_domain(self.chart_source.clone(), &ssh_keys),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys),
+                Self::to_chart_source_domain(
+                    self.chart_source.clone(),
+                    &ssh_keys,
+                    context.qovery_api.clone(),
+                    self.long_id,
+                ),
+                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
                 self.set_values,
                 self.set_string_values,
                 self.set_json_values,
                 self.arguments,
+                std::time::Duration::from_secs(self.timeout_sec),
                 self.allow_cluster_wide_resources,
                 environment_variables,
                 self.advanced_settings,
@@ -166,12 +194,18 @@ impl HelmChart {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
-                Self::to_chart_source_domain(self.chart_source.clone(), &ssh_keys),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys),
+                Self::to_chart_source_domain(
+                    self.chart_source.clone(),
+                    &ssh_keys,
+                    context.qovery_api.clone(),
+                    self.long_id,
+                ),
+                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
                 self.set_values,
                 self.set_string_values,
                 self.set_json_values,
                 self.arguments,
+                std::time::Duration::from_secs(self.timeout_sec),
                 self.allow_cluster_wide_resources,
                 environment_variables,
                 self.advanced_settings,
@@ -184,12 +218,18 @@ impl HelmChart {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
-                Self::to_chart_source_domain(self.chart_source.clone(), &ssh_keys),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys),
+                Self::to_chart_source_domain(
+                    self.chart_source.clone(),
+                    &ssh_keys,
+                    context.qovery_api.clone(),
+                    self.long_id,
+                ),
+                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
                 self.set_values,
                 self.set_string_values,
                 self.set_json_values,
                 self.arguments,
+                std::time::Duration::from_secs(self.timeout_sec),
                 self.allow_cluster_wide_resources,
                 environment_variables,
                 self.advanced_settings,

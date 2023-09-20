@@ -135,7 +135,10 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel deployment(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!(
+                "🎡 Proceeding with up to {} parallel deployment(s)",
+                parallel_deploys
+            )),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -186,7 +189,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel pause(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel pause(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -270,7 +273,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel delete(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel delete(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -327,7 +330,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel restart(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel restart(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
