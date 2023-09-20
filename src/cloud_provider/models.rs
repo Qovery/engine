@@ -106,8 +106,8 @@ pub enum CpuArchitecture {
     ARM64,
 }
 
-impl fmt::Display for CpuArchitecture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for CpuArchitecture {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             CpuArchitecture::AMD64 => write!(f, "AMD64"),
             CpuArchitecture::ARM64 => write!(f, "ARM64"),
@@ -179,7 +179,7 @@ pub enum KubernetesCpuResourceUnit {
 }
 
 impl Display for KubernetesCpuResourceUnit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(
             match &self {
                 KubernetesCpuResourceUnit::MilliCpu(v) => format!("{v}m"),
@@ -206,7 +206,7 @@ pub enum KubernetesMemoryResourceUnit {
 }
 
 impl Display for KubernetesMemoryResourceUnit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(
             match &self {
                 KubernetesMemoryResourceUnit::MebiByte(v) => format!("{v}Mi"),

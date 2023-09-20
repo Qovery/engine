@@ -91,6 +91,10 @@ impl CloudProvider for Scaleway {
         self.region.clone()
     }
 
+    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
+        None
+    }
+
     fn token(&self) -> &str {
         todo!()
     }
@@ -142,9 +146,5 @@ impl CloudProvider for Scaleway {
 
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.long_id, self.name.to_string())
-    }
-
-    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
-        None
     }
 }

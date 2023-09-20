@@ -429,7 +429,7 @@ pub trait Kubernetes: Send + Sync {
                     .config_file_store()
                     .get(bucket_name.as_str(), object_key.as_str(), true)
                 {
-                    Ok((path, file)) => retry::OperationResult::Ok((path, file)),
+                    Ok((path, file)) => OperationResult::Ok((path, file)),
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
                             self.get_event_details(stage.clone()),
@@ -798,7 +798,7 @@ pub fn event_details(
         QoveryIdentifier::new(*context.organization_long_id()),
         QoveryIdentifier::new(*context.cluster_long_id()),
         context.execution_id().to_string(),
-        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+        Infrastructure(InfrastructureStep::LoadConfiguration),
         Transmitter::Kubernetes(kubernetes_id, kubernetes_name),
     )
 }

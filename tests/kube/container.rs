@@ -156,9 +156,9 @@ fn should_increase_container_storage_size() {
         if let Some(spec) = &pvc.spec {
             if let Some(resources) = &spec.resources {
                 if let Some(req) = &resources.requests {
-                    assert!(
-                        req["storage"].0
-                            == format!("{}Gi", invalid_statefulset.invalid_pvcs[0].required_disk_size_in_gib)
+                    assert_eq!(
+                        req["storage"].0,
+                        format!("{}Gi", invalid_statefulset.invalid_pvcs[0].required_disk_size_in_gib)
                     )
                 }
             }
