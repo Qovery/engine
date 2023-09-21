@@ -63,6 +63,7 @@ pub fn main() -> io::Result<()> {
                 .delimited(", "),
         )
         .with_ansi(true)
+        .with_thread_names(true)
         .with_timer(UtcTime::rfc_3339())
         .init();
 

@@ -218,7 +218,8 @@ pub fn main() -> io::Result<()> {
             tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}"))
                 .delimited(", "),
         )
-        .with_ansi(false)
+        .with_ansi(true)
+        .with_thread_names(true)
         .with_timer(UtcTime::rfc_3339())
         .init();
 

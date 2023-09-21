@@ -430,7 +430,7 @@ impl DeploymentThreadsPool {
                 };
 
             // Launch our deployment in parallel for each service
-            for mut task in tasks {
+            for (ix, mut task) in tasks.into_iter().enumerate() {
                 // Ensure we have a slot available to run a new thread
                 let thread_result = await_deployment_slot(&mut active_threads);
                 handle_thread_result(thread_result, &mut ret);
@@ -442,7 +442,7 @@ impl DeploymentThreadsPool {
 
                 // We have a slot to run a new thread, so start a new deployment
                 let th = thread::Builder::new()
-                    .name("deployer".to_string())
+                    .name(format!("deployer-{}", ix))
                     .spawn_scoped(scope, {
                         let current_span = tracing::Span::current();
                         let current_thread = &current_thread;

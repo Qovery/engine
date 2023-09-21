@@ -668,7 +668,7 @@ impl BuilderThreadPool {
             };
 
             // Launch our build in parallel for each service
-            for mut task in tasks {
+            for (ix, mut task) in tasks.into_iter().enumerate() {
                 // Ensure we have a slot available to run a new thread
                 await_build_slot(&mut active_threads);
 
@@ -677,16 +677,18 @@ impl BuilderThreadPool {
                 }
 
                 // We have a slot to run a new thread, so start a new build
-                let th = thread::Builder::new().name("builder".to_string()).spawn_scoped(scope, {
-                    let current_thread = &current_thread;
-                    let current_span = tracing::Span::current();
+                let th = thread::Builder::new()
+                    .name(format!("builder-{}", ix))
+                    .spawn_scoped(scope, {
+                        let current_thread = &current_thread;
+                        let current_span = tracing::Span::current();
 
-                    move || {
-                        let _span = current_span.enter();
-                        let _guard = scopeguard::guard((), |_| current_thread.unpark());
-                        task()
-                    }
-                });
+                        move || {
+                            let _span = current_span.enter();
+                            let _guard = scopeguard::guard((), |_| current_thread.unpark());
+                            task()
+                        }
+                    });
                 active_threads.push_back(th.unwrap());
             }
 
