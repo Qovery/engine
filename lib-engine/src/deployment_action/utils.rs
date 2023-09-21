@@ -82,7 +82,7 @@ pub fn mirror_image(
 
     // Once we are logged to the registry, we mirror the user image into our cluster private registry
     // This is required only to avoid to manage rotating credentials
-    logger.info("🪞 Mirroring image to private cluster registry to ensure reproductibility".to_string());
+    logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
     let registry_info = target.container_registry.registry_info();
 
     let mirror_repo_name = get_mirror_repository_name(service_id);
@@ -101,16 +101,24 @@ pub fn mirror_image(
         vec![tag_for_mirror],
     );
 
-    if let Err(err) = retry::retry(Fixed::from_millis(1000).take(2), || {
-        target.docker.mirror(
+    if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
+        // Not setting 10min timeout because we need to send at least a log every 10min
+        let err = target.docker.mirror(
             &source_image,
             &dest_image,
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
-        )
+            &CommandKiller::from(Duration::from_secs(60 * 9), target.should_abort),
+        );
+
+        if err.is_err() {
+            error!("docker mirror error: {:?}", err);
+            logger.info("🪞 Retrying Mirroring image due to error...".to_string());
+        }
+
+        err
     }) {
-        let msg = format!("❌ Failed to mirror image {image_name}/{tag}: {err}");
+        let msg = format!("❌ Failed to mirror image {image_name}:{tag} due to {err}");
         let user_err = EngineError::new_docker_error(event_details, err.error);
 
         return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
