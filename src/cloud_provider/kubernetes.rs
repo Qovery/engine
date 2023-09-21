@@ -1403,50 +1403,61 @@ where
     let span = Span::current();
 
     // monitor thread to notify user while the blocking task is executed
-    let handle = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
-        // stop the thread when the blocking task is done
-        let _span = span.enter();
-        let action = action;
-        let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
+    let handle = thread::Builder::new()
+        .name("infra-task-monitor".to_string())
+        .spawn(move || {
+            // stop the thread when the blocking task is done
+            let _span = span.enter();
+            let action = action;
+            let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
-        loop {
-            // do notify users here
-            let event_details = Clone::clone(&event_details);
-            let event_message = EventMessage::new_from_safe(waiting_message.to_string());
+            loop {
+                // do notify users here
+                let event_details = Clone::clone(&event_details);
+                let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
-            match action {
-                Action::Create => {
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Create)),
-                        event_message,
-                    ));
-                }
-                Action::Pause => {
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Pause)),
-                        event_message,
-                    ));
-                }
-                Action::Delete => {
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Delete)),
-                        event_message,
-                    ));
-                }
-                Action::Restart => {
-                    // restart is not implemented yet
-                }
-            };
+                match action {
+                    Action::Create => {
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Infrastructure(InfrastructureStep::Create),
+                            ),
+                            event_message,
+                        ));
+                    }
+                    Action::Pause => {
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Infrastructure(InfrastructureStep::Pause),
+                            ),
+                            event_message,
+                        ));
+                    }
+                    Action::Delete => {
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Infrastructure(InfrastructureStep::Delete),
+                            ),
+                            event_message,
+                        ));
+                    }
+                    Action::Restart => {
+                        // restart is not implemented yet
+                    }
+                };
 
-            thread::sleep(Duration::from_secs(30));
+                thread::sleep(Duration::from_secs(30));
 
-            // watch for thread termination
-            match rx.try_recv() {
-                Ok(_) | Err(TryRecvError::Disconnected) => break,
-                Err(TryRecvError::Empty) => {}
+                // watch for thread termination
+                match rx.try_recv() {
+                    Ok(_) | Err(TryRecvError::Disconnected) => break,
+                    Err(TryRecvError::Empty) => {}
+                }
             }
-        }
-    });
+        });
 
     let blocking_task_result = long_task();
     let _ = tx.send(());
