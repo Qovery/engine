@@ -103,20 +103,19 @@ pub fn mirror_image(
 
     if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
         // Not setting 10min timeout because we need to send at least a log every 10min
-        let err = target.docker.mirror(
-            &source_image,
-            &dest_image,
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 9), target.should_abort),
-        );
-
-        if err.is_err() {
-            error!("docker mirror error: {:?}", err);
-            logger.info("🪞 Retrying Mirroring image due to error...".to_string());
-        }
-
-        err
+        target
+            .docker
+            .mirror(
+                &source_image,
+                &dest_image,
+                &mut |line| info!("{}", line),
+                &mut |line| warn!("{}", line),
+                &CommandKiller::from(Duration::from_secs(60 * 9), target.should_abort),
+            )
+            .map_error(|err| {
+                error!("docker mirror error: {:?}", err);
+                logger.info("🪞 Retrying Mirroring image due to error...".to_string());
+            })
     }) {
         let msg = format!("❌ Failed to mirror image {image_name}:{tag} due to {err}");
         let user_err = EngineError::new_docker_error(event_details, err.error);
