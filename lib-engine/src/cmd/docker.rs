@@ -30,6 +30,12 @@ pub enum DockerError {
     Timeout { raw_error_message: String },
 }
 
+impl DockerError {
+    pub fn is_aborted(&self) -> bool {
+        matches!(self, DockerError::Aborted { .. })
+    }
+}
+
 lazy_static! {
     // Docker login when launched in parallel can mess up ~/.docker/config.json
     // We use a mutex that will force serialization of logins in order to avoid that
