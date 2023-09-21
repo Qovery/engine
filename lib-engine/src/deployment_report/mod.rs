@@ -143,8 +143,9 @@ pub fn execute_long_deployment<Log, TaskRet>(
 
     let deployment_result = thread::scope(|th_scope| {
         // monitor thread to notify user while the blocking task is executed
+        let current_thread_name = thread::current().name().unwrap_or("unknown-thread");
         let th_handle = thread::Builder::new()
-            .name("deployment-monitor".to_string())
+            .name(format!("reporter-{}", current_thread_name))
             .spawn_scoped(th_scope, {
                 // Propagate the current span into the thread. This span is only used by tests
                 let current_span = tracing::Span::current();
