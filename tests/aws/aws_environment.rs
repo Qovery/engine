@@ -17,7 +17,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmValueSource};
+use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
@@ -3026,27 +3026,30 @@ fn deploy_helm_chart() {
             name: "my little chart ****".to_string(),
             kube_name: "my-little-chart".to_string(),
             action: Action::Create,
-            chart_source: HelmChartSource::Repository {
-                url: Url::parse("https://kubernetes.github.io/ingress-nginx").unwrap(),
-                credentials: None,
-                skip_tls_verify: false,
-                chart_name: "ingress-nginx".to_string(),
-                chart_version: "4.4.2".to_string(),
-            },
-            // chart_values: HelmValueSource::Raw {
-            //     values: vec![HelmRawValues { name: "toto.yaml".to_string(), content: "toto: tata".to_string() }],
-            // },
-            chart_values: HelmValueSource::Git {
-                git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
                 git_credentials: None,
-                commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
-                values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+                commit_id: "c4c33c5f7f6e88e2a24c81883c8868c79bbfffb5".to_string(),
+                root_path: PathBuf::from("/simple_app"),
             },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            //chart_values: HelmValueSource::Git {
+            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+            //    git_credentials: None,
+            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+            //},
             set_values: vec!["toto=tata".to_string()],
             set_string_values: vec!["my-string=1".to_string()],
             set_json_values: vec!["my-json={\"json\": \"value\"}".to_string()],
-            arguments: vec![],
-            allow_cluster_wide_resources: true,
+            arguments: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
             environment_vars: btreemap! { "TOTO".to_string() => "Salut".to_string() },
             advanced_settings: Default::default(),
         }];

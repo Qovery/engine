@@ -31,7 +31,6 @@ use aws_types::SdkConfig;
 use chrono::Duration;
 use function_name::named;
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -231,10 +230,7 @@ impl EC2 {
 
         match result {
             Ok(x) => Ok(x),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(_)) => Err(Box::new(
-                EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details),
-            )),
+            Err(Error { error, .. }) => Err(error),
         }
     }
 }
@@ -544,10 +540,6 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
-        &self.advanced_settings
-    }
-
     /// Update the vault with the new cluster information
     /// !!! Can only work has been just updated with Terraform data !!!
     fn update_vault_config(
@@ -595,6 +587,10 @@ impl Kubernetes for EC2 {
         Ok(())
     }
 
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
+    }
+
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
@@ -619,6 +615,13 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
             .send()
             .await
     }
+    async fn detach_instance_volume(
+        &self,
+        volume_id: String,
+    ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        client.detach_volume().volume_id(volume_id).send().await
+    }
     /// instance isn't used ATM but will be useful when we'll need to implement ec2 pause.
     async fn _get_instance_by_id(
         &self,
@@ -636,13 +639,6 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
             )
             .send()
             .await
-    }
-    async fn detach_instance_volume(
-        &self,
-        volume_id: String,
-    ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>> {
-        let client = aws_sdk_ec2::Client::new(self);
-        client.detach_volume().volume_id(volume_id).send().await
     }
     async fn detach_ec2_volumes(
         &self,

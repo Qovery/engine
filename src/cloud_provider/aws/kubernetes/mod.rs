@@ -9,7 +9,6 @@ use std::path::Path;
 use std::str::FromStr;
 
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
@@ -25,7 +24,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartError};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -66,7 +65,10 @@ use tokio::time::Duration;
 use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
+use crate::cmd::command::CommandKiller;
 use lazy_static::lazy_static;
+
+use super::models::QoveryAwsSdkConfigEks;
 
 mod addons;
 pub mod ec2;
@@ -1108,14 +1110,7 @@ fn create(
 
         match tf_apply_result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(e)) => Err(Box::new(EngineError::new_terraform_error(
-                event_details.clone(),
-                TerraformError::Unknown {
-                    terraform_args: vec![],
-                    raw_message: e,
-                },
-            ))),
+            Err(Error { error, .. }) => Err(error),
         }
     };
 
@@ -1131,6 +1126,7 @@ fn create(
             EventMessage::new_from_safe(
                 "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
             )));
+
             if let Err(e) = block_on(delete_eks_nodegroups(
                 aws_conn.clone(),
                 kubernetes.cluster_name(),
@@ -1138,8 +1134,13 @@ fn create(
                 NodeGroupsDeletionType::FailedOnly,
                 event_details.clone(),
             )) {
+                let is_the_only_nodegroup_available =
+                    match block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name())) {
+                        Ok(x) => matches!(x.nodegroups(), Some(n) if n.len() == 1),
+                        Err(_) => false,
+                    };
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
-                if e.tag() != &Tag::CannotGetCluster {
+                if e.tag() != &Tag::CannotGetCluster && !is_the_only_nodegroup_available {
                     return Err(e);
                 }
             }
@@ -1405,12 +1406,7 @@ fn create(
         });
         match result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(Error::Internal(e)) => Err(HelmChartError::CommandError(CommandError::new(
-                "Didn't manage to update Helm charts after 5 min.".to_string(),
-                Some(e),
-                None,
-            ))),
+            Err(Error { error, .. }) => Err(error),
         }
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
@@ -1628,11 +1624,8 @@ fn pause(
                     Ok(_) => {
                         kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                     }
-                    Err(Operation { error, .. }) => {
+                    Err(Error { error, .. }) => {
                         return Err(Box::new(error));
-                    }
-                    Err(Error::Internal(msg)) => {
-                        return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))));
                     }
                 }
             }
@@ -1931,12 +1924,7 @@ fn delete(
 
             match result {
                 Ok(x) => x,
-                Err(Operation { error, .. }) => return Err(error),
-                Err(Error::Internal(_)) => {
-                    return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                        event_details,
-                    )))
-                }
+                Err(Error { error, .. }) => return Err(error),
             }
         }
         _ => {
@@ -2031,7 +2019,7 @@ fn delete(
         )
         .map_err(|e| to_engine_error(&event_details, e))?;
         let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-        if let Err(e) = helm.uninstall(&chart, &[]) {
+        if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
             // this error is not blocking
             kubernetes.logger().log(EngineEvent::Warning(
                 event_details.clone(),
@@ -2069,7 +2057,7 @@ fn delete(
 
             for chart in charts_to_delete {
                 let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                match helm.uninstall(&chart_info, &[]) {
+                match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                     Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                         event_details.clone(),
                         EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
@@ -2118,7 +2106,7 @@ fn delete(
             Ok(helm_charts) => {
                 for chart in helm_charts {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[]) {
+                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),

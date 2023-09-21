@@ -129,7 +129,7 @@ impl QoveryAwsSdkConfigLoadBalancer for SdkConfig {
         &self,
     ) -> Result<
         aws_sdk_elasticloadbalancingv2::output::DescribeLoadBalancersOutput,
-        aws_smithy_client::SdkError<aws_sdk_elasticloadbalancingv2::error::DescribeLoadBalancersError>,
+        SdkError<aws_sdk_elasticloadbalancingv2::error::DescribeLoadBalancersError>,
     > {
         let client = aws_sdk_elasticloadbalancingv2::Client::new(self);
         // AWS API maximum per page size is 400

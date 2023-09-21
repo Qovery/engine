@@ -62,7 +62,7 @@ pub fn await_domain_resolve_cname<'a>(
                 .flat_map(|lookup| lookup.into_iter())
                 .filter_map(|rdata| {
                     if let RData::CNAME(cname) = rdata {
-                        Some(cname)
+                        Some(cname.0)
                     } else {
                         None
                     }
@@ -146,7 +146,7 @@ impl fmt::Display for TcpCheckSource<'_> {
 }
 
 pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(), TcpCheckErrors> {
-    let timeout = core::time::Duration::from_secs(1);
+    let timeout = Duration::from_secs(1);
 
     let ip = match address {
         TcpCheckSource::SocketAddr(x) => *x,
@@ -175,7 +175,7 @@ pub fn wait_until_port_is_open(
     logger: &dyn Logger,
     event_details: EventDetails,
 ) -> Result<(), TcpCheckErrors> {
-    let fixed_iterable = Fixed::from(core::time::Duration::from_secs(1)).take(max_timeout);
+    let fixed_iterable = Fixed::from(Duration::from_secs(1)).take(max_timeout);
     let check_result = retry::retry(fixed_iterable, || match check_tcp_port_is_open(address, port) {
         Ok(_) => OperationResult::Ok(()),
         Err(e) => {
@@ -189,10 +189,7 @@ pub fn wait_until_port_is_open(
 
     match check_result {
         Ok(_) => Ok(()),
-        Err(e) => match e {
-            Error::Operation { error, .. } => Err(error),
-            Error::Internal(_) => Err(TcpCheckErrors::UnknownError),
-        },
+        Err(Error { error, .. }) => Err(error),
     }
 }
 

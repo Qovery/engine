@@ -4,7 +4,7 @@ use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::EngineError;
-use crate::events::Stage::{self, Infrastructure};
+use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
@@ -72,7 +72,7 @@ impl InfrastructureTask {
     }
 
     fn get_event_details(&self, step: InfrastructureStep) -> EventDetails {
-        EventDetails::clone_changing_stage(self.request.event_details(), Stage::Infrastructure(step))
+        EventDetails::clone_changing_stage(self.request.event_details(), Infrastructure(step))
     }
 
     fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: TransactionResult) {

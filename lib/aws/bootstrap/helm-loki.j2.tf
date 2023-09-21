@@ -126,7 +126,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
 
     expiration {
       days = 1
-      expired_object_delete_marker = true
     }
 
     noncurrent_version_expiration {

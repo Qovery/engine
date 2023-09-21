@@ -1,5 +1,5 @@
-use crate::build_platform::SshKey;
-use crate::cloud_provider::helm::HelmChartError;
+use crate::build_platform::{Credentials, SshKey};
+use crate::cloud_provider::helm::{ChartInfo, HelmChartError};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
@@ -10,7 +10,6 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::git;
-use crate::io_models::application::GitCredentials;
 use crate::models::helm_chart::{HelmChart, HelmChartSource, HelmValueSource};
 use crate::models::types::CloudProvider;
 use anyhow::anyhow;
@@ -36,12 +35,30 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
             prepare_helm_chart_directory(self, target, event_details.clone(), logger)?;
             // Now the chart is ready at self.chart_workspace_directory()
 
-            // Check users does not bypass restrictions (i.e: install cluster wide resources, or not in the correct namesapce)
+            // Check users does not bypass restrictions (i.e: install cluster wide resources, or not in the correct namespace)
             check_resources_are_allowed_to_install(self, target, event_details.clone(), logger)?;
             Ok(())
         };
 
-        let run = |_logger: &EnvProgressLogger, _state: ()| Ok(());
+        let run = |logger: &EnvProgressLogger, _state: ()| {
+            let args = self.helm_upgrade_arguments().collect::<Vec<_>>();
+            target
+                .helm
+                .upgrade_raw(
+                    &self.helm_release_name(),
+                    self.chart_workspace_directory(),
+                    target.environment.namespace(),
+                    &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
+                    &[],
+                    &CommandKiller::from(self.helm_timeout(), target.should_abort),
+                    &mut |line| logger.info(line),
+                    &mut |line| logger.warning(line),
+                )
+                .map_err(|err| (event_details.clone(), HelmChartError::HelmError(err)))?;
+
+            Ok(())
+        };
+
         let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
 
         let task = DeploymentTaskImpl {
@@ -53,21 +70,60 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
         execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Create), task)
     }
 
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
 
-        Ok(())
+        // List all deployment / statefulset / daemonset / job / cronjob for this helm release
+        // scale them to 0
+
+        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            logger.warning("Pause for helm chart is not implemented yet".to_string());
+            Ok(())
+        };
+
+        execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Pause), task)
     }
 
-    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        Ok(())
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+
+        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            let mut chart_info =
+                ChartInfo::new_from_release_name(&self.helm_release_name(), target.environment.namespace());
+            chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
+
+            target
+                .helm
+                .uninstall(
+                    &chart_info,
+                    &[],
+                    &CommandKiller::from(self.helm_timeout(), &target.should_abort),
+                    &mut |line| logger.info(line),
+                    &mut |line| logger.warning(line),
+                )
+                .map_err(|err| {
+                    Box::new(EngineError::new_helm_chart_error(
+                        event_details.clone(),
+                        HelmChartError::HelmError(err),
+                    ))
+                })
+        };
+
+        execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Delete), task)
     }
 
-    fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
 
-        Ok(())
+        // List all deployment / statefulset / daemonset / job / cronjob for this helm release
+        // trigger a restart
+
+        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            logger.warning("Restart for helm chart is not implemented yet".to_string());
+            Ok(())
+        };
+
+        execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Restart), task)
     }
 }
 
@@ -134,7 +190,7 @@ fn replace_qovery_env_variable<'a>(
 }
 
 fn git_credentials_callback<'a>(
-    git_credentials: &'a Option<GitCredentials>,
+    git_credentials: &'a Option<Credentials>,
     ssh_keys: &'a [SshKey],
 ) -> impl Fn(&str) -> Vec<(CredentialType, Cred)> + 'a {
     move |user: &str| {
@@ -150,7 +206,7 @@ fn git_credentials_callback<'a>(
         if let Some(git_creds) = git_credentials {
             creds.push((
                 CredentialType::USER_PASS_PLAINTEXT,
-                Cred::userpass_plaintext(&git_creds.login, &git_creds.access_token).unwrap(),
+                Cred::userpass_plaintext(&git_creds.login, &git_creds.password).unwrap(),
             ));
         }
 
@@ -218,7 +274,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             git_url,
             commit_id,
             root_path,
-            git_credentials,
+            get_credentials,
             ssh_keys,
         } => {
             logger.info(format!(
@@ -229,13 +285,11 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             let tmpdir = tempfile::tempdir_in(this.workspace_directory())
                 .map_err(|e| to_error(format!("Cannot create tempdir {}", e)))?;
 
-            git::clone_at_commit(
-                git_url,
-                commit_id,
-                &tmpdir,
-                &git_credentials_callback(git_credentials, ssh_keys),
-            )
-            .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {}", e)))?;
+            let git_creds =
+                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {}", e)))?;
+
+            git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
+                .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {}", e)))?;
 
             fs::rename(&tmpdir.path().join(root_path), this.chart_workspace_directory())
                 .map_err(|e| to_error(format!("Cannot move helm chart directory due to {}", e)))?;
@@ -259,7 +313,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
         }
         HelmValueSource::Git {
             git_url,
-            git_credentials,
+            get_credentials,
             commit_id,
             values_path,
             ssh_keys,
@@ -271,13 +325,12 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
 
             let tmpdir = tempfile::tempdir_in(this.workspace_directory())
                 .map_err(|e| to_error(format!("Cannot create tempdir {}", e)))?;
-            git::clone_at_commit(
-                git_url,
-                commit_id,
-                &tmpdir,
-                &git_credentials_callback(git_credentials, ssh_keys),
-            )
-            .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {}", e)))?;
+
+            let git_creds =
+                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {}", e)))?;
+
+            git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
+                .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {}", e)))?;
 
             for value in values_path {
                 let Some(filename) = value.file_name() else {
@@ -317,16 +370,17 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
     }
 
     logger.info("Checking deployed resources do not cross namespace boundary".to_string());
-    let template_args: Vec<&str> = this.helm_template_arguments().collect();
+    let template_args: Vec<_> = this.helm_template_arguments().collect();
     let template = target
         .helm
         .template_raw(
             &this.helm_release_name(),
             this.chart_workspace_directory(),
-            this.kube_namespace(),
-            &template_args,
+            target.environment.namespace(),
+            &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
             &[],
             &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+            &mut |line| logger.warning(line),
         )
         .map_err(|e| (event_details.clone(), e))?;
 
@@ -343,8 +397,8 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
         })?;
 
         // Check that the user is allowed to deploy what he is requesting to install
-        is_allowed_namespaced_resource(this.kube_namespace(), &kube_obj).map_err(|err| {
-            error!("{} {:?}", &err, kube_obj);
+        is_allowed_namespaced_resource(target.environment.namespace(), &kube_obj).map_err(|err| {
+            error!("{err} {kube_obj:?}");
             (
                 event_details.clone(),
                 HelmChartError::RenderingError {
@@ -362,16 +416,92 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
 // * Cannot install in another namespaces
 // * Cannot install cluster wide resources (i.e: ClusterIssuer)
 fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<()>) -> Result<(), String> {
-    // If object is a CRD it will not get any namespace
-    // Same if it is a cluster wide resource
-    if kube_obj.metadata.namespace.as_deref() != Some(namespace) {
-        return Err(format!(
-            "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}",
-            kube_obj.types.as_ref().map(|x| x.kind.as_str()).unwrap_or(""),
-            kube_obj.metadata.name.as_deref().unwrap_or(""),
-            &kube_obj.metadata.namespace,
-            namespace
-        ));
+    // To find them `kubectl api-resources --namespaced=true`
+    const WHITELISTED_RESOURCES: &[&str] = &[
+        "Alertmanager",
+        "AlertmanagerConfig",
+        "Binding",
+        "Certificate",
+        "CertificateRequest",
+        "Challenge",
+        "CiliumEndpoint",
+        "CiliumNetworkPolicy",
+        "CiliumNodeConfig",
+        "ConfigMap",
+        "ControllerRevision",
+        "CronJob",
+        "CSIStorageCapacity",
+        "DaemonSet",
+        "Deployment",
+        "Endpoints",
+        "EndpointSlice",
+        "Event",
+        "HorizontalPodAutoscaler",
+        "Ingress",
+        "Issuer",
+        "Job",
+        "Lease",
+        "LimitRange",
+        "LocalSubjectAccessReview",
+        "NetworkPolicy",
+        "NetworkSet",
+        "Order",
+        "PersistentVolumeClaim",
+        "Pod",
+        "PodDisruptionBudget",
+        "PodMetrics",
+        "PodMonitor",
+        "PodTemplate",
+        "PolicyEndpoint",
+        "Probe",
+        "Prometheus",
+        "PrometheusAgent",
+        "PrometheusRule",
+        "ReplicaSet",
+        "ReplicationController",
+        "ResourceQuota",
+        "Role",
+        "RoleBinding",
+        "ScrapeConfig",
+        "Secret",
+        "SecurityGroupPolicy",
+        "Service",
+        "ServiceAccount",
+        "ServiceMonitor",
+        "StatefulSet",
+        "ThanosRuler",
+        "VerticalPodAutoscaler",
+        "VerticalPodAutoscalerCheckpoint",
+    ];
+
+    match (&kube_obj.metadata.namespace, &kube_obj.types) {
+        // If object is a CRD it will not get any namespace, same if it is a cluster wide resource
+        // helm template does not force the namespace to be set https://github.com/helm/helm/issues/3553
+        // so we must whitelist the resources we allow to be installed
+        (None, Some(obj)) => {
+            if !WHITELISTED_RESOURCES.contains(&obj.kind.as_str()) {
+                return Err(format!(
+                    "Cannot deploy {} {} as it is a cluster wide resource",
+                    &obj.kind, &obj.api_version
+                ));
+            }
+        }
+        (Some(requested_ns), _) => {
+            if requested_ns != namespace {
+                return Err(format!(
+                    "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}",
+                    kube_obj.types.as_ref().map(|x| x.kind.as_str()).unwrap_or(""),
+                    kube_obj.metadata.name.as_deref().unwrap_or(""),
+                    &kube_obj.metadata.namespace,
+                    namespace
+                ));
+            }
+        }
+        (None, None) => {
+            return Err(format!(
+                "Cannot deploy resource as no namespace is set and no type is set {kube_obj:?}"
+            ));
+        }
     }
 
     Ok(())
@@ -422,7 +552,7 @@ metadata:
 spec: []
        "#;
 
-        // Creating the namespace should not be allowed
+        // Creating the namespace should not be nok
         let ns: PartialObjectMeta<()> =
             PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
         assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
@@ -447,7 +577,7 @@ metadata:
 spec: []
        "#;
 
-        // Wrong namespace should not be nok
+        // Wrong namespace should be nok
         let ns: PartialObjectMeta<()> =
             PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
         assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
@@ -472,7 +602,7 @@ metadata:
 spec: []
        "#;
 
-        // Wrong namespace should not be ok
+        // Wrong namespace should be nok
         let ns: PartialObjectMeta<()> =
             PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
         assert!(is_allowed_namespaced_resource("tesotron", &ns).is_ok());

@@ -16,6 +16,7 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cloud_provider::CloudProvider;
+use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
@@ -47,7 +48,6 @@ use ::function_name::named;
 use itertools::Itertools;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
@@ -347,7 +347,7 @@ impl Kapsule {
         }
 
         // create sanitized nodegroup pools
-        let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
+        let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0f32) as usize);
         for ng in pools.pools.unwrap() {
             if ng.id.is_none() {
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(
@@ -913,13 +913,7 @@ impl Kapsule {
             );
             match res {
                 Ok(_) => {}
-                Err(Operation { error, .. }) => return Err(Box::new(error)),
-                Err(retry::Error::Internal(msg)) => {
-                    return Err(Box::new(EngineError::new_k8s_node_not_ready(
-                        event_details,
-                        CommandError::new("Waiting for too long worker nodes to be ready".to_string(), Some(msg), None),
-                    )))
-                }
+                Err(retry::Error { error, .. }) => return Err(Box::new(error)),
             }
         }
         self.logger.log(EngineEvent::Info(
@@ -1164,11 +1158,8 @@ impl Kapsule {
                         Ok(_) => {
                             self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
-                        Err(Operation { error, .. }) => {
+                        Err(retry::Error { error, .. }) => {
                             return Err(Box::new(error))
-                        }
-                        Err(retry::Error::Internal(msg)) => {
-                            return Err(Box::new(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg)))))
                         }
                     }
                 }
@@ -1349,7 +1340,7 @@ impl Kapsule {
                 .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
-            if let Err(e) = helm.uninstall(&chart, &[]) {
+            if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                 // this error is not blocking
                 self.logger().log(EngineEvent::Warning(
                     event_details.clone(),
@@ -1387,7 +1378,7 @@ impl Kapsule {
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[]) {
+                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => self.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
@@ -1439,7 +1430,7 @@ impl Kapsule {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &[]) {
+                        match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
@@ -1874,10 +1865,6 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
-        &self.advanced_settings
-    }
-
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -1913,6 +1900,10 @@ impl Kubernetes for Kapsule {
             let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details);
         };
         Ok(())
+    }
+
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {

@@ -200,7 +200,18 @@ impl Helm {
         }
     }
 
-    pub fn uninstall(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    pub fn uninstall<STDOUT, STDERR>(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+    ) -> Result<(), HelmError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
         // If the release does not exist, we do not return an error
         match self.check_release_exist(chart, envs) {
             Ok(_) => {}
@@ -220,6 +231,7 @@ impl Helm {
             "--timeout",
             &timeout,
             "--wait",
+            "--cascade=foreground",
             "--debug",
         ];
 
@@ -227,9 +239,12 @@ impl Helm {
         match helm_exec_with_output(
             &args,
             &self.get_all_envs(envs),
-            &mut |_| {},
-            &mut |line| stderr.push_str(&line),
-            &CommandKiller::never(),
+            stdout_output,
+            &mut |line| {
+                stderr.push_str(&line);
+                stderr_output(line)
+            },
+            cmd_killer,
         ) {
             Err(err) => {
                 stderr.push_str(&err.to_string());
@@ -243,7 +258,7 @@ impl Helm {
         match self.check_release_exist(chart, envs) {
             Ok(release) if release.is_locked() && release.version <= 1 => {
                 info!("Helm lock detected. Uninstalling it as it is the first version and rollback is not possible");
-                self.uninstall(chart, envs)?;
+                self.uninstall(chart, envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
             Ok(release) if release.is_locked() => {
                 info!("Helm lock detected. Forcing rollback to previous version");
@@ -574,7 +589,6 @@ impl Helm {
         let unlock_ret = self.unlock_release(chart, envs);
         info!("Helm lock status: {:?}", unlock_ret);
 
-        let debug = false;
         let timeout_string = format!("{}s", &chart.timeout_in_seconds);
 
         let mut args_string: Vec<String> = vec![
@@ -582,6 +596,7 @@ impl Helm {
             "--kubeconfig".to_string(),
             self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--create-namespace".to_string(),
+            "--cleanup-on-fail".to_string(),
             "--install".to_string(),
             "--debug".to_string(),
             "--timeout".to_string(),
@@ -591,11 +606,6 @@ impl Helm {
             "--namespace".to_string(),
             chart.get_namespace_string(),
         ];
-
-        if debug {
-            args_string.push("-o".to_string());
-            args_string.push("json".to_string());
-        }
 
         // warn: don't add debug or json output won't work
         if chart.atomic {
@@ -664,7 +674,7 @@ impl Helm {
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
             &mut |line| {
-                info!("{}", line);
+                info!("chart {}: {}", chart.name, line);
             },
             &mut |line| {
                 warn!("chart {}: {}", chart.name, line);
@@ -734,7 +744,7 @@ impl Helm {
             {
                 if let Some(version) = installed_versions.chart_version {
                     if &version < breaking_version {
-                        self.uninstall(chart, envs)?;
+                        self.uninstall(chart, envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
                     }
                 }
             }
@@ -743,7 +753,8 @@ impl Helm {
         Ok(())
     }
 
-    pub fn template_raw(
+    // Used by helmchart service to validate deployed resources
+    pub fn template_raw<STDERR>(
         &self,
         release_name: &str,
         chart_path: &Path,
@@ -751,7 +762,11 @@ impl Helm {
         args: &[&str],
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
-    ) -> Result<String, HelmError> {
+        stderr_output: &mut STDERR,
+    ) -> Result<String, HelmError>
+    where
+        STDERR: FnMut(String),
+    {
         let chart_path = chart_path.to_string_lossy();
         let args: Vec<&str> = [
             "template",
@@ -778,6 +793,7 @@ impl Helm {
             &mut |line| {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", release_name, line);
+                stderr_output(line);
             },
             cmd_killer,
         );
@@ -785,11 +801,110 @@ impl Helm {
         match helm_ret {
             // Ok is ok
             Ok(_) => Ok(stdout),
-            Err(err) => {
-                error!("Helm error: {:?}", err);
-                Err(CmdError(release_name.to_string(), HelmCommand::TEMPLATE, err.into()))
-            }
+            Err(err) => match err {
+                CommandError::TimeoutError(_) => Err(HelmError::Timeout(release_name.to_string(), UPGRADE, stderr_msg)),
+                CommandError::Killed(_) => Err(HelmError::Killed(release_name.to_string(), UPGRADE)),
+                _ => {
+                    error!("Helm error: {:?}", err);
+                    Err(CmdError(release_name.to_string(), HelmCommand::TEMPLATE, err.into()))
+                }
+            },
         }
+    }
+
+    // Used by helmchart service that takes its argument raw, as it users that control them
+    pub fn upgrade_raw<STDOUT, STDERR>(
+        &self,
+        release_name: &str,
+        chart_path: &Path,
+        namespace: &str,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+    ) -> Result<(), HelmError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
+        // Due to crash or error it is possible that the release is under an helm lock
+        // Try to un-stuck the situation first if needed
+        // We don't care if the rollback failed, as it is a best effort to remove the lock
+        // and to re-launch an upgrade just after
+        let chart = ChartInfo::new_from_release_name(release_name, namespace);
+        let unlock_ret = self.unlock_release(&chart, envs);
+        info!("Helm lock status: {:?}", unlock_ret);
+
+        let chart_path = chart_path.to_string_lossy();
+        let args: Vec<&str> = [
+            "upgrade",
+            release_name,
+            chart_path.as_ref(),
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "-n",
+            namespace,
+        ]
+        .into_iter()
+        .chain(args.iter().copied())
+        .collect();
+
+        let mut stderr_msgs: String = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| {
+                info!("chart {}: {}", chart.name, line);
+                stdout_output(line);
+            },
+            &mut |line| {
+                warn!("chart {}: {}", chart.name, line);
+                stderr_msgs.push_str(&line);
+                stderr_output(line);
+            },
+            cmd_killer,
+        );
+
+        if let Err(err) = helm_ret {
+            error!("Helm error: {:?}", err);
+
+            // Try do define/specify a bit more the message
+            let stderr_msg = format!("{stderr_msgs}: {err}",);
+
+            // If the helm command has been canceled by the user, propagate correctly the killed error
+            match err {
+                CommandError::TimeoutError(_) => {
+                    return Err(HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg));
+                }
+                CommandError::Killed(_) => {
+                    return Err(HelmError::Killed(chart.name.clone(), UPGRADE));
+                }
+                _ => {}
+            }
+
+            let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
+                HelmError::ReleaseLocked(chart.name.clone())
+            } else if stderr_msg.contains("has been rolled back") {
+                HelmError::Rollbacked(chart.name.clone(), UPGRADE)
+            } else if stderr_msg.contains("timed out waiting") || stderr_msg.contains("deadline exceeded") {
+                HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
+            } else {
+                CmdError(
+                    chart.name.clone(),
+                    UPGRADE,
+                    errors::CommandError::new(
+                        "Helm upgrade error".to_string(),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
+                )
+            };
+
+            return Err(error);
+        };
+
+        Ok(())
     }
 
     pub fn template_validate(
@@ -929,7 +1044,9 @@ mod tests {
     impl HelmTestCtx {
         fn cleanup(&self) {
             for chart in &self.charts {
-                let ret = self.helm.uninstall(chart, &[]);
+                let ret = self
+                    .helm
+                    .uninstall(chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {});
                 assert!(ret.is_ok())
             }
         }
@@ -1197,7 +1314,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // deleting something that does not exist should not be an issue
-        let ret = helm.uninstall(&charts[0], &[]);
+        let ret = helm.uninstall(&charts[0], &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {});
         assert!(matches!(ret, Ok(())));
 
         // install it
@@ -1209,7 +1326,7 @@ mod tests {
         assert!(ret.is_ok());
 
         // Delete it
-        let ret = helm.uninstall(&charts[0], &[]);
+        let ret = helm.uninstall(&charts[0], &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {});
         assert!(matches!(ret, Ok(())));
 
         // check release does not exist anymore

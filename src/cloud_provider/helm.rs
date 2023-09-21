@@ -526,7 +526,7 @@ pub trait HelmChart: Send {
                 }
 
                 // uninstall current chart
-                helm.uninstall(chart_info, &[])?;
+                helm.uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
             HelmAction::Skip => {}
         }
@@ -575,7 +575,7 @@ pub trait HelmChart: Send {
                 None => ".".to_string(),
             },
             action: match vpa_config {
-                Some(_) => HelmAction::Deploy,
+                Some(_) => Deploy,
                 None => HelmAction::Destroy,
             },
             namespace: current_chart.namespace,
@@ -819,13 +819,13 @@ impl HelmChart for CommonChart {
         };
         warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
         match vpa_chart.action {
-            HelmAction::Deploy => {
+            Deploy => {
                 warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.upgrade(&vpa_chart, &[], cmd_killer)?;
             }
             HelmAction::Destroy => {
                 warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
-                helm.uninstall(&vpa_chart, &[])?;
+                helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
             HelmAction::Skip => {}
         }

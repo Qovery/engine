@@ -9,7 +9,6 @@ use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::logger::Logger;
 use rand::Rng;
 use regex::Regex;
-use retry::Error::Operation;
 use std::fmt::{Display, Formatter};
 use std::{env, fs, thread, time};
 
@@ -1010,14 +1009,7 @@ fn terraform_init(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, 
 
     match result {
         Ok(_) => {}
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => {
-            return Err(TerraformError::new(
-                terraform_providers_lock_args.iter().map(|e| e.to_string()).collect(),
-                "".to_string(),
-                e,
-            ))
-        }
+        Err(retry::Error { error, .. }) => return Err(error),
     };
 
     let terraform_args = vec!["init", "-no-color"];
@@ -1035,12 +1027,7 @@ fn terraform_init(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>, 
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1063,12 +1050,7 @@ fn terraform_validate(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<Strin
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1087,12 +1069,7 @@ pub fn terraform_state_list(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1113,12 +1090,7 @@ pub fn terraform_plan(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<Strin
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1143,12 +1115,7 @@ fn terraform_apply(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<String>,
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1184,8 +1151,7 @@ pub fn terraform_apply_with_tf_workers_resources(
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(terraform_args_string, "".to_string(), e)),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1223,12 +1189,7 @@ pub fn terraform_destroy(root_dir: &str, envs: &[(&str, &str)]) -> Result<Vec<St
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 
@@ -1292,12 +1253,7 @@ pub fn terraform_remove_resource_from_tf_state(root_dir: &str, resource: &str) -
 
     match result {
         Ok(output) => Ok(output),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
-            terraform_args.iter().map(|e| e.to_string()).collect(),
-            "".to_string(),
-            e,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }
 

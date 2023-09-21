@@ -19,7 +19,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs_lifecycle" {
 
     expiration {
       days = var.vpc_flow_logs_retention_days
-      expired_object_delete_marker = true
     }
 
     noncurrent_version_expiration {

@@ -6,6 +6,7 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
     http_tokens = var.ec2_metadata_imds_version
     # https://github.com/kubernetes/autoscaler/issues/3592
     http_put_response_hop_limit = 2
+    instance_metadata_tags = "enabled"
   }
 
   block_device_mappings {
@@ -17,6 +18,10 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
   }
 
   tags = local.tags_eks
+  tag_specifications {
+    resource_type = "instance"
+    tags = local.tags_eks
+  }
 }
 
 resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {

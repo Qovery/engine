@@ -143,44 +143,41 @@ pub fn execute_long_deployment<Log, TaskRet>(
 
     let deployment_result = thread::scope(|th_scope| {
         // monitor thread to notify user while the blocking task is executed
-        let th_handle = thread::Builder::new()
-            .name("deployment-monitor".to_string())
-            .spawn_scoped(th_scope, {
-                // Propagate the current span into the thread. This span is only used by tests
-                let current_span = tracing::Span::current();
-                let deployment_start = deployment_start.clone();
-                let deployment_reporter = &deployment_reporter; // to avoid moving the object into the thread
-                let state = &mut state;
+        let thread_name = format!("reporter-of-{}", thread::current().name().unwrap_or("unknown-thread"));
+        let th_handle = thread::Builder::new().name(thread_name).spawn_scoped(th_scope, {
+            // Propagate the current span into the thread. This span is only used by tests
+            let current_span = tracing::Span::current();
+            let deployment_start = deployment_start.clone();
+            let deployment_reporter = &deployment_reporter; // to avoid moving the object into the thread
+            let state = &mut state;
 
-                move || {
-                    let _span = current_span.enter();
+            move || {
+                let _span = current_span.enter();
 
-                    // Before the launch of the deployment
-                    deployment_reporter.deployment_before_start(state);
+                // Before the launch of the deployment
+                deployment_reporter.deployment_before_start(state);
 
-                    // Wait the start of the deployment
-                    deployment_start.wait();
+                // Wait the start of the deployment
+                deployment_start.wait();
 
-                    // Send deployment progress report every x secs
-                    let report_frequency = deployment_reporter.report_frequency();
-                    loop {
-                        match rx.recv_timeout(report_frequency) {
-                            // Deployment is terminated, we received the result of the task
-                            Ok(_) => break,
+                // Send deployment progress report every x secs
+                let report_frequency = deployment_reporter.report_frequency();
+                loop {
+                    match rx.recv_timeout(report_frequency) {
+                        // Deployment is terminated, we received the result of the task
+                        Ok(_) => break,
 
-                            // Deployment is still in progress
-                            Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
+                        // Deployment is still in progress
+                        Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
 
-                            // Other side died without passing us the result ! this is a logical bug !
-                            Err(RecvTimeoutError::Disconnected) => {
-                                panic!(
-                                    "Haven't received task deployment result, but otherside of the channel is dead !"
-                                );
-                            }
+                        // Other side died without passing us the result ! this is a logical bug !
+                        Err(RecvTimeoutError::Disconnected) => {
+                            panic!("Haven't received task deployment result, but otherside of the channel is dead !");
                         }
                     }
                 }
-            });
+            }
+        });
 
         // Wait for our watcher thread to be ready before starting
         let _ = deployment_start.wait();

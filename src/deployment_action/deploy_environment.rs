@@ -135,7 +135,10 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel deployment(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!(
+                "🎡 Proceeding with up to {} parallel deployment(s)",
+                parallel_deploys
+            )),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -186,7 +189,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel pause(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel pause(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -270,7 +273,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel delete(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel delete(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -327,7 +330,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Proceeding with up to {} parallel restart(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel restart(s)", parallel_deploys)),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -364,7 +367,7 @@ impl<'a> EnvironmentDeployment<'a> {
         routers
             .iter()
             .find(|router| router.associated_service_id() == Some(service_id))
-            .map(|router| router.as_ref() as &'a dyn RouterService)
+            .map(|router| router.as_ref())
     }
 }
 
@@ -427,7 +430,7 @@ impl DeploymentThreadsPool {
                 };
 
             // Launch our deployment in parallel for each service
-            for mut task in tasks {
+            for (ix, mut task) in tasks.into_iter().enumerate() {
                 // Ensure we have a slot available to run a new thread
                 let thread_result = await_deployment_slot(&mut active_threads);
                 handle_thread_result(thread_result, &mut ret);
@@ -439,7 +442,7 @@ impl DeploymentThreadsPool {
 
                 // We have a slot to run a new thread, so start a new deployment
                 let th = thread::Builder::new()
-                    .name("deployer".to_string())
+                    .name(format!("deployer-{}", ix))
                     .spawn_scoped(scope, {
                         let current_span = tracing::Span::current();
                         let current_thread = &current_thread;

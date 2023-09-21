@@ -167,14 +167,7 @@ where
     });
 
     match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: _,
-                total_delay: _,
-                tries: _,
-            } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(CommandError::new_from_safe_message(err)),
-        },
+        Err(_) => Ok(Some(false)),
         Ok(_) => Ok(Some(true)),
     }
 }

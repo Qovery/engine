@@ -9,7 +9,6 @@ use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::api::ListParams;
 use kube::Api;
-use std::thread::sleep;
 use std::time::Duration;
 
 pub struct RestartServiceAction {
@@ -228,7 +227,7 @@ async fn wait_until_service_pods_are_restarted(
             break;
         }
 
-        sleep(Duration::from_secs(10));
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 
     Ok(())

@@ -2,7 +2,6 @@ use crate::cmd::kubectl::kubectl_exec_get_pods;
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::errors::CommandError;
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::OperationResult;
 use std::path::Path;
 use std::time::Duration;
@@ -38,11 +37,6 @@ where
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new(
-            "All pods didn't manage to restart after 10 min.".to_string(),
-            Some(e),
-            None,
-        )),
+        Err(retry::Error { error, .. }) => Err(error),
     }
 }

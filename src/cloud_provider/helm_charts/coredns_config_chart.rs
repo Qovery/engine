@@ -15,7 +15,6 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
 use retry::delay::Fixed;
-use retry::Error::Operation;
 use retry::OperationResult;
 use std::collections::HashMap;
 use std::path::Path;
@@ -194,7 +193,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn run(
         &self,
-        kube_client: &kube::Client,
+        kube_client: &Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
@@ -223,7 +222,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn post_exec(
         &self,
-        kube_client: &kube::Client,
+        kube_client: &Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
@@ -343,10 +342,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
 
         match result {
             Ok(_) => Ok(()),
-            Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(e)) => {
-                Err(CommandError::new("Error trying to get CoreDNS pods".to_string(), Some(e), None))
-            }
+            Err(retry::Error { error, .. }) => Err(error),
         }
     }
 
