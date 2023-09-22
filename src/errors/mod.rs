@@ -4019,10 +4019,16 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
         // build command error from underlying error in order to have proper safe message.
+
+        let is_abort = error.is_aborted();
         let command_error = CommandError::from(error);
         EngineError::new(
             event_details,
-            Tag::DockerError,
+            if is_abort {
+                Tag::TaskCancellationRequested
+            } else {
+                Tag::DockerError
+            },
             command_error.message_safe(),
             Some(command_error),
             None,
