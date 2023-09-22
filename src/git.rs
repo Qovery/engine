@@ -114,7 +114,7 @@ where
 {
     // TODO The fallback mechanism has been putting in place while checking if the shallow clone is
     // working well. The fallback mechanism can be removed if no issues are seen with the shallow clone.
-    match clone_at_commit_with_option(
+    match clone_at_commit_with_options(
         repository_url,
         commit_id,
         into_dir.as_ref(),
@@ -130,7 +130,7 @@ where
             if into_dir.as_ref().exists() {
                 let _ = std::fs::remove_dir_all(into_dir.as_ref());
             }
-            clone_at_commit_with_option(
+            clone_at_commit_with_options(
                 repository_url,
                 commit_id,
                 into_dir.as_ref(),
@@ -162,7 +162,7 @@ where
     Ok(commit.parent_ids().next().map(|x| x.to_string()))
 }
 
-fn clone_at_commit_with_option(
+fn clone_at_commit_with_options(
     repository_url: &Url,
     commit_id: &str,
     into_dir: &Path,
@@ -173,7 +173,7 @@ fn clone_at_commit_with_option(
 
     if clone_options.shallow {
         // fetch the specific commit from remote repository with depth 1
-        fetch_commit(&commit_id, &repo)?;
+        fetch_commit(&commit_id, &repo, get_credentials)?;
     }
 
     // position the repo at the correct commit
@@ -203,8 +203,16 @@ fn clone_at_commit_with_option(
     Ok(())
 }
 
-fn fetch_commit(commit_id: &&str, repo: &Repository) -> Result<(), Error> {
+fn fetch_commit(
+    commit_id: &&str,
+    repo: &Repository,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<(), Error> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(authentication_callback(get_credentials));
+
     let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
     fetch_options.depth(1);
     fetch_options.update_fetchhead(false);
     fetch_options.download_tags(AutotagOption::None);
@@ -236,7 +244,7 @@ impl Default for CloneOptions {
 
 #[cfg(test)]
 mod tests {
-    use crate::git::{checkout, clone, clone_at_commit_with_option, get_parent_commit_id, CloneOptions};
+    use crate::git::{checkout, clone, clone_at_commit_with_options, get_parent_commit_id, CloneOptions};
     use git2::{Cred, CredentialType, Repository};
     use std::path::{Path, PathBuf};
     use url::Url;
@@ -422,7 +430,7 @@ mod tests {
                 ),
             ]
         };
-        let repo = clone_at_commit_with_option(
+        let repo = clone_at_commit_with_options(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             commit_id,
             &Path::new(&clone_dir.path),
