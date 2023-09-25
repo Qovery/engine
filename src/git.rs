@@ -4,8 +4,8 @@ use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
 use git2::{
-    CertificateCheckStatus, Cred, CredentialType, Error, Object, Oid, RemoteCallbacks, Repository,
-    SubmoduleUpdateOptions,
+    AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, Oid, RemoteCallbacks,
+    Repository, SubmoduleUpdateOptions,
 };
 use url::Url;
 
@@ -70,6 +70,7 @@ fn clone<P>(
     repository_url: &Url,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+    clone_options: &CloneOptions,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
@@ -83,8 +84,13 @@ where
     callbacks.credentials(authentication_callback(&get_credentials));
 
     // Prepare fetch options.
-    let mut fo = git2::FetchOptions::new();
+    let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
+    if clone_options.shallow {
+        fo.depth(1);
+        fo.update_fetchhead(false);
+        fo.download_tags(AutotagOption::None);
+    }
 
     // Get our repository
     let mut repo = RepoBuilder::new();
@@ -102,12 +108,73 @@ pub fn clone_at_commit<P>(
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<Repository, Error>
+) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
+    // TODO The fallback mechanism has been putting in place while checking if the shallow clone is
+    // working well. The fallback mechanism can be removed if no issues are seen with the shallow clone.
+    match clone_at_commit_with_options(
+        repository_url,
+        commit_id,
+        into_dir.as_ref(),
+        get_credentials,
+        &CloneOptions::new().shallow(true),
+    ) {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            warn!(
+                "shallow clone failed for {} at {} with error {}",
+                repository_url, commit_id, err
+            );
+            if into_dir.as_ref().exists() {
+                let _ = std::fs::remove_dir_all(into_dir.as_ref());
+            }
+            clone_at_commit_with_options(
+                repository_url,
+                commit_id,
+                into_dir.as_ref(),
+                get_credentials,
+                &CloneOptions::new().shallow(false),
+            )
+        }
+    }
+}
+
+pub fn get_parent_commit_id<P>(
+    repository_url: &Url,
+    commit_id: &str,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<Option<String>, Error>
 where
     P: AsRef<Path>,
 {
     // clone repository
-    let repo = clone(repository_url, into_dir, get_credentials)?;
+    let repo = clone(repository_url, into_dir, get_credentials, &CloneOptions::default())?;
+
+    let oid = Oid::from_str(commit_id)?;
+    let commit = match repo.find_commit(oid) {
+        Ok(commit) => commit,
+        Err(_) => return Ok(None),
+    };
+
+    Ok(commit.parent_ids().next().map(|x| x.to_string()))
+}
+
+fn clone_at_commit_with_options(
+    repository_url: &Url,
+    commit_id: &str,
+    into_dir: &Path,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+    clone_options: &CloneOptions,
+) -> Result<(), Error> {
+    let repo = clone(repository_url, into_dir, get_credentials, clone_options)?;
+
+    if clone_options.shallow {
+        // fetch the specific commit from remote repository with depth 1
+        fetch_commit(&commit_id, &repo, get_credentials)?;
+    }
 
     // position the repo at the correct commit
     let _ = checkout(&repo, commit_id)?;
@@ -121,7 +188,7 @@ where
             callbacks.credentials(authentication_callback(&get_credentials));
             callbacks.certificate_check(|_, _| Ok(CertificateCheckStatus::CertificateOk));
 
-            let mut fo = git2::FetchOptions::new();
+            let mut fo = FetchOptions::new();
             fo.remote_callbacks(callbacks);
             let mut opts = SubmoduleUpdateOptions::new();
             opts.fetch(fo);
@@ -133,35 +200,53 @@ where
         }
     }
 
-    Ok(repo)
+    Ok(())
 }
 
-pub fn get_parent_commit_id<P>(
-    repository_url: &Url,
-    commit_id: &str,
-    into_dir: P,
+fn fetch_commit(
+    commit_id: &&str,
+    repo: &Repository,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<Option<String>, Error>
-where
-    P: AsRef<Path>,
-{
-    // clone repository
-    let repo = clone(repository_url, into_dir, get_credentials)?;
+) -> Result<(), Error> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(authentication_callback(get_credentials));
 
-    let oid = Oid::from_str(commit_id)?;
-    let commit = match repo.find_commit(oid) {
-        Ok(commit) => commit,
-        Err(_) => return Ok(None),
-    };
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(1);
+    fetch_options.update_fetchhead(false);
+    fetch_options.download_tags(AutotagOption::None);
+    let mut remote = repo.find_remote("origin")?;
+    remote.fetch(&[commit_id], Some(&mut fetch_options), None)?;
+    Ok(())
+}
 
-    Ok(commit.parent_ids().next().map(|x| x.to_string()))
+struct CloneOptions {
+    shallow: bool,
+}
+
+impl CloneOptions {
+    fn new() -> Self {
+        Self { shallow: false }
+    }
+
+    fn shallow(mut self, shallow: bool) -> Self {
+        self.shallow = shallow;
+        self
+    }
+}
+
+impl Default for CloneOptions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::git::{checkout, clone, clone_at_commit, get_parent_commit_id};
-    use git2::{Cred, CredentialType};
-    use std::path::PathBuf;
+    use crate::git::{checkout, clone, clone_at_commit_with_options, get_parent_commit_id, CloneOptions};
+    use git2::{Cred, CredentialType, Repository};
+    use std::path::{Path, PathBuf};
     use url::Url;
     use uuid::Uuid;
 
@@ -199,6 +284,7 @@ mod tests {
             &Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(),
             &repo_path,
             &|_| vec![],
+            &CloneOptions::default(),
         );
         assert!(matches!(repo, Err(e) if e.message().contains("https://")));
 
@@ -207,6 +293,7 @@ mod tests {
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             &repo_path,
             &|_| vec![],
+            &CloneOptions::default(),
         );
         assert!(repo.is_ok()); // clone makes sure to empty the directory
 
@@ -217,6 +304,7 @@ mod tests {
                 &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
                 clone_dir.path(),
                 &|_| vec![],
+                &CloneOptions::default(),
             );
             assert!(matches!(repo, Ok(_repo)));
         }
@@ -234,6 +322,7 @@ mod tests {
                 &Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(),
                 clone_dir.path(),
                 &get_credentials,
+                &CloneOptions::default(),
             );
             assert!(matches!(repo, Err(repo) if repo.message().contains("authentication")));
         }
@@ -271,6 +360,7 @@ mod tests {
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             clone_dir.path(),
             &|_| vec![],
+            &CloneOptions::default(),
         )
         .unwrap();
 
@@ -320,6 +410,7 @@ mod tests {
     fn test_git_submodule_with_ssh_key() {
         // Unique Key only valid for the submodule and in read access only
         // https://github.com/Qovery/dumb-logger/settings/keys
+        let commit_id = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
         let ssh_key = String::from_utf8(base64::decode("LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNBTzZlaGNrV0JrNlcwd3lTZ0FIY0dSY3JneW1IVThqRWVKRm5yQ2k1ZjZaQUFBQUpERlV0TVZ4VkxUCkZRQUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQU82ZWhja1dCazZXMHd5U2dBSGNHUmNyZ3ltSFU4akVlSkZuckNpNWY2WkEKQUFBRUQ0aGwvTmk0aGgvK3oxUm4wdWtMcm5mQ0xrN1BUWmErbVNQYk01ZS9aS0pnN3A2RnlSWUdUcGJUREpLQUFkd1pGeQp1REtZZFR5TVI0a1dlc0tMbC9wa0FBQUFDbVZ5WldKbFFITjBlWGdCQWdNPQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K").unwrap()).unwrap();
         let invalid_ssh_key = String::from_utf8(base64::decode("LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQ21GbGN6STFOaTFqZEhJQUFBQUdZbU55ZVhCMEFBQUFHQUFBQUJCNzZzbWIzVgp5WFB3SE12dm8zWTB5M0FBQUFFQUFBQUFFQUFBR1hBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCZ1FDOVZHbm13cjZCClRHdWxzODhEaXRXaE5IUUoxMjV0eGxHa2EzNDNxUVB2S3dSc2VxN05SdFAzY2IxbDRMZytzdWozZ0lQYU5yM295SlBoRDIKZmIxbzF1cUFiOStkbWhwQXc4L1lCa05NZkRrdDRTWEpGZjZ3dUZwa1p4SHF3czNZUXF6cjhicVJaaHA0bXlnc2VwNFVHOApBaGxVMG5CUXFBREFhS3dBcmpLeUdBeWwwenRDYVdObm9sOVRZSmZuNEpOQW5YUDFONmMxMUVaRm5wKzJsMTVoSVdNd2NKClpCMnFFeTFSZzFVNXpuOVNSOURIVXhvN2p0ZkkrdWJWbHdnelBQaDVjZzAydVc0K0JwcFg1UGlpZ04rQlBNajc3WEJ0VTQKZzU3MmRDZHBSRjk3NjJ5SDBsY21nSkRqVnhnOTludVVGRDlwVG9nUTRrUENrdUluNmcxS3JObFdqY1R2c1hFS2JVS0xqawpkQkR2Yk1tbzZBaHJXRFhDSjZqRUN0T2Jka29XMGVjTGU4cXB3Nmh5N1NmdWppSm9QbnVsazRWenMwR2xPa3VPU0JIUmhJClhSc25NaFNiNnh2dDl6QldJcklvZDZoWnhuQ0V2SWRESzlacVBnOXJpbXc4bG8rUkFwdm1ySnRINUhsbFJiYWh4K2RUU1cKM2hCa1BlMnNDL1UvRUFBQVdBVXBEOTFIQTAzSnQyNFFSSFVXRDAvVTJGMTBzZE5WN0w4bkhMeVNibFBnSFhMc3lpSTFxOQo0NXBOUEQyNElBakNzQ08rVHREcXc3MDhlNXliUWhXUCsybkxtdGQwclEyTXh3SnZwUjlGcEV6UDFyejRYUDVUbzZDN3N1CmZpd0JPZWd6bjhQT1hGSmRvRk9Ud3E3dWhaM201NE93NHZvZkFKSHdtYWtwTGZMd2R1TnQ3S1RNQkVpT3VlM0ZXTGtCR0wKQUE1RGtoYVlpVGgyajB2YU9jUWhxZVphVEp6V2tidUcvb29DK1cwcTVXcFNZdFlxREFhWEh0bG8rZGtOMFEzZVVhcm1FTQpGcy9tdEpha3dhOVhCMVgzMndKbUpIdmN0OG4vVzA1T0N5V0U1Y2szeitRQVB3a2pGK0hKOGlOZDluVk5zckx1T010a2VQCk1aMTZreTg5WUVSZVQ1QXRJU1lRd0JQU2tsTFZKL3VaOCszK2Vyc3JrOW1aakw3ZXpISnV4ZysxUmR1T3BPeWpXMTRoTGYKblJQTDlKOXgvZWZ2MFV0L3BpR3M5NEFRcFFVZnJFdXpjL1dmejRocUtzVUxnT0VnblZBWXpuSksyWHJGeTN4aWlKVkFVUQpZcm4xak9lU1oyTWV0cjJvd05VdVM3cEhGTHZIWURRWklURmxVaFlOYUx0ejV5WU9HTCtFbEVxQm4wT1FFenNESDhROEpFCk5jWGVxUjFRTE4rTUJaMFZqQ2Q3T0ExTGpXZVVrdjNMaFJER3lPS3RjWk5OeFl5MkgwRWlmYzIvRHpLMnlpcVRQWUdMbHYKOWhZTlZZcC8xOGxhUkFOL040MlVDMjRmS0hFZ2lYVTNnL3RCZkZmbEFBWThKSE9sQUJEdXFWYjJkWHZKdXFLeUJMUElqVQo5cVl5VXNOVXhWS2M2ZWh4VU4wcVlnTmV2Z0JmMXVSZkxCY2c3SjVJVDZQQ2dSa3lNenBRakY1RkhuM0J6SVMrb3ZFSnNaCk5LNklYbDJIY3FncExTWUFkTFZlZEZOUzlkVU01blpMdlJEMjkyc0FQWm5aaU91Z3pwSWNrMllFcXpscjc2NXlUakRJdWgKR3kvdFlBQ3FIZHV4S2pMdGc0OXpjZjdNN2xESGNuVEY1MlJsazEyR2x1emZGK1dhZDF3eUFKVnNyUmtqVFZYVHhnTEV6MQo4SzF0WUtVOWoyc3grUE1Vd0JxM3lQR2lTaEgydWp6em82SUc1cnVYSTAwZXVkT2t1NVVrSHhBVnJneUI1S0M2VFRMR1BYCnhQMFN5Zk12dXJycDdvMnhsK2dkSVc0c0dudEJ2V0RHRVFSY0RxbWdLV0tuNTNsbmg5U1Urcmh2UkdhRFJueENuYkNwUEUKTE82V0lKUXVPQm54bzhWcGU0R2JLc2NmSktKSzlZV2ZIOFEvYzBncnE0ZDh5ZmRwUG1uc3hHOEpoTFVuMEhpRFEzQytaMgpzU1RPeU85TDAySUZIdDdIUEY2OWRWR3c3M0pPU1FiL05GK2g5cGRVazBScGNRdGFaTm9TMHg2a3RCQXljK0o0VUpUYTliCkdENWRaSE1KVHBvcWFZUDV0dFlnMjlBQkpUUURMa0tnbWxWRGNtK28zRTN3cTlySWFXMlhpNDQrc3RnTVJVS1J5R041d1EKM2xTWjk1QXBpWFlpRkNONUVrWitUci96TDAraVdwUHRCRzlJZmlGbmlqVlVYUnpEWHZxeGE1QTQ1YUlNWDhad2U5ckxFdAphaVRaOUI5d2tVb0tYdXlDU3plQXhMTGU2aG8wLzBDbmhSR3NoVGg1UDd6aFA4bVExRGZMYlFCRU0zOHJMWlplMExVVVhZCkZpZkFXc3BFRDk2VjBMckhxRkd0Z0dzd1NQcWRBRzBPTDBWekRUbFRucDJVWDY0SEhjUzF2MUMyQnNxbllWbkJNL3p5aUYKQXhabDB4cGRPUVVuKzV2V2VHUXZsQkhGeU0vQmtXRVhMbjc1YVNQL3JwcnlZeGdOeWx2M2NiRWNYZXoyWXdLM2UrN1NnZAoxRzFZUVVtNStqNy90Q0x5aFluL1VjRzJhTHJNc3pRY1FoWTE4Sk9IOXF6a2FacWdYckFybnE0dWluT25sbFBKaGJ3ZTVrCmgvMmdyTlVqbEsrRHYxQ2dGZUVDcm9yRHo4L3ZxZW1QNXdVWWF5bFNWWVZ3UHM1bkxDQWUrVlNobFlIOXlNb3JwanNXc3MKYlg0UlAvVGd3TmNtRnBuZ21kTXppNmtIUXhSc2pUT3VxZ3Vsb01FUVZmQ3JkNGxBeWp3eVhRaEcrd2dWMXBuempCZlR4eQpZeFBrc1VGaTg3aEVkZ1RPZ2M5MHlNamVoVGhHOGRMWGEvd0NOU0hLZ1pBbFBZbWdLd2ZvcFlBMjQxdUlxR2J0WUtqSTFSCnVHU2JqSU80dUVYbkJ5eWVZTnA3Z29iR2NVc1BGV0doY1FPV05QZnl5K1crQ0xhKzVpYkJCZEF2NStVdlZZUHFGMHhTNy8KUm1TbW9BPT0KLS0tLS1FTkQgT1BFTlNTSCBQUklWQVRFIEtFWS0tLS0t").unwrap()).unwrap();
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_submodule".to_string());
@@ -339,13 +430,19 @@ mod tests {
                 ),
             ]
         };
-        let repo = clone_at_commit(
+        let repo = clone_at_commit_with_options(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
-            "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8",
-            clone_dir.path(),
+            commit_id,
+            &Path::new(&clone_dir.path),
             &get_credentials,
+            &CloneOptions::new().shallow(true),
         );
         assert!(repo.is_ok());
         assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
+
+        // Valid commit
+        let repo = Repository::open(&clone_dir.path);
+        assert!(repo.is_ok());
+        assert_eq!(repo.unwrap().head().unwrap().target().unwrap().to_string(), commit_id);
     }
 }
