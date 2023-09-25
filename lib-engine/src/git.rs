@@ -103,6 +103,56 @@ where
     repo.clone(repository_url.as_str(), into_dir.as_ref())
 }
 
+fn fetch<P>(
+    repository_url: &Url,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+    commit_id: &str,
+    clone_options: &CloneOptions,
+) -> Result<Repository, Error>
+where
+    P: AsRef<Path>,
+{
+    if repository_url.scheme() != "https" {
+        return Err(Error::from_str("Repository URL have to start with https://"));
+    }
+
+    // Prepare authentication callbacks.
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(authentication_callback(&get_credentials));
+
+    // Prepare fetch options.
+    let mut fo = FetchOptions::new();
+    fo.remote_callbacks(callbacks);
+    if clone_options.shallow {
+        fo.depth(1);
+        fo.update_fetchhead(false);
+        fo.download_tags(AutotagOption::None);
+    }
+
+    // Get our repository
+    if into_dir.as_ref().exists() {
+        let _ = std::fs::remove_dir_all(into_dir.as_ref());
+    }
+
+    let repo = Repository::init(into_dir)?;
+    remote_fetch(repository_url, &commit_id, &mut fo, &repo)?;
+
+    Ok(repo)
+}
+
+fn remote_fetch(
+    repository_url: &Url,
+    commit_id: &&str,
+    mut fo: &mut FetchOptions,
+    repo: &Repository,
+) -> Result<(), Error> {
+    let mut remote = repo.remote("origin", repository_url.as_str())?;
+    remote.fetch(&[commit_id], Some(&mut fo), None)?;
+    remote.disconnect()?;
+    Ok(())
+}
+
 pub fn clone_at_commit<P>(
     repository_url: &Url,
     commit_id: &str,
@@ -119,7 +169,7 @@ where
         commit_id,
         into_dir.as_ref(),
         get_credentials,
-        &CloneOptions::new().shallow(true),
+        &CloneOptions::new().shallow(true).fetch(true),
     ) {
         Ok(_) => Ok(()),
         Err(err) => {
@@ -135,7 +185,7 @@ where
                 commit_id,
                 into_dir.as_ref(),
                 get_credentials,
-                &CloneOptions::new().shallow(false),
+                &CloneOptions::new().shallow(false).fetch(false),
             )
         }
     }
@@ -169,12 +219,10 @@ fn clone_at_commit_with_options(
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
     clone_options: &CloneOptions,
 ) -> Result<(), Error> {
-    let repo = clone(repository_url, into_dir, get_credentials, clone_options)?;
-
-    if clone_options.shallow {
-        // fetch the specific commit from remote repository with depth 1
-        fetch_commit(&commit_id, &repo, get_credentials)?;
-    }
+    let repo = match clone_options.fetch {
+        true => fetch(repository_url, into_dir, get_credentials, commit_id, clone_options)?,
+        false => clone(repository_url, into_dir, get_credentials, clone_options)?,
+    };
 
     // position the repo at the correct commit
     let _ = checkout(&repo, commit_id)?;
@@ -203,35 +251,26 @@ fn clone_at_commit_with_options(
     Ok(())
 }
 
-fn fetch_commit(
-    commit_id: &&str,
-    repo: &Repository,
-    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<(), Error> {
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(authentication_callback(get_credentials));
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-    fetch_options.depth(1);
-    fetch_options.update_fetchhead(false);
-    fetch_options.download_tags(AutotagOption::None);
-    let mut remote = repo.find_remote("origin")?;
-    remote.fetch(&[commit_id], Some(&mut fetch_options), None)?;
-    Ok(())
-}
-
 struct CloneOptions {
     shallow: bool,
+    fetch: bool,
 }
 
 impl CloneOptions {
     fn new() -> Self {
-        Self { shallow: false }
+        Self {
+            shallow: false,
+            fetch: false,
+        }
     }
 
     fn shallow(mut self, shallow: bool) -> Self {
         self.shallow = shallow;
+        self
+    }
+
+    fn fetch(mut self, fetch: bool) -> Self {
+        self.fetch = fetch;
         self
     }
 }
@@ -435,7 +474,7 @@ mod tests {
             commit_id,
             &Path::new(&clone_dir.path),
             &get_credentials,
-            &CloneOptions::new().shallow(true),
+            &CloneOptions::new().shallow(true).fetch(true),
         );
         assert!(repo.is_ok());
         assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
