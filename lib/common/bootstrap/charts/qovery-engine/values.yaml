@@ -38,7 +38,7 @@ labels:
   app: qovery-engine
 
 environmentVariables:
-  RUST_LOG: DEBUG,rusoto_core=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info,vaultrs=info,h2=info
+  RUST_LOG: DEBUG,rusoto_core=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info,vaultrs=info,h2=info,tower::buffer=info
   #LIB_ROOT_DIR: ""
   #DOCKER_HOST: ""
   #ORGANIZATION: ""
