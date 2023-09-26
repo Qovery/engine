@@ -1,13 +1,51 @@
 use std::path::Path;
 
-use git2::build::{CheckoutBuilder, RepoBuilder};
+use git2::build::CheckoutBuilder;
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
 use git2::{
-    AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, Oid, RemoteCallbacks,
+    AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, RemoteCallbacks,
     Repository, SubmoduleUpdateOptions,
 };
 use url::Url;
+
+pub fn clone_at_commit<P>(
+    repository_url: &Url,
+    commit_id: &str,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
+    let repo = fetch(repository_url, into_dir, get_credentials, commit_id)?;
+
+    // position the repo at the correct commit
+    let _ = checkout(&repo, commit_id)?;
+
+    // check submodules if needed
+    {
+        let submodules = repo.submodules()?;
+        if !submodules.is_empty() {
+            // for auth
+            let mut callbacks = RemoteCallbacks::new();
+            callbacks.credentials(authentication_callback(&get_credentials));
+            callbacks.certificate_check(|_, _| Ok(CertificateCheckStatus::CertificateOk));
+
+            let mut fo = FetchOptions::new();
+            fo.remote_callbacks(callbacks);
+            let mut opts = SubmoduleUpdateOptions::new();
+            opts.fetch(fo);
+
+            for mut submodule in submodules {
+                info!("getting submodule {:?} from {:?}", submodule.name(), submodule.url());
+                submodule.update(true, Some(&mut opts))?
+            }
+        }
+    }
+
+    Ok(())
+}
 
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
 // If auth is denied, it up to us to return a new credential to try different auth method
@@ -66,11 +104,11 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
     Ok(obj)
 }
 
-fn clone<P>(
+fn fetch<P>(
     repository_url: &Url,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-    clone_options: &CloneOptions,
+    commit_id: &str,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
@@ -86,165 +124,36 @@ where
     // Prepare fetch options.
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
-    if clone_options.shallow {
-        fo.depth(1);
-        fo.update_fetchhead(false);
-        fo.download_tags(AutotagOption::None);
-    }
+    fo.depth(1);
+    fo.update_fetchhead(false);
+    fo.download_tags(AutotagOption::None);
 
     // Get our repository
-    let mut repo = RepoBuilder::new();
-    repo.fetch_options(fo);
-
     if into_dir.as_ref().exists() {
         let _ = std::fs::remove_dir_all(into_dir.as_ref());
     }
 
-    repo.clone(repository_url.as_str(), into_dir.as_ref())
+    let repo = Repository::init(into_dir)?;
+    remote_fetch(repository_url, &commit_id, &mut fo, &repo)?;
+
+    Ok(repo)
 }
 
-pub fn clone_at_commit<P>(
+fn remote_fetch(
     repository_url: &Url,
-    commit_id: &str,
-    into_dir: P,
-    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<(), Error>
-where
-    P: AsRef<Path>,
-{
-    // TODO The fallback mechanism has been putting in place while checking if the shallow clone is
-    // working well. The fallback mechanism can be removed if no issues are seen with the shallow clone.
-    match clone_at_commit_with_options(
-        repository_url,
-        commit_id,
-        into_dir.as_ref(),
-        get_credentials,
-        &CloneOptions::new().shallow(true),
-    ) {
-        Ok(_) => Ok(()),
-        Err(err) => {
-            warn!(
-                "shallow clone failed for {} at {} with error {}",
-                repository_url, commit_id, err
-            );
-            if into_dir.as_ref().exists() {
-                let _ = std::fs::remove_dir_all(into_dir.as_ref());
-            }
-            clone_at_commit_with_options(
-                repository_url,
-                commit_id,
-                into_dir.as_ref(),
-                get_credentials,
-                &CloneOptions::new().shallow(false),
-            )
-        }
-    }
-}
-
-pub fn get_parent_commit_id<P>(
-    repository_url: &Url,
-    commit_id: &str,
-    into_dir: P,
-    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<Option<String>, Error>
-where
-    P: AsRef<Path>,
-{
-    // clone repository
-    let repo = clone(repository_url, into_dir, get_credentials, &CloneOptions::default())?;
-
-    let oid = Oid::from_str(commit_id)?;
-    let commit = match repo.find_commit(oid) {
-        Ok(commit) => commit,
-        Err(_) => return Ok(None),
-    };
-
-    Ok(commit.parent_ids().next().map(|x| x.to_string()))
-}
-
-fn clone_at_commit_with_options(
-    repository_url: &Url,
-    commit_id: &str,
-    into_dir: &Path,
-    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-    clone_options: &CloneOptions,
-) -> Result<(), Error> {
-    let repo = clone(repository_url, into_dir, get_credentials, clone_options)?;
-
-    if clone_options.shallow {
-        // fetch the specific commit from remote repository with depth 1
-        fetch_commit(&commit_id, &repo, get_credentials)?;
-    }
-
-    // position the repo at the correct commit
-    let _ = checkout(&repo, commit_id)?;
-
-    // check submodules if needed
-    {
-        let submodules = repo.submodules()?;
-        if !submodules.is_empty() {
-            // for auth
-            let mut callbacks = RemoteCallbacks::new();
-            callbacks.credentials(authentication_callback(&get_credentials));
-            callbacks.certificate_check(|_, _| Ok(CertificateCheckStatus::CertificateOk));
-
-            let mut fo = FetchOptions::new();
-            fo.remote_callbacks(callbacks);
-            let mut opts = SubmoduleUpdateOptions::new();
-            opts.fetch(fo);
-
-            for mut submodule in submodules {
-                info!("getting submodule {:?} from {:?}", submodule.name(), submodule.url());
-                submodule.update(true, Some(&mut opts))?
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn fetch_commit(
     commit_id: &&str,
+    mut fo: &mut FetchOptions,
     repo: &Repository,
-    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> Result<(), Error> {
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(authentication_callback(get_credentials));
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-    fetch_options.depth(1);
-    fetch_options.update_fetchhead(false);
-    fetch_options.download_tags(AutotagOption::None);
-    let mut remote = repo.find_remote("origin")?;
-    remote.fetch(&[commit_id], Some(&mut fetch_options), None)?;
+    let mut remote = repo.remote("origin", repository_url.as_str())?;
+    remote.fetch(&[commit_id], Some(&mut fo), None)?;
+    remote.disconnect()?;
     Ok(())
-}
-
-struct CloneOptions {
-    shallow: bool,
-}
-
-impl CloneOptions {
-    fn new() -> Self {
-        Self { shallow: false }
-    }
-
-    fn shallow(mut self, shallow: bool) -> Self {
-        self.shallow = shallow;
-        self
-    }
-}
-
-impl Default for CloneOptions {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::git::{checkout, clone, clone_at_commit_with_options, get_parent_commit_id, CloneOptions};
+    use crate::git::{checkout, clone_at_commit, fetch};
     use git2::{Cred, CredentialType, Repository};
     use std::path::{Path, PathBuf};
     use url::Url;
@@ -275,36 +184,37 @@ mod tests {
     }
 
     #[test]
-    fn test_git_clone_repository() {
+    fn test_git_fetch_repository() {
         let repo_dir = DirectoryForTests::new_with_random_suffix("/tmp/tmp_git".to_string());
         let repo_path = repo_dir.path();
+        let commit = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
 
         // We only allow https:// at the moment
-        let repo = clone(
+        let repo = fetch(
             &Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(),
             &repo_path,
             &|_| vec![],
-            &CloneOptions::default(),
+            commit,
         );
         assert!(matches!(repo, Err(e) if e.message().contains("https://")));
 
         // Repository must be empty
-        let repo = clone(
+        let repo = fetch(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             &repo_path,
             &|_| vec![],
-            &CloneOptions::default(),
+            commit,
         );
         assert!(repo.is_ok()); // clone makes sure to empty the directory
 
         // Working case
         {
             let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone".to_string());
-            let repo = clone(
+            let repo = fetch(
                 &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
                 clone_dir.path(),
                 &|_| vec![],
-                &CloneOptions::default(),
+                commit,
             );
             assert!(matches!(repo, Ok(_repo)));
         }
@@ -318,11 +228,11 @@ mod tests {
                     Cred::userpass_plaintext("FAKE", "FAKE").unwrap(),
                 )]
             };
-            let repo = clone(
+            let repo = fetch(
                 &Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(),
                 clone_dir.path(),
                 &get_credentials,
-                &CloneOptions::default(),
+                commit,
             );
             assert!(matches!(repo, Err(repo) if repo.message().contains("authentication")));
         }
@@ -356,11 +266,12 @@ mod tests {
     #[test]
     fn test_git_checkout() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_checkout".to_string());
-        let repo = clone(
+        let valid_commit = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
+        let repo = fetch(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             clone_dir.path(),
             &|_| vec![],
-            &CloneOptions::default(),
+            valid_commit,
         )
         .unwrap();
 
@@ -369,41 +280,9 @@ mod tests {
         assert!(matches!(check, Err(_err)));
 
         // Valid commit
-        let commit = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
-        assert_ne!(repo.head().unwrap().target().unwrap().to_string(), commit);
-        let check = checkout(&repo, commit);
+        let check = checkout(&repo, valid_commit);
         assert!(check.is_ok());
-        assert_eq!(repo.head().unwrap().target().unwrap().to_string(), commit);
-    }
-
-    #[test]
-    fn test_git_parent_id() {
-        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id".to_string());
-        let result = get_parent_commit_id(
-            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
-            "964f02f3a3065bc7f6fb745d679b1ddb21153cc7",
-            clone_dir.path(),
-            &|_| vec![],
-        )
-        .unwrap()
-        .unwrap();
-
-        assert_eq!(result, "1538fb6333b86798f0cf865558a28e729a98dace".to_string());
-    }
-
-    #[test]
-    fn test_git_parent_id_not_existing() {
-        let clone_dir =
-            DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id_not_existing".to_string());
-        let result = get_parent_commit_id(
-            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
-            "964f02f3a3065bc7f6fb745d679b1ddb21153cc0",
-            clone_dir.path(),
-            &|_| vec![],
-        )
-        .unwrap();
-
-        assert_eq!(result, None);
+        assert_eq!(repo.head().unwrap().target().unwrap().to_string(), valid_commit);
     }
 
     #[test]
@@ -430,12 +309,11 @@ mod tests {
                 ),
             ]
         };
-        let repo = clone_at_commit_with_options(
+        let repo = clone_at_commit(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             commit_id,
             &Path::new(&clone_dir.path),
             &get_credentials,
-            &CloneOptions::new().shallow(true),
         );
         assert!(repo.is_ok());
         assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());

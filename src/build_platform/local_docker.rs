@@ -123,6 +123,8 @@ impl LocalDocker {
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
+        let build_record =
+            metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
             application: build.image.service_id.clone(),
             action_description: "reading dockerfile content".to_string(),
@@ -131,6 +133,7 @@ impl LocalDocker {
         let dockerfile_args = match extract_dockerfile_args(dockerfile_content) {
             Ok(dockerfile_args) => dockerfile_args,
             Err(err) => {
+                build_record.stop(StepStatus::Error);
                 return Err(BuildError::InvalidConfig {
                     application: build.image.service_id.clone(),
                     raw_error_message: format!("Cannot extract env vars from your dockerfile {err}"),
@@ -158,14 +161,12 @@ impl LocalDocker {
         logger.send_progress(format!("🕵️ Checking if image already exist remotely {image_name}"));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
             logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {image_name}"));
-
+            build_record.stop(StepStatus::Skip);
             // skip build
             return Ok(());
         }
 
         logger.send_progress(format!("⛏️ Building image. It does not exist remotely {image_name}"));
-        let build_record =
-            metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
