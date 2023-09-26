@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use crate::grpc::engine::StepRecord as GrpcStepRecord;
 use crate::grpc::engine::{engine_message_rx, EngineMessageRx};
 use crate::grpc::engine::{engine_message_tx, DeploymentInfo, DeploymentType, EngineMessageTx};
@@ -26,7 +28,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::{mpsc, watch, Mutex, OwnedMutexGuard};
 use tokio::time::timeout;
 use tonic::{Code, Streaming};
-use tracing::{error, field, Span};
+use tracing::{error, field, Instrument, Level, Span};
 
 // A single deployment can receive N tasks.
 // A task represent a deployment group/engine request.
@@ -237,17 +239,18 @@ impl DeploymentManager {
         }
     }
 
-    #[instrument(level="info", skip_all, fields(execution_id = field::Empty))]
     pub async fn run(mut self) {
+        const SPAN_NAME: &str = "deploymnt_mngr";
         let mut state = DeploymentManagerState::SeekingNewDeployment {};
         let mut delay = None;
+        let mut span = span!(Level::INFO, SPAN_NAME, execution_id = field::Empty);
 
         while state.does_execute_deployment() || !self.should_shutdown.load(Ordering::Relaxed) {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
 
-            let (new_state, new_delay) = self.run_exec_state(state).await;
+            let (new_state, new_delay) = self.run_exec_state(state).instrument(span.clone()).await;
 
             state = new_state;
             delay = new_delay;
@@ -256,13 +259,11 @@ impl DeploymentManager {
             match &state {
                 DeploymentManagerState::SeekingNewDeployment { .. } => {
                     METRICS_NB_RUNNING_TASKS.set(0);
-                    let span = Span::current();
-                    span.record("execution_id", field::Empty);
+                    span = span!(Level::INFO, SPAN_NAME, execution_id = field::Empty);
                 }
                 DeploymentManagerState::ExecutingDeployment { deployment, .. } => {
                     METRICS_NB_RUNNING_TASKS.set(1);
-                    let span = Span::current();
-                    span.record("execution_id", &deployment.deployment_info.execution_id);
+                    span = span!(Level::INFO, SPAN_NAME, execution_id = deployment.deployment_info.execution_id);
                 }
                 DeploymentManagerState::ExecutingDeploymentTask { .. } => {}
                 DeploymentManagerState::ResumingDeploymentTask { .. } => {}
