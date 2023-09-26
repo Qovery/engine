@@ -533,8 +533,6 @@ impl DeploymentManager {
                                 Some(engine_message_rx::Request::DeploymentCancel(_)) => {
                                     info!("Received cancel request: {:?}", msg);
                                     Self::terminate_task(task).await;
-
-                                    return (DeploymentManagerState::SeekingNewDeployment {}, None);
                                 }
                                 Some(engine_message_rx::Request::Terminated(_)) => {
                                     info!("Received terminated message for deployment: {:?}", msg);
