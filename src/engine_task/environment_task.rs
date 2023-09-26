@@ -59,8 +59,8 @@ impl EnvironmentTask {
     ) -> Self {
         let span = info_span!(
             "environment_task",
-            organization_id = request.organization_long_id.to_string(),
-            cluster_id = request.kubernetes.long_id.to_string(),
+            //organization_id = request.organization_long_id.to_string(),
+            //cluster_id = request.kubernetes.long_id.to_string(),
             execution_id = request.id,
         );
 
