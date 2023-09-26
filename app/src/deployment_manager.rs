@@ -406,10 +406,14 @@ impl DeploymentManager {
 
             Err(err) => match err.code() {
                 Code::NotFound => {
-                    error!(
-                        "Deployment not found anymore while wanting to resume task ??? {:?}",
-                        &deployment.deployment_info
-                    );
+                    if task.task.is_terminated() {
+                        info!("Deployment not found anymore and task is already terminated");
+                    } else {
+                        error!(
+                            "Deployment not found anymore to resume task ??? {:?}",
+                            &deployment.deployment_info
+                        );
+                    }
                     Self::terminate_task(task).await;
                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                 }

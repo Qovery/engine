@@ -39,7 +39,7 @@ impl Logger for StdIoLogger {
             "std_io_logger",
             //organization_id = event_details.organisation_id().short(),
             //cluster_id = event_details.cluster_id().short(),
-            execution_id = event_details.execution_id(),
+            //execution_id = event_details.execution_id(),
             //provider = match event_details.provider_kind() {
             //    Some(kind) => kind.to_string(),
             //    None => "".to_string(),
