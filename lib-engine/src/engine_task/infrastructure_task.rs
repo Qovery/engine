@@ -12,8 +12,9 @@ use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::transaction::{Transaction, TransactionResult};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{env, fs};
+use tokio::sync::broadcast;
 
 pub struct InfrastructureTask {
     workspace_root_dir: String,
@@ -24,6 +25,7 @@ pub struct InfrastructureTask {
     metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
     span: tracing::Span,
+    is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
 }
 
 impl InfrastructureTask {
@@ -52,6 +54,10 @@ impl InfrastructureTask {
             metrics_registry,
             qovery_api: Arc::new(qovery_api),
             span,
+            is_terminated: {
+                let (tx, rx) = broadcast::channel(1);
+                (RwLock::new(Some(tx)), rx)
+            },
         }
     }
 
@@ -158,6 +164,10 @@ impl Task for InfrastructureTask {
                 self.get_event_details(InfrastructureStep::Terminated),
                 EventMessage::new("Qovery Engine has terminated the infrastructure deployment".to_string(), None),
             ));
+            let Some(is_terminated_tx) = self.is_terminated.0.write().unwrap().take() else {
+                return;
+            };
+            let _ = is_terminated_tx.send(());
         });
 
         let engine = match self.request.engine(
@@ -233,5 +243,13 @@ impl Task for InfrastructureTask {
 
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         Box::new(|| false)
+    }
+
+    fn is_terminated(&self) -> bool {
+        self.is_terminated.0.read().map(|tx| tx.is_none()).unwrap_or(true)
+    }
+
+    fn await_terminated(&self) -> broadcast::Receiver<()> {
+        self.is_terminated.1.resubscribe()
     }
 }

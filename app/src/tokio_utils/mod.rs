@@ -10,7 +10,7 @@ use warp::Filter;
 static MAX_THREADS: usize = 2;
 lazy_static! {
     static ref TOKIO_RUNTIME: Runtime = Builder::new_multi_thread()
-        .thread_name("tokio-main-binary")
+        .thread_name("tokio")
         .max_blocking_threads(MAX_THREADS)
         .enable_all()
         .build()

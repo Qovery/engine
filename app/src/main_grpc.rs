@@ -23,7 +23,7 @@ use std::{io, process};
 use dirs::home_dir;
 use dotenv::dotenv;
 use futures_util::future::select;
-use futures_util::{pin_mut, stream, StreamExt};
+use futures_util::pin_mut;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::api::{DeleteParams, ListParams};
@@ -32,7 +32,6 @@ use qovery_engine::cmd::docker;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
-use tonic::Code;
 use tracing::error;
 use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -40,6 +39,13 @@ use url::Url;
 use uuid::Uuid;
 use warp::http::Uri;
 
+use crate::constants::ASCII_BANNER;
+use crate::deployment_manager::DeploymentManager;
+use crate::grpc::engine::{DeploymentInfo, DeploymentType};
+use crate::grpc::qovery_api::GrpcCoreServiceApi;
+use crate::grpc::GrpcEngineClient;
+use crate::models::TaskSelector;
+use crate::utils::{check_libs_directory, check_versions_from};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
@@ -50,19 +56,8 @@ use qovery_engine::events::{
 };
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
-use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
-
-use crate::constants::ASCII_BANNER;
-use crate::deployment_manager::DeploymentManager;
-use crate::grpc::engine::{
-    engine_message_rx, engine_message_tx, DeploymentInfo, DeploymentRequest, DeploymentType, EngineMessageTx,
-};
-use crate::grpc::qovery_api::GrpcCoreServiceApi;
-use crate::grpc::GrpcEngineClient;
-use crate::logger::composite_logger::CompositeLogger;
-use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, check_versions_from};
+use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 
 mod constants;
 mod custom_error;
@@ -209,7 +204,7 @@ pub fn main() -> io::Result<()> {
         cli.grpc_server
     };
 
-    println!("{ASCII_BANNER}");
+    println!("{}", ASCII_BANNER);
 
     // Init tracing subscriber
     tracing_subscriber::fmt()
@@ -224,7 +219,6 @@ pub fn main() -> io::Result<()> {
         .init();
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
-    let logger = Box::new(StdIoLogger::new());
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_callback = {
@@ -361,13 +355,13 @@ pub fn main() -> io::Result<()> {
             .await
             .expect("Engine can't connect to gateway");
 
-        let mut current_deployment = DeploymentManager::new();
-        let payload_to_engine_task = |payload: String,
-                                      grpc_client: &GrpcEngineClient,
-                                      logger: Box<dyn Logger>,
-                                      metrics_registry: Box<dyn MetricsRegistry>|
-         -> Result<Box<dyn Task>, serde_json::Error> {
-            to_engine_task(
+        let payload_to_engine_task = move |payload: String,
+                                           deployment_info: &DeploymentInfo,
+                                           grpc_client: &GrpcEngineClient,
+                                           logger: Box<dyn Logger>,
+                                           metrics_registry: Box<dyn MetricsRegistry>|
+              -> Result<Box<dyn Task>, EngineEvent> {
+            let ret = to_engine_task(
                 payload,
                 &cli.workspace_root_dir,
                 &cli.lib_root_dir,
@@ -376,229 +370,49 @@ pub fn main() -> io::Result<()> {
                 grpc_client,
                 logger,
                 metrics_registry,
-            )
+            );
+
+            match ret {
+                Ok(task) => Ok(task),
+                Err(err) => {
+                    let execution_id = deployment_info.execution_id.clone();
+                    error!("Error while creating task for {}: {}", execution_id, err);
+                    let event_details = EventDetails::new(
+                        None,
+                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
+                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.cluster_id).unwrap_or_default()),
+                        execution_id.to_string(),
+                        if deployment_info.r#type == DeploymentType::Environment as i32 {
+                            Stage::Environment(EnvironmentStep::Cancelled)
+                        } else {
+                            Stage::Infrastructure(InfrastructureStep::CannotProcessRequest)
+                        },
+                        Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
+                    );
+                    let msg =
+                        format!("Engine received an invalid deployment request for execution_id = {execution_id}");
+                    let message = EventMessage::new_from_safe(msg.to_string());
+                    let err = EngineEvent::Error(
+                        EngineError::new_invalid_engine_payload(
+                            event_details.clone(),
+                            msg.as_str(),
+                            Some(CommandError::new(msg.clone(), Some(format!("{err}")), None)),
+                        ),
+                        Some(message),
+                    );
+                    Err(err)
+                }
+            }
         };
 
-        // Execute deployment until we are asked to be shutdown and no deployment is on-going
-        while !(should_shutdown.load(Ordering::Relaxed) && current_deployment.get_current_deployment().is_none()) {
-            let ret = fetch_and_exec_deployments(
-                &mut engine_client,
-                &mut current_deployment,
-                payload_to_engine_task,
-                logger.clone(),
-                task_selector,
-            )
-            .await;
-
-            if let Err(e) = ret {
-                error!("{}", e);
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
-        }
+        let mngr =
+            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Box::new(payload_to_engine_task));
+        mngr.run().await
     };
 
     let task_executor_h = tokio_utils::launch_task(task_executor);
     while !task_executor_h.is_finished() {
         thread::sleep(Duration::from_secs(1));
-    }
-
-    Ok(())
-}
-
-async fn fetch_new_deployment(
-    engine_client: &mut GrpcEngineClient,
-    deployment_request: DeploymentRequest,
-) -> Result<DeploymentInfo, anyhow::Error> {
-    match engine_client.get_new_deployment(deployment_request.clone()).await {
-        Ok(deployment_info) => {
-            let deployment_info = deployment_info.into_inner();
-            Ok(deployment_info)
-        }
-        Err(err) => {
-            if err.code() == Code::NotFound {
-                Err(anyhow::anyhow!("No deployment found, waiting for a new one"))
-            } else {
-                Err(anyhow::anyhow!("Error while getting new deployment: {}", err))
-            }
-        }
-    }
-}
-
-async fn fetch_and_exec_deployments(
-    engine_client: &mut GrpcEngineClient,
-    mut current_deployment: &mut DeploymentManager,
-    to_engine_task: impl Fn(
-        String,
-        &GrpcEngineClient,
-        Box<dyn Logger>,
-        Box<dyn MetricsRegistry>,
-    ) -> Result<Box<dyn Task>, serde_json::Error>,
-    logger: Box<dyn Logger>,
-    task_selector: TaskSelector,
-) -> Result<(), anyhow::Error> {
-    let deployment_type = match task_selector {
-        TaskSelector::Infrastructure(_) => DeploymentRequest {
-            deployment_type: DeploymentType::Infrastructure as i32,
-        },
-        TaskSelector::Environment(_) => DeploymentRequest {
-            deployment_type: DeploymentType::Environment as i32,
-        },
-    };
-
-    // If there is no deployment on-going, we loop until we retrieve a new deployment to execute
-    // if there is already one deployment it means, the connection broke, and we try to resume the current one
-    let deployment_info = if let Some(deployment_info) = current_deployment.get_current_deployment() {
-        info!("Resuming deployment for: {:?}", deployment_info);
-        deployment_info.clone()
-    } else {
-        let deployment_info = fetch_new_deployment(engine_client, deployment_type).await?;
-        info!("Got new deployment for: {:?}", deployment_info);
-        current_deployment.set_current_deployment(deployment_info.clone());
-        deployment_info
-    };
-
-    // Now we retrieved a deployment, claim it and execute it
-    let (log_tx, msg_tx, msg_stream, abort_deployment_tx) = current_deployment.get_message_stream().await;
-    let logger_for_task = CompositeLogger::new(vec![logger.clone(), Box::new(log_tx.clone())]);
-    let msg_publisher = Box::new(msg_tx.clone());
-
-    let metrics_registry = Box::new(StdMetricsRegistry::new(msg_publisher.clone()));
-
-    let msg_stream = stream::iter(vec![EngineMessageTx {
-        message_id: None,
-        message: Some(engine_message_tx::Message::DeploymentRequest(deployment_info.clone())),
-    }])
-    .chain(msg_stream);
-
-    let msg_stream = match engine_client.exec_deployment(msg_stream).await {
-        Ok(upstream_msg) => upstream_msg.into_inner(),
-        Err(err) => {
-            return match err.code() {
-                Code::NotFound => {
-                    // Task is terminated, and the server refused to accept message for it, we can remove it
-                    while !current_deployment.is_task_terminated() {
-                        info!("Current deployment does not exist anymore, but the task is not terminated, waiting for it to finish");
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-                    info!("Task terminated and current deployment does not exist anymore, removing it");
-                    current_deployment.remove_current_deployment();
-
-                    Ok(())
-                }
-                _ => {
-                    error!("Error while getting new deployment: {}", err);
-                    Err(err.into())
-                }
-            };
-        }
-    };
-    info!("Connected to gateway, executing deployment task for: {:?}", deployment_info);
-
-    pin_mut!(msg_stream);
-    loop {
-        tokio::select! {
-            biased;
-
-            // If there is no task on-going for this deployment, we wait at max 15sec to receive a new one
-            // Before we check if the deployment is still valid
-            _ = tokio::time::sleep(Duration::from_secs(15)), if current_deployment.is_task_terminated() => {
-                info!("No new message after 15s, assuming deployment is terminated");
-                let _ = abort_deployment_tx.send(());
-                break;
-            }
-
-            // We wait for the current executing task to finish
-            // We don't put a if to avoid a race condition, if the task is terminated the future is going to never return
-            _ = &mut current_deployment => {
-                info!("Deployment task terminated");
-                current_deployment.remove_task();
-                continue;
-            }
-
-            // We lost the connection with gateway to forward engine message, trying to reconnect
-            _ = abort_deployment_tx.closed() => {
-                info!("EngineEvent forwarder to gateway has been close, trying to resume connection");
-                break;
-            }
-
-            // We wait to receive a new message from the gateway
-            // In case of error, we return to try to resume the current deployment.
-            // The server will let us know if the deployment is still valid
-            msg = msg_stream.next() => match msg {
-                Some(Ok(msg)) => {
-                    match msg.request {
-                        Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
-                            info!("Received new deployment task: {}", payload);
-                            let task = to_engine_task(
-                                payload,
-                                engine_client,
-                                logger_for_task.clone_dyn(),
-                                metrics_registry.clone(),
-                            );
-
-                            match task {
-                                Ok(task) => {
-                                    current_deployment.set_task(task);
-                                }
-                                Err(err) => {
-                                    let execution_id = deployment_info.execution_id.clone();
-                                    error!("Error while creating task for {}: {}", execution_id, err);
-                                    let event_details = EventDetails::new(None,
-                                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
-                                        QoveryIdentifier::new(Uuid::parse_str(&deployment_info.cluster_id).unwrap_or_default()),
-                                        execution_id.to_string(),
-                                        if deployment_info.r#type == DeploymentType::Environment as i32 {
-                                           Stage::Environment(EnvironmentStep::Cancelled)
-                                        } else {
-                                           Stage::Infrastructure(InfrastructureStep::CannotProcessRequest)
-                                        },
-                                        Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
-                                    );
-                                    let msg = format!("Engine received an invalid deployment request for execution_id = {execution_id}");
-                                    let message = EventMessage::new_from_safe(msg.to_string());
-                                    let err = EngineEvent::Error(EngineError::new_invalid_engine_payload(event_details.clone(), msg.as_str(), Some(CommandError::new(msg.clone(), Some(format!("{err}")), None))), Some(message));
-                                    let _ = log_tx.send(err);
-
-                                    let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Terminated));
-                                    let err = EngineEvent::Info(event_details, EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None));
-                                    let _ = log_tx.send(err);
-                                }
-                            }
-                        }
-                        Some(engine_message_rx::Request::DeploymentCancel(_)) => {
-                            info!("Received cancel request: {:?}", msg);
-                            if let Some(task) = current_deployment.get_task() {
-                                let _ = task.cancel();
-                            }
-                        }
-                        Some(engine_message_rx::Request::Terminated(_)) => {
-                            info!("Received terminated message for deployment: {:?}", msg);
-                            current_deployment.remove_current_deployment();
-                            let _ = abort_deployment_tx.send(());
-                            break;
-                        }
-                        None => {
-                            error!("Invalid payload received from grpc server. Update the protobuf !");
-                        }
-                    }
-                    // We record the last message we received, so in case of cnx loss
-                    // we can resume the deployment and restart from the last message
-                    current_deployment.set_last_message_id(msg.message_id);
-                },
-
-                // Return to try to resume the current deployment
-                None => {
-                    info!("Upstream stream closed");
-                    break;
-                }
-
-                // Return to try to resume the current deployment
-                Some(Err(e)) => {
-                    error!("error while receiving message from grpc server: {}", e);
-                    break;
-                }
-            }
-        }
     }
 
     Ok(())

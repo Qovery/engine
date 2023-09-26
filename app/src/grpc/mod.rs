@@ -65,3 +65,37 @@ pub async fn new_engine_client(
 
     Ok(client)
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use tokio::io::DuplexStream;
+    use tonic::transport::Endpoint;
+    use tower::service_fn;
+
+    pub async fn new_engine_client_test(mut client: Option<DuplexStream>) -> GrpcEngineClient {
+        let channel = Endpoint::try_from("http://[::]:50051")
+            .unwrap()
+            .connect_with_connector(service_fn(move |_: Uri| {
+                let client = client.take();
+                async move {
+                    if let Some(client) = client {
+                        Ok(client)
+                    } else {
+                        Err(std::io::Error::new(std::io::ErrorKind::Other, "Client already taken"))
+                    }
+                }
+            }))
+            .await
+            .unwrap();
+
+        let channel = ServiceBuilder::new()
+            .layer(tonic::service::interceptor(QoveryInterceptor {
+                token: AsciiMetadataValue::from_static(""),
+                cluster_id: AsciiMetadataValue::from_static(""),
+            }))
+            .service(channel);
+
+        EngineClient::new(channel)
+    }
+}
