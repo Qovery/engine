@@ -412,7 +412,7 @@ impl EnvironmentTask {
                 service::Action::Delete => env_deployment.on_delete(),
                 service::Action::Restart => env_deployment.on_restart(),
             };
-            deployed_services = env_deployment.deployed_services.blocking_lock().clone();
+            deployed_services = env_deployment.deployed_services.lock().map(|v| v.clone()).unwrap();
 
             deployment_ret
         };
