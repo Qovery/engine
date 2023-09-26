@@ -556,7 +556,7 @@ impl DeploymentManager {
     }
 
     async fn terminate_task(ctx: TaskContext) {
-        error!("Canceling current task");
+        warn!("Canceling current task");
         ctx.task.cancel();
         info!("Task canceled, waiting for task to terminate");
         Self::await_task_termination(ctx).await;
