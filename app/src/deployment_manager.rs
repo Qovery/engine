@@ -49,9 +49,21 @@ struct DeploymentContext {
     last_msg_memento: Arc<Mutex<Option<EngineMessageTx>>>,
 }
 
+impl Drop for DeploymentContext {
+    fn drop(&mut self) {
+        info!("Dropping deployment context");
+    }
+}
+
 struct TaskContext {
     task: Arc<Box<dyn Task>>,
     _handle: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for TaskContext {
+    fn drop(&mut self) {
+        info!("Dropping task context");
+    }
 }
 
 // Represent the state when the engine is connected to the gateway and is forwarding/receiving engine events
@@ -60,6 +72,12 @@ struct UpstreamGatewayContext {
     close_upstream_tx: watch::Sender<()>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
+}
+
+impl Drop for UpstreamGatewayContext {
+    fn drop(&mut self) {
+        info!("Dropping upstream gateway context");
+    }
 }
 
 //
@@ -345,7 +363,7 @@ impl DeploymentManager {
                             match task {
                                 Ok(task) => {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
-                                        deployment: DeploymentContext::new(deployment.deployment_info),
+                                        deployment,
                                         task: Self::spawn_new_task(task),
                                         upstream_gtw: UpstreamGatewayContext { msg_stream, close_upstream_tx, logger, metrics_registry }
                                     };
