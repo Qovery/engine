@@ -33,19 +33,18 @@ impl Logger for StdIoLogger {
     fn log(&self, event: EngineEvent) {
         let event_details = event.get_details();
         let stage = event_details.stage();
-        let execution_id = event_details.execution_id().to_string();
 
         tracing::span!(
             tracing::Level::INFO,
             "std_io_logger",
-            organization_id = event_details.organisation_id().short(),
-            cluster_id = event_details.cluster_id().short(),
-            execution_id = execution_id.as_str(),
-            provider = match event_details.provider_kind() {
-                Some(kind) => kind.to_string(),
-                None => "".to_string(),
-            }
-            .as_str(),
+            //organization_id = event_details.organisation_id().short(),
+            //cluster_id = event_details.cluster_id().short(),
+            //execution_id = event_details.execution_id(),
+            //provider = match event_details.provider_kind() {
+            //    Some(kind) => kind.to_string(),
+            //    None => "".to_string(),
+            //}
+            //.as_str(),
             stage = stage.to_string().as_str(),
             step = stage.sub_step_name().as_str(),
             transmitter = event_details.transmitter().to_string().as_str(),
@@ -200,37 +199,37 @@ mod tests {
                 tc.description
             );
 
-            assert!(
-                logs_contain(format!("organization_id=\"{}\"", orga_id.short()).as_str()),
-                "{}",
-                tc.description
-            );
-            assert!(
-                logs_contain(format!("cluster_id=\"{}\"", cluster_id.short()).as_str()),
-                "{}",
-                tc.description
-            );
-            assert!(
-                logs_contain(format!("execution_id=\"{execution_id}\"").as_str()),
-                "{}",
-                tc.description
-            );
+            // assert!(
+            //     logs_contain(format!("organization_id=\"{}\"", orga_id.short()).as_str()),
+            //     "{}",
+            //     tc.description
+            // );
+            // assert!(
+            //     logs_contain(format!("cluster_id=\"{}\"", cluster_id.short()).as_str()),
+            //     "{}",
+            //     tc.description
+            // );
+            // assert!(
+            //     logs_contain(format!("execution_id=\"{execution_id}\"").as_str()),
+            //     "{}",
+            //     tc.description
+            // );
 
             let details = tc.event.get_details();
-            assert!(
-                logs_contain(
-                    format!(
-                        "provider=\"{}\"",
-                        match details.provider_kind() {
-                            Some(k) => k.to_string(),
-                            None => "".to_string(),
-                        }
-                    )
-                    .as_str()
-                ),
-                "{}",
-                tc.description
-            );
+            // assert!(<
+            //     logs_contain(
+            //         format!(
+            //             "provider=\"{}\"",
+            //             match details.provider_kind() {
+            //                 Some(k) => k.to_string(),
+            //                 None => "".to_string(),
+            //             }
+            //         )
+            //         .as_str()
+            //     ),
+            //     "{}",
+            //     tc.description
+            // );
 
             assert!(
                 logs_contain(format!("stage=\"{}\"", details.stage()).as_str()),

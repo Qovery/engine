@@ -27,13 +27,13 @@ use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::ScopedJoinHandle;
 use std::time::Duration;
 use std::{env, fs, thread};
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
-#[derive(Clone)]
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -44,6 +44,7 @@ pub struct EnvironmentTask {
     metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<Box<dyn QoveryApi>>,
     span: tracing::Span,
+    is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
 }
 
 impl EnvironmentTask {
@@ -58,8 +59,8 @@ impl EnvironmentTask {
     ) -> Self {
         let span = info_span!(
             "environment_task",
-            organization_id = request.organization_long_id.to_string(),
-            cluster_id = request.kubernetes.long_id.to_string(),
+            //organization_id = request.organization_long_id.to_string(),
+            //cluster_id = request.kubernetes.long_id.to_string(),
             execution_id = request.id,
         );
 
@@ -70,9 +71,13 @@ impl EnvironmentTask {
             request,
             logger,
             metrics_registry,
-            cancel_requested: Arc::new(AtomicBool::from(false)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
             qovery_api: Arc::new(qovery_api),
             span,
+            is_terminated: {
+                let (tx, rx) = broadcast::channel(1);
+                (RwLock::new(Some(tx)), rx)
+            },
         }
     }
 
@@ -407,7 +412,7 @@ impl EnvironmentTask {
                 service::Action::Delete => env_deployment.on_delete(),
                 service::Action::Restart => env_deployment.on_restart(),
             };
-            deployed_services = env_deployment.deployed_services.blocking_lock().clone();
+            deployed_services = env_deployment.deployed_services.lock().map(|v| v.clone()).unwrap();
 
             deployment_ret
         };
@@ -462,6 +467,10 @@ impl Task for EnvironmentTask {
                 self.get_event_details(EnvironmentStep::Terminated),
                 EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),
             ));
+            let Some(is_terminated_tx) = self.is_terminated.0.write().unwrap().take() else {
+                return;
+            };
+            let _ = is_terminated_tx.send(());
         });
 
         let infra_context = match self.infrastructure_context() {
@@ -607,6 +616,14 @@ impl Task for EnvironmentTask {
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         let cancel_requested = self.cancel_requested.clone();
         Box::new(move || cancel_requested.load(Ordering::Relaxed))
+    }
+
+    fn is_terminated(&self) -> bool {
+        self.is_terminated.0.read().map(|tx| tx.is_none()).unwrap_or(true)
+    }
+
+    fn await_terminated(&self) -> broadcast::Receiver<()> {
+        self.is_terminated.1.resubscribe()
     }
 }
 

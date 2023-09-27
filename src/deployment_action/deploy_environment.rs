@@ -17,11 +17,10 @@ use kube::Api;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::ScopedJoinHandle;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub struct EnvironmentDeployment<'a> {
@@ -150,12 +149,12 @@ impl<'a> EnvironmentDeployment<'a> {
                     let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
                         // creating services first
-                        deployed_services.blocking_lock().insert(service_id);
+                        deployed_services.lock().unwrap().insert(service_id);
                         service.exec_action(target, service_action)?;
 
                         // then routers
                         if let Some(router) = opt_router {
-                            deployed_services.blocking_lock().insert(*router.long_id());
+                            deployed_services.lock().unwrap().insert(*router.long_id());
                             return router.exec_action(target, *router.action());
                         }
                         Ok(())
@@ -203,12 +202,12 @@ impl<'a> EnvironmentDeployment<'a> {
                     move || {
                         // pausing routers
                         if let Some(router) = opt_router {
-                            deployed_services.blocking_lock().insert(*router.long_id());
+                            let _ = deployed_services.lock().map(|mut v| v.insert(*router.long_id()));
                             router.on_pause(&local_target)?;
                         }
 
                         // then services
-                        deployed_services.blocking_lock().insert(service_id);
+                        let _ = deployed_services.lock().map(|mut v| v.insert(service_id));
                         service.on_pause(&local_target)
                     }
                 })
@@ -258,7 +257,7 @@ impl<'a> EnvironmentDeployment<'a> {
         {
             info!("no need to delete environment {}, already absent", environment.namespace());
             Self::services_without_routers_iter(target.environment).for_each(|(id, _, _)| {
-                self.deployed_services.blocking_lock().insert(id);
+                let _ = self.deployed_services.lock().map(|mut v| v.insert(id));
             });
             return Ok(());
         }
@@ -286,12 +285,12 @@ impl<'a> EnvironmentDeployment<'a> {
                     move || {
                         // deleting routers
                         if let Some(router) = opt_router {
-                            deployed_services.blocking_lock().insert(*router.long_id());
+                            let _ = deployed_services.lock().map(|mut v| v.insert(*router.long_id()));
                             router.on_delete(target)?;
                         }
 
                         // then services
-                        deployed_services.blocking_lock().insert(service_id);
+                        let _ = deployed_services.lock().map(|mut v| v.insert(service_id));
                         service.on_delete(target)
                     }
                 })
@@ -343,12 +342,12 @@ impl<'a> EnvironmentDeployment<'a> {
                     let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
                         // restarting services
-                        deployed_services.blocking_lock().insert(service_id);
+                        let _ = deployed_services.lock().map(|mut v| v.insert(service_id));
                         service.on_restart(&local_target)?;
 
                         // then router
                         if let Some(router) = opt_router {
-                            deployed_services.blocking_lock().insert(*router.long_id());
+                            let _ = deployed_services.lock().map(|mut v| v.insert(*router.long_id()));
                             return router.on_restart(&local_target);
                         }
                         Ok(())

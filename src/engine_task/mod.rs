@@ -5,6 +5,7 @@ use crate::io_models::engine_request::Archive;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
 use std::borrow::Cow;
+use tokio::sync::broadcast;
 
 pub mod environment_task;
 pub mod infrastructure_task;
@@ -15,6 +16,8 @@ pub trait Task: Send + Sync {
     fn run(&self);
     fn cancel(&self) -> bool;
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync>;
+    fn is_terminated(&self) -> bool;
+    fn await_terminated(&self) -> broadcast::Receiver<()>;
 }
 
 fn basename(path: &str, sep: char) -> Cow<str> {
