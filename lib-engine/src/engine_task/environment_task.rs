@@ -189,10 +189,15 @@ impl EnvironmentTask {
             .registry_image_retention_time_sec;
         let cr_registry = infra_ctx.container_registry();
         let build_platform = infra_ctx.build_platform();
+
+        let _ = services.iter().map(|service| {
+            metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::BuildQueueing)
+        });
         let build_tasks = services
             .into_iter()
             .map(|service| {
                 || {
+                    metrics_registry.stop_record(*service.long_id(), StepName::BuildQueueing, StepStatus::Success);
                     Self::build_and_push_service(
                         service,
                         option,
