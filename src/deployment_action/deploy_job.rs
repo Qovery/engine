@@ -14,6 +14,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::job::JobSchedule;
+use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -151,11 +152,14 @@ fn run_job<'a, T: CloudProvider>(
 where
     Job<T>: JobService,
 {
+    let metrics_registry = target.metrics_registry.clone();
     let pre_run = move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         match &job.image_source {
             // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
             ImageSource::Registry { source } => {
-                mirror_image(
+                let mirror_record =
+                    metrics_registry.start_record(*job.long_id(), StepLabel::Service, StepName::MirrorImage);
+                let result = mirror_image(
                     job.long_id(),
                     &source.registry,
                     &source.image,
@@ -164,7 +168,13 @@ where
                     target,
                     logger,
                     event_details.clone(),
-                )?;
+                );
+                mirror_record.stop(if result.is_ok() {
+                    StepStatus::Success
+                } else {
+                    StepStatus::Error
+                });
+                result?;
             }
             ImageSource::Build { .. } => {}
         }

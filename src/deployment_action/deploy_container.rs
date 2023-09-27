@@ -18,6 +18,7 @@ use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -27,13 +28,16 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let metrics_registry = target.metrics_registry.clone();
         struct TaskContext {
             last_deployed_image: Option<String>,
         }
 
         // We first mirror the image if needed
         let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
-            mirror_image(
+            let mirror_record =
+                metrics_registry.start_record(*self.long_id(), StepLabel::Service, StepName::MirrorImage);
+            let result = mirror_image(
                 self.long_id(),
                 &self.registry,
                 &self.image,
@@ -42,7 +46,13 @@ where
                 target,
                 logger,
                 event_details.clone(),
-            )?;
+            );
+            mirror_record.stop(if result.is_ok() {
+                StepStatus::Success
+            } else {
+                StepStatus::Error
+            });
+            result?;
 
             let last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),
