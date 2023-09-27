@@ -187,5 +187,4 @@ ENV LOCAL_DEPLOY false
 ENV PATH="$HOME_DIR/binaries:${PATH}"
 ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
 
-CMD ["./run.sh"]
-
+CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
