@@ -268,10 +268,13 @@ impl ExecutableCommand for QoveryCommand {
 
                 match line {
                     Err(ref err) if err.kind() == ErrorKind::TimedOut => {
-                        if last_log_check.elapsed() > LOGGING_INTERVAL && log_counter == 0 {
-                            stderr_output(
-                                "Command still running. No output available. Waiting for next line...".to_string(),
-                            );
+                        if last_log_check.elapsed() > LOGGING_INTERVAL {
+                            if log_counter == 0 {
+                                stderr_output(
+                                    "Command still running. No output available. Waiting for next line...".to_string(),
+                                );
+                            }
+
                             last_log_check = Instant::now();
                             log_counter = 0;
                         }
