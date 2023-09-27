@@ -349,7 +349,6 @@ impl DeploymentManager {
                 let next_step = DeploymentManagerState::ExecutingDeployment { deployment };
                 (next_step, None)
             }
-
             msg = msg_stream.next() => match msg {
                 Some(Ok(msg)) => {
                     // We record the last message we received, so in case of cnx loss
@@ -360,17 +359,20 @@ impl DeploymentManager {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                             info!("Received new deployment task: {}", payload);
                             let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone());
+                            let upstream = UpstreamGatewayContext { msg_stream, close_upstream_tx, logger, metrics_registry };
                             match task {
                                 Ok(task) => {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                                         deployment,
                                         task: Self::spawn_new_task(task),
-                                        upstream_gtw: UpstreamGatewayContext { msg_stream, close_upstream_tx, logger, metrics_registry }
+                                        upstream_gtw: upstream,
                                     };
                                     (next_step, None)
                                 }
                                 Err(err) => {
-                                    Self::hard_abort_deployment(deployment, err).await
+                                    Self::hard_abort_deployment(deployment, err).await;
+                                    Self::terminate_upstream_cnx(upstream).await;
+                                    (DeploymentManagerState::SeekingNewDeployment {}, None)
                                 }
                             }
                         }
@@ -489,7 +491,8 @@ impl DeploymentManager {
                 // If there is no task on-going for this deployment, we wait at max 15sec to receive a new one
                 _ = tokio::time::sleep(self.deadline_for_new_task), if task_is_terminated => {
                     info!("No new message after 15s, assuming deployment is terminated");
-                    let _ = upstream.close_upstream_tx.send(());
+                    Self::terminate_upstream_cnx(upstream).await;
+
                     return (DeploymentManagerState::SeekingNewDeployment {}, None);
                 }
 
@@ -526,7 +529,10 @@ impl DeploymentManager {
                                             task = Self::spawn_new_task(new_task);
                                         }
                                         Err(err) => {
-                                            return Self::hard_abort_deployment(deployment, err).await;
+                                            Self::hard_abort_deployment(deployment, err).await;
+                                            Self::terminate_upstream_cnx(upstream).await;
+
+                                            return (DeploymentManagerState::SeekingNewDeployment {}, None);
                                         }
                                     }
                                 }
@@ -537,6 +543,7 @@ impl DeploymentManager {
                                 Some(engine_message_rx::Request::Terminated(_)) => {
                                     info!("Received terminated message for deployment: {:?}", msg);
                                     Self::terminate_task(task).await;
+                                    Self::terminate_upstream_cnx(upstream).await;
 
                                     return (DeploymentManagerState::SeekingNewDeployment {}, None);
                                 }
@@ -606,10 +613,16 @@ impl DeploymentManager {
         }
     }
 
-    async fn hard_abort_deployment(
-        deployment: DeploymentContext,
-        err: EngineEvent,
-    ) -> (DeploymentManagerState, Option<Duration>) {
+    async fn terminate_upstream_cnx(upstream: UpstreamGatewayContext) {
+        info!("Closing upstream connection with gateway");
+        let _ = upstream.close_upstream_tx.send(());
+        while (timeout(Duration::from_secs(10), upstream.close_upstream_tx.closed()).await).is_err() {
+            info!("Waiting for upstream connection to be terminated ");
+        }
+        info!("Upstream connection terminated");
+    }
+
+    async fn hard_abort_deployment(deployment: DeploymentContext, err: EngineEvent) {
         let event_details = err.get_details().clone();
         let _ = deployment.log_tx.send(err);
 
@@ -623,8 +636,6 @@ impl DeploymentManager {
 
         // Wait a bit for the message to be flushed
         let _ = tokio::time::sleep(Duration::from_secs(5)).await;
-
-        (DeploymentManagerState::SeekingNewDeployment {}, None)
     }
 }
 
@@ -672,8 +683,8 @@ impl EngineMessageStream {
         mut last_msg_memento: OwnedMutexGuard<Option<EngineMessageTx>>,
     ) -> (Self, watch::Sender<()>) {
         let (abort_handle_tx, abort_handle_rx) = watch::channel(());
-        log_stream_context.should_stop = Some(abort_handle_rx);
-        msg_stream_context.should_stop = Some(abort_handle_tx.subscribe());
+        log_stream_context.should_stop = Some(abort_handle_rx.clone());
+        msg_stream_context.should_stop = Some(abort_handle_rx);
 
         // We re-emit the last message in case of failure
         let remit_last_msg: Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>> =
@@ -734,14 +745,17 @@ impl EngineMessageStream {
         let opt_engine_message_tx = tokio::select! {
             biased;
 
-            msg = ctx.msg_receiver.recv() => msg.map(Self::convert_msg_to_grpc_message),
+            msg = ctx.msg_receiver.recv() => {
+                msg.map(Self::convert_msg_to_grpc_message) },
 
              // Deployment asked to be aborted, we leave to release the mutex of the channel
             _ = should_stop.changed() => None
         };
-        ctx.should_stop = Some(should_stop);
 
-        opt_engine_message_tx.map(|engine_message_tx| (engine_message_tx, ctx))
+        opt_engine_message_tx.map(|engine_message_tx| {
+            ctx.should_stop = Some(should_stop);
+            (engine_message_tx, ctx)
+        })
     }
 
     async fn on_next_log(
@@ -773,9 +787,11 @@ impl EngineMessageStream {
             // Deployment asked to be aborted, we leave to release the mutex of the channel
             _ = should_stop.changed() => None
         };
-        ctx.should_stop = Some(should_stop);
 
-        opt_engine_message_tx.map(|engine_message_tx| (engine_message_tx, ctx))
+        opt_engine_message_tx.map(|engine_message_tx| {
+            ctx.should_stop = Some(should_stop);
+            (engine_message_tx, ctx)
+        })
     }
 }
 
