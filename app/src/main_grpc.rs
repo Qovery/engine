@@ -238,7 +238,7 @@ pub fn main() -> io::Result<()> {
         }
     };
     tokio_utils::launch_task(shutdown_callback);
-    tokio_utils::launch(&cli.http_listen_on);
+    tokio_utils::launch_http_server(&cli.http_listen_on, should_shutdown.clone());
 
     info!(
         "running from current directory: {}",
