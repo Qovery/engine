@@ -8,6 +8,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::logger::Logger;
+use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::models::router::RouterService;
 use crate::runtime::block_on;
 use itertools::Itertools;
@@ -118,6 +119,7 @@ impl<'a> EnvironmentDeployment<'a> {
             .context()
             .resource_expiration_in_seconds()
             .map(|ttl| Duration::from_secs(ttl as u64));
+        let metrics_registry = target.metrics_registry.clone();
 
         let should_abort = Self::should_abort_wrapper(target, &event_details);
         should_abort()?;
@@ -145,9 +147,13 @@ impl<'a> EnvironmentDeployment<'a> {
             services_to_deploy
                 .into_iter()
                 .map(|(service_id, service, service_action)| {
+                    let queueing_record =
+                        metrics_registry.start_record(service_id, StepLabel::Service, StepName::DeploymentQueueing);
                     let deployed_services = self.deployed_services.clone();
                     let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
+                        queueing_record.stop(StepStatus::Success);
+
                         // creating services first
                         deployed_services.lock().unwrap().insert(service_id);
                         service.exec_action(target, service_action)?;
