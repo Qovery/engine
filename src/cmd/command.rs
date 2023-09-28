@@ -246,7 +246,9 @@ impl ExecutableCommand for QoveryCommand {
 
         let mut stdout_closed = false;
         let mut stderr_closed = false;
-        let mut last_log = Instant::now();
+        let mut last_log_check = Instant::now();
+        let mut log_counter: u64 = 0;
+
         while !stdout_closed || !stderr_closed {
             // We should abort and kill the process
             if abort_notifier.should_abort().is_some() {
@@ -266,15 +268,22 @@ impl ExecutableCommand for QoveryCommand {
 
                 match line {
                     Err(ref err) if err.kind() == ErrorKind::TimedOut => {
-                        if last_log.elapsed() > LOGGING_INTERVAL {
-                            stderr_output(
-                                "Command still running. No output available. Waiting for next line...".to_string(),
-                            );
-                            last_log = Instant::now();
+                        if last_log_check.elapsed() > LOGGING_INTERVAL {
+                            if log_counter == 0 {
+                                stderr_output(
+                                    "Command still running. No output available. Waiting for next line...".to_string(),
+                                );
+                            }
+
+                            last_log_check = Instant::now();
+                            log_counter = 0;
                         }
                         break;
                     }
-                    Ok(line) => stdout_output(line),
+                    Ok(line) => {
+                        log_counter = log_counter.wrapping_add(1);
+                        stdout_output(line)
+                    }
                     Err(err) => {
                         error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
                         stdout_closed = true;
@@ -303,7 +312,10 @@ impl ExecutableCommand for QoveryCommand {
 
                 match line {
                     Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
-                    Ok(line) => stderr_output(line),
+                    Ok(line) => {
+                        log_counter = log_counter.wrapping_add(1);
+                        stderr_output(line)
+                    }
                     Err(err) => {
                         error!("Error on stderr of cmd {:?}: {:?}", self.command, err);
                         stderr_closed = true;

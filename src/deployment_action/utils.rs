@@ -15,7 +15,7 @@ use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Service;
 use kube::api::ListParams;
 use kube::Api;
-use retry::delay::Fixed;
+use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
 use std::time::Duration;
 use uuid::Uuid;
@@ -70,8 +70,16 @@ pub fn mirror_image(
             url.host_str().unwrap_or_default(),
             url.username()
         ));
-        if let Err(err) = target.docker.login(&url) {
-            let err = EngineError::new_docker_error(event_details, err);
+
+        let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
+            target.docker.login(&url).map_err(|err| {
+                logger.warning("🔓 Retrying to login to registry due to error...".to_string());
+                err
+            })
+        });
+
+        if let Err(err) = login_ret {
+            let err = EngineError::new_docker_error(event_details, err.error);
             let user_err = EngineError::new_engine_error(
                 err,
                 format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),

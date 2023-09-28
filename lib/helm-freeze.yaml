@@ -106,7 +106,7 @@ charts:
     version: 0.11.1
     repo_name: pleco
   - name: iam-eks-user-mapper
-    version: 0.1.3
+    version: 1.0.1
     repo_name: iam-eks-user-mapper
     dest: aws-bootstrap
   - name: datadog

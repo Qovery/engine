@@ -11,8 +11,10 @@ pub enum StepName {
     ProvisionBuilder,
     RegistryCreateRepository,
     GitClone,
+    BuildQueueing,
     Build,
     MirrorImage,
+    DeploymentQueueing,
     Deployment,
 }
 
@@ -22,9 +24,11 @@ impl ToString for StepName {
             StepName::Total => "Total".to_string(),
             StepName::ProvisionBuilder => "ProvisionBuilder".to_string(),
             StepName::RegistryCreateRepository => "RegistryCreateRepository".to_string(),
+            StepName::BuildQueueing => "BuildQueueing".to_string(),
             StepName::GitClone => "GitClone".to_string(),
             StepName::Build => "Build".to_string(),
             StepName::MirrorImage => "MirrorImage".to_string(),
+            StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
         }
     }

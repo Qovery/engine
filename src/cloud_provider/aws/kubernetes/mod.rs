@@ -618,6 +618,14 @@ fn tera_context(
         "resource_expiration_in_seconds",
         &kubernetes.advanced_settings().pleco_resources_ttl,
     );
+    context.insert(
+        "aws_iam_user_mapper_sso_enabled",
+        &kubernetes.advanced_settings().aws_iam_user_mapper_sso_enabled,
+    );
+    context.insert(
+        "aws_iam_user_mapper_sso_role_arn",
+        &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
+    );
 
     // EKS Addons
     if kubernetes.kind() != Kind::Ec2 {

@@ -356,10 +356,10 @@ impl Docker {
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
 
-        let _lock = LOGIN_LOCK.lock().unwrap();
-        let password = urlencoding::decode(registry.password().unwrap_or_default())
-            .unwrap_or_default()
-            .to_string();
+        let password = registry
+            .password()
+            .and_then(|password| urlencoding::decode(password).ok())
+            .unwrap_or_default();
         let args = vec![
             "login",
             registry.host_str().unwrap_or_default(),
@@ -369,6 +369,7 @@ impl Docker {
             &password,
         ];
 
+        let _lock = LOGIN_LOCK.lock().unwrap();
         docker_exec(
             &args,
             &self.get_all_envs(&[]),

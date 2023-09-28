@@ -2,8 +2,15 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-iamK8sGroups: "" # "group1,group2"
 refreshIntervalSeconds: 60
+
+groupUsersSync:
+  enabled: false
+  iamK8sGroups: "" # "group1,group2"
+
+sso:
+  enabled: false
+  iamSSORoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/aws-reserved/sso.amazonaws.com/[AWS_REGION]/AWSReservedSSO_AdministratorAccess_53b82e109c5e2cac"
 
 aws:
   defaultRegion: ""
@@ -15,10 +22,10 @@ selectorLabels:
   app: iam-eks-user-mapper
 
 image:
-  repository: ""
+  repository: "ghcr.io/qovery/iam-eks-user-mapper"
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "main"
 
 imagePullSecrets: []
 nameOverride: ""

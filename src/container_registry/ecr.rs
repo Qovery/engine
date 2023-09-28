@@ -198,6 +198,7 @@ impl ECR {
         // ensure repository is created
         // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
         let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
+            info!("Trying to create ECR repository {}", repository_name);
             let repositories = block_on(
                 self.ecr_client()
                     .describe_repositories(container_registry_request.clone()),
@@ -208,33 +209,32 @@ impl ECR {
                 Err(e) => match e {
                     RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_)) => {
                         match block_on(self.ecr_client().create_repository(crr.clone())) {
-                            // The Repo should be created at this point, but we want to verify that
-                            // the describe/list return it now. we want to reloop so return a retry instead of a ok
-                            Ok(_) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                                registry_name: self.name.to_string(),
-                                repository_name: repository_name.to_string(),
-                                raw_error_message: "Retry to check repository exist".to_string(),
-                            })),
-                            // Repo does not exist, so creating it
-                            Err(err) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                                registry_name: self.name.to_string(),
-                                repository_name: repository_name.to_string(),
-                                raw_error_message: err.to_string(),
-                            })),
+                            // The Repo should be created at this point, but we want to verify that the describe/list return it now.
+                            // So we reloop in order to be sure it is available when we do a describe
+                            Ok(_) => OperationResult::Retry(e),
+                            // Should not happen
+                            Err(err) => {
+                                error!("Error while wanting to create ECR repository {:?}", err);
+                                OperationResult::Retry(e)
+                            }
                         }
                     }
+
                     // Unknown error, so retries ¯\_(ツ)_/¯
-                    _ => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                        registry_name: self.name.to_string(),
-                        repository_name: repository_name.to_string(),
-                        raw_error_message: e.to_string(),
-                    })),
+                    err => OperationResult::Retry(err),
                 },
             }
         });
 
         match repo_created {
-            Err(retry::Error { error, .. }) => error,
+            Err(err) => {
+                error!("Cannot create AWS repository due to {:?}", err.error);
+                Err(ContainerRegistryError::CannotCreateRepository {
+                    registry_name: self.name.to_string(),
+                    repository_name: repository_name.to_string(),
+                    raw_error_message: err.error.to_string(),
+                })
+            }
             Ok(repos) => {
                 // apply retention policy
                 if let Some(repos) = repos {

@@ -110,7 +110,19 @@ spec:
               exec:
                 # Check if prometheus is shutdown before shutting down docker builder. DO NOT REMOVE.
                 # If we don't check it, processes like docker are hard kill and it generates issues.
-                command: ["/bin/sh", "-c", "echo 'Stopping docker container...' > /proc/1/fd/1 ; while nc -z localhost 8080; do sleep 1; done; echo 'Stopping docker container now...' > /proc/1/fd/1"]
+                command:
+                - "/bin/sh"
+                - "-c"
+                - |
+                  echo 'Kube asked docker container to be stopped' > /proc/1/fd/1
+                  echo 'Triggering and waiting for the engine to shutdown first' > /proc/1/fd/1
+                  while $(wget -qS -T 10 --spider http://localhost:8080/shutdown 2>&1 | grep -q 'HTTP/1.1 200 OK')
+                  do 
+                    echo 'waiting for engine to shutdown' > /proc/1/fd/1
+                    sleep 10
+                  done
+                  echo 'Stopping docker container now...' > /proc/1/fd/1
+
       volumes:
         - name: qovery-workspace
           emptyDir: {}
