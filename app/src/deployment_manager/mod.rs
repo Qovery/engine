@@ -654,15 +654,15 @@ mod test {
 
     #[tokio::test]
     async fn test_deployment_manager_executing_task() {
-        use tracing_subscriber::EnvFilter;
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::builder()
-                    .with_default_directive(tracing::Level::INFO.into())
-                    .from_env_lossy(),
-            )
-            .with_ansi(true)
-            .init();
+        //use tracing_subscriber::EnvFilter;
+        //tracing_subscriber::fmt()
+        //    .with_env_filter(
+        //        EnvFilter::builder()
+        //            .with_default_directive(tracing::Level::INFO.into())
+        //            .from_env_lossy(),
+        //    )
+        //    .with_ansi(true)
+        //    .init();
 
         let (client, server) = tokio::io::duplex(1024);
 

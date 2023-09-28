@@ -11,6 +11,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{watch, OwnedMutexGuard};
+use tracing::Span;
+use tracing_futures::Instrument;
 
 // Represent the context of the msg stream that the engine use to communicate with the gateway
 // For now there is only metrics
@@ -57,6 +59,7 @@ impl EngineLogStreamContext {
 // on cnx drop, the stream is dropped and the mutex is released
 pub struct EngineMessageStream {
     stream: Box<dyn Stream<Item = EngineMessageTx> + Send + 'static>,
+    span: Span,
 }
 
 impl EngineMessageStream {
@@ -95,7 +98,8 @@ impl EngineMessageStream {
         });
 
         let s = Self {
-            stream: Box::new(remit_last_msg.chain(normal_flow)),
+            stream: Box::new(remit_last_msg.chain(normal_flow).instrument(Span::current())),
+            span: Span::current(),
         };
 
         (s, abort_handle_tx)
@@ -188,6 +192,7 @@ impl Stream for EngineMessageStream {
 
 impl Drop for EngineMessageStream {
     fn drop(&mut self) {
+        let _span = self.span.enter();
         info!("engine message stream to gateway terminated");
     }
 }

@@ -2,6 +2,7 @@ use crate::tokio_utils;
 use qovery_engine::engine_task::Task;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::Span;
 
 /// State when the engine is executing a task
 pub struct TaskContext {
@@ -12,12 +13,14 @@ pub struct TaskContext {
 impl TaskContext {
     pub fn spawn_new_task(task: Box<dyn Task>) -> TaskContext {
         let task = Arc::new(task);
+        let span = Span::current();
 
         let task_handle = tokio_utils::launch_blocking_task({
             let task = task.clone();
             move || {
-                let _guard = scopeguard::guard((), |_| {
-                    debug!("Task {} has terminated to run", task.id());
+                let _guard = scopeguard::guard(span, |span| {
+                    let _span = span.enter();
+                    debug!("Task {} has terminated to run from blocking pool", task.id());
                 });
 
                 task.run();
