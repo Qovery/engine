@@ -8,9 +8,27 @@ use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryR
 use crate::errors::CommandError;
 use crate::runtime::block_on;
 use chrono::Duration;
+use itertools::Itertools;
 use k8s_openapi::api::rbac::v1::RoleBinding;
 use kube::core::params::ListParams;
 use kube::{Api, Client};
+
+pub struct GroupConfigMapping {
+    pub iam_group_name: String,
+    pub k8s_group_name: String,
+}
+
+pub enum GroupConfig {
+    Disabled,
+    Enabled {
+        group_config_mapping: Vec<GroupConfigMapping>,
+    },
+}
+
+pub enum SSOConfig {
+    Disabled,
+    Enabled { sso_role_arn: String },
+}
 
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
@@ -18,7 +36,8 @@ pub struct AwsIamEksUserMapperChart {
     aws_region: AwsRegion,
     aws_service_account_name: String,
     aws_iam_eks_user_mapper_role_arn: String,
-    aws_iam_user_mapper_groups_names_mappings: String,
+    aws_iam_group_config: GroupConfig,
+    aws_iam_sso_config: SSOConfig,
     refresh_interval: Duration,
     chart_resources: HelmChartResources,
 }
@@ -29,7 +48,8 @@ impl AwsIamEksUserMapperChart {
         aws_region: AwsRegion,
         aws_service_account_name: String,
         aws_iam_eks_user_mapper_role_arn: String,
-        aws_iam_user_mapper_groups_names_mappings: String, // iam_group1->k8s_group1,iam_group2->k8s_group2,
+        aws_iam_group_config: GroupConfig,
+        aws_iam_sso_config: SSOConfig,
         refresh_interval: Duration,
         chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
@@ -37,7 +57,8 @@ impl AwsIamEksUserMapperChart {
             aws_region,
             aws_service_account_name,
             aws_iam_eks_user_mapper_role_arn,
-            aws_iam_user_mapper_groups_names_mappings,
+            aws_iam_group_config,
+            aws_iam_sso_config,
             refresh_interval,
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -68,7 +89,7 @@ impl AwsIamEksUserMapperChart {
 
 impl ToCommonHelmChart for AwsIamEksUserMapperChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
-        Ok(CommonChart {
+        let mut chart = CommonChart {
             chart_info: ChartInfo {
                 name: AwsIamEksUserMapperChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -86,13 +107,6 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                         // we use string templating (r"...") to escape dot in annotation's key
                         key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                         value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "iamK8sGroups".to_string(),
-                        value: self
-                            .aws_iam_user_mapper_groups_names_mappings
-                            .to_string()
-                            .replace(',', r"\,"), // commas should be escaped in --set otherwise it's wrongly interpreted by Helm
                     },
                     ChartSetValue {
                         key: "refreshIntervalSeconds".to_string(),
@@ -124,7 +138,60 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
             },
             chart_installation_checker: Some(Box::new(AwsIamEksUserMapperChecker::new())),
             vertical_pod_autoscaler: None,
-        })
+        };
+
+        // Activating Group mapping option
+        match &self.aws_iam_group_config {
+            GroupConfig::Enabled { group_config_mapping } => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "groupUsersSync.enabled".to_string(),
+                    value: "true".to_string(),
+                });
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "groupUsersSync.iamK8sGroups".to_string(),
+                    value: group_config_mapping
+                        .iter()
+                        .map(|g| format!("{}->{}", g.iam_group_name, g.k8s_group_name))
+                        .join(r"\,"), // Helm CLI --set needs escaped commas in values otherwise it's considered as keys
+                });
+            }
+            GroupConfig::Disabled => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "groupUsersSync.enabled".to_string(),
+                    value: "false".to_string(),
+                });
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "groupUsersSync.iamK8sGroups".to_string(),
+                    value: "".to_string(),
+                });
+            }
+        }
+
+        // Activating SSO option
+        match &self.aws_iam_sso_config {
+            SSOConfig::Enabled { sso_role_arn } => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "sso.enabled".to_string(),
+                    value: "true".to_string(),
+                });
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "sso.iamSSORoleArn".to_string(),
+                    value: sso_role_arn.to_string(),
+                });
+            }
+            SSOConfig::Disabled => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "sso.enabled".to_string(),
+                    value: "false".to_string(),
+                });
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "sso.iamSSORoleArn".to_string(),
+                    value: "".to_string(),
+                });
+            }
+        }
+
+        Ok(chart)
     }
 }
 
@@ -198,7 +265,9 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
+    use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::{
+        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
+    };
     use crate::cloud_provider::aws::regions::AwsRegion;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -217,7 +286,15 @@ mod tests {
             AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            GroupConfig::Enabled {
+                group_config_mapping: vec![GroupConfigMapping {
+                    iam_group_name: "whatever".to_string(),
+                    k8s_group_name: "whatever".to_string(),
+                }],
+            },
+            SSOConfig::Enabled {
+                sso_role_arn: "whatever".to_string(),
+            },
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -251,7 +328,15 @@ mod tests {
             AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            GroupConfig::Enabled {
+                group_config_mapping: vec![GroupConfigMapping {
+                    iam_group_name: "whatever".to_string(),
+                    k8s_group_name: "whatever".to_string(),
+                }],
+            },
+            SSOConfig::Enabled {
+                sso_role_arn: "whatever".to_string(),
+            },
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -286,7 +371,15 @@ mod tests {
             AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
-            "whatever".to_string(),
+            GroupConfig::Enabled {
+                group_config_mapping: vec![GroupConfigMapping {
+                    iam_group_name: "whatever".to_string(),
+                    k8s_group_name: "whatever".to_string(),
+                }],
+            },
+            SSOConfig::Enabled {
+                sso_role_arn: "whatever".to_string(),
+            },
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -307,5 +400,14 @@ mod tests {
 
         // verify:
         assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+    }
+
+    #[test]
+    fn aws_iam_eks_user_mapper_group_configuration_test() {
+        // setup:
+
+        // execute:
+
+        // verify:
     }
 }

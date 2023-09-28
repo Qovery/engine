@@ -1,5 +1,12 @@
-iamK8sGroups: set-by-engine-code
 refreshIntervalSeconds: set-by-engine-code
+
+groupUsersSync:
+  enabled: false
+  iamK8sGroups: set-by-engine-code
+
+sso:
+  enabled: false
+  iamSSORoleArn: set-by-engine-code
 
 aws:
   defaultRegion: set-by-engine-code
@@ -11,7 +18,7 @@ aws:
 image:
   repository: public.ecr.aws/r3m4q3r9/iam-eks-user-mapper-rs
   pullPolicy: IfNotPresent
-  tag: 2bf0fe4c
+  tag: 3c62e457
 
 serviceAccount:
   name: set-by-engine-code
