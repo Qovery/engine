@@ -1,6 +1,13 @@
 #![allow(unused_imports)]
 
-use crate::grpc::engine::StepRecord as GrpcStepRecord;
+mod deployment_context;
+mod engine_message_stream;
+mod task_context;
+mod upstream_gtw_context;
+
+use crate::deployment_manager::deployment_context::DeploymentContext;
+use crate::deployment_manager::task_context::TaskContext;
+use crate::deployment_manager::upstream_gtw_context::UpstreamGatewayContext;
 use crate::grpc::engine::{engine_message_rx, EngineMessageRx};
 use crate::grpc::engine::{engine_message_tx, DeploymentInfo, DeploymentType, EngineMessageTx};
 use crate::grpc::engine::{DeploymentRequest, Metrics};
@@ -13,7 +20,6 @@ use chrono::Utc;
 use futures_util::{stream, Stream, StreamExt};
 use prost_types::Timestamp;
 use qovery_engine::engine_task::Task;
-use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
 use qovery_engine::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::logger::{Logger, StdIoLogger};
@@ -29,56 +35,6 @@ use tokio::sync::{mpsc, watch, Mutex, OwnedMutexGuard};
 use tokio::time::timeout;
 use tonic::{Code, Streaming};
 use tracing::{error, field, Instrument, Level, Span};
-
-// A single deployment can receive N tasks.
-// A task represent a deployment group/engine request.
-// The same engine is going to receive all the deployment group/task for a deployment
-struct DeploymentContext {
-    deployment_info: DeploymentInfo,
-
-    // The channel to send engine events to the gateway/receiver
-    // The same channel is re-used across all tasks, so even in case of cnx loss
-    // We can resume the connection with the gateway without losing events
-    log_tx: UnboundedSender<EngineEvent>,
-    log_rx: Arc<Mutex<EngineLogStreamContext>>,
-
-    msg_tx: UnboundedSender<EngineMsg>,
-    msg_rx: Arc<Mutex<EngineMsgStreamContext>>,
-
-    // The last message we sent to the gateway, that we will re-emit in case of cnx resume
-    last_msg_memento: Arc<Mutex<Option<EngineMessageTx>>>,
-}
-
-impl Drop for DeploymentContext {
-    fn drop(&mut self) {
-        info!("Dropping deployment context");
-    }
-}
-
-struct TaskContext {
-    task: Arc<Box<dyn Task>>,
-    _handle: tokio::task::JoinHandle<()>,
-}
-
-impl Drop for TaskContext {
-    fn drop(&mut self) {
-        info!("Dropping task context");
-    }
-}
-
-// Represent the state when the engine is connected to the gateway and is forwarding/receiving engine events
-struct UpstreamGatewayContext {
-    msg_stream: Streaming<EngineMessageRx>,
-    close_upstream_tx: watch::Sender<()>,
-    logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
-}
-
-impl Drop for UpstreamGatewayContext {
-    fn drop(&mut self) {
-        info!("Dropping upstream gateway context");
-    }
-}
 
 //
 //
@@ -141,74 +97,7 @@ impl DeploymentManagerState {
     }
 }
 
-impl DeploymentContext {
-    pub fn new(deployment_info: DeploymentInfo) -> Self {
-        let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
-        let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
-        Self {
-            deployment_info,
-            log_tx: log_engine_tx,
-            log_rx: Arc::new(Mutex::new(EngineLogStreamContext::new(log_engine_rx))),
-
-            msg_tx: msg_engine_tx,
-            msg_rx: Arc::new(Mutex::new(EngineMsgStreamContext::new(msg_engine_rx))),
-
-            // To keep the last message in case the cnx with upstream broke and that we need to re-emit the last message
-            // on resume
-            last_msg_memento: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    async fn get_message_stream(
-        &mut self,
-    ) -> (
-        UnboundedSender<EngineEvent>,                         // To feed the stream
-        UnboundedSender<EngineMsg>,                           // To feed the stream
-        impl Stream<Item = EngineMessageTx> + Send + 'static, // The stream that receive the EngineEvent and the EngineMsg
-        watch::Sender<()>, // To know/stop the stream and release the rx side of the channel
-    ) {
-        let (stream, abort_handle) = EngineMessageStream::new(
-            self.log_rx.clone().lock_owned().await,
-            self.msg_rx.clone().lock_owned().await,
-            self.last_msg_memento.clone().lock_owned().await,
-        );
-        (self.log_tx.clone(), self.msg_tx.clone(), stream, abort_handle)
-    }
-
-    pub async fn execute_deployment(
-        &mut self,
-        engine_client: &mut GrpcEngineClient,
-    ) -> Result<
-        (
-            Streaming<EngineMessageRx>,
-            watch::Sender<()>,
-            Box<dyn Logger>,
-            Box<dyn MetricsRegistry>,
-        ),
-        tonic::Status,
-    > {
-        let (log_tx, msg_tx, msg_stream, abort_upstream_tx) = self.get_message_stream().await;
-        let msg_publisher = Box::new(msg_tx);
-        let logger_for_task: Box<dyn Logger> =
-            Box::new(CompositeLogger::new(vec![Box::new(StdIoLogger::new()), Box::new(log_tx)]));
-        let metrics_registry: Box<dyn MetricsRegistry> = Box::new(StdMetricsRegistry::new(msg_publisher));
-
-        let msg_stream = stream::iter(vec![EngineMessageTx {
-            message_id: None,
-            message: Some(engine_message_tx::Message::DeploymentRequest(self.deployment_info.clone())),
-        }])
-        .chain(msg_stream);
-
-        engine_client
-            .exec_deployment(msg_stream)
-            .await
-            .map(|msg_stream| (msg_stream.into_inner(), abort_upstream_tx, logger_for_task, metrics_registry))
-    }
-
-    pub fn set_last_message_id(&mut self, last_id: String) {
-        self.deployment_info.last_message_id = last_id;
-    }
-}
+impl DeploymentContext {}
 
 type MkEngineTask = Box<
     dyn Fn(
@@ -307,6 +196,32 @@ impl DeploymentManager {
         }
     }
 
+    /// Engine has nothing to do, pool the gtw to get a new deployment to execute
+    async fn seek_new_deployment(&mut self) -> (DeploymentManagerState, Option<Duration>) {
+        let deployment_info = match self
+            .engine_client
+            .get_new_deployment(self.deployment_request.clone())
+            .await
+        {
+            Ok(deployment_info) => deployment_info.into_inner(),
+            Err(err) => {
+                if err.code() == Code::NotFound {
+                    info!("No deployment found, waiting for a new one");
+                } else {
+                    error!("Error while getting new deployment: {}", err);
+                }
+                return (DeploymentManagerState::SeekingNewDeployment {}, Some(self.default_wait_time));
+            }
+        };
+
+        info!("Got new deployment for: {:?}", deployment_info);
+        let next_state = DeploymentManagerState::ExecutingDeployment {
+            deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1)),
+        };
+
+        (next_state, None)
+    }
+
     /// We have a new deployment to execute, but no task yet. Contact the gateway to claim the deployment and get a task to execute
     async fn execute_deployment(
         &mut self,
@@ -359,19 +274,19 @@ impl DeploymentManager {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                             info!("Received new deployment task: {}", payload);
                             let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone());
-                            let upstream = UpstreamGatewayContext { msg_stream, close_upstream_tx, logger, metrics_registry };
+                            let upstream = UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry);
                             match task {
                                 Ok(task) => {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                                         deployment,
-                                        task: Self::spawn_new_task(task),
+                                        task: TaskContext::spawn_new_task(task),
                                         upstream_gtw: upstream,
                                     };
                                     (next_step, None)
                                 }
                                 Err(err) => {
-                                    Self::hard_abort_deployment(deployment, err).await;
-                                    Self::terminate_upstream_cnx(upstream).await;
+                                    deployment.hard_abort_deployment(err).await;
+                                    upstream.terminate_upstream_cnx().await;
                                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                                 }
                             }
@@ -414,12 +329,7 @@ impl DeploymentManager {
                 let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                     deployment,
                     task,
-                    upstream_gtw: UpstreamGatewayContext {
-                        msg_stream,
-                        close_upstream_tx,
-                        logger,
-                        metrics_registry,
-                    },
+                    upstream_gtw: UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry),
                 };
                 (next_step, None)
             }
@@ -434,7 +344,7 @@ impl DeploymentManager {
                             &deployment.deployment_info
                         );
                     }
-                    Self::terminate_task(task).await;
+                    task.terminate_task().await;
                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                 }
                 _ => {
@@ -444,32 +354,6 @@ impl DeploymentManager {
                 }
             },
         }
-    }
-
-    /// Engine has nothing to do, pool the gtw to get a new deployment to execute
-    async fn seek_new_deployment(&mut self) -> (DeploymentManagerState, Option<Duration>) {
-        let deployment_info = match self
-            .engine_client
-            .get_new_deployment(self.deployment_request.clone())
-            .await
-        {
-            Ok(deployment_info) => deployment_info.into_inner(),
-            Err(err) => {
-                if err.code() == Code::NotFound {
-                    info!("No deployment found, waiting for a new one");
-                } else {
-                    error!("Error while getting new deployment: {}", err);
-                }
-                return (DeploymentManagerState::SeekingNewDeployment {}, Some(self.default_wait_time));
-            }
-        };
-
-        info!("Got new deployment for: {:?}", deployment_info);
-        let next_state = DeploymentManagerState::ExecutingDeployment {
-            deployment: DeploymentContext::new(deployment_info),
-        };
-
-        (next_state, None)
     }
 
     /// We have a deployment and a task to execute, we execute the task, business as usual
@@ -490,8 +374,10 @@ impl DeploymentManager {
 
                 // If there is no task on-going for this deployment, we wait at max 15sec to receive a new one
                 _ = tokio::time::sleep(self.deadline_for_new_task), if task_is_terminated => {
-                    info!("No new message after 15s, assuming deployment is terminated");
-                    Self::terminate_upstream_cnx(upstream).await;
+                    info!("No new message after {}s, assuming deployment is terminated", self.deadline_for_new_task.as_secs());
+                    task.terminate_task().await;
+                    deployment.terminate_deployment().await;
+                    upstream.await_termination().await;
 
                     return (DeploymentManagerState::SeekingNewDeployment {}, None);
                 }
@@ -522,15 +408,16 @@ impl DeploymentManager {
                             match msg.request {
                                 Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                                     info!("Received new deployment task: {}", payload);
-                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger.clone(), upstream.metrics_registry.clone());
+                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry());
                                     match new_task {
                                         Ok(new_task) => {
-                                            Self::await_task_termination(task).await;
-                                            task = Self::spawn_new_task(new_task);
+                                            task.await_task_termination().await;
+                                            task = TaskContext::spawn_new_task(new_task);
                                         }
                                         Err(err) => {
-                                            Self::hard_abort_deployment(deployment, err).await;
-                                            Self::terminate_upstream_cnx(upstream).await;
+                                            task.terminate_task().await;
+                                            deployment.hard_abort_deployment(err).await;
+                                            upstream.await_termination().await;
 
                                             return (DeploymentManagerState::SeekingNewDeployment {}, None);
                                         }
@@ -542,8 +429,9 @@ impl DeploymentManager {
                                 }
                                 Some(engine_message_rx::Request::Terminated(_)) => {
                                     info!("Received terminated message for deployment: {:?}", msg);
-                                    Self::terminate_task(task).await;
-                                    Self::terminate_upstream_cnx(upstream).await;
+                                    task.terminate_task().await;
+                                    deployment.terminate_deployment().await;
+                                    upstream.await_termination().await;
 
                                     return (DeploymentManagerState::SeekingNewDeployment {}, None);
                                 }
@@ -581,237 +469,11 @@ impl DeploymentManager {
             }
         }
     }
-
-    async fn terminate_task(ctx: TaskContext) {
-        warn!("Canceling current task");
-        ctx.task.cancel();
-        info!("Task canceled, waiting for task to terminate");
-        Self::await_task_termination(ctx).await;
-    }
-
-    async fn await_task_termination(ctx: TaskContext) {
-        info!("Waiting for task to terminate");
-        while (timeout(Duration::from_secs(10), ctx.task.await_terminated().recv()).await).is_err() {
-            info!("Waiting for task to terminate");
-        }
-        info!("Task terminated");
-    }
-
-    fn spawn_new_task(task: Box<dyn Task>) -> TaskContext {
-        let task = Arc::new(task);
-
-        let task_handle = tokio_utils::launch_blocking_task({
-            let task = task.clone();
-            move || {
-                task.run();
-            }
-        });
-
-        TaskContext {
-            task,
-            _handle: task_handle,
-        }
-    }
-
-    async fn terminate_upstream_cnx(upstream: UpstreamGatewayContext) {
-        info!("Closing upstream connection with gateway");
-        let _ = upstream.close_upstream_tx.send(());
-        while (timeout(Duration::from_secs(10), upstream.close_upstream_tx.closed()).await).is_err() {
-            info!("Waiting for upstream connection to be terminated ");
-        }
-        info!("Upstream connection terminated");
-    }
-
-    async fn hard_abort_deployment(deployment: DeploymentContext, err: EngineEvent) {
-        let event_details = err.get_details().clone();
-        let _ = deployment.log_tx.send(err);
-
-        let event_details =
-            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Terminated));
-        let err = EngineEvent::Info(
-            event_details,
-            EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),
-        );
-        let _ = deployment.log_tx.send(err);
-
-        // Wait a bit for the message to be flushed
-        let _ = tokio::time::sleep(Duration::from_secs(5)).await;
-    }
-}
-
-struct EngineMsgStreamContext {
-    msg_receiver: UnboundedReceiver<EngineMsg>,
-    should_stop: Option<watch::Receiver<()>>,
-}
-
-// Represent the context of the stream that the engine use to communicate with the gateway
-struct EngineLogStreamContext {
-    log_receiver: UnboundedReceiver<EngineEvent>,
-    log_buffer: Vec<EngineEventIo>,
-    log_buffer_duration: Duration,
-    should_stop: Option<watch::Receiver<()>>,
-}
-
-impl EngineLogStreamContext {
-    fn new(log_receiver: UnboundedReceiver<EngineEvent>) -> Self {
-        EngineLogStreamContext {
-            log_receiver,
-            log_buffer: Vec::with_capacity(1024),
-            log_buffer_duration: Duration::from_secs(1),
-            should_stop: None,
-        }
-    }
-}
-
-impl EngineMsgStreamContext {
-    fn new(msg_receiver: UnboundedReceiver<EngineMsg>) -> Self {
-        EngineMsgStreamContext {
-            msg_receiver,
-            should_stop: None,
-        }
-    }
-}
-
-struct EngineMessageStream {
-    stream: Box<dyn Stream<Item = EngineMessageTx> + Send + 'static>,
-}
-
-impl EngineMessageStream {
-    pub fn new(
-        mut log_stream_context: OwnedMutexGuard<EngineLogStreamContext>,
-        mut msg_stream_context: OwnedMutexGuard<EngineMsgStreamContext>,
-        mut last_msg_memento: OwnedMutexGuard<Option<EngineMessageTx>>,
-    ) -> (Self, watch::Sender<()>) {
-        let (abort_handle_tx, abort_handle_rx) = watch::channel(());
-        log_stream_context.should_stop = Some(abort_handle_rx.clone());
-        msg_stream_context.should_stop = Some(abort_handle_rx);
-
-        // We re-emit the last message in case of failure
-        let remit_last_msg: Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>> =
-            if let Some(last_msg) = last_msg_memento.clone() {
-                Box::pin(stream::once(futures_util::future::ready(last_msg)))
-            } else {
-                Box::pin(stream::empty())
-            };
-
-        // Normal flow were we dequeue engine message
-        let normal_flow = stream::select(
-            stream::unfold(log_stream_context, Self::on_next_log),
-            stream::unfold(msg_stream_context, Self::on_next_msg),
-        )
-        // We inspect each message to store the last_msg to re-emit it in case of failure
-        // We set the message id of each msg to have a global order of the message
-        .map(move |mut msg| {
-            let ts = Utc::now();
-            msg.message_id = Some(Timestamp {
-                seconds: ts.timestamp(),
-                nanos: ts.timestamp_subsec_nanos() as i32,
-            });
-            last_msg_memento.replace(msg.clone());
-            msg
-        });
-
-        let s = Self {
-            stream: Box::new(remit_last_msg.chain(normal_flow)),
-        };
-
-        (s, abort_handle_tx)
-    }
-
-    fn convert_logs_to_grpc_message(buffer: &Vec<EngineEventIo>) -> EngineMessageTx {
-        EngineMessageTx {
-            message_id: None, // Will be generated at a later stage
-            message: Some(engine_message_tx::Message::Log(
-                serde_json::to_string(buffer).unwrap_or_default(),
-            )),
-        }
-    }
-
-    fn convert_msg_to_grpc_message(msg: EngineMsg) -> EngineMessageTx {
-        match msg.payload {
-            EngineMsgPayload::Metrics(step_record) => EngineMessageTx {
-                message_id: None, // Will be generated at a later stage
-                message: Some(engine_message_tx::Message::Metrics(Metrics {
-                    step_record: Some(GrpcStepRecord::from_record(step_record)),
-                })),
-            },
-        }
-    }
-
-    async fn on_next_msg(
-        mut ctx: OwnedMutexGuard<EngineMsgStreamContext>,
-    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineMsgStreamContext>)> {
-        let mut should_stop = ctx.should_stop.take().unwrap();
-        let opt_engine_message_tx = tokio::select! {
-            biased;
-
-            msg = ctx.msg_receiver.recv() => {
-                msg.map(Self::convert_msg_to_grpc_message) },
-
-             // Deployment asked to be aborted, we leave to release the mutex of the channel
-            _ = should_stop.changed() => None
-        };
-
-        opt_engine_message_tx.map(|engine_message_tx| {
-            ctx.should_stop = Some(should_stop);
-            (engine_message_tx, ctx)
-        })
-    }
-
-    async fn on_next_log(
-        mut ctx: OwnedMutexGuard<EngineLogStreamContext>,
-    ) -> Option<(EngineMessageTx, OwnedMutexGuard<EngineLogStreamContext>)> {
-        // We re-send previous messages that may not have been received, gateway is responsible for dedup them
-        let mut should_stop = ctx.should_stop.take().unwrap();
-        let opt_engine_message_tx = tokio::select! {
-            biased;
-
-            msg = ctx.log_receiver.recv() => match msg {
-                Some(engine_event) => {
-                    // Buffer msg to avoid flooding the gateway
-                    ctx.log_buffer.clear();
-                    ctx.log_buffer.push(EngineEventIo::from(engine_event));
-                    tokio::time::sleep(ctx.log_buffer_duration).await;
-                    while ctx.log_buffer.len() < ctx.log_buffer.capacity() {
-                        match ctx.log_receiver.try_recv() {
-                            Ok(engine_event) => ctx.log_buffer.push(EngineEventIo::from(engine_event)),
-                            _ => break,
-                        }
-                    }
-
-                    Some(Self::convert_logs_to_grpc_message(&ctx.log_buffer))
-                }
-                None => None,
-            },
-
-            // Deployment asked to be aborted, we leave to release the mutex of the channel
-            _ = should_stop.changed() => None
-        };
-
-        opt_engine_message_tx.map(|engine_message_tx| {
-            ctx.should_stop = Some(should_stop);
-            (engine_message_tx, ctx)
-        })
-    }
-}
-
-impl Stream for EngineMessageStream {
-    type Item = EngineMessageTx;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        unsafe { self.map_unchecked_mut(|s| s.stream.deref_mut()).poll_next(cx) }
-    }
-}
-
-impl Drop for EngineMessageStream {
-    fn drop(&mut self) {
-        info!("engine message stream to gateway terminated");
-    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::deployment_manager::{DeploymentContext, DeploymentManager, EngineMessageStream};
+    use crate::deployment_manager::{DeploymentContext, DeploymentManager};
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
         engine_message_rx, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx, GitTokenRequest,
@@ -838,128 +500,6 @@ mod test {
     use tonic::{Request, Response, Status, Streaming};
     use uuid::Uuid;
 
-    #[tokio::test]
-    async fn test_engine_message_stream() {
-        let event_details = events::EventDetails::new(
-            None,
-            QoveryIdentifier::new(Uuid::new_v4()),
-            QoveryIdentifier::new(Uuid::new_v4()),
-            " test".to_string(),
-            Stage::Environment(EnvironmentStep::Cancelled),
-            Transmitter::TaskManager(Uuid::new_v4(), "test".to_string()),
-        );
-        let engine_event =
-            EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details.clone()), None);
-        let deployment = DeploymentContext::new(DeploymentInfo::default());
-        let buffer_duration = Duration::from_millis(100);
-        let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        deployment.log_rx.clone().lock().await.log_buffer_duration = buffer_duration;
-
-        // Dropping the handle should terminate the stream
-        let (mut stream, abort_handle) = EngineMessageStream::new(
-            deployment.log_rx.clone().lock_owned().await,
-            deployment.msg_rx.clone().lock_owned().await,
-            deployment.last_msg_memento.clone().lock_owned().await,
-        );
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-        drop(abort_handle);
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(None)));
-
-        drop(stream);
-        // Log sent should be received and buffered
-        let log_tx = deployment.log_tx.clone();
-        let (mut stream, abort_handle) = EngineMessageStream::new(
-            deployment.log_rx.clone().lock_owned().await,
-            deployment.msg_rx.clone().lock_owned().await,
-            deployment.last_msg_memento.clone().lock_owned().await,
-        );
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-        let _ = log_tx.send(engine_event.clone());
-        let ret = log_tx.send(engine_event.clone());
-        assert!(ret.is_ok());
-
-        // We should receive one batch
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(Some(_))));
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-
-        // We should receive 2 batch as message have been sent after the buffer duration
-        let barrier = Arc::new(tokio::sync::Barrier::new(2));
-        tokio::spawn({
-            let barrier = barrier.clone();
-            async move {
-                barrier.wait().await;
-                let _ = log_tx.send(engine_event.clone());
-                tokio::time::sleep(buffer_deadline).await;
-                let ret = log_tx.send(engine_event.clone());
-                assert!(ret.is_ok());
-            }
-        });
-
-        barrier.wait().await;
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(Some(_))));
-        let msg = timeout(buffer_deadline * 2, stream.next()).await;
-        assert!(matches!(msg, Ok(Some(_))));
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-
-        // Resuming the stream should re-send the previous messages
-        drop(abort_handle);
-        drop(stream);
-        let (mut stream, _abort_handle) = EngineMessageStream::new(
-            deployment.log_rx.clone().lock_owned().await,
-            deployment.msg_rx.clone().lock_owned().await,
-            deployment.last_msg_memento.clone().lock_owned().await,
-        );
-        assert!(matches!(
-            timeout(buffer_deadline, stream.next()).await,
-            Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
-        ));
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-
-        // Terminating the deployment should terminate the stream
-        drop(deployment);
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(None)));
-    }
-
-    #[tokio::test]
-    async fn test_engine_message_stream_msg() {
-        let engine_msg = EngineMsg::new(EngineMsgPayload::Metrics(StepRecord::new(
-            StepName::Deployment,
-            StepLabel::Service,
-            Uuid::new_v4(),
-        )));
-        let deployment = DeploymentContext::new(DeploymentInfo::default());
-        let buffer_duration = Duration::from_millis(100);
-        let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let msg_tx = deployment.msg_tx.clone();
-        let (mut stream, abort_handle) = EngineMessageStream::new(
-            deployment.log_rx.clone().lock_owned().await,
-            deployment.msg_rx.clone().lock_owned().await,
-            deployment.last_msg_memento.clone().lock_owned().await,
-        );
-
-        let _ = msg_tx.send(engine_msg.clone());
-        let msg = timeout(buffer_deadline * 2, stream.next()).await;
-        assert!(matches!(msg, Ok(Some(_))));
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-
-        // Resuming the stream should re-send the previous messages
-        drop(abort_handle);
-        drop(stream);
-        let (mut stream, _abort_handle) = EngineMessageStream::new(
-            deployment.log_rx.clone().lock_owned().await,
-            deployment.msg_rx.clone().lock_owned().await,
-            deployment.last_msg_memento.clone().lock_owned().await,
-        );
-        assert!(matches!(
-            timeout(buffer_deadline, stream.next()).await,
-            Ok(Some(m)) if m.message_id.as_ref().unwrap() == &msg.unwrap().unwrap().message_id.unwrap()
-        ));
-        assert!(timeout(buffer_deadline, stream.next()).await.is_err());
-    }
-
-    //
-    // Deployment Manager
-    //
     struct MyEngineGtwTest {
         deployments: Mutex<Vec<Result<Response<DeploymentInfo>, Status>>>,
         msgs: Vec<Result<EngineMessageRx, Status>>,
@@ -1114,15 +654,15 @@ mod test {
 
     #[tokio::test]
     async fn test_deployment_manager_executing_task() {
-        //use tracing_subscriber::EnvFilter;
-        //tracing_subscriber::fmt()
-        //    .with_env_filter(
-        //        EnvFilter::builder()
-        //            .with_default_directive(tracing::Level::INFO.into())
-        //            .from_env_lossy(),
-        //    )
-        //    .with_ansi(true)
-        //    .init();
+        use tracing_subscriber::EnvFilter;
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::builder()
+                    .with_default_directive(tracing::Level::INFO.into())
+                    .from_env_lossy(),
+            )
+            .with_ansi(true)
+            .init();
 
         let (client, server) = tokio::io::duplex(1024);
 
@@ -1173,7 +713,7 @@ mod test {
 
         task_cancel.store(true, Ordering::Relaxed);
         should_shutdown.store(true, Ordering::Relaxed);
-        assert!(timeout(Duration::from_secs(2), &mut fut).await.is_ok());
+        assert!(timeout(Duration::from_secs(7), &mut fut).await.is_ok());
         assert!(!task_is_running.load(Ordering::Relaxed));
     }
 }
