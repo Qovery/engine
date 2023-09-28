@@ -19,7 +19,7 @@ use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, 
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
-use crate::runtime::block_on;
+use crate::runtime::{block_on, block_on_with_timeout};
 use retry::delay::Fixed;
 use retry::OperationResult;
 use serde_json::json;
@@ -129,9 +129,14 @@ impl ECR {
             repository_name: repository_name.to_string(),
         };
 
-        match block_on(self.ecr_client().delete_repository(drr)) {
-            Ok(_) => Ok(()),
-            Err(RusotoError::Service(DeleteRepositoryError::RepositoryNotFound(_))) => Ok(()),
+        match block_on_with_timeout(self.ecr_client().delete_repository(drr)) {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(RusotoError::Service(DeleteRepositoryError::RepositoryNotFound(_)))) => Ok(()),
+            Ok(Err(err)) => Err(ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.registry_info().registry_name.clone(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: err.to_string(),
+            }),
             Err(err) => Err(ContainerRegistryError::CannotDeleteRepository {
                 registry_name: self.registry_info().registry_name.clone(),
                 repository_name: repository_name.to_string(),
@@ -161,16 +166,16 @@ impl ECR {
     }
 
     fn delete_image(&self, imge: &Image) -> Result<(), ContainerRegistryError> {
-        let ret = block_on(self.ecr_client().batch_delete_image(BatchDeleteImageRequest {
+        let request = BatchDeleteImageRequest {
             registry_id: None,
             repository_name: imge.repository_name.clone(),
             image_ids: vec![ImageIdentifier {
                 image_digest: None,
                 image_tag: Some(imge.tag.to_string()),
             }],
-        }));
+        };
 
-        match ret {
+        match block_on_with_timeout(self.ecr_client().batch_delete_image(request)) {
             Ok(_) => Ok(()),
             Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
                 registry_name: imge.registry_name.clone(),
@@ -199,11 +204,11 @@ impl ECR {
         // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
         let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
             info!("Trying to create ECR repository {}", repository_name);
-            let repositories = block_on(
+            let repositories = block_on_with_timeout(
                 self.ecr_client()
                     .describe_repositories(container_registry_request.clone()),
             );
-            match repositories {
+            match repositories.unwrap_or(Err(RusotoError::Blocking)) {
                 // Repo already exist, so ok
                 Ok(result) => OperationResult::Ok(result.repositories),
                 Err(e) => match e {
