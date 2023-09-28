@@ -28,8 +28,6 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           env:
-            - name: "IAM_K8S_GROUPS"
-              value: "{{ .Values.iamK8sGroups }}"
             - name: "REFRESH_INTERVAL_SECONDS"
               value: "{{ .Values.refreshIntervalSeconds }}"
             - name: "AWS_STS_REGIONAL_ENDPOINTS"
@@ -42,6 +40,14 @@ spec:
               value: "{{ .Values.aws.roleArn }}"
             - name: "SERVICE_ACCOUNT_NAME"
               value: "{{ .Values.serviceAccount.name }}"
+            - name: "ENABLE_GROUP_USER_SYNC"
+              value: "{{ .Values.groupUsersSync.enabled }}"
+            - name: "IAM_K8S_GROUPS"
+              value: "{{ .Values.groupUsersSync.iamK8sGroups }}"
+            - name: "ENABLE_SSO"
+              value: "{{ .Values.sso.enabled }}"
+            - name: "IAM_SSO_ROLE_ARN"
+              value: "{{ .Values.sso.iamSSORoleArn }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           command:

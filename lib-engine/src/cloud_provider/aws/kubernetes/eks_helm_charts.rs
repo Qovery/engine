@@ -17,7 +17,9 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::{
+    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
+};
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
@@ -151,21 +153,57 @@ pub fn eks_aws_helm_charts(
     .to_common_helm_chart()?;
 
     // AWS IAM EKS user mapper
-    let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites.region.clone(),
-        "iam-eks-user-mapper".to_string(),
-        qovery_terraform_config.aws_iam_eks_user_mapper_role_arn,
-        format!(
-            "{}->system:masters",
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .aws_iam_user_mapper_group_name
-        ),
-        Duration::seconds(30), // TODO(benjaminch): might be a parameter
-        HelmChartResourcesConstraintType::ChartDefault,
-    )
-    .to_common_helm_chart()?;
+    let mut aws_iam_eks_user_mapper: Option<CommonChart> = None;
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_iam_user_mapper_sso_enabled
+        || chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_iam_user_mapper_group_enabled
+    {
+        aws_iam_eks_user_mapper = Some(
+            AwsIamEksUserMapperChart::new(
+                chart_prefix_path,
+                chart_config_prerequisites.region.clone(),
+                "iam-eks-user-mapper".to_string(),
+                qovery_terraform_config.aws_iam_eks_user_mapper_role_arn,
+                match &chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_iam_user_mapper_group_enabled
+                {
+                    true => GroupConfig::Enabled {
+                        group_config_mapping: vec![GroupConfigMapping {
+                            iam_group_name: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .aws_iam_user_mapper_group_name
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_default(), // TODO(benjaminch): introduce a proper error
+                            k8s_group_name: "system:masters".to_string(),
+                        }],
+                    },
+                    false => GroupConfig::Disabled,
+                },
+                match &chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_iam_user_mapper_sso_enabled
+                {
+                    true => SSOConfig::Enabled {
+                        sso_role_arn: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .aws_iam_user_mapper_sso_role_arn
+                            .as_ref()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default(), // TODO(benjaminch): introduce a proper error
+                    },
+                    false => SSOConfig::Disabled,
+                },
+                Duration::seconds(30), // TODO(benjaminch): might be a parameter
+                HelmChartResourcesConstraintType::ChartDefault,
+            )
+            .to_common_helm_chart()?,
+        );
+    }
 
     // AWS nodes term handler
     let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart()?;
@@ -557,12 +595,12 @@ pub fn eks_aws_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(aws_iam_eks_user_mapper),
-        Box::new(q_storage_class),
-        Box::new(aws_ui_view),
-        Box::new(vpa),
-    ];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(aws_ui_view), Box::new(vpa)];
+
+    // If IAM settings are set and activated
+    if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
+        level_1.push(Box::new(aws_iam_eks_user_mapper));
+    }
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(coredns_config)];
 

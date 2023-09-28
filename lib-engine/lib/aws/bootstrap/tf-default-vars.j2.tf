@@ -25,7 +25,6 @@ variable "organization_long_id" {
 }
 
 # AWS specific
-
 variable "aws_availability_zones" {
   description = "AWS availability zones"
   default = {{ aws_availability_zones }}
@@ -134,6 +133,18 @@ variable "vpc_flow_logs_retention_days" {
   description = "Set VPC flow logs retention in days"
   default = {{ vpc_flow_logs_retention_days }}
   type = number
+}
+
+variable "aws_iam_user_mapper_sso_enabled" {
+  description = "Enable SSO"
+  default = "{{ aws_iam_user_mapper_sso_enabled }}"
+  type = string
+}
+
+variable "aws_iam_user_mapper_sso_role_arn" {
+  description = "Set cluster SSO role ARN"
+  default = "{{ aws_iam_user_mapper_sso_role_arn }}"
+  type = string
 }
 
 variable "s3_flow_logs_bucket_name" {

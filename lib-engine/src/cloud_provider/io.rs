@@ -42,8 +42,14 @@ pub struct ClusterAdvancedSettings {
     pub pleco_resources_ttl: i32,
     #[serde(alias = "loki.log_retention_in_week")]
     pub loki_log_retention_in_week: u32,
+    #[serde(alias = "aws.iam.enable_admin_group_sync")]
+    pub aws_iam_user_mapper_group_enabled: bool,
     #[serde(alias = "aws.iam.admin_group")]
-    pub aws_iam_user_mapper_group_name: String,
+    pub aws_iam_user_mapper_group_name: Option<String>,
+    #[serde(alias = "aws.iam.enable_sso")]
+    pub aws_iam_user_mapper_sso_enabled: bool,
+    #[serde(alias = "aws.iam.sso_role_arn")]
+    pub aws_iam_user_mapper_sso_role_arn: Option<String>,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
@@ -80,7 +86,10 @@ impl Default for ClusterAdvancedSettings {
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,
-            aws_iam_user_mapper_group_name: "Admins".to_string(),
+            aws_iam_user_mapper_group_enabled: true,
+            aws_iam_user_mapper_group_name: Some("Admins".to_string()),
+            aws_iam_user_mapper_sso_enabled: false,
+            aws_iam_user_mapper_sso_role_arn: None,
             cloud_provider_container_registry_tags: HashMap::new(),
             aws_eks_ec2_metadata_imds: AwsEc2MetadataImds::Optional,
             aws_vpc_enable_flow_logs: false,
