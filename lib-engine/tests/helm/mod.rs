@@ -206,6 +206,7 @@ fn test_custom_domain() -> CustomDomain {
     CustomDomain {
         domain: "my_custom_domain".to_string(),
         target_domain: "my_target_domain".to_string(),
+        generate_certificate: true,
     }
 }
 
