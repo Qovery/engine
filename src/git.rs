@@ -312,7 +312,7 @@ mod tests {
         let repo = clone_at_commit(
             &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             commit_id,
-            &Path::new(&clone_dir.path),
+            Path::new(&clone_dir.path),
             &get_credentials,
         );
         assert!(repo.is_ok());

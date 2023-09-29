@@ -247,6 +247,7 @@ impl EnvironmentTask {
                 "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
             ));
             match infra_ctx.context().docker.spawn_builder(
+                infra_ctx.context().execution_id(),
                 nb_builder,
                 infra_ctx
                     .kubernetes()

@@ -147,7 +147,7 @@ enum BuilderLocation {
     Local,
     Kubernetes {
         namespace: String,
-        builder_id: String,
+        builder_prefix: String,
         builder_name: String,
         supported_architectures: BTreeSet<Architecture>,
     },
@@ -242,16 +242,16 @@ impl Docker {
     pub fn new_with_kube_builder(
         socket_location: Option<Url>,
         supported_architectures: &[Architecture],
-        namespace: &str,
-        builder_id: &str,
+        namespace: String,
+        builder_prefix: String,
         args: Vec<(String, String)>,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
         let builder_name = "engine-builder";
         docker.builder_location = BuilderLocation::Kubernetes {
-            namespace: namespace.to_string(),
-            builder_id: builder_id.to_string(),
+            namespace,
+            builder_prefix,
             builder_name: builder_name.to_string(),
             supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
         };
@@ -262,6 +262,7 @@ impl Docker {
 
     pub fn spawn_builder(
         &self,
+        exec_id: &str,
         nb_builder: NonZeroUsize,
         requested_architectures: &[Architecture],
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
@@ -276,8 +277,8 @@ impl Docker {
             }),
             BuilderLocation::Kubernetes {
                 namespace,
-                builder_id,
                 builder_name,
+                builder_prefix,
                 supported_architectures,
             } => {
                 let available_architectures = requested_architectures
@@ -300,7 +301,9 @@ impl Docker {
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
                 for arch in requested_architectures {
-                    let node_name = format!("{builder_id}-{arch}");
+                    let mut node_name = format!("{builder_prefix}{exec_id}-{arch}");
+                    node_name.truncate(60);
+                    let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
                     let driver_opt = format!(concat!(
                     "--driver-opt=",
@@ -322,7 +325,7 @@ impl Docker {
                         "--platform",
                         &platform,
                         "--node",
-                        &node_name,
+                        node_name,
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
@@ -910,13 +913,14 @@ mod tests {
         let docker = Docker::new_with_kube_builder(
             None,
             &[Architecture::ARM64, Architecture::AMD64],
-            "default",
-            &format!("b{}", Uuid::new_v4()),
+            "default".to_string(),
+            "builder-".to_string(),
             args,
         )
         .unwrap();
         let _builder = docker
             .spawn_builder(
+                Uuid::new_v4().to_string().as_str(),
                 NonZeroUsize::new(1).unwrap(),
                 &[Architecture::AMD64],
                 (0, 1000),
