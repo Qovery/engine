@@ -35,7 +35,7 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) set_values: Vec<String>,
     pub(super) set_string_values: Vec<String>,
     pub(super) set_json_values: Vec<String>,
-    pub(super) arguments: Vec<String>,
+    pub(super) command_args: Vec<String>,
     pub(super) timeout: Duration,
     pub(super) allow_cluster_wide_resources: bool,
     pub(super) environment_variables: HashMap<String, String>,
@@ -59,7 +59,7 @@ impl<T: CloudProvider> HelmChart<T> {
         set_values: Vec<String>,
         set_string_values: Vec<String>,
         set_json_values: Vec<String>,
-        arguments: Vec<String>,
+        command_args: Vec<String>,
         timeout: Duration,
         allow_cluster_wide_resources: bool,
         environment_variables: HashMap<String, String>,
@@ -111,7 +111,7 @@ impl<T: CloudProvider> HelmChart<T> {
             set_values,
             set_string_values,
             set_json_values,
-            arguments,
+            command_args,
             timeout,
             allow_cluster_wide_resources,
             environment_variables,
@@ -231,7 +231,7 @@ impl<T: CloudProvider> HelmChart<T> {
                 Cow::from("--timeout"),
                 Cow::from(format!("{}s", self.timeout.as_secs())),
             ])
-            .chain(self.arguments.iter().map(|v| Cow::from(v.as_str())))
+            .chain(self.command_args.iter().map(|v| Cow::from(v.as_str())))
     }
 }
 
