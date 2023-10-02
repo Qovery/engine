@@ -3048,7 +3048,7 @@ fn deploy_helm_chart() {
             set_values: vec!["toto=tata".to_string()],
             set_string_values: vec!["my-string=1".to_string()],
             set_json_values: vec!["my-json={\"json\": \"value\"}".to_string()],
-            arguments: vec!["--install".to_string()],
+            command_args: vec!["--install".to_string()],
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars: btreemap! { "TOTO".to_string() => "Salut".to_string() },
