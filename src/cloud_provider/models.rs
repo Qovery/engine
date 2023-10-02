@@ -51,6 +51,7 @@ pub struct StorageDataTemplate {
 pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
+    pub generate_certificate: bool,
 }
 impl CustomDomain {
     const WILDCARD_PREFIX: &'static str = "*.";

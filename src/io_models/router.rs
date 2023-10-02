@@ -11,6 +11,10 @@ use crate::models::types::{AWSEc2, AWS, SCW};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+fn default_generate_certificate() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
     pub long_id: Uuid,
@@ -27,6 +31,8 @@ pub struct Router {
 pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
+    #[serde(default = "default_generate_certificate")]
+    pub generate_certificate: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -48,6 +54,7 @@ impl Router {
             .map(|x| crate::cloud_provider::models::CustomDomain {
                 domain: x.domain.clone(),
                 target_domain: x.target_domain.clone(),
+                generate_certificate: x.generate_certificate,
             })
             .collect::<Vec<_>>();
 

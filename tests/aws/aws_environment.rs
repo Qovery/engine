@@ -582,6 +582,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
             let cd = CustomDomain {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
+                generate_certificate: true,
             };
 
             router.custom_domains = vec![cd];

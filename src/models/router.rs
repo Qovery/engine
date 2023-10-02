@@ -340,7 +340,9 @@ fn generate_certificate_alternative_names(
         .iter()
         // we filter out domain that belongs to our cluster, we dont need to create certificate for them
         // we keep wildcard domains, as we will need to create certificate for them
-        .filter(|domain| domain.is_wildcard() || !domain.domain.ends_with(&cluster_domain))
+        .filter(|domain| {
+            (domain.is_wildcard() || !domain.domain.ends_with(&cluster_domain)) && domain.generate_certificate
+        })
         .flat_map(|cd| {
             // We always want the root domain to be in the certificate (I.e: example.com, or if *.example.com -> example.com)
             let default_domain = CustomDomainDataTemplate {
@@ -467,10 +469,17 @@ mod tests {
             CustomDomain {
                 domain: "toto.com".to_string(),
                 target_domain: "".to_string(),
+                generate_certificate: true,
             },
             CustomDomain {
                 domain: "cluster.com".to_string(),
                 target_domain: "".to_string(),
+                generate_certificate: true,
+            },
+            CustomDomain {
+                domain: "titi.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: false,
             },
         ];
 
@@ -520,6 +529,7 @@ mod tests {
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.cluster.com".to_string(),
             target_domain: "".to_string(),
+            generate_certificate: true,
         }];
         let port2 = Port {
             long_id: Default::default(),
@@ -562,6 +572,7 @@ mod tests {
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
+            generate_certificate: true,
         }];
 
         let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains, "cluster.com");
@@ -611,10 +622,12 @@ mod tests {
             CustomDomain {
                 domain: "super.mydomain.com".to_string(),
                 target_domain: "".to_string(),
+                generate_certificate: true,
             },
             CustomDomain {
                 domain: "*.toto.mydomain.com".to_string(),
                 target_domain: "".to_string(),
+                generate_certificate: true,
             },
         ];
         let ret =
@@ -685,6 +698,7 @@ mod tests {
         let custom_domains = vec![CustomDomain {
             domain: "toto.cluster.com".to_string(),
             target_domain: "".to_string(),
+            generate_certificate: true,
         }];
 
         let ret = to_host_data_template("srv", &[&port_http], "cluster.com", &custom_domains, "cluster.com");
