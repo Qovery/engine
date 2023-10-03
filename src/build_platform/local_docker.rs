@@ -25,7 +25,7 @@ use crate::io_models::context::Context;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::utilities::to_short_id;
 
-/// https://github.com/heroku/builder
+/// https://github.com/heroku/cnb-builder-images
 const BUILDPACKS_BUILDERS: [&str; 1] = [
     "heroku/builder-classic:22",
     // removed because it does not support dynamic port binding
