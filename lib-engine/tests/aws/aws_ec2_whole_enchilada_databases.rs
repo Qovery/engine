@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tracing::{span, Level};
 
 use crate::helpers;
+use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::database::{test_db, StorageSize};
 
@@ -67,11 +68,7 @@ fn test_ec2_database(
             metrics_registry.clone(),
             &localisation,
             Kind::Ec2,
-            KubernetesVersion::V1_26 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(6),
-                suffix: Some(Arc::from("+k3s1")),
-            },
+            AWS_EC2_KUBERNETES_VERSION.clone(),
             &cluster_domain,
             None,
             1,
