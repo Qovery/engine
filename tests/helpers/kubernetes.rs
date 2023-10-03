@@ -1,4 +1,4 @@
-use crate::helpers::aws_ec2::ec2_kubernetes_instance;
+use crate::helpers::aws_ec2::{ec2_kubernetes_instance, AWS_EC2_KUBERNETES_VERSION};
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
@@ -173,11 +173,7 @@ pub fn cluster_test(
 
     let kubernetes_boot_version = match kubernetes_kind {
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => KubernetesVersion::V1_26 {
-            prefix: Some(Arc::from("v")),
-            patch: Some(6),
-            suffix: Some(Arc::from("+k3s1")),
-        },
+        KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
     };
 

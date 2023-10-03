@@ -19,9 +19,9 @@ pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
 
 lazy_static! {
-    pub static ref AWS_EC2_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_25 {
+    pub static ref AWS_EC2_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_26 {
         prefix: Some(Arc::from("v")),
-        patch: Some(11),
+        patch: Some(6),
         suffix: Some(Arc::from("+k3s1")),
     };
 }
@@ -67,11 +67,7 @@ pub fn aws_ec2_default_infra_config(
             .expect("AWS_EC2_TEST_CLUSTER_REGION is not set")
             .as_str(),
         KubernetesKind::Ec2,
-        KubernetesVersion::V1_26 {
-            prefix: Some(Arc::from("v")),
-            patch: Some(6),
-            suffix: Some(Arc::from("+k3s1")),
-        },
+        AWS_EC2_KUBERNETES_VERSION.clone(),
         &ClusterDomain::Default {
             cluster_id: context.cluster_short_id().to_string(),
         },
