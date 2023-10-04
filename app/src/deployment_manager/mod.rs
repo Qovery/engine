@@ -137,7 +137,7 @@ impl DeploymentManager {
         };
 
         Self {
-            default_wait_time: Duration::from_secs(10),
+            default_wait_time: Duration::from_secs(1),
             deadline_for_new_task: Duration::from_secs(15),
             deployment_request,
             engine_client,
