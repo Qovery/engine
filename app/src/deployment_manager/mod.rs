@@ -286,7 +286,7 @@ impl DeploymentManager {
                                 }
                                 Err(err) => {
                                     deployment.hard_abort_deployment(err).await;
-                                    upstream.terminate_upstream_cnx().await;
+                                    upstream.await_termination().await;
                                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                                 }
                             }
