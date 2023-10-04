@@ -499,7 +499,7 @@ pub fn environment_3_apps_3_databases(
                 mode: CONTAINER,
             },
         ],
-        helm_charts: vec![],
+        helms: vec![],
     }
 }
 
@@ -550,7 +550,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         jobs: vec![],
         routers: vec![],
         databases: vec![],
-        helm_charts: vec![],
+        helms: vec![],
     }
 }
 
@@ -601,7 +601,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         jobs: vec![],
         routers: vec![],
         databases: vec![],
-        helm_charts: vec![],
+        helms: vec![],
     }
 }
 
