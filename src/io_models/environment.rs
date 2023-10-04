@@ -39,7 +39,7 @@ pub struct EnvironmentRequest {
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
     #[serde(default)]
-    pub helm_charts: Vec<HelmChart>,
+    pub helms: Vec<HelmChart>,
 }
 
 fn default_max_parallel_build() -> u32 {
@@ -236,7 +236,7 @@ impl EnvironmentRequest {
         let jobs = jobs?;
 
         let helm_charts: Result<Vec<Box<dyn HelmChartService>>, HelmChartError> = self
-            .helm_charts
+            .helms
             .iter()
             .cloned()
             .map(|helm_chart| helm_chart.to_helm_chart_domain(context, cloud_provider))

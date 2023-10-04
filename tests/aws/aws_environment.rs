@@ -3022,7 +3022,7 @@ fn deploy_helm_chart() {
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
-        environment.helm_charts = vec![HelmChart {
+        environment.helms = vec![HelmChart {
             long_id: service_id,
             name: "my little chart ****".to_string(),
             kube_name: "my-little-chart".to_string(),
