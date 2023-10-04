@@ -114,6 +114,9 @@ impl DeploymentContext {
             EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),
         );
         let _ = self.log_tx.send(err);
+
+        // Wait for the gateway to receive the last message
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 
     pub async fn terminate_deployment(self) {}
