@@ -5,7 +5,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::deployment_action::deploy_helm::HelmDeployment;
-use crate::deployment_action::utils::{get_last_deployed_image, mirror_image, KubeObjectKind};
+use crate::deployment_action::utils::{get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind};
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -14,7 +14,6 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::job::JobSchedule;
-use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -157,9 +156,7 @@ where
         match &job.image_source {
             // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
             ImageSource::Registry { source } => {
-                let mirror_record =
-                    metrics_registry.start_record(*job.long_id(), StepLabel::Service, StepName::MirrorImage);
-                let result = mirror_image(
+                mirror_image_if_necessary(
                     job.long_id(),
                     &source.registry,
                     &source.image,
@@ -168,13 +165,8 @@ where
                     target,
                     logger,
                     event_details.clone(),
-                );
-                mirror_record.stop(if result.is_ok() {
-                    StepStatus::Success
-                } else {
-                    StepStatus::Error
-                });
-                result?;
+                    metrics_registry.clone(),
+                )?;
             }
             ImageSource::Build { .. } => {}
         }

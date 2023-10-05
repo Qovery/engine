@@ -43,7 +43,7 @@ pub trait ContainerRegistry: Send + Sync {
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;
 
-    // Check on the registry if a specific image already exist
+    // Check on the registry if a specific image already exists
     fn does_image_exists(&self, image: &Image) -> bool;
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
