@@ -7,6 +7,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::features_repository::FeatureRepository;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
@@ -64,8 +65,12 @@ pub struct Container<T: CloudProvider> {
     pub(super) lib_root_directory: String,
 }
 
-pub fn get_mirror_repository_name(service_id: &Uuid) -> String {
-    format!("qovery-mirror-{service_id}")
+pub fn get_mirror_repository_name(service_id: &Uuid, cluster_id: &Uuid) -> String {
+    if FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(cluster_id) {
+        format!("qovery-mirror-cluster-{cluster_id}")
+    } else {
+        format!("qovery-mirror-{service_id}")
+    }
 }
 
 pub fn to_public_l4_ports<'a>(
@@ -242,7 +247,10 @@ impl<T: CloudProvider> Container<T> {
                 image_full: format!(
                     "{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(&get_mirror_repository_name(self.long_id())),
+                    (registry_info.get_image_name)(&get_mirror_repository_name(
+                        self.long_id(),
+                        &environment.event_details().cluster_id().to_uuid(),
+                    )),
                     self.tag_for_mirror()
                 ),
                 image_tag: self.tag_for_mirror(),

@@ -36,12 +36,6 @@ impl UpstreamGatewayContext {
         self.metrics_registry.clone()
     }
 
-    pub async fn terminate_upstream_cnx(self) {
-        info!("Closing upstream connection with gateway");
-        let _ = self.close_upstream_tx.send(());
-        self.await_termination().await;
-    }
-
     pub async fn await_termination(self) {
         let close_upstream_tx = self.close_handle();
         info!("Waiting for upstream connection to be terminated");

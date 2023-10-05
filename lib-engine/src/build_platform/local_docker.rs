@@ -158,9 +158,9 @@ impl LocalDocker {
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
-        logger.send_progress(format!("🕵️ Checking if image already exist remotely {image_name}"));
+        logger.send_progress(format!("🕵️ Checking if image already exists remotely {image_name}"));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
-            logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {image_name}"));
+            logger.send_progress(format!("🎯 Skipping build. Image already exists in the registry {image_name}"));
             build_record.stop(StepStatus::Skip);
             // skip build
             return Ok(());
