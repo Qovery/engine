@@ -258,7 +258,7 @@ pub enum Transmitter {
     Container { id: TransmitterId, name: TransmitterName },
     Router { id: TransmitterId, name: TransmitterName },
     Job { id: TransmitterId, name: TransmitterName },
-    HelmChart { id: TransmitterId, name: TransmitterName },
+    Helm { id: TransmitterId, name: TransmitterName },
 }
 
 impl From<events::Transmitter> for Transmitter {
@@ -277,7 +277,7 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
             events::Transmitter::Container(id, name) => Transmitter::Container { id, name },
             events::Transmitter::Job(id, name) => Transmitter::Job { id, name },
-            events::Transmitter::HelmChart(id, name) => Transmitter::HelmChart { id, name },
+            events::Transmitter::Helm(id, name) => Transmitter::Helm { id, name },
         }
     }
 }
