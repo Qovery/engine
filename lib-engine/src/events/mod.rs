@@ -484,7 +484,7 @@ pub enum Transmitter {
     /// Application: application engine part.
     Container(TransmitterId, TransmitterName),
     /// HelmChart: helmChart engine part.
-    HelmChart(TransmitterId, TransmitterName),
+    Helm(TransmitterId, TransmitterName),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
     /// Job: job engine part.
@@ -510,7 +510,7 @@ impl Display for Transmitter {
                 Transmitter::Router(id, name) => format!("router({id}, {name})"),
                 Transmitter::Container(id, name) => format!("container({id}, {name})"),
                 Transmitter::Job(id, name) => format!("job({id}, {name})"),
-                Transmitter::HelmChart(id, name) => format!("helm_chart({id}, {name})"),
+                Transmitter::Helm(id, name) => format!("helm_chart({id}, {name})"),
             }
         )
     }
