@@ -7,10 +7,10 @@ use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
 use crate::features_repository::FeatureRepository;
-use crate::io_models::container::Registry;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::container::get_mirror_repository_name;
+use crate::models::registry_image_source::RegistryImageSource;
 use crate::runtime::block_on;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
@@ -31,13 +31,6 @@ pub fn delete_cached_image(
     target: &DeploymentTarget,
     logger: &EnvSuccessLogger,
 ) -> Result<(), ContainerRegistryError> {
-    if FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
-        &target.environment.event_details().cluster_id().to_uuid(),
-    ) {
-        // We want to keep the image when this feature is enabled.
-        return Ok(());
-    }
-
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
         if is_service_deletion || last_image_tag != current_image_tag {
@@ -65,9 +58,7 @@ pub fn delete_cached_image(
 
 pub fn mirror_image_if_necessary(
     service_id: &Uuid,
-    registry: &Registry,
-    image_name: &str,
-    tag: &str,
+    source: &RegistryImageSource,
     tag_for_mirror: String,
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
@@ -87,21 +78,13 @@ pub fn mirror_image_if_necessary(
 
     if image_already_exist(&dest_image, target) {
         logger.info(format!(
-            "🎯 Skipping image mirroring. Image already exists in the registry {image_name}"
+            "🎯 Skipping image mirroring. Image {} already exists in the registry",
+            source.image
         ));
         mirror_record.stop(StepStatus::Skip);
         Ok(())
     } else {
-        let result = mirror_image(
-            service_id,
-            registry,
-            image_name,
-            tag,
-            &dest_image,
-            target,
-            logger,
-            event_details.clone(),
-        );
+        let result = mirror_image(service_id, source, &dest_image, target, logger, event_details.clone());
         mirror_record.stop(if result.is_ok() {
             StepStatus::Success
         } else {
@@ -123,16 +106,14 @@ fn image_already_exist(dest_image: &ContainerImage, target: &DeploymentTarget) -
 
 fn mirror_image(
     service_id: &Uuid,
-    registry: &Registry,
-    image_name: &str,
-    tag: &str,
+    source: &RegistryImageSource,
     dest_image: &ContainerImage,
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
-    let url = registry.get_url_with_credentials();
+    let url = source.registry.get_url_with_credentials();
     if url.password().is_some() {
         logger.info(format!(
             "🔓 Login to registry {} as user {}",
@@ -171,7 +152,11 @@ fn mirror_image(
         )
         .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
-    let source_image = ContainerImage::new(registry.url().clone(), image_name.to_string(), vec![tag.to_string()]);
+    let source_image = ContainerImage::new(
+        source.registry.url().clone(),
+        source.image.to_string(),
+        vec![source.tag.to_string()],
+    );
 
     if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
         // Not setting 10min timeout because we need to send at least a log every 10min
@@ -191,7 +176,7 @@ fn mirror_image(
             }
         }
     }) {
-        let msg = format!("❌ Failed to mirror image {image_name}:{tag} due to {err}");
+        let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
         let user_err = EngineError::new_docker_error(event_details, err.error);
 
         return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));

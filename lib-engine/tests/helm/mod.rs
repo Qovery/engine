@@ -29,8 +29,9 @@ use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
 use qovery_engine::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
-use qovery_engine::models::job::{ImageSource, Job, RegistryImageSource};
+use qovery_engine::models::job::{ImageSource, Job};
 use qovery_engine::models::probe::{Probe, ProbeType};
+use qovery_engine::models::registry_image_source::RegistryImageSource;
 use qovery_engine::models::router::{Router, RouterAdvancedSettings};
 use qovery_engine::models::types::{VersionsNumber, AWS as AWSType};
 use qovery_engine::utilities::to_short_id;
@@ -531,6 +532,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
                 },
                 image: "my_image".to_string(),
                 tag: "my_tag".to_string(),
+                tag_for_mirror_with_service_id: true,
             }),
         },
         JobSchedule::Cron {
