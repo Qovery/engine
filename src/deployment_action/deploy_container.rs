@@ -16,9 +16,10 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
 use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
-use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
+use crate::deployment_action::utils::{
+    delete_cached_image, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
+};
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -35,9 +36,7 @@ where
 
         // We first mirror the image if needed
         let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
-            let mirror_record =
-                metrics_registry.start_record(*self.long_id(), StepLabel::Service, StepName::MirrorImage);
-            let result = mirror_image(
+            mirror_image_if_necessary(
                 self.long_id(),
                 &self.registry,
                 &self.image,
@@ -46,13 +45,8 @@ where
                 target,
                 logger,
                 event_details.clone(),
-            );
-            mirror_record.stop(if result.is_ok() {
-                StepStatus::Success
-            } else {
-                StepStatus::Error
-            });
-            result?;
+                metrics_registry.clone(),
+            )?;
 
             let last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),

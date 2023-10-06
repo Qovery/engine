@@ -293,7 +293,7 @@ impl EnvironmentTask {
         };
         let image_name = build.image.full_image_name_with_tag();
 
-        // If image already exist in the registry, skip the build
+        // If image already exists in the registry, skip the build
         if !option.force_build && cr_registry.does_image_exists(&build.image) {
             let msg = format!("✅ Container image {image_name} already exists and ready to use");
             logger.send_success(msg);

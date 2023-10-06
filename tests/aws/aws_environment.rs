@@ -22,7 +22,7 @@ use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
+use qovery_engine::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
@@ -1483,6 +1483,26 @@ fn deploy_container_with_no_router_on_aws_eks() {
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
+
+        let records = metrics_registry.get_records(environment.containers.first().unwrap().long_id);
+        let mirror_record = records
+            .iter()
+            .find(|record| record.step_name == StepName::MirrorImage)
+            .unwrap();
+        assert_eq!(mirror_record.status, Some(StepStatus::Success));
+
+        // Start the same deployment to check if the mirror step is skipped.
+        let metrics_registry = helpers::utilities::metrics_registry();
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let records = metrics_registry.get_records(environment.containers.first().unwrap().long_id);
+        let mirror_record = records
+            .iter()
+            .find(|record| record.step_name == StepName::MirrorImage)
+            .unwrap();
+        assert_eq!(mirror_record.status, Some(StepStatus::Skip));
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

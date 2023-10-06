@@ -180,7 +180,10 @@ impl<T: CloudProvider> Job<T> {
                     format!(
                         "{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
-                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(self.long_id())),
+                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
+                            self.long_id(),
+                            &target.environment.event_details().cluster_id().to_uuid(),
+                        )),
                         image_tag
                     ),
                     image_tag,
