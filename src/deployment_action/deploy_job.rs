@@ -13,6 +13,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
+use crate::features_repository::FeatureRepository;
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -158,9 +159,7 @@ where
             ImageSource::Registry { source } => {
                 mirror_image_if_necessary(
                     job.long_id(),
-                    &source.registry,
-                    &source.image,
-                    &source.tag,
+                    source,
                     source.tag_for_mirror(job.long_id()),
                     target,
                     logger,
@@ -469,17 +468,21 @@ where
         match &job.image_source {
             // Delete previous image from cache to cleanup resources
             ImageSource::Registry { source } => {
-                let mirrored_image_tag = source.tag_for_mirror(job.long_id());
-                if let Err(err) = delete_cached_image(
-                    job.long_id(),
-                    mirrored_image_tag,
-                    state.last_deployed_image,
-                    false,
-                    target,
-                    logger,
+                if !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
+                    &target.environment.event_details().cluster_id().to_uuid(),
                 ) {
-                    let user_msg = format!("Failed to delete previous image from cache: {err}");
-                    logger.send_success(user_msg);
+                    let mirrored_image_tag = source.tag_for_mirror(job.long_id());
+                    if let Err(err) = delete_cached_image(
+                        job.long_id(),
+                        mirrored_image_tag,
+                        state.last_deployed_image,
+                        false,
+                        target,
+                        logger,
+                    ) {
+                        let user_msg = format!("Failed to delete previous image from cache: {err}");
+                        logger.send_success(user_msg);
+                    }
                 }
             }
 
