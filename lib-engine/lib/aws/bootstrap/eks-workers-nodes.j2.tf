@@ -89,7 +89,7 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
 }
 
 
-// We suspend AZ Rebalance because it is hard terminating EC2/nodes of the cluster without gracefully draining the nodes.
+// We suspend AZ Rebalanced because it is hard terminating EC2/nodes of the cluster without gracefully draining the nodes.
 // https://github.com/terraform-aws-modules/terraform-aws-eks/pull/369
 // We use local-exec provisioner because recreating the ASG from the aws_eks_node_group is too flaky to be reliable.
 resource "null_resource" "autoscaling_suspend_workers_nodes_{{ loop.index }}" {

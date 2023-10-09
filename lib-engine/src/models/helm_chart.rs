@@ -32,9 +32,9 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) action: Action,
     pub(super) chart_source: HelmChartSource,
     pub(super) chart_values: HelmValueSource,
-    pub(super) set_values: Vec<String>,
-    pub(super) set_string_values: Vec<String>,
-    pub(super) set_json_values: Vec<String>,
+    pub(super) set_values: Vec<(String, String)>,
+    pub(super) set_string_values: Vec<(String, String)>,
+    pub(super) set_json_values: Vec<(String, String)>,
     pub(super) command_args: Vec<String>,
     pub(super) timeout: Duration,
     pub(super) allow_cluster_wide_resources: bool,
@@ -56,9 +56,9 @@ impl<T: CloudProvider> HelmChart<T> {
         action: Action,
         mut chart_source: HelmChartSource,
         mut chart_values: HelmValueSource,
-        set_values: Vec<String>,
-        set_string_values: Vec<String>,
-        set_json_values: Vec<String>,
+        set_values: Vec<(String, String)>,
+        set_string_values: Vec<(String, String)>,
+        set_json_values: Vec<(String, String)>,
         command_args: Vec<String>,
         timeout: Duration,
         allow_cluster_wide_resources: bool,
@@ -207,17 +207,17 @@ impl<T: CloudProvider> HelmChart<T> {
             .chain(
                 self.set_values
                     .iter()
-                    .flat_map(|v| [Cow::from("--set"), Cow::from(v.as_str())]),
+                    .flat_map(|v| [Cow::from("--set"), Cow::from(format!("{}={}", v.0, v.1))]),
             )
             .chain(
                 self.set_string_values
                     .iter()
-                    .flat_map(|v| [Cow::from("--set-string"), Cow::from(v.as_str())]),
+                    .flat_map(|v| [Cow::from("--set-string"), Cow::from(format!("{}={}", v.0, v.1))]),
             )
             .chain(
                 self.set_json_values
                     .iter()
-                    .flat_map(|v| [Cow::from("--set-json"), Cow::from(v.as_str())]),
+                    .flat_map(|v| [Cow::from("--set-json"), Cow::from(format!("{}={}", v.0, v.1))]),
             )
     }
 
