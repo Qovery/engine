@@ -9,6 +9,7 @@ pub mod helm_chart;
 pub mod job;
 pub mod kubernetes;
 pub mod probe;
+pub mod registry_image_source;
 pub mod router;
 pub mod scaleway;
 pub mod third_parties;

@@ -4,14 +4,13 @@ use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::models;
 use crate::models::container::RegistryTeraContext;
 use crate::models::probe::Probe;
+use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
-use crate::string::cut;
 use crate::utilities::to_short_id;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -437,20 +436,6 @@ where
 
     fn is_force_trigger(&self) -> bool {
         self.force_trigger
-    }
-}
-
-pub struct RegistryImageSource {
-    pub registry: Registry,
-    pub image: String,
-    pub tag: String,
-}
-
-impl RegistryImageSource {
-    pub fn tag_for_mirror(&self, service_id: &Uuid) -> String {
-        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
-        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
-        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, service_id), 128)
     }
 }
 

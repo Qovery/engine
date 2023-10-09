@@ -14,9 +14,9 @@ use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::probe::Probe;
+use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
-use crate::string::cut;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
@@ -41,9 +41,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) name: String,
     pub(super) kube_name: String,
     pub(super) action: Action,
-    pub registry: Registry,
-    pub image: String,
-    pub tag: String,
+    pub source: RegistryImageSource,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) cpu_request_in_mili: u32,
@@ -168,6 +166,8 @@ impl<T: CloudProvider> Container<T> {
 
         let event_details = mk_event_details(Transmitter::Container(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
+        let tag_for_mirror_with_service_id =
+            !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(context.cluster_long_id());
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),
@@ -176,9 +176,12 @@ impl<T: CloudProvider> Container<T> {
             action,
             name,
             kube_name,
-            registry,
-            image,
-            tag,
+            source: RegistryImageSource {
+                registry,
+                image,
+                tag,
+                tag_for_mirror_with_service_id,
+            },
             command_args,
             entrypoint,
             cpu_request_in_mili,
@@ -214,7 +217,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn registry(&self) -> &Registry {
-        &self.registry
+        &self.source.registry
     }
 
     fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
@@ -251,9 +254,9 @@ impl<T: CloudProvider> Container<T> {
                         self.long_id(),
                         &environment.event_details().cluster_id().to_uuid(),
                     )),
-                    self.tag_for_mirror()
+                    self.source.tag_for_mirror(&self.long_id)
                 ),
-                image_tag: self.tag_for_mirror(),
+                image_tag: self.source.tag_for_mirror(&self.long_id),
                 version: self.service_version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
@@ -324,16 +327,6 @@ impl<T: CloudProvider> Container<T> {
         self.public_ports().count() > 0
     }
 
-    pub fn image_with_tag(&self) -> String {
-        format!("{}:{}", self.image, self.tag)
-    }
-
-    pub fn tag_for_mirror(&self) -> String {
-        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
-        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
-        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, self.long_id), 128)
-    }
-
     pub fn kube_label_selector(&self) -> String {
         format!("qovery.com/service-id={}", self.long_id)
     }
@@ -343,7 +336,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     fn service_version(&self) -> String {
-        format!("{}:{}", self.image, self.tag)
+        format!("{}:{}", self.source.image, self.source.tag)
     }
 }
 
@@ -424,9 +417,9 @@ where
     fn image_full(&self) -> String {
         format!(
             "{}{}:{}",
-            self.registry.url().to_string().trim_start_matches("https://"),
-            self.image,
-            self.tag
+            self.source.registry.url().to_string().trim_start_matches("https://"),
+            self.source.image,
+            self.source.tag
         )
     }
 

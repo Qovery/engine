@@ -20,6 +20,7 @@ use crate::deployment_action::utils::{
     delete_cached_image, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
 };
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use crate::features_repository::FeatureRepository;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -38,10 +39,8 @@ where
         let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             mirror_image_if_necessary(
                 self.long_id(),
-                &self.registry,
-                &self.image,
-                &self.tag,
-                self.tag_for_mirror(),
+                &self.source,
+                self.source.tag_for_mirror(self.long_id()),
                 target,
                 logger,
                 event_details.clone(),
@@ -132,7 +131,7 @@ where
             // Delete previous image from cache to cleanup resources
             let _ = delete_cached_image(
                 self.long_id(),
-                self.tag_for_mirror(),
+                self.source.tag_for_mirror(self.long_id()),
                 state.last_deployed_image,
                 false,
                 target,
@@ -238,17 +237,27 @@ where
         let post_task = |logger: &EnvSuccessLogger, state: TaskContext| {
             // Delete previous image from cache to cleanup resources
             let last_deployed_image = if state.last_deployed_image.is_none() {
-                Some(self.tag_for_mirror())
+                Some(self.source.tag_for_mirror(self.long_id()))
             } else {
                 state.last_deployed_image
             };
 
-            let _ =
-                delete_cached_image(self.long_id(), self.tag_for_mirror(), last_deployed_image, true, target, logger)
-                    .map_err(|err| {
-                        error!("Error while deleting cached image: {}", err);
-                        Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                    });
+            if !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
+                &target.environment.event_details().cluster_id().to_uuid(),
+            ) {
+                let _ = delete_cached_image(
+                    self.long_id(),
+                    self.source.tag_for_mirror(self.long_id()),
+                    last_deployed_image,
+                    true,
+                    target,
+                    logger,
+                )
+                .map_err(|err| {
+                    error!("Error while deleting cached image: {}", err);
+                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+                });
+            }
         };
 
         // Trigger deployment
