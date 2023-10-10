@@ -4,6 +4,7 @@ use crate::helpers::utilities::{engine_run_test, init};
 use crate::kube::{kube_test_env, TestEnvOption};
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use qovery_engine::cloud_provider::io::ImageMirroringMode;
 use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
@@ -14,6 +15,7 @@ use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::container::{get_container_with_invalid_storage_size, Container};
+use qovery_engine::models::registry_image_source::RegistryImageSource;
 use qovery_engine::models::types::AWS;
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
@@ -73,9 +75,12 @@ fn should_increase_container_storage_size() {
             resized_container.name.clone(),
             resized_container.name.clone(),
             *test_container.action(),
-            resized_container.registry.clone(),
-            resized_container.image.clone(),
-            resized_container.tag.clone(),
+            RegistryImageSource {
+                registry: resized_container.registry.clone(),
+                image: resized_container.image.clone(),
+                tag: resized_container.tag.clone(),
+                image_mirroring_mode: ImageMirroringMode::Service,
+            },
             resized_container.command_args.clone(),
             resized_container.entrypoint.clone(),
             resized_container.cpu_request_in_mili,

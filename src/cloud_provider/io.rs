@@ -8,6 +8,10 @@ pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
 ];
 
+fn default_image_mirroring_mode() -> ImageMirroringMode {
+    ImageMirroringMode::Service
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -30,6 +34,13 @@ impl From<KindModel> for Kind {
 pub enum AwsEc2MetadataImds {
     Required,
     Optional,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageMirroringMode {
+    Cluster,
+    Service,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -77,6 +88,8 @@ pub struct ClusterAdvancedSettings {
     pub database_mongodb_deny_public_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
     pub database_mongodb_allowed_cidrs: Vec<String>,
+    #[serde(alias = "image.mirroring_mode", default = "default_image_mirroring_mode")]
+    pub image_mirroring_mode: ImageMirroringMode,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -104,6 +117,7 @@ impl Default for ClusterAdvancedSettings {
             database_redis_allowed_cidrs: default_database_cirds.clone(),
             database_mongodb_deny_public_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
+            image_mirroring_mode: ImageMirroringMode::Service,
         }
     }
 }

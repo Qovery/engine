@@ -93,7 +93,7 @@ impl EnvironmentRequest {
             .containers
             .iter()
             .cloned()
-            .map(|srv| srv.to_container_domain(context, cloud_provider, container_registry))
+            .map(|srv| srv.to_container_domain(context, cloud_provider, container_registry, cluster))
             .collect();
         let containers = containers?;
 
