@@ -1,4 +1,4 @@
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ecr::ECR;
 use crate::container_registry::ContainerRegistry;
@@ -10,6 +10,7 @@ use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::container::{ContainerError, ContainerService};
+use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::{AWSEc2, AWS, SCW};
 use rusoto_core::{Client, HttpClient, Region};
@@ -320,6 +321,7 @@ impl Container {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
+        cluster: &dyn Kubernetes,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars);
 
@@ -330,6 +332,12 @@ impl Container {
                 .set_url(default_container_registry.registry_info().endpoint.clone());
         }
 
+        let image_source = RegistryImageSource {
+            registry: self.registry,
+            image: self.image,
+            tag: self.tag,
+            image_mirroring_mode: cluster.advanced_settings().image_mirroring_mode.clone(),
+        };
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
             CPKind::Aws => {
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
@@ -339,9 +347,7 @@ impl Container {
                         self.name,
                         self.kube_name,
                         self.action.to_service_action(),
-                        self.registry,
-                        self.image,
-                        self.tag,
+                        image_source,
                         self.command_args,
                         self.entrypoint,
                         self.cpu_request_in_mili,
@@ -371,9 +377,7 @@ impl Container {
                         self.name,
                         self.kube_name,
                         self.action.to_service_action(),
-                        self.registry,
-                        self.image,
-                        self.tag,
+                        image_source,
                         self.command_args,
                         self.entrypoint,
                         self.cpu_request_in_mili,
@@ -404,9 +408,7 @@ impl Container {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
-                self.registry,
-                self.image,
-                self.tag,
+                image_source,
                 self.command_args,
                 self.entrypoint,
                 self.cpu_request_in_mili,

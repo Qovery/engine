@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::aws::{
     AWS,
 };
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
+use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, ImageMirroringMode};
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{
     CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage,
@@ -343,13 +343,16 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         "my_container_name".to_string(),
         "my-application-name".to_string(),
         Action::Create,
-        Registry::DockerHub {
-            long_id: Default::default(),
-            url: Url::parse("https://my_registry_url.com").unwrap(),
-            credentials: None,
+        RegistryImageSource {
+            registry: Registry::DockerHub {
+                long_id: Default::default(),
+                url: Url::parse("https://my_registry_url.com").unwrap(),
+                credentials: None,
+            },
+            image: "my_image".to_string(),
+            tag: "my_tag".to_string(),
+            image_mirroring_mode: ImageMirroringMode::Service,
         },
-        "my_image".to_string(),
-        "my_tag".to_string(),
         vec![test_cmd_arg()],
         Some("my_entrypoint".to_string()),
         1,
@@ -532,7 +535,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
                 },
                 image: "my_image".to_string(),
                 tag: "my_tag".to_string(),
-                tag_for_mirror_with_service_id: true,
+                image_mirroring_mode: ImageMirroringMode::Service,
             }),
         },
         JobSchedule::Cron {
