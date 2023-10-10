@@ -37,9 +37,11 @@ pub enum AwsEc2MetadataImds {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "lowercase")]
 pub enum ImageMirroringMode {
+    #[serde(alias = "cluster", alias = "CLUSTER")]
     Cluster,
+    #[serde(alias = "service", alias = "SERVICE")]
+    #[serde(other)]
     Service,
 }
 
@@ -172,6 +174,7 @@ impl CustomerHelmChartsOverrideEncoded {
 mod tests {
     use uuid::Uuid;
 
+    use crate::cloud_provider::io::{ClusterAdvancedSettings, ImageMirroringMode};
     use crate::{
         cloud_provider::io::validate_aws_cloudwatch_eks_logs_retention_days,
         events::{EventDetails, Stage, Transmitter},
@@ -198,5 +201,57 @@ mod tests {
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(0));
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(90));
         assert!(!validate_aws_cloudwatch_eks_logs_retention_days(2));
+    }
+
+    #[test]
+    fn test_image_mirroring_mode_deserialization() {
+        struct TestCase {
+            input: String,
+            expected: ImageMirroringMode,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "Service".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "service".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "SERVICE".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "Cluster".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "cluster".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "CLUSTER".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "TOTO".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+        ];
+
+        for tc in test_cases {
+            let data = format!(
+                r#"
+        {{
+            "image.mirroring_mode": "{}"
+        }}"#,
+                tc.input
+            );
+
+            let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
+            assert_eq!(cluster_advanced_settings.image_mirroring_mode, tc.expected);
+        }
     }
 }
