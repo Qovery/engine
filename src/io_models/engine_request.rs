@@ -86,11 +86,8 @@ impl<T> EngineRequest<T> {
             .advanced_settings
             .cloud_provider_container_registry_tags
             .clone();
-        if self.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
-            tags.insert(
-                "ttl".to_string(),
-                self.kubernetes.advanced_settings.pleco_resources_ttl.to_string(),
-            );
+        if let Some(ttl) = self.kubernetes.advanced_settings.resource_ttl() {
+            tags.insert("ttl".to_string(), ttl.as_secs().to_string());
         };
 
         let container_registry = self

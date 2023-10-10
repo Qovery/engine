@@ -9,6 +9,7 @@ use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
 use std::collections::HashSet;
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -318,6 +319,7 @@ impl ContainerRegistry for ScalewayCR {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
+        _resource_ttl: Option<Duration>,
     ) -> Result<RepositoryInfo, ContainerRegistryError> {
         let (_, repository_info) = self.get_or_create_registry_namespace(name)?;
         Ok(repository_info)

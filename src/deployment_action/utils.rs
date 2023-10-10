@@ -149,6 +149,7 @@ fn mirror_image(
         .create_repository(
             mirror_repo_name.as_str(),
             target.kubernetes.advanced_settings().registry_image_retention_time_sec,
+            target.kubernetes.advanced_settings().resource_ttl(),
         )
         .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 

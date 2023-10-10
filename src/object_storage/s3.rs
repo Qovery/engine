@@ -3,6 +3,7 @@ use retry::delay::Fixed;
 use std::fs::File;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::cloud_provider::aws::regions::AwsRegion;
 use rusoto_core::credential::StaticProvider;
@@ -29,7 +30,7 @@ pub struct S3 {
     secret_access_key: String,
     region: AwsRegion,
     bucket_versioning_activated: bool,
-    bucket_ttl_in_seconds: Option<i32>,
+    resource_ttl: Option<Duration>,
 }
 
 impl S3 {
@@ -41,7 +42,7 @@ impl S3 {
         secret_access_key: String,
         region: AwsRegion,
         bucket_versioning_activated: bool,
-        bucket_ttl_in_seconds: Option<i32>,
+        resource_ttl: Option<Duration>,
     ) -> Self {
         S3 {
             context,
@@ -51,7 +52,7 @@ impl S3 {
             secret_access_key,
             region,
             bucket_versioning_activated,
-            bucket_ttl_in_seconds,
+            resource_ttl,
         }
     }
 
@@ -197,7 +198,7 @@ impl ObjectStorage for S3 {
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or(0)),
+                        value: format!("{}", self.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     },
                 ],
             },

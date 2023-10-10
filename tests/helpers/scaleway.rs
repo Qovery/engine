@@ -39,7 +39,7 @@ pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_26 {
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: ScwDatabaseInstanceType = ScwDatabaseInstanceType::DB_DEV_S;
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
-pub const SCW_BUCKET_TTL_IN_SECONDS: i32 = 3600;
+pub const SCW_BUCKET_TTL_IN_SECONDS: u64 = 3600;
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();

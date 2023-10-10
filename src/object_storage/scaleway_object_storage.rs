@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
+use std::time::Duration;
 
 use crate::models::domain::StringPath;
 use crate::object_storage::{Kind, ObjectStorage};
@@ -33,7 +34,7 @@ pub struct ScalewayOS {
     zone: ScwZone,
     bucket_delete_strategy: BucketDeleteStrategy,
     bucket_versioning_activated: bool,
-    bucket_ttl_in_seconds: Option<i32>,
+    resource_ttl: Option<Duration>,
 }
 
 impl ScalewayOS {
@@ -46,7 +47,7 @@ impl ScalewayOS {
         zone: ScwZone,
         bucket_delete_strategy: BucketDeleteStrategy,
         bucket_versioning_activated: bool,
-        bucket_ttl_in_seconds: Option<i32>,
+        resource_ttl: Option<Duration>,
     ) -> ScalewayOS {
         ScalewayOS {
             context,
@@ -57,7 +58,7 @@ impl ScalewayOS {
             zone,
             bucket_delete_strategy,
             bucket_versioning_activated,
-            bucket_ttl_in_seconds,
+            resource_ttl,
         }
     }
 
@@ -222,7 +223,7 @@ impl ObjectStorage for ScalewayOS {
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("Ttl={}", self.bucket_ttl_in_seconds.unwrap_or(0)),
+                        value: format!("Ttl={}", self.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     },
                 ],
             },

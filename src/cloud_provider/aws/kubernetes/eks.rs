@@ -104,7 +104,7 @@ impl EKS {
         };
         advanced_settings.validate(event_details)?;
 
-        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
+        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.resource_ttl());
 
         // copy listeners from CloudProvider
         Ok(EKS {

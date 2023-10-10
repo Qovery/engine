@@ -1,5 +1,6 @@
 use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, FuncTestsSecrets};
 use function_name::named;
+use std::time::Duration;
 
 use crate::helpers::scaleway::SCW_BUCKET_TTL_IN_SECONDS;
 use qovery_engine::models::scaleway::ScwZone;
@@ -38,7 +39,7 @@ fn test_delete_bucket_hard_delete_strategy() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -84,7 +85,7 @@ fn test_delete_bucket_empty_strategy() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::Empty,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -129,7 +130,7 @@ fn test_create_bucket() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -176,7 +177,7 @@ fn test_recreate_bucket() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -231,7 +232,7 @@ fn test_file_handling() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -289,7 +290,7 @@ fn test_ensure_file_is_absent() {
             SCW_OBJECT_STORAGE_TEST_ZONE,
             BucketDeleteStrategy::HardDelete,
             false,
-            Some(SCW_BUCKET_TTL_IN_SECONDS),
+            Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());

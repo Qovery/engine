@@ -5,6 +5,7 @@ use crate::io_models::engine_request::Archive;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
 use std::borrow::Cow;
+use std::time::Duration;
 use tokio::sync::broadcast;
 
 pub mod environment_task;
@@ -33,7 +34,7 @@ fn upload_s3_file(
     archive: Option<&Archive>,
     file_path: &str,
     region: AwsRegion,
-    bucket_ttl: i32,
+    resource_ttl: Option<Duration>,
 ) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,
@@ -55,10 +56,6 @@ fn upload_s3_file(
     );
 
     // I am using this s3 object directly to avoid reinventing the wheel.
-    let ttl = match bucket_ttl {
-        0 => None,
-        _ => Some(bucket_ttl),
-    };
     let s3 = crate::object_storage::s3::S3::new(
         context.clone(),
         "archive-123abc".to_string(),
@@ -67,7 +64,7 @@ fn upload_s3_file(
         archive.secret_access_key.to_string(),
         region,
         true,
-        ttl,
+        resource_ttl,
     );
 
     match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
