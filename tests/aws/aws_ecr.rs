@@ -5,6 +5,7 @@ use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::runtime::block_on;
 use rusoto_ecr::Ecr;
 use rusoto_ecr::{DescribeRepositoriesRequest, ListTagsForResourceRequest, Tag};
+use std::time::Duration;
 use tracing::{span, Level};
 use uuid::Uuid;
 
@@ -38,7 +39,8 @@ fn create_ecr_repository_with_tags() {
         assert!(cr.is_ok());
 
         let repo_name = format!("test-{}", Uuid::new_v4());
-        let repo_creation = container_registry.create_repository(repo_name.as_str(), 3600);
+        let repo_creation =
+            container_registry.create_repository(repo_name.as_str(), 3600, Some(Duration::from_secs(3600)));
         assert!(repo_creation.is_ok());
 
         let result = block_on(

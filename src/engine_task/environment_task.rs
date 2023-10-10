@@ -187,6 +187,7 @@ impl EnvironmentTask {
             .kubernetes()
             .advanced_settings()
             .registry_image_retention_time_sec;
+        let resource_ttl = infra_ctx.kubernetes().advanced_settings().resource_ttl();
         let cr_registry = infra_ctx.container_registry();
         let build_platform = infra_ctx.build_platform();
 
@@ -204,6 +205,7 @@ impl EnvironmentTask {
                         cr_registry,
                         build_platform,
                         img_retention_time_sec,
+                        resource_ttl,
                         cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
@@ -281,6 +283,7 @@ impl EnvironmentTask {
         cr_registry: &dyn ContainerRegistry,
         build_platform: &dyn BuildPlatform,
         image_retention_time_sec: u32,
+        resource_ttl: Option<Duration>,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<Box<dyn MetricsRegistry>>,
@@ -307,7 +310,7 @@ impl EnvironmentTask {
             StepLabel::Service,
             StepName::RegistryCreateRepository,
         );
-        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec) {
+        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec, resource_ttl) {
             Err(err) => {
                 provision_registry_record.stop(StepStatus::Error);
                 return Err(Box::new(cr_to_engine_error(err)));
@@ -596,7 +599,7 @@ This is a general/global message. Look at your services deployment status to kno
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request.kubernetes.advanced_settings.pleco_resources_ttl,
+                    self.request.kubernetes.advanced_settings.resource_ttl(),
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));

@@ -2,6 +2,7 @@ use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::Even
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str;
+use std::time::Duration;
 
 pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
@@ -119,6 +120,14 @@ impl ClusterAdvancedSettings {
         }
 
         Ok(())
+    }
+
+    pub fn resource_ttl(&self) -> Option<Duration> {
+        if self.pleco_resources_ttl >= 0 {
+            Some(Duration::new(self.pleco_resources_ttl as u64, 0))
+        } else {
+            None
+        }
     }
 }
 

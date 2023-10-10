@@ -222,7 +222,7 @@ impl Kapsule {
             zone,
             BucketDeleteStrategy::Empty,
             false,
-            Some(advanced_settings.pleco_resources_ttl),
+            advanced_settings.resource_ttl(),
         );
 
         Ok(Kapsule {
