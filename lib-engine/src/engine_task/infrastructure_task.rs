@@ -223,7 +223,7 @@ impl Task for InfrastructureTask {
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request.kubernetes.advanced_settings.pleco_resources_ttl,
+                    self.request.kubernetes.advanced_settings.resource_ttl(),
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));

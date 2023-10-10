@@ -212,11 +212,7 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, ttl: i32) -> S3 {
-    let bucket_ttl = match ttl {
-        0 => None,
-        _ => Some(ttl),
-    };
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, resource_ttl: Option<Duration>) -> S3 {
     S3::new(
         context.clone(),
         "s3-temp-id".to_string(),
@@ -225,7 +221,7 @@ fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider,
         cloud_provider.secret_access_key(),
         region.clone(),
         true,
-        bucket_ttl,
+        resource_ttl,
     )
 }
 

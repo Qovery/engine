@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -38,7 +39,9 @@ pub trait ContainerRegistry: Send + Sync {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        resource_ttl: Option<Duration>,
     ) -> Result<RepositoryInfo, ContainerRegistryError>;
+
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;

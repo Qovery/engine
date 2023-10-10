@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::time::Duration;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
@@ -190,13 +191,22 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        resource_ttl: Option<Duration>,
     ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
             ..Default::default()
         };
+
+        let tags = resource_ttl.map(|ttl| {
+            vec![Tag {
+                key: Some("ttl".to_string()),
+                value: Some(ttl.as_secs().to_string()),
+            }]
+        });
         let crr = CreateRepositoryRequest {
             repository_name: repository_name.to_string(),
+            tags,
             ..Default::default()
         };
 
@@ -318,6 +328,7 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        resource_ttl: Option<Duration>,
     ) -> Result<RepositoryInfo, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
@@ -325,7 +336,7 @@ impl ECR {
             return Ok(RepositoryInfo { created: false });
         }
 
-        self.create_repository(repository_name, image_retention_time_in_seconds)?;
+        self.create_repository(repository_name, image_retention_time_in_seconds, resource_ttl)?;
         Ok(RepositoryInfo { created: true })
     }
 
@@ -407,8 +418,9 @@ impl ContainerRegistry for ECR {
         &self,
         name: &str,
         image_retention_time_in_seconds: u32,
+        resource_ttl: Option<Duration>,
     ) -> Result<RepositoryInfo, ContainerRegistryError> {
-        let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
+        let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds, resource_ttl)?;
         Ok(repository_info)
     }
 

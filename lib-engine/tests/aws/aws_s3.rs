@@ -4,6 +4,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::object_storage::s3::S3;
 use qovery_engine::object_storage::ObjectStorage;
 use std::str::FromStr;
+use std::time::Duration;
 use tempfile::NamedTempFile;
 use tracing::{span, Level};
 use uuid::Uuid;
@@ -37,7 +38,7 @@ fn test_delete_bucket() {
             aws_secret_key,
             aws_region.clone(),
             false,
-            Some(7200),
+            Some(Duration::from_secs(7200)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -90,7 +91,7 @@ fn test_create_bucket() {
             aws_secret_key,
             aws_region.clone(),
             false,
-            Some(7200),
+            Some(Duration::from_secs(7200)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -142,7 +143,7 @@ fn test_recreate_bucket() {
             aws_secret_key,
             aws_region,
             false,
-            Some(7200),
+            Some(Duration::from_secs(7200)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -195,7 +196,7 @@ fn test_put_file() {
             aws_secret_key,
             aws_region,
             false,
-            Some(7200),
+            Some(Duration::from_secs(7200)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -254,7 +255,7 @@ fn test_get_file() {
             aws_secret_key,
             aws_region,
             false,
-            Some(7200),
+            Some(Duration::from_secs(7200)),
         );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
