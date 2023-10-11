@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::aws::{
     AWS,
 };
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, ImageMirroringMode};
+use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{
     CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage,
@@ -351,7 +351,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             },
             image: "my_image".to_string(),
             tag: "my_tag".to_string(),
-            image_mirroring_mode: ImageMirroringMode::Service,
+            registry_mirroring_mode: RegistryMirroringMode::Service,
         },
         vec![test_cmd_arg()],
         Some("my_entrypoint".to_string()),
@@ -535,7 +535,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
                 },
                 image: "my_image".to_string(),
                 tag: "my_tag".to_string(),
-                image_mirroring_mode: ImageMirroringMode::Service,
+                registry_mirroring_mode: RegistryMirroringMode::Service,
             }),
         },
         JobSchedule::Cron {

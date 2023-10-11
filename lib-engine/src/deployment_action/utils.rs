@@ -1,5 +1,5 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::io::ImageMirroringMode;
+use crate::cloud_provider::io::RegistryMirroringMode;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
@@ -31,7 +31,7 @@ pub fn delete_cached_image(
     target: &DeploymentTarget,
     logger: &EnvSuccessLogger,
 ) -> Result<(), ContainerRegistryError> {
-    if target.kubernetes.advanced_settings().image_mirroring_mode == ImageMirroringMode::Cluster {
+    if target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Cluster {
         // Do no delete image when mirroring mode is Cluster because it can be used by another service
         return Ok(());
     }
@@ -44,7 +44,7 @@ pub fn delete_cached_image(
             let mirror_repo_name = get_mirror_repository_name(
                 service_id,
                 target.kubernetes.long_id(),
-                &target.kubernetes.advanced_settings().image_mirroring_mode,
+                &target.kubernetes.advanced_settings().registry_mirroring_mode,
             );
             let image = Image {
                 name: mirror_repo_name.clone(),
@@ -79,7 +79,7 @@ pub fn mirror_image_if_necessary(
     let mirror_repo_name = get_mirror_repository_name(
         service_id,
         target.kubernetes.long_id(),
-        &target.kubernetes.advanced_settings().image_mirroring_mode,
+        &target.kubernetes.advanced_settings().registry_mirroring_mode,
     );
     let dest_image = ContainerImage::new(
         target.container_registry.registry_info().endpoint.clone(),
@@ -106,7 +106,7 @@ pub fn mirror_image_if_necessary(
 }
 
 fn image_already_exist(dest_image: &ContainerImage, target: &DeploymentTarget) -> bool {
-    if target.kubernetes.advanced_settings().image_mirroring_mode == ImageMirroringMode::Service {
+    if target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Service {
         // TODO remove this once we send comm to remind to don't reuse existing tags (and probably prepare a doc)
         return false;
     }
@@ -155,7 +155,7 @@ fn mirror_image(
     let mirror_repo_name = get_mirror_repository_name(
         service_id,
         target.kubernetes.long_id(),
-        &target.kubernetes.advanced_settings().image_mirroring_mode,
+        &target.kubernetes.advanced_settings().registry_mirroring_mode,
     );
     target
         .container_registry
