@@ -20,7 +20,6 @@ use crate::deployment_action::utils::{
     delete_cached_image, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
 };
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::features_repository::FeatureRepository;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -242,22 +241,18 @@ where
                 state.last_deployed_image
             };
 
-            if !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
-                &target.environment.event_details().cluster_id().to_uuid(),
-            ) {
-                let _ = delete_cached_image(
-                    self.long_id(),
-                    self.source.tag_for_mirror(self.long_id()),
-                    last_deployed_image,
-                    true,
-                    target,
-                    logger,
-                )
-                .map_err(|err| {
-                    error!("Error while deleting cached image: {}", err);
-                    Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
-                });
-            }
+            let _ = delete_cached_image(
+                self.long_id(),
+                self.source.tag_for_mirror(self.long_id()),
+                last_deployed_image,
+                true,
+                target,
+                logger,
+            )
+            .map_err(|err| {
+                error!("Error while deleting cached image: {}", err);
+                Box::new(EngineError::new_container_registry_error(event_details.clone(), err))
+            });
         };
 
         // Trigger deployment

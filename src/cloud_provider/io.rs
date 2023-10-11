@@ -8,6 +8,10 @@ pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
 ];
 
+fn default_image_mirroring_mode() -> ImageMirroringMode {
+    ImageMirroringMode::Service
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -30,6 +34,15 @@ impl From<KindModel> for Kind {
 pub enum AwsEc2MetadataImds {
     Required,
     Optional,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ImageMirroringMode {
+    #[serde(alias = "cluster", alias = "CLUSTER")]
+    Cluster,
+    #[serde(alias = "service", alias = "SERVICE")]
+    #[serde(other)]
+    Service,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -77,6 +90,8 @@ pub struct ClusterAdvancedSettings {
     pub database_mongodb_deny_public_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
     pub database_mongodb_allowed_cidrs: Vec<String>,
+    #[serde(alias = "image.mirroring_mode", default = "default_image_mirroring_mode")]
+    pub image_mirroring_mode: ImageMirroringMode,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -104,6 +119,7 @@ impl Default for ClusterAdvancedSettings {
             database_redis_allowed_cidrs: default_database_cirds.clone(),
             database_mongodb_deny_public_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
+            image_mirroring_mode: ImageMirroringMode::Service,
         }
     }
 }
@@ -158,6 +174,7 @@ impl CustomerHelmChartsOverrideEncoded {
 mod tests {
     use uuid::Uuid;
 
+    use crate::cloud_provider::io::{ClusterAdvancedSettings, ImageMirroringMode};
     use crate::{
         cloud_provider::io::validate_aws_cloudwatch_eks_logs_retention_days,
         events::{EventDetails, Stage, Transmitter},
@@ -184,5 +201,57 @@ mod tests {
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(0));
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(90));
         assert!(!validate_aws_cloudwatch_eks_logs_retention_days(2));
+    }
+
+    #[test]
+    fn test_image_mirroring_mode_deserialization() {
+        struct TestCase {
+            input: String,
+            expected: ImageMirroringMode,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "Service".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "service".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "SERVICE".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+            TestCase {
+                input: "Cluster".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "cluster".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "CLUSTER".to_string(),
+                expected: ImageMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "TOTO".to_string(),
+                expected: ImageMirroringMode::Service,
+            },
+        ];
+
+        for tc in test_cases {
+            let data = format!(
+                r#"
+        {{
+            "image.mirroring_mode": "{}"
+        }}"#,
+                tc.input
+            );
+
+            let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
+            assert_eq!(cluster_advanced_settings.image_mirroring_mode, tc.expected);
+        }
     }
 }

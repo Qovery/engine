@@ -181,7 +181,8 @@ impl<T: CloudProvider> Job<T> {
                         registry_info.endpoint.host_str().unwrap_or_default(),
                         (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
                             self.long_id(),
-                            &target.environment.event_details().cluster_id().to_uuid(),
+                            target.kubernetes.long_id(),
+                            &target.kubernetes.advanced_settings().image_mirroring_mode,
                         )),
                         image_tag
                     ),

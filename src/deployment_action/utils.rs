@@ -1,4 +1,5 @@
 use crate::build_platform::Image;
+use crate::cloud_provider::io::ImageMirroringMode;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
@@ -6,7 +7,6 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
-use crate::features_repository::FeatureRepository;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::container::get_mirror_repository_name;
@@ -31,13 +31,21 @@ pub fn delete_cached_image(
     target: &DeploymentTarget,
     logger: &EnvSuccessLogger,
 ) -> Result<(), ContainerRegistryError> {
+    if target.kubernetes.advanced_settings().image_mirroring_mode == ImageMirroringMode::Cluster {
+        // Do no delete image when mirroring mode is Cluster because it can be used by another service
+        return Ok(());
+    }
+
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
         if is_service_deletion || last_image_tag != current_image_tag {
             logger.send_success(format!("🪓 Deleting previous cached image {last_image_tag}"));
 
-            let mirror_repo_name =
-                get_mirror_repository_name(service_id, &target.environment.event_details().cluster_id().to_uuid());
+            let mirror_repo_name = get_mirror_repository_name(
+                service_id,
+                target.kubernetes.long_id(),
+                &target.kubernetes.advanced_settings().image_mirroring_mode,
+            );
             let image = Image {
                 name: mirror_repo_name.clone(),
                 tag: last_image_tag,
@@ -68,8 +76,11 @@ pub fn mirror_image_if_necessary(
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 
     let registry_info = target.container_registry.registry_info();
-    let mirror_repo_name =
-        get_mirror_repository_name(service_id, &target.environment.event_details().cluster_id().to_uuid());
+    let mirror_repo_name = get_mirror_repository_name(
+        service_id,
+        target.kubernetes.long_id(),
+        &target.kubernetes.advanced_settings().image_mirroring_mode,
+    );
     let dest_image = ContainerImage::new(
         target.container_registry.registry_info().endpoint.clone(),
         (registry_info.get_image_name)(&mirror_repo_name),
@@ -95,9 +106,8 @@ pub fn mirror_image_if_necessary(
 }
 
 fn image_already_exist(dest_image: &ContainerImage, target: &DeploymentTarget) -> bool {
-    if !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
-        &target.environment.event_details().cluster_id().to_uuid(),
-    ) {
+    if target.kubernetes.advanced_settings().image_mirroring_mode == ImageMirroringMode::Service {
+        // TODO remove this once we send comm to remind to don't reuse existing tags (and probably prepare a doc)
         return false;
     }
 
@@ -142,8 +152,11 @@ fn mirror_image(
     // Once we are logged to the registry, we mirror the user image into our cluster private registry
     // This is required only to avoid to manage rotating credentials
     logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
-    let mirror_repo_name =
-        get_mirror_repository_name(service_id, &target.environment.event_details().cluster_id().to_uuid());
+    let mirror_repo_name = get_mirror_repository_name(
+        service_id,
+        target.kubernetes.long_id(),
+        &target.kubernetes.advanced_settings().image_mirroring_mode,
+    );
     target
         .container_registry
         .create_repository(

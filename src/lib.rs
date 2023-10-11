@@ -20,7 +20,6 @@ pub mod engine;
 pub mod engine_task;
 pub mod errors;
 pub mod events;
-pub mod features_repository;
 pub mod fs;
 pub mod git;
 pub mod io_models;

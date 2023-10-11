@@ -1,4 +1,5 @@
 use crate::build_platform::Build;
+use crate::cloud_provider::io::ImageMirroringMode;
 use crate::cloud_provider::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
 };
@@ -7,7 +8,6 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::features_repository::FeatureRepository;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
@@ -63,11 +63,14 @@ pub struct Container<T: CloudProvider> {
     pub(super) lib_root_directory: String,
 }
 
-pub fn get_mirror_repository_name(service_id: &Uuid, cluster_id: &Uuid) -> String {
-    if FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(cluster_id) {
-        format!("qovery-mirror-cluster-{cluster_id}")
-    } else {
-        format!("qovery-mirror-{service_id}")
+pub fn get_mirror_repository_name(
+    service_id: &Uuid,
+    cluster_id: &Uuid,
+    image_mirroring_mode: &ImageMirroringMode,
+) -> String {
+    match image_mirroring_mode {
+        ImageMirroringMode::Cluster => format!("qovery-mirror-cluster-{cluster_id}"),
+        ImageMirroringMode::Service => format!("qovery-mirror-{service_id}"),
     }
 }
 
@@ -99,9 +102,7 @@ impl<T: CloudProvider> Container<T> {
         name: String,
         kube_name: String,
         action: Action,
-        registry: Registry,
-        image: String,
-        tag: String,
+        registry_image_source: RegistryImageSource,
         command_args: Vec<String>,
         entrypoint: Option<String>,
         cpu_request_in_mili: u32,
@@ -166,8 +167,6 @@ impl<T: CloudProvider> Container<T> {
 
         let event_details = mk_event_details(Transmitter::Container(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
-        let tag_for_mirror_with_service_id =
-            !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(context.cluster_long_id());
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),
@@ -176,12 +175,7 @@ impl<T: CloudProvider> Container<T> {
             action,
             name,
             kube_name,
-            source: RegistryImageSource {
-                registry,
-                image,
-                tag,
-                tag_for_mirror_with_service_id,
-            },
+            source: registry_image_source,
             command_args,
             entrypoint,
             cpu_request_in_mili,
@@ -252,7 +246,8 @@ impl<T: CloudProvider> Container<T> {
                     registry_info.endpoint.host_str().unwrap_or_default(),
                     (registry_info.get_image_name)(&get_mirror_repository_name(
                         self.long_id(),
-                        &environment.event_details().cluster_id().to_uuid(),
+                        kubernetes.long_id(),
+                        &kubernetes.advanced_settings().image_mirroring_mode,
                     )),
                     self.source.tag_for_mirror(&self.long_id)
                 ),

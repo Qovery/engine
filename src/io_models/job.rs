@@ -5,7 +5,6 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::engine_task::qovery_api::QoveryApi;
-use crate::features_repository::FeatureRepository;
 use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
@@ -266,16 +265,12 @@ impl Job {
                 if registry.id() == default_container_registry.long_id() {
                     registry.set_url(default_container_registry.registry_info().endpoint.clone());
                 }
-                let tag_for_mirror_with_service_id =
-                    !FeatureRepository::check_if_image_already_exist_in_the_registry_of_the_cluster(
-                        context.cluster_long_id(),
-                    );
                 ImageSource::Registry {
                     source: Box::new(RegistryImageSource {
                         registry,
                         image,
                         tag,
-                        tag_for_mirror_with_service_id,
+                        image_mirroring_mode: cluster.advanced_settings().image_mirroring_mode.clone(),
                     }),
                 }
             }
