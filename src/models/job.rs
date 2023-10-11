@@ -182,7 +182,7 @@ impl<T: CloudProvider> Job<T> {
                         (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
                             self.long_id(),
                             target.kubernetes.long_id(),
-                            &target.kubernetes.advanced_settings().image_mirroring_mode,
+                            &target.kubernetes.advanced_settings().registry_mirroring_mode,
                         )),
                         image_tag
                     ),
