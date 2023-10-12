@@ -336,7 +336,7 @@ impl Container {
             registry: self.registry,
             image: self.image,
             tag: self.tag,
-            image_mirroring_mode: cluster.advanced_settings().image_mirroring_mode.clone(),
+            registry_mirroring_mode: cluster.advanced_settings().registry_mirroring_mode.clone(),
         };
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
             CPKind::Aws => {

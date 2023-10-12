@@ -1,5 +1,5 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::io::ImageMirroringMode;
+use crate::cloud_provider::io::RegistryMirroringMode;
 use crate::cloud_provider::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
 };
@@ -66,11 +66,11 @@ pub struct Container<T: CloudProvider> {
 pub fn get_mirror_repository_name(
     service_id: &Uuid,
     cluster_id: &Uuid,
-    image_mirroring_mode: &ImageMirroringMode,
+    registry_mirroring_mode: &RegistryMirroringMode,
 ) -> String {
-    match image_mirroring_mode {
-        ImageMirroringMode::Cluster => format!("qovery-mirror-cluster-{cluster_id}"),
-        ImageMirroringMode::Service => format!("qovery-mirror-{service_id}"),
+    match registry_mirroring_mode {
+        RegistryMirroringMode::Cluster => format!("qovery-mirror-cluster-{cluster_id}"),
+        RegistryMirroringMode::Service => format!("qovery-mirror-{service_id}"),
     }
 }
 
@@ -247,7 +247,7 @@ impl<T: CloudProvider> Container<T> {
                     (registry_info.get_image_name)(&get_mirror_repository_name(
                         self.long_id(),
                         kubernetes.long_id(),
-                        &kubernetes.advanced_settings().image_mirroring_mode,
+                        &kubernetes.advanced_settings().registry_mirroring_mode,
                     )),
                     self.source.tag_for_mirror(&self.long_id)
                 ),

@@ -4,7 +4,7 @@ use crate::helpers::utilities::{engine_run_test, init};
 use crate::kube::{kube_test_env, TestEnvOption};
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use qovery_engine::cloud_provider::io::ImageMirroringMode;
+use qovery_engine::cloud_provider::io::RegistryMirroringMode;
 use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
@@ -79,7 +79,7 @@ fn should_increase_container_storage_size() {
                 registry: resized_container.registry.clone(),
                 image: resized_container.image.clone(),
                 tag: resized_container.tag.clone(),
-                image_mirroring_mode: ImageMirroringMode::Service,
+                registry_mirroring_mode: RegistryMirroringMode::Service,
             },
             resized_container.command_args.clone(),
             resized_container.entrypoint.clone(),

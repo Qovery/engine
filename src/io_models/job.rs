@@ -270,7 +270,7 @@ impl Job {
                         registry,
                         image,
                         tag,
-                        image_mirroring_mode: cluster.advanced_settings().image_mirroring_mode.clone(),
+                        registry_mirroring_mode: cluster.advanced_settings().registry_mirroring_mode.clone(),
                     }),
                 }
             }
