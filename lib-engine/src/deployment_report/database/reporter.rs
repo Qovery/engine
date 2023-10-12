@@ -2,7 +2,7 @@ use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
+use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::database::DatabaseService;
@@ -193,7 +193,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         // Managed database don't make any progress, so display the message from time to time
-        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
             return;
         }
         *last_report = (rendered_report, Instant::now());
