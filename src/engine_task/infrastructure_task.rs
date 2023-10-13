@@ -23,7 +23,7 @@ pub struct InfrastructureTask {
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-    qovery_api: Arc<Box<dyn QoveryApi>>,
+    qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
 }
@@ -52,7 +52,7 @@ impl InfrastructureTask {
             request,
             logger,
             metrics_registry,
-            qovery_api: Arc::new(qovery_api),
+            qovery_api: Arc::from(qovery_api),
             span,
             is_terminated: {
                 let (tx, rx) = broadcast::channel(1);

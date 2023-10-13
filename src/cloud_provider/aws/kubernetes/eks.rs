@@ -62,8 +62,8 @@ pub struct EKS {
     version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZones>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
+    dns_provider: Arc<dyn DnsProvider>,
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
@@ -83,8 +83,8 @@ impl EKS {
         version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
-        cloud_provider: Arc<Box<dyn CloudProvider>>,
-        dns_provider: Arc<Box<dyn DnsProvider>>,
+        cloud_provider: Arc<dyn CloudProvider>,
+        dns_provider: Arc<dyn DnsProvider>,
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
@@ -92,7 +92,7 @@ impl EKS {
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
@@ -104,7 +104,7 @@ impl EKS {
         };
         advanced_settings.validate(event_details)?;
 
-        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.resource_ttl());
+        let s3 = kubernetes::s3(&context, &region, &*cloud_provider, advanced_settings.resource_ttl());
 
         // copy listeners from CloudProvider
         Ok(EKS {

@@ -79,7 +79,7 @@ impl<T> EngineRequest<T> {
                     ),
                 ))
             })?;
-        let cloud_provider = Arc::new(cloud_provider);
+        let cloud_provider: Arc<dyn cloud_provider::CloudProvider> = Arc::from(cloud_provider);
 
         let mut tags = self
             .kubernetes
@@ -125,7 +125,7 @@ impl<T> EngineRequest<T> {
                     ),
                 )
             })?;
-        let dns_provider = Arc::new(dns_provider);
+        let dns_provider: Arc<dyn dns_provider::DnsProvider> = Arc::from(dns_provider);
 
         let kubernetes = match self.kubernetes.to_engine_kubernetes(
             context,
@@ -286,13 +286,12 @@ impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
-        cloud_provider: Arc<Box<dyn cloud_provider::CloudProvider>>,
-        dns_provider: Arc<Box<dyn dns_provider::DnsProvider>>,
+        cloud_provider: Arc<dyn cloud_provider::CloudProvider>,
+        dns_provider: Arc<dyn dns_provider::DnsProvider>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
-        let event_details =
-            event_details(&**cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
+        let event_details = event_details(&*cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
         let decoded_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> =
             match &self.customer_helm_charts_override {

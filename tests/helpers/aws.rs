@@ -11,6 +11,7 @@ use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
@@ -113,10 +114,11 @@ impl Cluster<AWS, Options> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use AWS
-        let cloud_provider: Arc<Box<dyn CloudProvider>> =
-            Arc::new(AWS::cloud_provider(context, kubernetes_kind, localisation));
-        let dns_provider = Arc::new(dns_provider_qoverydns(context, cluster_domain));
+        let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(context, kubernetes_kind, localisation);
+        let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
+        let cloud_provider: Arc<dyn CloudProvider> = Arc::from(cloud_provider);
+        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider);
         let kubernetes = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),

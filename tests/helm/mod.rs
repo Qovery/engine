@@ -17,7 +17,7 @@ use qovery_engine::cloud_provider::models::{
 };
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
-use qovery_engine::cloud_provider::DeploymentTarget;
+use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
@@ -73,6 +73,7 @@ pub struct TestInfo {
 fn test_kubernetes() -> Box<dyn Kubernetes> {
     let cluster_id = Uuid::new_v4();
     let context = context_for_cluster(Uuid::new_v4(), cluster_id, None);
+    let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(&context, Eks, "us-east-2");
     Box::new(
         EKS::new(
             context.clone(),
@@ -90,8 +91,8 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 AwsZones::UsEast2B.to_string(),
                 AwsZones::UsEast2C.to_string(),
             ],
-            Arc::new(AWS::cloud_provider(&context, Eks, "us-east-2")),
-            Arc::new(dns_provider_qoverydns(
+            Arc::from(cloud_provider),
+            Arc::from(dns_provider_qoverydns(
                 &context,
                 &ClusterDomain::Default {
                     cluster_id: cluster_id.to_string(),

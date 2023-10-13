@@ -92,7 +92,7 @@ impl HelmChart {
     fn to_chart_source_domain(
         src: HelmChartSource,
         ssh_keys: &[SshKey],
-        qovery_api: Arc<Box<dyn QoveryApi>>,
+        qovery_api: Arc<dyn QoveryApi>,
         service_id: Uuid,
     ) -> models::helm_chart::HelmChartSource {
         match src {
@@ -119,7 +119,7 @@ impl HelmChart {
                 get_credentials: if git_credentials.is_none() {
                     Box::new(|| Ok(None))
                 } else {
-                    Box::new(move || fetch_git_token(&**qovery_api, ServiceType::HelmChart, &service_id).map(Some))
+                    Box::new(move || fetch_git_token(&*qovery_api, ServiceType::HelmChart, &service_id).map(Some))
                 },
                 commit_id,
                 root_path,
@@ -131,7 +131,7 @@ impl HelmChart {
     fn to_chart_value_domain(
         src: HelmValueSource,
         ssh_keys: &[SshKey],
-        qovery_api: Arc<Box<dyn QoveryApi>>,
+        qovery_api: Arc<dyn QoveryApi>,
         service_id: Uuid,
     ) -> models::helm_chart::HelmValueSource {
         match src {
@@ -146,7 +146,7 @@ impl HelmChart {
                 get_credentials: if git_credentials.is_none() {
                     Box::new(|| Ok(None))
                 } else {
-                    Box::new(move || fetch_git_token(&**qovery_api, ServiceType::HelmChart, &service_id).map(Some))
+                    Box::new(move || fetch_git_token(&*qovery_api, ServiceType::HelmChart, &service_id).map(Some))
                 },
                 commit_id,
                 values_path,
