@@ -6,13 +6,12 @@ use tracing::Span;
 
 /// State when the engine is executing a task
 pub struct TaskContext {
-    pub task: Arc<Box<dyn Task>>,
+    pub task: Arc<dyn Task>,
     _handle: tokio::task::JoinHandle<()>,
 }
 
 impl TaskContext {
-    pub fn spawn_new_task(task: Box<dyn Task>) -> TaskContext {
-        let task = Arc::new(task);
+    pub fn spawn_new_task(task: Arc<dyn Task>) -> TaskContext {
         let span = Span::current();
 
         let task_handle = tokio_utils::launch_blocking_task({

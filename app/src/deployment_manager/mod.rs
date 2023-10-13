@@ -106,7 +106,7 @@ type MkEngineTask = Box<
             &GrpcEngineClient,
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
-        ) -> Result<Box<dyn Task>, EngineEvent>
+        ) -> Result<Arc<dyn Task>, EngineEvent>
         + Send,
 >;
 
@@ -637,7 +637,7 @@ mod test {
         let task = TaskSelector::Environment("");
         let should_shutdown = Arc::new(AtomicBool::new(false));
         let mk_engine_task = |_, _: &_, _: &_, _, _| {
-            let task: Box<dyn Task> = Box::new(EngineTaskTest::new());
+            let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
             Ok::<_, EngineEvent>(task)
         };
 
@@ -696,7 +696,7 @@ mod test {
         let task_cancel = task.should_shutdown.clone();
 
         let mk_engine_task = move |_, _: &_, _: &_, _, _| {
-            let task: Box<dyn Task> = Box::new(task.clone());
+            let task: Arc<dyn Task> = Arc::new(task.clone());
             Ok::<_, EngineEvent>(task)
         };
 

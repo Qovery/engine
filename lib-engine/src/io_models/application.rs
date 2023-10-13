@@ -392,7 +392,7 @@ impl Application {
     pub fn to_build(
         &self,
         registry_url: &ContainerRegistryInfo,
-        qovery_api: Arc<Box<dyn QoveryApi>>,
+        qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
     ) -> Build {
         // Get passphrase and public key if provided by the user
@@ -412,7 +412,7 @@ impl Application {
                     None
                 } else {
                     let id = self.long_id;
-                    Some(Box::new(move || fetch_git_token(&**qovery_api, ServiceType::Application, &id)))
+                    Some(Box::new(move || fetch_git_token(&*qovery_api, ServiceType::Application, &id)))
                 },
                 ssh_keys,
                 commit_id: self.commit_id.clone(),

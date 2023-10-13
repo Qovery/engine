@@ -89,8 +89,8 @@ fn to_engine_task(
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-) -> Result<Box<dyn Task>, serde_json::Error> {
-    let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
+) -> Result<Arc<dyn Task>, serde_json::Error> {
+    let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
             TaskSelector::Infrastructure(_) => {
                 let request = serde_json::from_slice::<InfrastructureEngineRequest>(msg.as_bytes())?;
@@ -98,7 +98,7 @@ fn to_engine_task(
                     request.deployment_jwt_token.clone(),
                     grpc_client.clone(),
                 ));
-                Ok(Box::new(InfrastructureTask::new(
+                Ok(Arc::new(InfrastructureTask::new(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
@@ -114,7 +114,7 @@ fn to_engine_task(
                     request.deployment_jwt_token.clone(),
                     grpc_client.clone(),
                 ));
-                Ok(Box::new(EnvironmentTask::new(
+                Ok(Arc::new(EnvironmentTask::new(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
@@ -357,7 +357,7 @@ pub fn main() -> io::Result<()> {
                                            grpc_client: &GrpcEngineClient,
                                            logger: Box<dyn Logger>,
                                            metrics_registry: Box<dyn MetricsRegistry>|
-              -> Result<Box<dyn Task>, EngineEvent> {
+              -> Result<Arc<dyn Task>, EngineEvent> {
             let ret = to_engine_task(
                 payload,
                 &cli.workspace_root_dir,

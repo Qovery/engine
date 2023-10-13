@@ -42,7 +42,7 @@ pub struct EnvironmentTask {
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-    qovery_api: Arc<Box<dyn QoveryApi>>,
+    qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
 }
@@ -72,7 +72,7 @@ impl EnvironmentTask {
             logger,
             metrics_registry,
             cancel_requested: Arc::new(AtomicBool::new(false)),
-            qovery_api: Arc::new(qovery_api),
+            qovery_api: Arc::from(qovery_api),
             span,
             is_terminated: {
                 let (tx, rx) = broadcast::channel(1);
