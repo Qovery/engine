@@ -1,9 +1,10 @@
 use crate::cloud_provider::service::{Action, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
-use crate::deployment_report::application::renderer::render_app_deployment_report;
+use crate::deployment_report::application::renderer::{render_app_deployment_report, render_recap_events};
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
+use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
+use std::str::FromStr;
 
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::application::ApplicationService;
@@ -71,9 +72,15 @@ impl<T> ApplicationDeploymentReporter<T> {
     }
 }
 
+pub struct DeploymentStateStruct {
+    report: String,
+    timestamp: Instant,
+    all_warning_events: Vec<Event>,
+}
+
 impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     type DeploymentResult = T;
-    type DeploymentState = (String, Instant);
+    type DeploymentState = DeploymentStateStruct;
     type Logger = EnvLogger;
 
     fn logger(&self) -> &Self::Logger {
@@ -81,7 +88,11 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     }
 
     fn new_state(&self) -> Self::DeploymentState {
-        ("".to_string(), Instant::now())
+        DeploymentStateStruct {
+            report: "".to_string(),
+            timestamp: Instant::now(),
+            all_warning_events: vec![],
+        }
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
@@ -133,13 +144,32 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
         };
 
         // don't spam log same report unless it has been too long time elapsed without one
-        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
             return;
         }
-        *last_report = (rendered_report, Instant::now());
+
+        report
+            .events
+            .clone()
+            .into_iter()
+            .filter_map(|event| {
+                if let Some(event_type) = &event.type_ {
+                    if event_type == "Warning" {
+                        return Some(event);
+                    }
+                }
+                None
+            })
+            .for_each(|event| last_report.all_warning_events.push(event));
+
+        *last_report = DeploymentStateStruct {
+            report: rendered_report,
+            timestamp: Instant::now(),
+            all_warning_events: last_report.all_warning_events.clone(),
+        };
 
         // Send it to user
-        for line in last_report.0.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.report.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }
@@ -147,7 +177,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     fn deployment_terminated(
         &self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        _: &mut Self::DeploymentState,
+        last_report: &mut Self::DeploymentState,
     ) {
         let error = match result {
             Ok(_) => {
@@ -177,7 +207,24 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             ));
         } else {
             self.stop_records(StepStatus::Error);
-            //self.logger.send_error(*error.clone());
+
+            // TODO (mzo) checking one of sandbox app only for testing / render purposes
+            // Also, we'll need to modify the final engine error user_log_message to "force" users to take in account this recap
+            if self.long_id == Uuid::from_str("f6122dd4-7ba1-4571-9d95-dbe5a4a283e9").unwrap_or_default() {
+                let recap_report = match render_recap_events(&last_report.all_warning_events) {
+                    Ok(report) => report,
+                    Err(err) => {
+                        self.logger
+                            .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
+                        return;
+                    }
+                };
+                // Send it to user
+                for line in recap_report.trim_end().split('\n').map(str::to_string) {
+                    self.logger.send_warning(line);
+                }
+            }
+
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"

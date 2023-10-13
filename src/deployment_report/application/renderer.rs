@@ -1,10 +1,11 @@
 use crate::cloud_provider::service::ServiceType;
 use crate::deployment_report::application::reporter::AppDeploymentReport;
 use crate::deployment_report::utils::{
-    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_services_render_context,
-    PodsRenderContext, PvcRenderContext, ServiceRenderContext,
+    get_tera_instance, to_event_context, to_pods_render_context_by_version, to_pvc_render_context,
+    to_services_render_context, EventRenderContext, PodsRenderContext, PvcRenderContext, ServiceRenderContext,
 };
 use crate::utilities::to_short_id;
+use k8s_openapi::api::core::v1::Event;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -18,6 +19,11 @@ pub struct AppDeploymentRenderContext {
     pub pods_current_version: PodsRenderContext,
     pub pods_old_version: PodsRenderContext,
     pub pvcs: Vec<PvcRenderContext>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecapRenderContext {
+    pub events: Vec<EventRenderContext>,
 }
 
 const REPORT_TEMPLATE: &str = r#"
@@ -64,6 +70,13 @@ const REPORT_TEMPLATE: &str = r#"
 {%- endif %}
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
+const RECAP_TEMPLATE: &str = r#"
+┏━━ 📝 Recap Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{%- for event in warning_events %}
+┃  | {{ event.type_ | fmt_event_type }} {{ event.message }}
+{%- endfor -%}
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+
 pub(super) fn render_app_deployment_report(
     service_type: ServiceType,
     service_tag: &str,
@@ -91,6 +104,14 @@ pub(super) fn render_app_deployment_report(
     };
     let ctx = tera::Context::from_serialize(render_ctx)?;
     get_tera_instance().render_str(REPORT_TEMPLATE, &ctx)
+}
+
+pub(super) fn render_recap_events(events: &[Event]) -> Result<String, tera::Error> {
+    let render_ctx = RecapRenderContext {
+        events: events.iter().flat_map(to_event_context).collect(),
+    };
+    let ctx = tera::Context::from_serialize(render_ctx)?;
+    get_tera_instance().render(RECAP_TEMPLATE, &ctx)
 }
 
 #[cfg(test)]

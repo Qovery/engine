@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::{DeploymentReporter, MAX_ELASPED_TIME_WITHOUT_REPORT};
+use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
@@ -195,7 +195,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         };
 
         // don't spam log same report unless it has been too long time elapsed without one
-        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
             return;
         }
         *last_report = (rendered_report, Instant::now());
