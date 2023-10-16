@@ -25,7 +25,6 @@ use kube::Api;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -596,7 +595,7 @@ fn get_active_job_pod_by_selector(
                         // Pod is running, checking container statuses
                         let job_container_is_active = &pod_container_statuses
                             .iter()
-                            .filter_map(|container_status| container_status.borrow().clone().state)
+                            .filter_map(|container_status| container_status.clone().state)
                             .any(|status| status.running.is_some());
                         if *job_container_is_active {
                             return Some(pod.metadata.name.as_ref().unwrap().clone());
@@ -643,7 +642,7 @@ fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_
                 let job_container_terminated = &pod_container_statuses
                     .iter()
                     .filter(|container_status| container_status.name == job_container_name)
-                    .filter_map(|container_status| container_status.borrow().clone().state)
+                    .filter_map(|container_status| container_status.clone().state)
                     .any(|status| status.terminated.is_some());
                 return *job_container_terminated;
             }
