@@ -1545,11 +1545,11 @@ impl Kubernetes for Kapsule {
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref().borrow()
+        self.cloud_provider.as_ref()
     }
 
     fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref().borrow()
+        self.dns_provider.as_ref()
     }
 
     fn logger(&self) -> &dyn Logger {
