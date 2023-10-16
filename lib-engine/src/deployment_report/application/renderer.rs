@@ -1,12 +1,14 @@
 use crate::cloud_provider::service::ServiceType;
 use crate::deployment_report::application::reporter::AppDeploymentReport;
 use crate::deployment_report::utils::{
-    get_tera_instance, to_event_context, to_pods_render_context_by_version, to_pvc_render_context,
-    to_services_render_context, EventRenderContext, PodsRenderContext, PvcRenderContext, ServiceRenderContext,
+    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_services_render_context,
+    EventRenderContext, PodsRenderContext, PvcRenderContext, ServiceRenderContext,
 };
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use k8s_openapi::api::core::v1::Event;
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
 pub struct AppDeploymentRenderContext {
@@ -23,7 +25,7 @@ pub struct AppDeploymentRenderContext {
 
 #[derive(Debug, Serialize)]
 pub struct RecapRenderContext {
-    pub events: Vec<EventRenderContext>,
+    pub warning_events: Vec<EventRenderContext>,
 }
 
 const REPORT_TEMPLATE: &str = r#"
@@ -71,10 +73,10 @@ const REPORT_TEMPLATE: &str = r#"
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 const RECAP_TEMPLATE: &str = r#"
-┏━━ 📝 Recap Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┏━━ 📝 Recap Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {%- for event in warning_events %}
 ┃  | {{ event.type_ | fmt_event_type }} {{ event.message }}
-{%- endfor -%}
+{%- endfor %}
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_app_deployment_report(
@@ -106,25 +108,57 @@ pub(super) fn render_app_deployment_report(
     get_tera_instance().render_str(REPORT_TEMPLATE, &ctx)
 }
 
-pub(super) fn render_recap_events(events: &[Event]) -> Result<String, tera::Error> {
+pub(super) fn render_recap_events(warning_events: &[Event]) -> Result<String, tera::Error> {
+    // aggregate messages to have the number of occurrences
+    let event_messages_by_occurrences: HashMap<String, u16> = warning_events
+        .iter()
+        .filter_map(|event| event.message.as_ref())
+        .fold(HashMap::new(), |mut event_messages_by_occurrences, message| {
+            event_messages_by_occurrences
+                .entry(message.to_string())
+                .and_modify(|occurrence| *occurrence += 1)
+                .or_insert(1);
+            event_messages_by_occurrences
+        });
+
+    // create manually the event render context
+    let warning_events_context = event_messages_by_occurrences
+        .iter()
+        .sorted_by(|a, b| Ord::cmp(&b.1, &a.1))
+        .map(|(k, v)| {
+            let message = if *v > 1 {
+                format!("{} (x{})", k, v)
+            } else {
+                k.to_string()
+            };
+            EventRenderContext {
+                message,
+                type_: "Warning".to_string(),
+            }
+        })
+        .collect::<Vec<EventRenderContext>>();
+
     let render_ctx = RecapRenderContext {
-        events: events.iter().flat_map(to_event_context).collect(),
+        warning_events: warning_events_context,
     };
+
     let ctx = tera::Context::from_serialize(render_ctx)?;
-    get_tera_instance().render(RECAP_TEMPLATE, &ctx)
+    get_tera_instance().render_str(RECAP_TEMPLATE, &ctx)
 }
 
 #[cfg(test)]
 mod test {
     use crate::cloud_provider::service::ServiceType;
     use crate::deployment_report::application::renderer::{
-        AppDeploymentRenderContext, PodsRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
+        render_recap_events, AppDeploymentRenderContext, PodsRenderContext, RecapRenderContext, ServiceRenderContext,
+        RECAP_TEMPLATE, REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
-        QContainerState, QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type, get_tera_instance, to_event_context, DeploymentState, EventRenderContext,
+        PodRenderContext, PvcRenderContext, QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
+    use k8s_openapi::api::core::v1::Event;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1;
     use maplit::btreemap;
     use tera::Tera;
@@ -324,6 +358,35 @@ mod test {
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
+            assert_eq!(rendered_line.trim_end(), gold_line);
+        }
+    }
+
+    #[test]
+    fn test_recap_rendering() {
+        // given
+        let mut event_mock_1 = Event::default();
+        event_mock_1.message = Some("Readiness probe failure".to_string());
+        event_mock_1.type_ = Some("Warning".to_string());
+        let mut event_mock_2 = Event::default();
+        event_mock_2.message = Some("Liveness probe failure".to_string());
+        event_mock_2.type_ = Some("Warning".to_string());
+        let mut event_mock_3 = Event::default();
+        event_mock_3.message = Some("Readiness probe failure".to_string());
+        event_mock_3.type_ = Some("Warning".to_string());
+        let event_mocks = vec![event_mock_1, event_mock_2, event_mock_3];
+
+        // when
+        let rendered_report = render_recap_events(&event_mocks).unwrap();
+
+        // then
+        let expected = r#"
+┏━━ 📝 Recap Status Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃  | ⚠️ Readiness probe failure (x2)
+┃  | ⚠️ Liveness probe failure
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
+        println!("{rendered_report}");
+        for (rendered_line, gold_line) in rendered_report.lines().zip(expected.lines()) {
             assert_eq!(rendered_line.trim_end(), gold_line);
         }
     }
