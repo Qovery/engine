@@ -37,8 +37,8 @@ pub struct InfrastructureContext {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
+    dns_provider: Arc<dyn DnsProvider>,
     kubernetes: Box<dyn Kubernetes>,
 }
 
@@ -47,8 +47,8 @@ impl InfrastructureContext {
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
-        cloud_provider: Arc<Box<dyn CloudProvider>>,
-        dns_provider: Arc<Box<dyn DnsProvider>>,
+        cloud_provider: Arc<dyn CloudProvider>,
+        dns_provider: Arc<dyn DnsProvider>,
         kubernetes: Box<dyn Kubernetes>,
     ) -> InfrastructureContext {
         InfrastructureContext {

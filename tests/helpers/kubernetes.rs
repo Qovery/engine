@@ -50,9 +50,9 @@ pub fn get_cluster_test_kubernetes<'a>(
     boot_version: KubernetesVersion,
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
     kubernetes_provider: KubernetesKind,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    dns_provider: Arc<dyn DnsProvider>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
@@ -396,9 +396,9 @@ pub fn cluster_test(
 
 pub fn get_environment_test_kubernetes(
     context: &Context,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
     kubernetes_version: KubernetesVersion,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    dns_provider: Arc<dyn DnsProvider>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
     localisation: &str,

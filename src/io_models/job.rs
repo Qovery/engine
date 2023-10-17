@@ -148,7 +148,7 @@ impl Job {
     pub fn to_build(
         &self,
         registry_url: &ContainerRegistryInfo,
-        qovery_api: Arc<Box<dyn QoveryApi>>,
+        qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
     ) -> Option<Build> {
         let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
@@ -183,7 +183,7 @@ impl Job {
                     None
                 } else {
                     let id = self.long_id;
-                    Some(Box::new(move || fetch_git_token(&**qovery_api, ServiceType::Job, &id)))
+                    Some(Box::new(move || fetch_git_token(&*qovery_api, ServiceType::Job, &id)))
                 },
                 ssh_keys,
                 commit_id: commit_id.clone(),

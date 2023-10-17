@@ -127,8 +127,8 @@ impl<T: CloudProvider> HelmChart<T> {
         Some(self.kube_label_selector())
     }
 
-    pub fn helm_release_name(&self) -> String {
-        format!("qovery-{}-{}", self.id(), self.kube_name)
+    pub fn helm_release_name(&self) -> &str {
+        &self.kube_name
     }
 
     pub fn chart_source(&self) -> &HelmChartSource {

@@ -21,7 +21,7 @@ pub struct Context {
     features: Vec<Features>,
     metadata: Option<Metadata>,
     pub docker: Arc<Docker>,
-    pub qovery_api: Arc<Box<dyn QoveryApi>>,
+    pub qovery_api: Arc<dyn QoveryApi>,
     event_details: EventDetails,
 }
 
@@ -36,7 +36,7 @@ impl Context {
         features: Vec<Features>,
         metadata: Option<Metadata>,
         docker: Arc<Docker>,
-        qovery_api: Arc<Box<dyn QoveryApi>>,
+        qovery_api: Arc<dyn QoveryApi>,
         event_details: EventDetails,
     ) -> Self {
         Context {

@@ -4,6 +4,7 @@ use crate::deployment_report::application::renderer::{render_app_deployment_repo
 use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
@@ -148,10 +149,32 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             return;
         }
 
+        // Compute events' involved object ids to keep only interesting events (e.g remove warning from Horizontal Pod Autoscaler)
+        let mut event_uuids_to_keep: HashSet<String> = report
+            .pods
+            .into_iter()
+            .filter_map(|it| it.metadata.uid)
+            .collect::<HashSet<String>>();
+        event_uuids_to_keep.extend(
+            report
+                .services
+                .into_iter()
+                .filter_map(|it| it.metadata.uid)
+                .collect::<HashSet<String>>(),
+        );
+        event_uuids_to_keep.extend(
+            report
+                .pvcs
+                .into_iter()
+                .filter_map(|it| it.metadata.uid)
+                .collect::<HashSet<String>>(),
+        );
+
         report
             .events
             .clone()
             .into_iter()
+            .filter(|event| event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()))
             .filter_map(|event| {
                 if let Some(event_type) = &event.type_ {
                     if event_type == "Warning" {

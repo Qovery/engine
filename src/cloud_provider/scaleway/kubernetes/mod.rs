@@ -138,8 +138,8 @@ pub struct Kapsule {
     name: String,
     version: KubernetesVersion,
     zone: ScwZone,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
+    dns_provider: Arc<dyn DnsProvider>,
     object_storage: ScalewayOS,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
@@ -157,8 +157,8 @@ impl Kapsule {
         name: String,
         version: KubernetesVersion,
         zone: ScwZone,
-        cloud_provider: Arc<Box<dyn CloudProvider>>,
-        dns_provider: Arc<Box<dyn DnsProvider>>,
+        cloud_provider: Arc<dyn CloudProvider>,
+        dns_provider: Arc<dyn DnsProvider>,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
@@ -167,7 +167,7 @@ impl Kapsule {
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
-        let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
+        let event_details = kubernetes::event_details(&*cloud_provider, long_id, name.to_string(), &context);
 
         for node_group in &nodes_groups {
             match ScwInstancesType::from_str(node_group.instance_type.as_str()) {
@@ -987,7 +987,7 @@ impl Kapsule {
             Some(&temp_dir),
             kubeconfig_path,
             &credentials_environment_variables,
-            &**self.context.qovery_api,
+            &*self.context.qovery_api,
             self.customer_helm_charts_override(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
@@ -1545,11 +1545,11 @@ impl Kubernetes for Kapsule {
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref().borrow()
+        self.cloud_provider.as_ref()
     }
 
     fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref().borrow()
+        self.dns_provider.as_ref()
     }
 
     fn logger(&self) -> &dyn Logger {

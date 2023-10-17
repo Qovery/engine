@@ -51,8 +51,8 @@ pub struct EC2 {
     version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZones>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
+    cloud_provider: Arc<dyn CloudProvider>,
+    dns_provider: Arc<dyn DnsProvider>,
     s3: S3,
     template_directory: String,
     options: Options,
@@ -72,8 +72,8 @@ impl EC2 {
         version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
-        cloud_provider: Arc<Box<dyn CloudProvider>>,
-        dns_provider: Arc<Box<dyn DnsProvider>>,
+        cloud_provider: Arc<dyn CloudProvider>,
+        dns_provider: Arc<dyn DnsProvider>,
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
@@ -81,12 +81,12 @@ impl EC2 {
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = event_details(&**cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
-        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.resource_ttl());
+        let s3 = kubernetes::s3(&context, &region, &*cloud_provider, advanced_settings.resource_ttl());
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);

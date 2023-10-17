@@ -126,9 +126,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider: Arc<Box<dyn CloudProvider>> =
-            Arc::new(Self::cloud_provider(context, kubernetes_kind, localisation));
-        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_qoverydns(context, cluster_domain));
+        let cloud_provider: Arc<dyn CloudProvider> =
+            Arc::from(Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>);
+        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider_qoverydns(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
             context,
@@ -271,7 +271,7 @@ pub fn clean_environments(
             .map(|a| {
                 a.to_build(
                     registry_url,
-                    Arc::new(Box::new(FakeQoveryApi {})),
+                    Arc::from(FakeQoveryApi {}),
                     vec![CpuArchitecture::AMD64, CpuArchitecture::ARM64],
                 )
             })

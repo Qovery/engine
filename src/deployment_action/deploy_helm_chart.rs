@@ -45,7 +45,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
             target
                 .helm
                 .upgrade_raw(
-                    &self.helm_release_name(),
+                    self.helm_release_name(),
                     self.chart_workspace_directory(),
                     target.environment.namespace(),
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
@@ -89,7 +89,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
         let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             let mut chart_info =
-                ChartInfo::new_from_release_name(&self.helm_release_name(), target.environment.namespace());
+                ChartInfo::new_from_release_name(self.helm_release_name(), target.environment.namespace());
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
 
             target
@@ -374,7 +374,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
     let template = target
         .helm
         .template_raw(
-            &this.helm_release_name(),
+            this.helm_release_name(),
             this.chart_workspace_directory(),
             target.environment.namespace(),
             &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),

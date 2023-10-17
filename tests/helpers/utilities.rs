@@ -125,7 +125,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         enabled_features,
         Option::from(metadata),
         Arc::new(docker),
-        Arc::new(Box::new(StaticQoveryApi { versions })),
+        Arc::new(StaticQoveryApi { versions }),
         EventDetails::new(
             None,
             QoveryIdentifier::new(organization_id),
