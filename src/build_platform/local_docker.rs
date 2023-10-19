@@ -347,12 +347,7 @@ impl BuildPlatform for LocalDocker {
 
         // LOGGING
         let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
-
-        logger.send_progress(format!(
-            "📥 Cloning repository: {} to {}",
-            build.git_repository.url,
-            repository_root_path.to_string_lossy()
-        ));
+        logger.send_progress(format!("📥 Cloning repository {}", build.git_repository.url));
 
         // Retrieve git credentials
         let git_user_creds = match build.git_repository.credentials() {
