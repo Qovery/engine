@@ -9,6 +9,7 @@ controller:
   config:
     proxy-body-size: 100m
     server-tokens: "false"
+    use-proxy-protocol: "true"
   ingressClass: nginx-qovery
   extraArgs:
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
@@ -30,7 +31,7 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
       service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
-      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
       service.beta.kubernetes.io/scw-loadbalancer-type: "{{ load_balancer_size }}"
