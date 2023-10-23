@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::models::InvalidStatefulsetStorage;
+use crate::cloud_provider::models::{EnvironmentVariable, InvalidStatefulsetStorage};
 use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
@@ -46,6 +46,7 @@ pub trait Service: Send {
     fn as_service_mut(&mut self) -> &mut dyn Service;
     fn build(&self) -> Option<&Build>;
     fn build_mut(&mut self) -> Option<&mut Build>;
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable>;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]

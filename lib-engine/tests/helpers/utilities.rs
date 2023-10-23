@@ -38,6 +38,7 @@ use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInsta
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+use qovery_engine::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
 use qovery_engine::errors::CommandError;
@@ -45,6 +46,7 @@ use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::DatabaseMode::MANAGED;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
@@ -155,6 +157,10 @@ pub fn logger() -> Box<dyn Logger> {
 
 pub fn metrics_registry() -> Box<dyn MetricsRegistry> {
     Box::new(StdMetricsRegistry::new(Box::new(StdMsgPublisher::new())))
+}
+
+pub fn obfuscation_service() -> Box<dyn ObfuscationService> {
+    Box::new(StdObfuscationService::new(vec![]))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -753,7 +759,7 @@ pub struct DBInfos {
     pub db_port: u16,
     pub db_name: String,
     pub app_commit: String,
-    pub app_env_vars: BTreeMap<String, String>,
+    pub app_env_vars: BTreeMap<String, VariableInfo>,
 }
 
 pub fn db_infos(
@@ -776,13 +782,13 @@ pub fn db_infos(
                 db_name: database_db_name.to_string(),
                 app_commit: "0ce035590a117ff0683c273a359c7a452f639dd1".to_string(),
                 app_env_vars: btreemap! {
-                    "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri),
-                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name),
-                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username),
-                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password),
+                    "IS_DOCUMENTDB".to_string() => VariableInfo { value: base64::encode((database_mode == MANAGED).to_string()), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => VariableInfo { value: base64::encode(db_fqdn), is_secret:false},
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => VariableInfo { value: base64::encode(database_uri), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => VariableInfo { value: base64::encode(database_port.to_string()), is_secret:false},
+                    "MONGODB_DBNAME".to_string() => VariableInfo { value: base64::encode(database_db_name), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() =>VariableInfo { value:  base64::encode(database_username), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => VariableInfo { value: base64::encode(database_password), is_secret:false},
                 },
             }
         }
@@ -794,11 +800,11 @@ pub fn db_infos(
                 db_name: database_db_name.to_string(),
                 app_commit: "0c73aac9bbab7f494da1d89a535ed40e668a8ab4".to_string(),
                 app_env_vars: btreemap! {
-                    "MYSQL_HOST".to_string() => base64::encode(db_fqdn),
-                    "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
-                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name),
-                    "MYSQL_USERNAME".to_string() => base64::encode(database_username),
-                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password),
+                    "MYSQL_HOST".to_string() =>VariableInfo { value: base64::encode(db_fqdn), is_secret:false},
+                    "MYSQL_PORT".to_string() => VariableInfo { value:base64::encode(database_port.to_string()), is_secret:false},
+                    "MYSQL_DBNAME".to_string()   => VariableInfo { value:base64::encode(database_db_name), is_secret:false},
+                    "MYSQL_USERNAME".to_string() => VariableInfo { value:base64::encode(database_username), is_secret:false},
+                    "MYSQL_PASSWORD".to_string() => VariableInfo { value:base64::encode(database_password), is_secret:false},
                 },
             }
         }
@@ -814,11 +820,11 @@ pub fn db_infos(
                 db_name: database_db_name.to_string(),
                 app_commit: "1dec771b8bfdeeb71df0d56ebea9d4f6c2be5705".to_string(),
                 app_env_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_db_name),
-                     "PG_HOST".to_string() => base64::encode(db_fqdn),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password),
+                     "PG_DBNAME".to_string() => VariableInfo { value: base64::encode(database_db_name), is_secret:false},
+                     "PG_HOST".to_string() => VariableInfo { value: base64::encode(db_fqdn), is_secret:false},
+                     "PG_PORT".to_string() => VariableInfo { value: base64::encode(database_port.to_string()), is_secret:false},
+                     "PG_USERNAME".to_string() => VariableInfo { value: base64::encode(database_username), is_secret:false},
+                     "PG_PASSWORD".to_string() => VariableInfo { value: base64::encode(database_password), is_secret:false},
                 },
             }
         }
@@ -830,11 +836,11 @@ pub fn db_infos(
                 db_name: database_db_name,
                 app_commit: "c8dd8b57a4ebafabc860f0b948f881dad5ab632e".to_string(),
                 app_env_vars: btreemap! {
-                "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED && database_username == "default").to_string()),
-                "REDIS_HOST".to_string()      => base64::encode(db_fqdn),
-                "REDIS_PORT".to_string()      => base64::encode(database_port.to_string()),
-                "REDIS_USERNAME".to_string()  => base64::encode(database_username),
-                "REDIS_PASSWORD".to_string()  => base64::encode(database_password),
+                "IS_ELASTICCACHE".to_string() => VariableInfo { value: base64::encode((database_mode == MANAGED && database_username == "default").to_string()), is_secret:false},
+                "REDIS_HOST".to_string()      => VariableInfo { value: base64::encode(db_fqdn), is_secret:false},
+                "REDIS_PORT".to_string()      =>VariableInfo { value:  base64::encode(database_port.to_string()), is_secret:false},
+                "REDIS_USERNAME".to_string()  => VariableInfo { value: base64::encode(database_username), is_secret:false},
+                "REDIS_PASSWORD".to_string()  =>VariableInfo { value:  base64::encode(database_password), is_secret:false},
                 },
             }
         }

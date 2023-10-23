@@ -23,6 +23,7 @@ use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::models::scaleway::ScwZone;
@@ -371,12 +372,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     timeout_seconds: 10,
                 });
                 app.liveness_probe = None;
-                app.environment_vars = btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(database_host.clone()),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                app.environment_vars_with_infos = btreemap! {
+                     "PG_DBNAME".to_string() => VariableInfo{ value: base64::encode(database_db_name.clone()), is_secret:false},
+                     "PG_HOST".to_string() => VariableInfo{ value:base64::encode(database_host.clone()), is_secret:false},
+                     "PG_PORT".to_string() => VariableInfo{ value:base64::encode(database_port.to_string()), is_secret:false},
+                     "PG_USERNAME".to_string() => VariableInfo{ value:base64::encode(database_username.clone()), is_secret:false},
+                     "PG_PASSWORD".to_string() => VariableInfo{ value:base64::encode(database_password.clone()), is_secret:false},
                 };
                 app
             })

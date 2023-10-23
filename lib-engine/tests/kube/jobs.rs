@@ -4,6 +4,7 @@ use crate::kube::{kube_test_env, TestEnvOption};
 use function_name::named;
 use qovery_engine::io_models::container::Registry;
 use qovery_engine::io_models::job::{JobSchedule, JobSource};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
@@ -67,8 +68,14 @@ fn should_have_mounted_files_as_volume() {
         cron_job.max_nb_restart = 1;
         cron_job.max_duration_in_sec = 120;
         cron_job.mounted_files = vec![mounted_file];
-        cron_job.environment_vars = BTreeMap::from([
-            (mount_file_env_var_key.to_string(), base64::encode(mount_file_env_var_value)), // <- mounted file PATH
+        cron_job.environment_vars_with_infos = BTreeMap::from([
+            (
+                mount_file_env_var_key.to_string(),
+                VariableInfo {
+                    value: base64::encode(mount_file_env_var_value),
+                    is_secret: false,
+                },
+            ), // <- mounted file PATH
         ]);
 
         // create a job

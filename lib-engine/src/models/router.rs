@@ -1,5 +1,7 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, Route};
+use crate::cloud_provider::models::{
+    CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, Route,
+};
 use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
@@ -420,6 +422,10 @@ impl<T: CloudProvider> Service for Router<T> {
 
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
+    }
+
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        vec![]
     }
 }
 
