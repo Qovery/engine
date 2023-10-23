@@ -474,6 +474,11 @@ impl DnsProvider {
             Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token")?;
                 let email = self.options.get("cloudflare_email")?;
+                let proxied: bool = self
+                    .options
+                    .get("cloudflare_proxied")
+                    .map(|s| s.parse::<bool>().unwrap_or(false))
+                    .unwrap_or(false);
 
                 Some(Box::new(Cloudflare::new(
                     context,
@@ -482,6 +487,7 @@ impl DnsProvider {
                     Domain::new(self.domain.clone()),
                     token.as_str(),
                     email.as_str(),
+                    proxied,
                 )))
             }
             Kind::QoveryDns => {
