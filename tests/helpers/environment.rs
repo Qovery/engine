@@ -8,6 +8,7 @@ use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{Route, Router};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::utilities::to_short_id;
@@ -56,7 +57,7 @@ pub fn working_environment(
             action: Action::Create,
             git_credentials: None,
             storage: vec![],
-            environment_vars: BTreeMap::default(),
+            environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![Port {
@@ -160,12 +161,21 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     application.mounted_files = vec![mounted_file.clone()];
     application.liveness_probe = None;
     application.readiness_probe = None;
-    application.environment_vars = BTreeMap::from([
+    application.environment_vars_with_infos = BTreeMap::from([
         (
             "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
-            base64::encode(&mount_file_env_var_value),
+            VariableInfo {
+                value: base64::encode(&mount_file_env_var_value),
+                is_secret: false,
+            }, // TODO check secret value
         ), // <- https://github.com/Qovery/engine-testing/blob/app-crashing-if-file-doesnt-exist/src/main.rs#L19
-        (mount_file_env_var_key.to_string(), base64::encode(&mount_file_env_var_value)), // <- mounted file PATH
+        (
+            mount_file_env_var_key.to_string(),
+            VariableInfo {
+                value: base64::encode(&mount_file_env_var_value),
+                is_secret: false,
+            },
+        ), // <- mounted file PATH
     ]);
 
     // create a statefulset
@@ -262,13 +272,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
-                },
+                environment_vars_with_infos: btreemap! {},
                 mounted_files: vec![],
                 ports: vec![Port {
                     long_id: Default::default(),
@@ -322,13 +326,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name),
-                     "PG_HOST".to_string() => base64::encode(fqdn),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password),
-                },
+                environment_vars_with_infos: btreemap! {},
                 mounted_files: vec![],
                 public_domain: format!("{}.{}", application_id2, test_domain),
                 ports: vec![Port {
@@ -451,8 +449,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             action: Action::Create,
             git_credentials: None,
             storage: vec![],
-            environment_vars: btreemap! {
-                "ECHO_TEXT".to_string() => base64::encode("42"),
+            environment_vars_with_infos: btreemap! {
+                "ECHO_TEXT".to_string() => VariableInfo {value: base64::encode("42"), is_secret: false},
             },
             mounted_files: vec![],
             branch: "echo-app".to_string(),
@@ -555,7 +553,7 @@ pub fn environment_only_http_server(
             action: Action::Create,
             git_credentials: None,
             storage: vec![],
-            environment_vars: BTreeMap::default(),
+            environment_vars_with_infos: btreemap! {},
             mounted_files: vec![],
             branch: "main".to_string(),
             public_domain: format!("{}.{}", application_id, test_domain),

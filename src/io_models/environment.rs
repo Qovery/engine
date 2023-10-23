@@ -123,19 +123,20 @@ impl EnvironmentRequest {
                         // basic auth
                         if app.advanced_settings.network_ingress_basic_auth_env_var != *"" {
                             match app
-                                .environment_vars
+                                .environment_vars_with_infos
                                 .get(&app.advanced_settings.network_ingress_basic_auth_env_var)
                             {
-                                Some(value) => {
-                                    let secret = base64_replace_comma_to_new_line(value.clone()).map_err(|_| {
-                                        DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
-                                            env_var_name: app
-                                                .advanced_settings
-                                                .network_ingress_basic_auth_env_var
-                                                .to_string(),
-                                            env_var_value: value.clone(),
-                                        })
-                                    })?;
+                                Some(variable_infos) => {
+                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
+                                        .map_err(|_| {
+                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                                                env_var_name: app
+                                                    .advanced_settings
+                                                    .network_ingress_basic_auth_env_var
+                                                    .to_string(),
+                                                env_var_value: variable_infos.value.clone(),
+                                            })
+                                        })?;
                                     router_advanced_settings.basic_auth = Some(secret);
                                 }
                                 None => {
@@ -182,19 +183,20 @@ impl EnvironmentRequest {
                         // basic auth
                         if container.advanced_settings.network_ingress_basic_auth_env_var != *"" {
                             match container
-                                .environment_vars
+                                .environment_vars_with_infos
                                 .get(&container.advanced_settings.network_ingress_basic_auth_env_var)
                             {
-                                Some(value) => {
-                                    let secret = base64_replace_comma_to_new_line(value.clone()).map_err(|_| {
-                                        DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
-                                            env_var_name: container
-                                                .advanced_settings
-                                                .network_ingress_basic_auth_env_var
-                                                .to_string(),
-                                            env_var_value: value.clone(),
-                                        })
-                                    })?;
+                                Some(variable_infos) => {
+                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
+                                        .map_err(|_| {
+                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                                                env_var_name: container
+                                                    .advanced_settings
+                                                    .network_ingress_basic_auth_env_var
+                                                    .to_string(),
+                                                env_var_value: variable_infos.value.clone(),
+                                            })
+                                        })?;
                                     router_advanced_settings.basic_auth = Some(secret);
                                 }
                                 None => {

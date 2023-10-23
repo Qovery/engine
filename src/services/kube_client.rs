@@ -362,6 +362,7 @@ mod tests {
 
     use uuid::Uuid;
 
+    use crate::runtime::block_on;
     use crate::services::kube_client::SelectK8sResourceBy;
     use crate::{
         events::{EventDetails, Stage},
@@ -369,7 +370,6 @@ mod tests {
     };
 
     use super::QubeClient;
-    use crate::runtime::block_on;
 
     pub fn get_qube_client() -> (QubeClient, EventDetails) {
         let kubeconfig = env::var("HOME").unwrap() + "/.kube/config";

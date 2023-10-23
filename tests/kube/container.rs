@@ -9,8 +9,10 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
+use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
@@ -52,7 +54,8 @@ fn should_increase_container_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
+        let obfuscation_service = Box::new(StdObfuscationService::new(vec![]));
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, obfuscation_service, &|| false).unwrap();
         let test_container = &test_env.containers[0];
 
         let storages = resized_container
@@ -62,11 +65,12 @@ fn should_increase_container_storage_size() {
             .collect::<Vec<Storage<AwsStorageType>>>();
 
         let envs = resized_container
-            .environment_vars
+            .environment_vars_with_infos
             .iter()
-            .map(|(k, v)| EnvironmentVariable {
+            .map(|(k, variable_infos)| EnvironmentVariable {
                 key: k.to_string(),
-                value: v.to_string(),
+                value: variable_infos.value.to_string(),
+                is_secret: variable_infos.is_secret,
             })
             .collect::<Vec<EnvironmentVariable>>();
         let container: Container<AWS> = Container::new(
@@ -229,8 +233,14 @@ fn should_have_mounted_files_as_volume() {
             "apt-get update; apt-get install -y netcat-openbsd; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
         ];
         //container.mounted_files = vec![mounted_file];
-        container.environment_vars = BTreeMap::from([
-            (mount_file_env_var_key.to_string(), base64::encode(mount_file_env_var_value)), // <- mounted file PATH
+        container.environment_vars_with_infos = BTreeMap::from([
+            (
+                mount_file_env_var_key.to_string(),
+                VariableInfo {
+                    value: base64::encode(mount_file_env_var_value),
+                    is_secret: false,
+                },
+            ), // <- mounted file PATH
         ]);
         container.mounted_files = vec![mounted_file];
 

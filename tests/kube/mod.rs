@@ -181,7 +181,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         snapshot_retention_in_days: 0,
                     },
                 ],
-                environment_vars: BTreeMap::default(),
+                environment_vars_with_infos: BTreeMap::default(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
             };
@@ -225,7 +225,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         snapshot_retention_in_days: 0,
                     },
                 ],
-                environment_vars: BTreeMap::default(),
+                environment_vars_with_infos: BTreeMap::default(),
                 branch: "basic-app-deploy".to_string(),
                 public_domain: format!("{}.{}", application_id, infra_ctx.dns_provider().domain()),
                 ports: vec![Port {
@@ -300,7 +300,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 },
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,
-                environment_vars: BTreeMap::default(),
+                environment_vars_with_infos: BTreeMap::default(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 default_port: None,

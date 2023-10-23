@@ -8,8 +8,10 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
+use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::models::application::{get_application_with_invalid_storage_size, Application};
@@ -50,7 +52,8 @@ fn should_increase_app_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
+        let obfuscation_service = Box::new(StdObfuscationService::new(vec![]));
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, obfuscation_service, &|| false).unwrap();
         let test_app = &test_env.applications[0];
 
         let storages = resized_app
@@ -60,11 +63,12 @@ fn should_increase_app_storage_size() {
             .collect::<Vec<Storage<AwsStorageType>>>();
 
         let envs = resized_app
-            .environment_vars
+            .environment_vars_with_infos
             .iter()
-            .map(|(k, v)| EnvironmentVariable {
+            .map(|(k, variable_infos)| EnvironmentVariable {
                 key: k.to_string(),
-                value: v.to_string(),
+                value: variable_infos.value.to_string(),
+                is_secret: variable_infos.is_secret,
             })
             .collect::<Vec<EnvironmentVariable>>();
         let app: Application<AWS> = Application::new(
@@ -224,12 +228,21 @@ fn should_have_mounted_files_as_volume() {
         application.mounted_files = vec![mounted_file];
         application.readiness_probe = None;
         application.liveness_probe = None;
-        application.environment_vars = BTreeMap::from([
+        application.environment_vars_with_infos = BTreeMap::from([
             (
                 "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
-                base64::encode(&mount_file_env_var_value),
+                VariableInfo {
+                    value: base64::encode(&mount_file_env_var_value),
+                    is_secret: false,
+                },
             ), // <- https://github.com/Qovery/engine-testing/blob/app-crashing-if-file-doesnt-exist/src/main.rs#L19
-            (mount_file_env_var_key.to_string(), base64::encode(&mount_file_env_var_value)), // <- mounted file PATH
+            (
+                mount_file_env_var_key.to_string(),
+                VariableInfo {
+                    value: base64::encode(&mount_file_env_var_value),
+                    is_secret: false,
+                },
+            ), // <- mounted file PATH
         ]);
 
         // create a statefulset

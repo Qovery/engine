@@ -12,6 +12,7 @@ use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
@@ -216,7 +217,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value:  base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
         }];
@@ -333,7 +334,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {

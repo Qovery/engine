@@ -5,6 +5,7 @@ use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
+use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{Action, MountedFile};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
@@ -306,7 +307,8 @@ pub struct Container {
     pub storages: Vec<Storage>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
-    pub environment_vars: BTreeMap<String, String>,
+    #[serde(default = "default_environment_vars_with_info")]
+    pub environment_vars_with_infos: BTreeMap<String, VariableInfo>,
     #[serde(default)]
     pub mounted_files: Vec<MountedFile>,
     pub readiness_probe: Option<Probe>,
@@ -323,7 +325,7 @@ impl Container {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
-        let environment_variables = to_environment_variable(self.environment_vars);
+        let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
         // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved
         // by us with some tags
