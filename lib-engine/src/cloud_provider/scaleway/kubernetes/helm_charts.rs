@@ -217,7 +217,6 @@ pub fn scw_helm_charts(
         chart_config_prerequisites
             .managed_dns_root_domain_helm_format
             .to_string(),
-        false,
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
         true,

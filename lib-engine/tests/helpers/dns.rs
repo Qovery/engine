@@ -26,6 +26,7 @@ pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box
         domain,
         secrets.CLOUDFLARE_TOKEN.expect("CLOUDFLARE_TOKEN is not set").as_str(), // Cloudflare name: Qovery test
         secrets.CLOUDFLARE_ID.expect("CLOUDFLARE_ID is not set").as_str(),
+        false,
     ))
 }
 
