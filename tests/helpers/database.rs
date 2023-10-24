@@ -29,14 +29,17 @@ use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
+use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
+use qovery_engine::models::kubernetes::K8sSecretType::StringData;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -81,6 +84,7 @@ impl Infrastructure for EnvironmentRequest {
             1,
             |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
+            Box::new(StdObfuscationService::new(vec![])),
             &|| false,
         );
         ret.unwrap();
@@ -254,12 +258,12 @@ pub fn environment_3_apps_3_databases(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                environment_vars_with_infos: btreemap! {
+                     "PG_DBNAME".to_string() => VariableInfo{value: base64::encode(database_name.clone()), is_secret: false},
+                     "PG_HOST".to_string() => VariableInfo{value: base64::encode(fqdn.clone()),is_secret: false},
+                     "PG_PORT".to_string() => VariableInfo{value: base64::encode(database_port.to_string()), is_secret: false},
+                     "PG_USERNAME".to_string() => VariableInfo{value: base64::encode(database_username.clone()), is_secret: false},
+                     "PG_PASSWORD".to_string() => VariableInfo{value: base64::encode(database_password.clone()), is_secret: false},
                 },
                 mounted_files: vec![],
                 public_domain: format!("{}.example.com", app_id),
@@ -314,12 +318,12 @@ pub fn environment_3_apps_3_databases(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name_2.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn_2.clone()),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username_2.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                environment_vars_with_infos: btreemap! {
+                     "PG_DBNAME".to_string() => VariableInfo {value: base64::encode(database_name_2.clone()), is_secret: false },
+                     "PG_HOST".to_string() =>VariableInfo {value: base64::encode(fqdn_2.clone()), is_secret: false },
+                     "PG_PORT".to_string() => VariableInfo {value:base64::encode(database_port.to_string()), is_secret: false },
+                     "PG_USERNAME".to_string() =>VariableInfo {value: base64::encode(database_username_2.clone()), is_secret: false },
+                     "PG_PASSWORD".to_string() => VariableInfo {value:base64::encode(database_password.clone()), is_secret: false },
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
@@ -374,15 +378,7 @@ pub fn environment_3_apps_3_databases(
                 root_path: String::from("/"),
                 git_credentials: None,
                 storage: vec![],
-                environment_vars: btreemap! {
-                    "IS_DOCUMENTDB".to_string() => base64::encode("false"),
-                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo),
-                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo),
-                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
-                },
+                environment_vars_with_infos: btreemap! {},
                 mounted_files: vec![],
                 public_domain: format!("{}.example.com", app_id),
                 ports: vec![Port {
@@ -533,7 +529,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             action: Action::Create,
             git_credentials: None,
             storage: vec![],
-            environment_vars: BTreeMap::default(),
+            environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             ports: vec![],
             total_cpus: "100m".to_string(),
@@ -583,7 +579,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             action: Action::Create,
             git_credentials: None,
             storage: vec![],
-            environment_vars: BTreeMap::default(),
+            environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             public_domain: format!("{}.example.com", Uuid::new_v4()),
@@ -738,7 +734,7 @@ pub fn test_db(
             };
             app.command_args = vec![];
             app.entrypoint = None;
-            app.environment_vars = db_infos.app_env_vars.clone();
+            app.environment_vars_with_infos = db_infos.app_env_vars.clone();
             app
         })
         .collect::<Vec<Application>>();
@@ -1322,7 +1318,7 @@ pub fn test_db_on_upgrade(
                 protocol: Protocol::HTTP,
             }];
             app.dockerfile_path = Some(format!("Dockerfile-{version}"));
-            app.environment_vars = db_infos.app_env_vars.clone();
+            app.environment_vars_with_infos = db_infos.app_env_vars.clone();
             app
         })
         .collect::<Vec<Application>>();

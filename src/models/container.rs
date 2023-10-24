@@ -387,6 +387,10 @@ impl<T: CloudProvider> Service for Container<T> {
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
     }
+
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        self.environment_variables.clone()
+    }
 }
 
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {

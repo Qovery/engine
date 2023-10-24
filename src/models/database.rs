@@ -1,5 +1,5 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{InvalidPVCStorage, InvalidStatefulsetStorage};
+use crate::cloud_provider::models::{EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage};
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
     ServiceType, ServiceVersionCheckResult,
@@ -306,6 +306,10 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
 
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
+    }
+
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        vec![]
     }
 }
 

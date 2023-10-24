@@ -3,6 +3,7 @@ use crate::cloud_provider;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::ServiceType;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -20,6 +21,7 @@ pub mod helm_chart;
 pub mod job;
 pub mod probe;
 pub mod router;
+pub mod variable_utils;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug, Default)]
 pub enum UpdateStrategy {
@@ -114,14 +116,14 @@ impl MountedFile {
 }
 
 // Retrieve ssh keys from env variables, values are base64 encoded
-pub fn ssh_keys_from_env_vars(environment_vars: &BTreeMap<String, String>) -> Vec<SshKey> {
+pub fn ssh_keys_from_env_vars(environment_vars: &BTreeMap<String, VariableInfo>) -> Vec<SshKey> {
     // Retrieve ssh keys from env variables
     const ENV_GIT_PREFIX: &str = "GIT_SSH_KEY";
     let env_ssh_keys: Vec<(String, String)> = environment_vars
         .iter()
-        .filter_map(|(name, value)| {
+        .filter_map(|(name, variable_infos)| {
             if name.starts_with(ENV_GIT_PREFIX) {
-                Some((name.clone(), value.clone()))
+                Some((name.clone(), variable_infos.value.clone()))
             } else {
                 None
             }
@@ -140,12 +142,12 @@ pub fn ssh_keys_from_env_vars(environment_vars: &BTreeMap<String, String>) -> Ve
 
         let passphrase = environment_vars
             .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-            .and_then(|val| base64::decode(val).ok())
+            .and_then(|variable_infos| base64::decode(variable_infos.value.clone()).ok())
             .and_then(|str| String::from_utf8(str).ok());
 
         let public_key = environment_vars
             .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-            .and_then(|val| base64::decode(val).ok())
+            .and_then(|variable_infos| base64::decode(variable_infos.value.clone()).ok())
             .and_then(|str| String::from_utf8(str).ok());
 
         ssh_keys.push(SshKey {

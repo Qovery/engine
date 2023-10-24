@@ -12,6 +12,7 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
+use crate::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::engine::InfrastructureContext;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
@@ -124,6 +125,7 @@ impl EnvironmentTask {
         max_build_in_parallel: usize,
         env_logger: impl Fn(String),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
+        obfuscation_service: Box<dyn ObfuscationService>,
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
@@ -194,6 +196,8 @@ impl EnvironmentTask {
         let _ = services.iter().map(|service| {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::BuildQueueing)
         });
+
+        let obfuscation_service: Arc<dyn ObfuscationService> = Arc::from(obfuscation_service);
         let build_tasks = services
             .into_iter()
             .map(|service| {
@@ -209,6 +213,7 @@ impl EnvironmentTask {
                         cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
+                        obfuscation_service.clone(),
                         &should_abort,
                     )
                 }
@@ -287,6 +292,7 @@ impl EnvironmentTask {
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        obfuscation_service: Arc<dyn ObfuscationService>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
@@ -323,7 +329,8 @@ impl EnvironmentTask {
         }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), should_abort);
+        let build_result =
+            build_platform.build(build, &logger, metrics_registry.clone(), obfuscation_service, should_abort);
         match build_result {
             Ok(_) => {
                 let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -377,12 +384,22 @@ impl EnvironmentTask {
             .chain(environment.jobs.iter().map(|x| x.as_service()))
             .chain(environment.helm_charts.iter().map(|x| x.as_service()));
 
+        let mut secrets: Vec<String> = vec![];
         for service in services.clone() {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
+            secrets.append(
+                &mut service
+                    .get_environment_variables()
+                    .iter()
+                    .filter(|environment_variable| environment_variable.is_secret)
+                    .map(|environment_variable| environment_variable.value.clone())
+                    .collect::<Vec<String>>(),
+            );
         }
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
+        let obfuscation_service = Box::new(StdObfuscationService::new(secrets));
         let run_deploy = || -> Result<(), Box<EngineError>> {
             // Build apps
             if should_abort() {
@@ -407,6 +424,7 @@ impl EnvironmentTask {
                 environment.max_parallel_build as usize,
                 env_logger,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
+                obfuscation_service.clone(),
                 should_abort,
             )?;
 
@@ -414,7 +432,13 @@ impl EnvironmentTask {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
-            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort, logger.clone())?;
+            let mut env_deployment = EnvironmentDeployment::new(
+                infra_ctx,
+                &environment,
+                should_abort,
+                logger.clone(),
+                obfuscation_service.clone(),
+            )?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),

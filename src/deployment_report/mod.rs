@@ -10,6 +10,7 @@ pub mod database;
 pub mod helm_chart;
 pub mod job;
 pub mod logger;
+pub mod obfuscation_service;
 pub mod router;
 mod utils;
 

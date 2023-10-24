@@ -8,6 +8,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::container::ContainerAdvancedSettings;
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
+use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
 };
@@ -52,10 +53,14 @@ pub struct Port {
     pub protocol: Protocol,
 }
 
-pub fn to_environment_variable(env_vars: BTreeMap<String, String>) -> Vec<EnvironmentVariable> {
+pub fn to_environment_variable(env_vars: BTreeMap<String, VariableInfo>) -> Vec<EnvironmentVariable> {
     env_vars
         .into_iter()
-        .map(|(k, v)| EnvironmentVariable { key: k, value: v })
+        .map(|(k, variable_infos)| EnvironmentVariable {
+            key: k,
+            value: variable_infos.value,
+            is_secret: variable_infos.is_secret,
+        })
         .collect()
 }
 
@@ -256,7 +261,8 @@ pub struct Application {
     pub storage: Vec<Storage>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
-    pub environment_vars: BTreeMap<String, String>,
+    #[serde(default = "default_environment_vars_with_info")]
+    pub environment_vars_with_infos: BTreeMap<String, VariableInfo>,
     #[serde(default)]
     pub mounted_files: Vec<MountedFile>,
     pub readiness_probe: Option<Probe>,
@@ -276,7 +282,7 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
-        let environment_variables = to_environment_variable(self.environment_vars);
+        let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -396,7 +402,7 @@ impl Application {
         architectures: Vec<CpuArchitecture>,
     ) -> Build {
         // Get passphrase and public key if provided by the user
-        let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars);
+        let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars_with_infos);
 
         // Convert our root path to an relative path to be able to append them correctly
         let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(&self.root_path, &self.dockerfile_path);
@@ -422,11 +428,13 @@ impl Application {
             },
             image: self.to_image(registry_url),
             environment_variables: self
-                .environment_vars
+                .environment_vars_with_infos
                 .iter()
-                .filter_map(|(k, v)| {
+                .filter_map(|(k, variable_infos)| {
                     // Remove special vars
-                    let v = String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned();
+                    let v =
+                        String::from_utf8_lossy(&base64::decode(variable_infos.value.as_bytes()).unwrap_or_default())
+                            .into_owned();
                     if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
                         disable_build_cache = true;
                         return None;

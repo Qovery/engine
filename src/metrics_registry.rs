@@ -149,7 +149,7 @@ impl MetricsRegistry for StdMetricsRegistry {
         debug!("start record deployment step {:#?} for item {}", step_name, id);
 
         let mut registry = self.registry.lock().unwrap();
-        let metrics_per_id = registry.entry(id).or_insert(HashMap::new());
+        let metrics_per_id = registry.entry(id).or_default();
 
         if metrics_per_id.contains_key(&step_name) {
             error!("key {:#?} already exist", step_name);
@@ -163,7 +163,7 @@ impl MetricsRegistry for StdMetricsRegistry {
         debug!("stop record deployment step {:#?} for item {}", step_name, id);
 
         let mut registry = self.registry.lock().unwrap();
-        let metrics_per_id = registry.entry(id).or_insert(HashMap::new());
+        let metrics_per_id = registry.entry(id).or_default();
 
         if let Some(deployment_step_record) = metrics_per_id.get_mut(&step_name) {
             deployment_step_record.duration = Some(deployment_step_record.start_time.elapsed());
@@ -183,7 +183,7 @@ impl MetricsRegistry for StdMetricsRegistry {
 
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
         let mut locked_registry = self.registry.lock().unwrap();
-        let metrics_per_id = locked_registry.entry(id).or_insert(HashMap::new());
+        let metrics_per_id = locked_registry.entry(id).or_default();
         if let Some(deployment_step_record) = metrics_per_id.get(&step_name) {
             if deployment_step_record.duration.is_some() {
                 return true;
@@ -196,7 +196,7 @@ impl MetricsRegistry for StdMetricsRegistry {
         debug!("get step durations for item ${}", id);
 
         let mut registry = self.registry.lock().unwrap();
-        let metrics_per_service = registry.entry(id).or_insert(HashMap::new());
+        let metrics_per_service = registry.entry(id).or_default();
         metrics_per_service
             .values()
             .filter(|record| record.duration.is_some())

@@ -10,6 +10,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::git;
+use crate::io_models::variable_utils::VariableInfo;
 use crate::models::helm_chart::{HelmChart, HelmChartSource, HelmValueSource};
 use crate::models::types::CloudProvider;
 use anyhow::anyhow;
@@ -51,8 +52,8 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
                     &[],
                     &CommandKiller::from(self.helm_timeout(), target.should_abort),
-                    &mut |line| logger.info(line),
-                    &mut |line| logger.warning(line),
+                    &mut |line| logger.info(target.obfuscation_service.obfuscate_secrets(line)),
+                    &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
                 )
                 .map_err(|err| (event_details.clone(), HelmChartError::HelmError(err)))?;
 
@@ -98,8 +99,8 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     &chart_info,
                     &[],
                     &CommandKiller::from(self.helm_timeout(), &target.should_abort),
-                    &mut |line| logger.info(line),
-                    &mut |line| logger.warning(line),
+                    &mut |line| logger.info(target.obfuscation_service.obfuscate_secrets(line)),
+                    &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
                 )
                 .map_err(|err| {
                     Box::new(EngineError::new_helm_chart_error(
@@ -130,7 +131,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 fn write_helm_value_with_replacement<'a>(
     lines: impl Iterator<Item = Cow<'a, str>>,
     output_file_path: &Path,
-    env_vars: &HashMap<String, String>,
+    env_vars: &HashMap<String, VariableInfo>,
 ) -> Result<(), anyhow::Error> {
     let mut output_writer = BufWriter::new(File::create(output_file_path)?);
     let ret: Result<(), anyhow::Error> = lines
@@ -151,7 +152,7 @@ fn write_helm_value_with_replacement<'a>(
 
 fn replace_qovery_env_variable<'a>(
     mut line: Cow<'a, str>,
-    envs: &HashMap<String, String>,
+    envs: &HashMap<String, VariableInfo>,
 ) -> Result<Cow<'a, str>, anyhow::Error> {
     const PREFIX: &str = "qovery.env.";
 
@@ -175,7 +176,7 @@ fn replace_qovery_env_variable<'a>(
                 &line[beg_pos..]
             };
 
-        let Some(variable) = envs.get(&variable_name[PREFIX.len()..]) else {
+        let Some(variable_infos) = envs.get(&variable_name[PREFIX.len()..]) else {
             return Err(anyhow!(
                 "Invalid variable, specified {:?} variable does not exist at line: {}",
                 variable_name,
@@ -183,7 +184,7 @@ fn replace_qovery_env_variable<'a>(
             ));
         };
 
-        line = Cow::Owned(line.replace(variable_name, variable))
+        line = Cow::Owned(line.replace(variable_name, &variable_infos.value))
     }
 
     Ok(line)
@@ -380,7 +381,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
             &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
             &[],
             &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
-            &mut |line| logger.warning(line),
+            &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
         )
         .map_err(|e| (event_details.clone(), e))?;
 
@@ -515,8 +516,8 @@ mod tests {
     #[test]
     fn test_replace_qovery_env_variables() {
         let envs = hashmap! {
-          "TOTO".to_string() => "toto_var".to_string(),
-            "LABEL_NAME".to_string() => "toto_label".to_string()
+            "TOTO".to_string() => VariableInfo { value: "toto_var".to_string(), is_secret: false},
+            "LABEL_NAME".to_string() => VariableInfo {value: "toto_label".to_string(), is_secret: false}
         };
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("toto: qovery.env.TOTO"), &envs);

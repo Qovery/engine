@@ -366,6 +366,10 @@ impl<T: CloudProvider> Service for Job<T> {
             }
         }
     }
+
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        self.environment_variables.clone()
+    }
 }
 
 pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {

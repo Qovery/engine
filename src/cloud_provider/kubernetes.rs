@@ -1634,11 +1634,13 @@ mod tests {
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
     use std::collections::BTreeMap;
 
-    use crate::cloud_provider::kubernetes::KubernetesVersion as K8sVersion;
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        filter_svc_loadbalancers, kube_create_namespace_if_not_exists, kube_does_secret_exists, kube_list_services,
-        validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        filter_svc_loadbalancers, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+    };
+    use crate::cloud_provider::kubernetes::{
+        kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists, kube_does_secret_exists,
+        kube_list_services, KubernetesVersion as K8sVersion,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1652,8 +1654,6 @@ mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
     use uuid::Uuid;
-
-    use super::kube_copy_secret_to_another_namespace;
 
     pub fn kubeconfig_path() -> String {
         env::var("HOME").unwrap() + "/.kube/config"

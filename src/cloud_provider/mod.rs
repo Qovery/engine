@@ -13,6 +13,7 @@ use crate::cmd::docker::Docker;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::container_registry::ContainerRegistry;
 use crate::deployment_report::logger::EnvLogger;
+use crate::deployment_report::obfuscation_service::ObfuscationService;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
@@ -114,6 +115,7 @@ impl TerraformStateCredentials {
 pub struct DeploymentTarget<'a> {
     pub kubernetes: &'a dyn Kubernetes,
     pub container_registry: &'a dyn ContainerRegistry,
+    pub obfuscation_service: Box<dyn ObfuscationService>,
     pub cloud_provider: &'a dyn CloudProvider,
     pub dns_provider: &'a dyn DnsProvider,
     pub environment: &'a Environment,
@@ -131,6 +133,7 @@ impl<'a> DeploymentTarget<'a> {
     pub fn new(
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
+        obfuscation_service: Box<dyn ObfuscationService>,
         should_abort: &'a (dyn Fn() -> bool + Sync + Send),
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
@@ -166,6 +169,7 @@ impl<'a> DeploymentTarget<'a> {
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),
             metrics_registry: Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn()),
+            obfuscation_service,
         })
     }
 

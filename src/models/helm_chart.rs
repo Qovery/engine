@@ -1,9 +1,11 @@
 use crate::build_platform::{Build, Credentials, SshKey};
+use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
+use crate::io_models::variable_utils::VariableInfo;
 use crate::models::types::CloudProvider;
 use crate::utilities::to_short_id;
 use std::borrow::Cow;
@@ -38,7 +40,7 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) command_args: Vec<String>,
     pub(super) timeout: Duration,
     pub(super) allow_cluster_wide_resources: bool,
-    pub(super) environment_variables: HashMap<String, String>,
+    pub(super) environment_variables: HashMap<String, VariableInfo>,
     pub(super) advanced_settings: HelmChartAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
@@ -62,7 +64,7 @@ impl<T: CloudProvider> HelmChart<T> {
         command_args: Vec<String>,
         timeout: Duration,
         allow_cluster_wide_resources: bool,
-        environment_variables: HashMap<String, String>,
+        environment_variables: HashMap<String, VariableInfo>,
         advanced_settings: HelmChartAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -162,7 +164,7 @@ impl<T: CloudProvider> HelmChart<T> {
         }
     }
 
-    pub fn environment_variables(&self) -> &HashMap<String, String> {
+    pub fn environment_variables(&self) -> &HashMap<String, VariableInfo> {
         &self.environment_variables
     }
 
@@ -286,6 +288,17 @@ impl<T: CloudProvider> Service for HelmChart<T> {
 
     fn build_mut(&mut self) -> Option<&mut Build> {
         None
+    }
+
+    fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        self.environment_variables
+            .iter()
+            .map(|(key, variable_infos)| EnvironmentVariable {
+                key: key.clone(),
+                value: variable_infos.value.clone(),
+                is_secret: variable_infos.is_secret,
+            })
+            .collect()
     }
 }
 

@@ -18,6 +18,7 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::TransactionResult;
@@ -826,7 +827,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
                 app.branch = "1app_fail_deploy".to_string();
                 app.commit_id = "5b89305b9ae8a62a1f16c5c773cddf1d12f70db1".to_string();
-                app.environment_vars = BTreeMap::default();
+                app.environment_vars_with_infos = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -906,7 +907,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
                 app.branch = "master".to_string();
                 app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
-                app.environment_vars = BTreeMap::default();
+                app.environment_vars_with_infos = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -1232,7 +1233,7 @@ fn deploy_container_with_no_router_on_scw() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
@@ -1341,7 +1342,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 },
             ],
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() =>  VariableInfo{ value: base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1476,7 +1477,7 @@ fn deploy_container_with_router_on_scw() {
                 },
             ],
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value:base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1585,7 +1586,7 @@ fn deploy_job_on_scw_kapsule() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1678,7 +1679,7 @@ fn deploy_cronjob_on_scw_kapsule() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1771,7 +1772,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1864,7 +1865,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1969,7 +1970,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2142,7 +2143,7 @@ fn deploy_container_with_tcp_public_port() {
                 failure_threshold: 50,
             }),
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: base64::encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];

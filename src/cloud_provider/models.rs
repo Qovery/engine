@@ -9,6 +9,7 @@ use super::helm::ChartValuesGenerated;
 pub struct EnvironmentVariable {
     pub key: String,
     pub value: String,
+    pub is_secret: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

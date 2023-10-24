@@ -21,6 +21,7 @@ use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawVa
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use qovery_engine::runtime::block_on;
@@ -923,7 +924,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
                 app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
                 app.branch = "1app_fail_deploy".to_string();
                 app.commit_id = "a6343aa14fb9f04ef4b68babf5bb9d4d21098cb2".to_string();
-                app.environment_vars = BTreeMap::default();
+                app.environment_vars_with_infos = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -989,7 +990,7 @@ fn deploy_ok_fail_fail_ok_environment() {
                 app.git_url = "https://gitlab.com/maathor/my-exit-container".to_string();
                 app.branch = "master".to_string();
                 app.commit_id = "55bc95a23fbf91a7699c28c5f61722d4f48201c9".to_string();
-                app.environment_vars = BTreeMap::default();
+                app.environment_vars_with_infos = BTreeMap::default();
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
@@ -1265,7 +1266,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 },
             ],
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: base64::encode("my_value"), is_secret: false}},
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1398,7 +1399,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         );
         let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
+        let _infra_ctx_for_delete =
             aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
@@ -1455,7 +1456,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 },
             ],
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1604,7 +1605,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                     snapshot_retention_in_days: 0,
                 },
             ],
-            environment_vars: BTreeMap::default(),
+            environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
@@ -1730,7 +1731,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
         }];
@@ -1868,7 +1869,7 @@ fn deploy_container_with_router_on_aws_eks() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
@@ -1959,7 +1960,7 @@ fn deploy_job_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2052,7 +2053,7 @@ fn deploy_cronjob_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2147,7 +2148,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2266,7 +2267,7 @@ fn build_and_deploy_job_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2400,7 +2401,7 @@ fn test_restart_deployment() {
             }),
             storages: vec![],
             mounted_files: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
         }];
 
@@ -2528,7 +2529,7 @@ fn test_restart_statefulset() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
         }];
 
@@ -2619,7 +2620,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 100,
             ram_limit_in_mib: 100,
-            environment_vars: Default::default(),
+            environment_vars_with_infos: Default::default(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2918,7 +2919,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 },
             ],
             storages: vec![],
-            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -3055,7 +3056,7 @@ fn deploy_helm_chart() {
             command_args: vec!["--install".to_string()],
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
-            environment_vars: btreemap! { "TOTO".to_string() => "Salut".to_string() },
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
         }];
 

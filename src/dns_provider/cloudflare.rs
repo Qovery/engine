@@ -11,6 +11,7 @@ use crate::models::domain::Domain;
 pub struct CloudflareDnsConfig {
     pub cloudflare_email: String,
     pub cloudflare_api_token: String,
+    pub cloudflare_proxied: bool,
 }
 
 pub struct Cloudflare {
@@ -20,6 +21,7 @@ pub struct Cloudflare {
     domain: Domain,
     cloudflare_api_token: String,
     cloudflare_email: String,
+    cloudflare_proxied: bool,
 }
 
 impl Cloudflare {
@@ -30,6 +32,7 @@ impl Cloudflare {
         domain: Domain,
         cloudflare_api_token: &str,
         cloudflare_email: &str,
+        cloudflare_proxied: bool,
     ) -> Self {
         Cloudflare {
             context,
@@ -38,6 +41,7 @@ impl Cloudflare {
             domain,
             cloudflare_api_token: cloudflare_api_token.to_string(),
             cloudflare_email: cloudflare_email.to_string(),
+            cloudflare_proxied,
         }
     }
 }
@@ -74,6 +78,7 @@ impl DnsProvider for Cloudflare {
         DnsProviderConfiguration::Cloudflare(CloudflareDnsConfig {
             cloudflare_email: self.cloudflare_email.clone(),
             cloudflare_api_token: self.cloudflare_api_token.clone(),
+            cloudflare_proxied: self.cloudflare_proxied,
         })
     }
 
