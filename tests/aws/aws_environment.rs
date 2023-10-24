@@ -1399,7 +1399,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         );
         let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
+        let _infra_ctx_for_delete =
             aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);

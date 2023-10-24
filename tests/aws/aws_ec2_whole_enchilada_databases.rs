@@ -4,13 +4,13 @@ use crate::helpers::utilities::{
 };
 use function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::{Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
-use std::sync::Arc;
+
 use tracing::{span, Level};
 
 use crate::helpers;
