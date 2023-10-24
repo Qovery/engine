@@ -150,12 +150,11 @@ pub(super) fn render_recap_events(warning_events: &[Event]) -> Result<String, te
 mod test {
     use crate::cloud_provider::service::ServiceType;
     use crate::deployment_report::application::renderer::{
-        render_recap_events, AppDeploymentRenderContext, PodsRenderContext, RecapRenderContext, ServiceRenderContext,
-        RECAP_TEMPLATE, REPORT_TEMPLATE,
+        render_recap_events, AppDeploymentRenderContext, PodsRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
     };
     use crate::deployment_report::utils::{
-        exit_code_to_msg, fmt_event_type, get_tera_instance, to_event_context, DeploymentState, EventRenderContext,
-        PodRenderContext, PvcRenderContext, QContainerState, QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
+        QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
     use k8s_openapi::api::core::v1::Event;
