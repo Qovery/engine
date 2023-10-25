@@ -239,6 +239,7 @@ impl HelmChart {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
+            kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
         };
 
         Ok(service)

@@ -87,6 +87,7 @@ impl Database {
                     Ok(t) => Some(Box::new(t)),
                     Err(e) => return Err(e),
                 },
+                Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
             },
         };
 
@@ -607,6 +608,7 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
+            (Kind::Gcp, _, _) => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 }
