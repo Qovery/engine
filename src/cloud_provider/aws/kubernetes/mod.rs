@@ -621,6 +621,27 @@ fn tera_context(
         &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
     );
 
+    context.insert(
+        "nginx_hpa_minimum_replicas",
+        &kubernetes.advanced_settings().nginx_hpa_min_number_instances,
+    );
+    context.insert(
+        "nginx_hpa_maximum_replicas",
+        &kubernetes.advanced_settings().nginx_hpa_max_number_instances,
+    );
+    context.insert(
+        "nginx_hpa_target_cpu_utilization_percentage",
+        &kubernetes
+            .advanced_settings()
+            .nginx_hpa_cpu_utilization_percentage_threshold,
+    );
+    context.insert(
+        "nginx_hpa_target_memory_utilization_percentage",
+        &kubernetes
+            .advanced_settings()
+            .nginx_hpa_memory_utilization_percentage_threshold,
+    );
+
     // EKS Addons
     if kubernetes.kind() != Kind::Ec2 {
         // CNI
