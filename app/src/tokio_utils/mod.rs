@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use prometheus::{self, Encoder, IntCounter, TextEncoder};
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
@@ -11,19 +11,21 @@ use warp::reply::{WithHeader, WithStatus};
 use warp::Filter;
 
 static MAX_THREADS: usize = 2;
-lazy_static! {
-    static ref TOKIO_RUNTIME: Runtime = Builder::new_multi_thread()
+static TOKIO_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+    Builder::new_multi_thread()
         .thread_name("tokio")
         .max_blocking_threads(MAX_THREADS)
         .enable_all()
         .build()
-        .unwrap();
-    static ref METRICS_PROMETHEUS_NB_CALLS: IntCounter = register_int_counter!(
+        .unwrap()
+});
+static METRICS_PROMETHEUS_NB_CALLS: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
         "prometheus_endpoint_nb_call",
         "Number of time since startup that the prometheus endpoint got called"
     )
-    .unwrap();
-}
+    .unwrap()
+});
 
 /// Launch a webserver as a Tokio task
 ///

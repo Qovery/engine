@@ -23,7 +23,6 @@ gethostname = "0.4.3"
 reqwest = { version = "0.11.20", features = ["blocking", "json"] }
 futures = "0.3.28"
 timeout-readwrite = "0.3.3"
-lazy_static = "1.4.0"
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 url = { version = "2.4.1", features = ["serde"] }
 function_name = "0.3.0"

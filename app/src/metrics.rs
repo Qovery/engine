@@ -1,6 +1,5 @@
+use once_cell::sync::Lazy;
 use prometheus::{self, IntGauge};
 
-lazy_static! {
-    pub static ref METRICS_NB_RUNNING_TASKS: IntGauge =
-        register_int_gauge!("taskmanager_nb_running_tasks", "Number of tasks currently running").unwrap();
-}
+pub static METRICS_NB_RUNNING_TASKS: Lazy<IntGauge> =
+    Lazy::new(|| register_int_gauge!("taskmanager_nb_running_tasks", "Number of tasks currently running").unwrap());

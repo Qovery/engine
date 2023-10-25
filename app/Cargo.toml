@@ -40,7 +40,7 @@ clap = { version = "4.4.2", features = ["derive", "env"]}
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-stream = "0.1.14"
 warp = "0.3.5"
-lazy_static = "1.4.0"
+once_cell = "1.18.0"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 
 # Kubernetes
