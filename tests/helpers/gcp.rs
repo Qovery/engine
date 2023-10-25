@@ -1,10 +1,7 @@
 use chrono::Duration;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use qovery_engine::cloud_provider::gcp::regions::GcpRegion;
-use qovery_engine::cloud_provider::kubernetes::KubernetesVersion;
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
-lazy_static! {
-    pub static ref GCP_RESOURCE_TTL: Duration = Duration::hours(4);
-}
+pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::hours(4));

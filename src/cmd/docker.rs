@@ -1,7 +1,7 @@
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use itertools::Itertools;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
@@ -36,12 +36,10 @@ impl DockerError {
     }
 }
 
-lazy_static! {
-    // Docker login when launched in parallel can mess up ~/.docker/config.json
-    // We use a mutex that will force serialization of logins in order to avoid that
-    // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
-    static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
-}
+// Docker login when launched in parallel can mess up ~/.docker/config.json
+// We use a mutex that will force serialization of logins in order to avoid that
+// Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
+static LOGIN_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Architecture {
