@@ -212,7 +212,7 @@ where
             helm.on_delete(target)?;
 
             // Delete pvc of statefulset if needed
-            // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
+            // FIXME(ENG-1606): Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
             if self.is_stateful() {
                 logger.info("🪓 Terminating network volume of the container".to_string());
                 if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
@@ -224,6 +224,21 @@ where
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),
                         self.kube_label_selector(),
+                        CommandError::new_from_safe_message(err.to_string()),
+                    )));
+                }
+
+                // Trying to delete PVCs using old labels
+                // TODO(benjaminch): should be removed once PVCs are migrated to new labels
+                if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
+                    &target.kube,
+                    &self.kube_legacy_label_selector(),
+                    target.environment.namespace(),
+                    KubeDeleteMode::Normal,
+                )) {
+                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
+                        event_details.clone(),
+                        self.kube_legacy_label_selector(),
                         CommandError::new_from_safe_message(err.to_string()),
                     )));
                 }

@@ -265,6 +265,10 @@ impl<T: CloudProvider> Application<T> {
         format!("qovery.com/service-id={}", self.long_id)
     }
 
+    pub fn kube_legacy_label_selector(&self) -> String {
+        format!("appId={}", self.id)
+    }
+
     pub fn build(&self) -> &Build {
         &self.build
     }
