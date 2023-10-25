@@ -191,6 +191,8 @@ pub struct FuncTestsSecrets {
     pub DEFAULT_TEST_DOMAIN: Option<String>,
     pub DISCORD_API_URL: Option<String>,
     pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
+    pub GCP_CREDENTIALS: Option<String>,
+    pub GCP_PROJECT_NAME: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
     pub HTTP_LISTEN_ON: Option<String>,
     pub LETS_ENCRYPT_EMAIL_REPORT: Option<String>,
@@ -293,6 +295,8 @@ impl FuncTestsSecrets {
             DEFAULT_TEST_DOMAIN: None,
             DISCORD_API_URL: None,
             EKS_ACCESS_CIDR_BLOCKS: None,
+            GCP_CREDENTIALS: None,
+            GCP_PROJECT_NAME: None,
             GITHUB_ACCESS_TOKEN: None,
             HTTP_LISTEN_ON: None,
             LETS_ENCRYPT_EMAIL_REPORT: None,
@@ -409,6 +413,8 @@ impl FuncTestsSecrets {
             DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
             DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
             EKS_ACCESS_CIDR_BLOCKS: Self::select_secret("EKS_ACCESS_CIDR_BLOCKS", secrets.EKS_ACCESS_CIDR_BLOCKS),
+            GCP_CREDENTIALS: Self::select_secret("GCP_CREDENTIALS", secrets.GCP_CREDENTIALS),
+            GCP_PROJECT_NAME: Self::select_secret("GCP_PROJECT_NAME", secrets.GCP_PROJECT_NAME),
             GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
             HTTP_LISTEN_ON: Self::select_secret("HTTP_LISTEN_ON", secrets.HTTP_LISTEN_ON),
             LETS_ENCRYPT_EMAIL_REPORT: Self::select_secret(
@@ -595,6 +601,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
                 secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
             ),
         ],
+        Kind::Gcp => vec![],
     }
 }
 
@@ -854,6 +861,7 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     }
     .to_string()
 }
@@ -874,6 +882,7 @@ pub fn db_instance_type(
             MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
             DatabaseMode::CONTAINER => None,
         },
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     }
 }
 

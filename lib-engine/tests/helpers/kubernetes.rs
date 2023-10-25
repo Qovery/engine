@@ -146,6 +146,7 @@ pub fn get_cluster_test_kubernetes<'a>(
             )
             .unwrap(),
         ),
+        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
     };
 
     kubernetes
@@ -175,6 +176,7 @@ pub fn cluster_test(
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
+        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
@@ -213,6 +215,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     };
     // Bootstrap
     let mut bootstrap_tx = Transaction::new(&engine).unwrap();
@@ -299,6 +302,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -349,6 +353,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -500,6 +505,7 @@ pub fn get_environment_test_kubernetes(
                 .unwrap(),
             )
         }
+        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
     };
 
     kubernetes

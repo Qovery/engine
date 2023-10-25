@@ -118,6 +118,7 @@ impl Router {
                 )?);
                 Ok(router)
             }
+            CPKind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 }

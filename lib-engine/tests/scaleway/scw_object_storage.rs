@@ -300,7 +300,7 @@ fn test_ensure_file_is_absent() {
         assert!(create_result.is_ok());
         info!("Bucket {} created.", bucket_name);
 
-        assert!(scaleway_os.ensure_file_is_absent(&bucket_name, &object_key).is_ok());
+        assert!(scaleway_os.delete(&bucket_name, &object_key).is_ok());
         info!("File {} absent from bucket {} as expected.", object_key, bucket_name);
 
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
@@ -311,7 +311,7 @@ fn test_ensure_file_is_absent() {
         assert!(put_result.is_ok());
         info!("File {} put in bucket {}.", object_key, bucket_name);
 
-        assert!(scaleway_os.ensure_file_is_absent(&bucket_name, &object_key).is_ok());
+        assert!(scaleway_os.delete(&bucket_name, &object_key).is_ok());
         info!("File {} not in bucket {} anymore.", object_key, bucket_name);
 
         // clean-up:

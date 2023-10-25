@@ -181,6 +181,7 @@ impl ClusterSecrets {
                 Ok(x) => Ok(ClusterSecrets::Scaleway(x)),
                 Err(e) => Err(err(e)),
             },
+            Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 
