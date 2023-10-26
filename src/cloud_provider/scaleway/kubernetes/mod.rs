@@ -577,6 +577,24 @@ impl Kapsule {
         // Advanced settings
         context.insert("load_balancer_size", &self.advanced_settings().load_balancer_size);
         context.insert("resource_expiration_in_seconds", &self.advanced_settings().pleco_resources_ttl);
+        context.insert(
+            "nginx_hpa_minimum_replicas",
+            &self.advanced_settings().nginx_hpa_min_number_instances,
+        );
+        context.insert(
+            "nginx_hpa_maximum_replicas",
+            &self.advanced_settings().nginx_hpa_max_number_instances,
+        );
+        context.insert(
+            "nginx_hpa_target_cpu_utilization_percentage",
+            &self.advanced_settings().nginx_hpa_cpu_utilization_percentage_threshold,
+        );
+        context.insert(
+            "nginx_hpa_target_memory_utilization_percentage",
+            &self
+                .advanced_settings()
+                .nginx_hpa_memory_utilization_percentage_threshold,
+        );
 
         Ok(context)
     }

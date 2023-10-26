@@ -1,18 +1,18 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::future::Future;
 use std::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 
-lazy_static! {
-    static ref TOKIO_RUNTIME: Runtime = Builder::new_multi_thread()
+static TOKIO_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+    Builder::new_multi_thread()
         .worker_threads(2)
         .thread_name("tokio-engine-blocking")
         .enable_all()
         .build()
-        .unwrap();
-}
+        .unwrap()
+});
 
 pub fn block_on<F: Future>(future: F) -> F::Output {
     TOKIO_RUNTIME.block_on(future)

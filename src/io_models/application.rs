@@ -377,6 +377,7 @@ impl Application {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?)),
+            CPKind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 

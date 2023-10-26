@@ -748,6 +748,7 @@ pub fn test_db(
         KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
+        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -797,6 +798,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
             };
             &computed_infra_ctx
         }
@@ -916,6 +918,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
             };
             &computed_infra_ctx_for_delete
         }
@@ -1050,6 +1053,7 @@ pub fn test_pause_managed_db(
                 .to_string(),
             SCW_KUBERNETES_VERSION,
         ),
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -1099,6 +1103,7 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
             };
             &computed_infra_ctx
         }
@@ -1207,6 +1212,7 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
+                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
             };
             &computed_infra_ctx_for_delete
         }
@@ -1345,6 +1351,7 @@ pub fn test_db_on_upgrade(
                 .to_string(),
             SCW_KUBERNETES_VERSION,
         ),
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let infra_ctx = match provider_kind {
@@ -1380,6 +1387,7 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let ret = environment.deploy_environment(&ea, &infra_ctx);
@@ -1467,6 +1475,7 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
+        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);

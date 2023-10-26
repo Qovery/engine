@@ -385,7 +385,7 @@ impl ObjectStorage for ScalewayOS {
         }
     }
 
-    fn ensure_file_is_absent(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+    fn delete(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
         if ScalewayOS::is_bucket_name_valid(bucket_name).is_err() {
             // bucket is missing it's ok as file can't be present
             return Ok(());

@@ -18,10 +18,10 @@ controller:
       maxUnavailable: 1
   autoscaling:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 25
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 50
+    minReplicas: {{ nginx_hpa_minimum_replicas }}
+    maxReplicas: {{ nginx_hpa_maximum_replicas }}
+    targetCPUUtilizationPercentage: {{ nginx_hpa_target_cpu_utilization_percentage }}
+    targetMemoryUtilizationPercentage: {{ nginx_hpa_target_memory_utilization_percentage }}
   publishService:
     enabled: true
   service:

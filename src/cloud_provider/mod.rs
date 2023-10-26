@@ -26,6 +26,7 @@ use crate::utilities::create_kube_client;
 
 pub mod aws;
 pub mod environment;
+pub mod gcp;
 pub mod helm;
 pub mod helm_charts;
 pub mod io;
@@ -71,6 +72,7 @@ pub trait CloudProvider: Send + Sync {
 pub enum Kind {
     Aws,
     Scw,
+    Gcp,
 }
 
 impl FromStr for Kind {
@@ -80,6 +82,7 @@ impl FromStr for Kind {
         match s.trim().to_lowercase().as_str() {
             "aws" | "amazon" => Ok(Kind::Aws),
             "scw" | "scaleway" => Ok(Kind::Scw),
+            "gcp" | "google" => Ok(Kind::Gcp),
             _ => Err(()),
         }
     }
@@ -90,6 +93,7 @@ impl Display for Kind {
         f.write_str(match self {
             Kind::Aws => "AWS",
             Kind::Scw => "Scaleway",
+            Kind::Gcp => "Google",
         })
     }
 }
@@ -202,6 +206,13 @@ mod tests {
             ("SCW ", Ok(Kind::Scw)),
             ("Scw", Ok(Kind::Scw)),
             ("scw_blabla", Err(())),
+            ("gcp", Ok(Kind::Gcp)),
+            ("google", Ok(Kind::Gcp)),
+            (" gcp ", Ok(Kind::Gcp)),
+            (" google ", Ok(Kind::Gcp)),
+            ("GCP ", Ok(Kind::Gcp)),
+            ("Gcp", Ok(Kind::Gcp)),
+            ("gcp_blabla", Err(())),
         ];
 
         for tc in test_cases {

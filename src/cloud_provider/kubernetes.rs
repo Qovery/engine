@@ -363,7 +363,7 @@ pub trait Kubernetes: Send + Sync {
     fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), Box<EngineError>> {
         if let Err(e) = self
             .config_file_store()
-            .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+            .delete(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
         {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
             return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
@@ -754,6 +754,7 @@ pub enum Kind {
     Eks,
     Ec2,
     ScwKapsule,
+    Gke,
 }
 
 impl Kind {
@@ -762,6 +763,7 @@ impl Kind {
             Kind::Eks => CloudProviderKind::Aws,
             Kind::Ec2 => CloudProviderKind::Aws,
             Kind::ScwKapsule => CloudProviderKind::Scw,
+            Kind::Gke => CloudProviderKind::Gcp,
         }
     }
 }
@@ -772,6 +774,7 @@ impl Display for Kind {
             Kind::Eks => "EKS",
             Kind::Ec2 => "K3S",
             Kind::ScwKapsule => "ScwKapsule",
+            Kind::Gke => "GKE",
         })
     }
 }
@@ -1408,7 +1411,6 @@ where
         .spawn(move || {
             // stop the thread when the blocking task is done
             let _span = span.enter();
-            let action = action;
             let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
             loop {

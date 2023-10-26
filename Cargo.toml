@@ -23,7 +23,6 @@ gethostname = "0.4.3"
 reqwest = { version = "0.11.20", features = ["blocking", "json"] }
 futures = "0.3.28"
 timeout-readwrite = "0.3.3"
-lazy_static = "1.4.0"
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 url = { version = "2.4.1", features = ["serde"] }
 function_name = "0.3.0"
@@ -37,6 +36,9 @@ scopeguard = "1.2.0"
 libc = "0.2.147"
 anyhow = "1.0.75"
 tempfile = "3"
+governor = "0.6.0"
+once_cell = "1.18.0"
+nonzero_ext = "0.3.0"
 
 kube = { version = "0.86.0", features = ["default", "runtime", "derive", "ws"] }
 k8s-openapi = { version = "0.20.0", default-features = false, features = ["v1_26"] }
@@ -93,6 +95,10 @@ aws-smithy-async = { version="0.54.4", features=["rt-tokio"] }
 # Scaleway Deps
 scaleway_api_rs = "=0.1.2"
 
+# GCP deps
+google-cloud-auth = "0.13.0"
+google-cloud-storage = "0.14.0"
+
 [dev-dependencies]
 bstr = "1.6.2"
 tempdir = "0.3.7"
@@ -116,7 +122,8 @@ test-all = ["test-all-minimal", "test-all-self-hosted", "test-all-infra", "test-
 test-aws-minimal = ["env-logger-check"]
 test-aws-ec2-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
-test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-scw-minimal"]
+test-gcp-minimal = ["env-logger-check"]
+test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-scw-minimal", "test-gcp-minimal"]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check"]

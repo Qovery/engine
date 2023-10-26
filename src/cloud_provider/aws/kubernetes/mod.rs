@@ -60,13 +60,13 @@ use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use chrono::Duration as ChronoDuration;
 use itertools::Itertools;
+use once_cell::sync::Lazy;
 use tokio::time::Duration;
 
 use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
-use lazy_static::lazy_static;
 
 use super::models::QoveryAwsSdkConfigEks;
 
@@ -78,11 +78,9 @@ pub mod eks_helm_charts;
 pub mod helm_charts;
 pub mod node;
 
-lazy_static! {
-    static ref AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::hours(1);
-    // https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html
-    static ref AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::minutes(15);
-}
+static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::new(|| ChronoDuration::hours(1));
+// https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html
+static AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::new(|| ChronoDuration::minutes(15));
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -621,6 +619,27 @@ fn tera_context(
     context.insert(
         "aws_iam_user_mapper_sso_role_arn",
         &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
+    );
+
+    context.insert(
+        "nginx_hpa_minimum_replicas",
+        &kubernetes.advanced_settings().nginx_hpa_min_number_instances,
+    );
+    context.insert(
+        "nginx_hpa_maximum_replicas",
+        &kubernetes.advanced_settings().nginx_hpa_max_number_instances,
+    );
+    context.insert(
+        "nginx_hpa_target_cpu_utilization_percentage",
+        &kubernetes
+            .advanced_settings()
+            .nginx_hpa_cpu_utilization_percentage_threshold,
+    );
+    context.insert(
+        "nginx_hpa_target_memory_utilization_percentage",
+        &kubernetes
+            .advanced_settings()
+            .nginx_hpa_memory_utilization_percentage_threshold,
     );
 
     // EKS Addons

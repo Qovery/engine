@@ -9,9 +9,11 @@ use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
-use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::models::{CpuArchitecture, CustomerHelmChartsOverride};
+use crate::cloud_provider::models::{
+    CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::cloud_provider::qovery::EngineLocation;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -416,7 +418,28 @@ pub fn eks_aws_helm_charts(
     // Nginx ingress
     let nginx_ingress = NginxIngressChart::new(
         chart_prefix_path,
-        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_vcpu_request_in_milli,
+            ),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_memory_request_in_mib,
+            ),
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_vcpu_limit_in_milli,
+            ),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_memory_limit_in_mib,
+            ),
+        }),
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_overrride_fn.clone(),

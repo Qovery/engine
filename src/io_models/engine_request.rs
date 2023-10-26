@@ -254,6 +254,7 @@ impl CloudProvider {
                 region,
                 terraform_state_credentials,
             ))),
+            cloud_provider::Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 }
@@ -399,6 +400,7 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
+            cloud_provider::kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 }

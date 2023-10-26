@@ -1,11 +1,15 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::io_models::context::Context;
 use crate::models::domain::StringPath;
+use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
+use chrono::Duration;
 use std::fs::File;
 
 pub mod errors;
+pub mod google_object_storage;
 pub mod s3;
 pub mod scaleway_object_storage;
 
@@ -38,7 +42,7 @@ pub trait ObjectStorage {
         use_cache: bool,
     ) -> Result<(StringPath, File), ObjectStorageError>;
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError>;
-    fn ensure_file_is_absent(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
+    fn delete(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -47,4 +51,37 @@ pub enum Kind {
     S3,
     Spaces,
     ScalewayOs,
+    GcpOs,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Bucket<R>
+where
+    R: ToCloudProviderFormat,
+{
+    pub name: String,
+    pub ttl: Option<Duration>,
+    pub location: R,
+    pub labels: Option<HashMap<String, String>>,
+}
+
+impl<R> Bucket<R>
+where
+    R: ToCloudProviderFormat,
+{
+    pub fn new(name: String, ttl: Option<Duration>, location: R, labels: Option<HashMap<String, String>>) -> Self {
+        Self {
+            name,
+            ttl,
+            location,
+            labels,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct BucketObject {
+    pub bucket_name: String,
+    pub key: String,
+    pub value: Vec<u8>,
 }

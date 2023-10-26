@@ -376,6 +376,7 @@ impl Job {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
+            Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         };
 
         Ok(service)

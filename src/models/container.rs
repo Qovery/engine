@@ -326,6 +326,10 @@ impl<T: CloudProvider> Container<T> {
         format!("qovery.com/service-id={}", self.long_id)
     }
 
+    pub fn kube_legacy_label_selector(&self) -> String {
+        format!("appId={}", self.id)
+    }
+
     pub fn workspace_directory(&self) -> &str {
         &self.workspace_directory
     }

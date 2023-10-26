@@ -18,6 +18,7 @@ pub enum Kind {
     Aws,
     Do,
     Scw,
+    Gcp,
 }
 
 impl From<KindModel> for Kind {
@@ -25,6 +26,7 @@ impl From<KindModel> for Kind {
         match kind {
             KindModel::Aws => Kind::Aws,
             KindModel::Scw => Kind::Scw,
+            KindModel::Gcp => Kind::Gcp,
         }
     }
 }
@@ -92,6 +94,22 @@ pub struct ClusterAdvancedSettings {
     pub database_mongodb_allowed_cidrs: Vec<String>,
     #[serde(alias = "registry.mirroring_mode", default = "default_registry_mirroring_mode")]
     pub registry_mirroring_mode: RegistryMirroringMode,
+    #[serde(alias = "nginx.vcpu.request_in_milli")]
+    pub nginx_vcpu_request_in_milli: u32,
+    #[serde(alias = "nginx.vcpu.limit_in_milli")]
+    pub nginx_vcpu_limit_in_milli: u32,
+    #[serde(alias = "nginx.memory.request_in_mib")]
+    pub nginx_memory_request_in_mib: u32,
+    #[serde(alias = "nginx.memory.limit_in_mib")]
+    pub nginx_memory_limit_in_mib: u32,
+    #[serde(alias = "nginx.hpa.cpu_utilization_percentage_threshold")]
+    pub nginx_hpa_cpu_utilization_percentage_threshold: u32,
+    #[serde(alias = "nginx.hpa.memory_utilization_percentage_threshold")]
+    pub nginx_hpa_memory_utilization_percentage_threshold: u32,
+    #[serde(alias = "nginx.hpa.min_number_instances")]
+    pub nginx_hpa_min_number_instances: i32,
+    #[serde(alias = "nginx.hpa.max_number_instances")]
+    pub nginx_hpa_max_number_instances: i32,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -120,6 +138,14 @@ impl Default for ClusterAdvancedSettings {
             database_mongodb_deny_public_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
             registry_mirroring_mode: RegistryMirroringMode::Service,
+            nginx_vcpu_request_in_milli: 100,
+            nginx_vcpu_limit_in_milli: 500,
+            nginx_memory_request_in_mib: 768,
+            nginx_memory_limit_in_mib: 768,
+            nginx_hpa_cpu_utilization_percentage_threshold: 50,
+            nginx_hpa_memory_utilization_percentage_threshold: 50,
+            nginx_hpa_min_number_instances: 2,
+            nginx_hpa_max_number_instances: 25,
         }
     }
 }
@@ -253,5 +279,48 @@ mod tests {
             let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
             assert_eq!(cluster_advanced_settings.registry_mirroring_mode, tc.expected);
         }
+    }
+
+    #[test]
+    fn test_default_values_for_nginx() {
+        let data = r#" {}"#;
+        let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(cluster_advanced_settings.nginx_vcpu_request_in_milli, 100);
+        assert_eq!(cluster_advanced_settings.nginx_vcpu_limit_in_milli, 500);
+        assert_eq!(cluster_advanced_settings.nginx_memory_request_in_mib, 768);
+        assert_eq!(cluster_advanced_settings.nginx_memory_limit_in_mib, 768);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_cpu_utilization_percentage_threshold, 50);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_memory_utilization_percentage_threshold, 50);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
+    }
+
+    #[test]
+    fn test_nginx_deserialization() {
+        let nginx_vcpu_request_in_milli = 155;
+        let nginx_hpa_cpu_utilization_percentage_threshold = 75;
+        let data = format!(
+            r#"
+        {{
+            "nginx.vcpu.request_in_milli": {},
+            "nginx.hpa.cpu_utilization_percentage_threshold": {}
+        }}"#,
+            nginx_vcpu_request_in_milli, nginx_hpa_cpu_utilization_percentage_threshold
+        );
+        let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
+        assert_eq!(
+            cluster_advanced_settings.nginx_vcpu_request_in_milli,
+            nginx_vcpu_request_in_milli
+        );
+        assert_eq!(cluster_advanced_settings.nginx_vcpu_limit_in_milli, 500);
+        assert_eq!(cluster_advanced_settings.nginx_memory_request_in_mib, 768);
+        assert_eq!(cluster_advanced_settings.nginx_memory_limit_in_mib, 768);
+        assert_eq!(
+            cluster_advanced_settings.nginx_hpa_cpu_utilization_percentage_threshold,
+            nginx_hpa_cpu_utilization_percentage_threshold
+        );
+        assert_eq!(cluster_advanced_settings.nginx_hpa_memory_utilization_percentage_threshold, 50);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
+        assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
     }
 }

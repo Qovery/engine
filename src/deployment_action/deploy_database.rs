@@ -851,7 +851,7 @@ where
 
                 helm.on_delete(target)?;
 
-                // TODO: Remove once we migrate to kube 1.23, it will done automatically
+                // FIXME(ENG-1606): Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
                 logger.info("🪓 Terminating network volume of the database".to_string());
                 if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                     &target.kube,
