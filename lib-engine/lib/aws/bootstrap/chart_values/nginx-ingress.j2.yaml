@@ -21,7 +21,6 @@ controller:
     minReplicas: {{ nginx_hpa_minimum_replicas }}
     maxReplicas: {{ nginx_hpa_maximum_replicas }}
     targetCPUUtilizationPercentage: {{ nginx_hpa_target_cpu_utilization_percentage }}
-    targetMemoryUtilizationPercentage: {{ nginx_hpa_target_memory_utilization_percentage }}
 
   publishService:
     enabled: true
