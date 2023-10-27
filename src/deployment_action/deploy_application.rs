@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
-use crate::cloud_provider::service::{delete_pending_service, Action, Service};
+use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
@@ -79,14 +79,6 @@ where
             );
 
             helm.on_create(target)?;
-
-            delete_pending_service(
-                target.kubernetes.get_kubeconfig_file_path()?.as_str(),
-                target.environment.namespace(),
-                self.kube_label_selector().as_str(),
-                target.kubernetes.cloud_provider().credentials_environment_variables(),
-                event_details,
-            )?;
 
             Ok(())
         };

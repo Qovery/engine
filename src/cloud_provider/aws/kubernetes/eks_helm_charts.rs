@@ -422,7 +422,7 @@ pub fn eks_aws_helm_charts(
             request_cpu: KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_vcpu_request_in_milli,
+                    .nginx_vcpu_request_in_milli_cpu,
             ),
             request_memory: KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
@@ -432,7 +432,7 @@ pub fn eks_aws_helm_charts(
             limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_vcpu_limit_in_milli,
+                    .nginx_vcpu_limit_in_milli_cpu,
             ),
             limit_memory: KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites

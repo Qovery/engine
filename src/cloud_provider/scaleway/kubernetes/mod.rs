@@ -589,12 +589,6 @@ impl Kapsule {
             "nginx_hpa_target_cpu_utilization_percentage",
             &self.advanced_settings().nginx_hpa_cpu_utilization_percentage_threshold,
         );
-        context.insert(
-            "nginx_hpa_target_memory_utilization_percentage",
-            &self
-                .advanced_settings()
-                .nginx_hpa_memory_utilization_percentage_threshold,
-        );
 
         Ok(context)
     }

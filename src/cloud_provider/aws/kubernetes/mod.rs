@@ -635,12 +635,6 @@ fn tera_context(
             .advanced_settings()
             .nginx_hpa_cpu_utilization_percentage_threshold,
     );
-    context.insert(
-        "nginx_hpa_target_memory_utilization_percentage",
-        &kubernetes
-            .advanced_settings()
-            .nginx_hpa_memory_utilization_percentage_threshold,
-    );
 
     // EKS Addons
     if kubernetes.kind() != Kind::Ec2 {
