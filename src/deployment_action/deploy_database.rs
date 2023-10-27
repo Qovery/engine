@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
-use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
+use crate::cloud_provider::service::{get_database_terraform_config, Action, Service};
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
@@ -778,14 +778,6 @@ where
                     },
                 };
             };
-
-            delete_pending_service(
-                target.kubernetes.get_kubeconfig_file_path()?.as_str(),
-                target.environment.namespace(),
-                self.kube_label_selector().as_str(),
-                target.kubernetes.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
-            )?;
 
             Ok(())
         };
