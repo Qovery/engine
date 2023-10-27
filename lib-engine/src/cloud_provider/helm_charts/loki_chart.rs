@@ -214,9 +214,9 @@ impl ToCommonHelmChart for LokiChart {
                         ),
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(512)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(4)),
                         ),
                     }],
