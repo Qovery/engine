@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, CommonChart, HelmChart};
+use crate::cloud_provider::helm::{ChartInfo, HelmChart, ServiceChart};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
@@ -92,8 +92,8 @@ impl DeploymentAction for HelmDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_helm_chart()?;
 
-        let common_chart = CommonChart::new(self.helm_chart.clone(), None, None);
-        let chart: Box<dyn HelmChart> = Box::new(common_chart);
+        let service_chart = ServiceChart::new(self.helm_chart.clone());
+        let chart: Box<dyn HelmChart> = Box::new(service_chart);
         let kubeconfig_string = target.kubernetes.get_kubeconfig_file_path()?;
         let kubeconfig = Path::new(kubeconfig_string.as_str());
 

@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -17,8 +16,6 @@ use uuid::Uuid;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, InvalidStatefulsetStorage};
-use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
-use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
@@ -277,37 +274,6 @@ pub fn get_tfstate_suffix(service: &dyn Service) -> String {
 // As mention the doc: Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}.
 pub fn get_tfstate_name(service: &dyn Service) -> String {
     format!("tfstate-default-{}", service.id())
-}
-
-pub fn delete_pending_service<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-    event_details: EventDetails,
-) -> Result<(), Box<EngineError>>
-where
-    P: AsRef<Path>,
-{
-    match kubectl_exec_get_pods(&kubernetes_config, Some(namespace), Some(selector), envs.clone()) {
-        Ok(pods) => {
-            for pod in pods.items {
-                if pod.status.phase == KubernetesPodStatusPhase::Pending {
-                    if let Err(e) = kubectl_exec_delete_pod(
-                        &kubernetes_config,
-                        pod.metadata.namespace.as_str(),
-                        pod.metadata.name.as_str(),
-                        envs.clone(),
-                    ) {
-                        return Err(Box::new(EngineError::new_k8s_service_issue(event_details, e)));
-                    }
-                }
-            }
-
-            Ok(())
-        }
-        Err(e) => Err(Box::new(EngineError::new_k8s_service_issue(event_details, e))),
-    }
 }
 
 pub async fn increase_storage_size(

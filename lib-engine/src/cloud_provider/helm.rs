@@ -564,33 +564,6 @@ pub trait HelmChart: Send {
         };
         Ok(payload)
     }
-
-    fn get_vpa_chart_info(&self, vpa_config: Option<CommonChartVpa>) -> ChartInfo {
-        let current_chart = self.get_chart_info();
-        let chart_name = format!("vpa-{}", current_chart.name);
-        ChartInfo {
-            name: chart_name.clone(),
-            path: match vpa_config.clone() {
-                Some(x) => x.helm_path.to_string(),
-                None => ".".to_string(),
-            },
-            action: match vpa_config {
-                Some(_) => Deploy,
-                None => HelmAction::Destroy,
-            },
-            namespace: current_chart.namespace,
-            custom_namespace: current_chart.custom_namespace.clone(),
-            yaml_files_content: match vpa_config {
-                Some(config) => vec![ChartValuesGenerated::new(
-                    chart_name,
-                    ChartInfo::generate_vpa_helm_config(config.vpa),
-                )],
-                None => vec![],
-            },
-            timeout_in_seconds: 15,
-            ..Default::default()
-        }
-    }
 }
 
 impl Clone for Box<dyn HelmChart> {
@@ -765,6 +738,44 @@ impl CommonChart {
             vertical_pod_autoscaler,
         }
     }
+
+    fn get_vpa_chart_info(&self, vpa_config: Option<CommonChartVpa>) -> ChartInfo {
+        let current_chart = self.get_chart_info();
+        let chart_name = format!("vpa-{}", current_chart.name);
+        ChartInfo {
+            name: chart_name.clone(),
+            path: match vpa_config.clone() {
+                Some(x) => x.helm_path.to_string(),
+                None => ".".to_string(),
+            },
+            action: match vpa_config {
+                Some(_) => Deploy,
+                None => HelmAction::Destroy,
+            },
+            namespace: current_chart.namespace,
+            custom_namespace: current_chart.custom_namespace.clone(),
+            yaml_files_content: match vpa_config {
+                Some(config) => vec![ChartValuesGenerated::new(
+                    chart_name,
+                    ChartInfo::generate_vpa_helm_config(config.vpa),
+                )],
+                None => vec![],
+            },
+            timeout_in_seconds: 15,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct ServiceChart {
+    pub chart_info: ChartInfo,
+}
+
+impl ServiceChart {
+    pub fn new(chart_info: ChartInfo) -> Self {
+        ServiceChart { chart_info }
+    }
 }
 
 /// using ChartPayload to pass random kind of data between each deployment steps against a chart deployment
@@ -831,6 +842,57 @@ impl HelmChart for CommonChart {
         }
 
         chart_payload_res
+    }
+}
+
+impl HelmChart for ServiceChart {
+    fn clone_dyn(&self) -> Box<dyn HelmChart> {
+        Box::new(self.clone())
+    }
+
+    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, HelmChartError> {
+        Ok(None)
+    }
+
+    fn get_chart_info(&self) -> &ChartInfo {
+        &self.chart_info
+    }
+
+    fn exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(&str, &str)],
+        payload: Option<ChartPayload>,
+        cmd_killer: &CommandKiller,
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
+        let chart_info = self.get_chart_info();
+        let helm = Helm::new(kubernetes_config, envs)?;
+
+        match chart_info.action {
+            Deploy => {
+                let _ = helm.upgrade_diff(chart_info, &[]);
+                match helm.upgrade(chart_info, &[], cmd_killer) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(HelmChartError::HelmError(e));
+                    }
+                };
+            }
+            HelmAction::Destroy => {
+                helm.uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
+            }
+            HelmAction::Skip => {}
+        }
+        Ok(payload)
+    }
+
+    fn on_deploy_failure(
+        &self,
+        _kubernetes_config: &Path,
+        _envs: &[(&str, &str)],
+        payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, CommandError> {
+        Ok(payload)
     }
 }
 
