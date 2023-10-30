@@ -46,9 +46,9 @@ impl NginxIngressChart {
             ),
             controller_resources: match controller_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(700),
                     limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
