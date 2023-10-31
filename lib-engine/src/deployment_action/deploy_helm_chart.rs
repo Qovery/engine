@@ -3,6 +3,7 @@ use crate::cloud_provider::helm::{ChartInfo, HelmChartError};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
+use crate::deployment_action::pause_service::{K8sResourceType, PauseServiceAction};
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -42,6 +43,16 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
         };
 
         let run = |logger: &EnvProgressLogger, _state: ()| {
+            // unpause cron job if necessary
+            let _ = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::CronJob,
+                Duration::from_secs(5 * 60),
+                event_details.clone(),
+                self.is_cluster_wide_resources_allowed(),
+            )
+            .unpause_if_needed(target);
+
             let args = self.helm_upgrade_arguments().collect::<Vec<_>>();
             target
                 .helm
@@ -74,12 +85,33 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
 
-        // List all deployment / statefulset / daemonset / job / cronjob for this helm release
-        // scale them to 0
+        let task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            let pause_cron_job = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::CronJob,
+                Duration::from_secs(5 * 60),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            pause_cron_job.on_pause(target)?;
 
-        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
-            logger.warning("Pause for helm chart is not implemented yet".to_string());
-            Ok(())
+            let pause_deployment = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::Deployment,
+                Duration::from_secs(5 * 60),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            pause_deployment.on_pause(target)?;
+
+            let pause_statefulset = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::StateFulSet,
+                Duration::from_secs(5 * 60),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            pause_statefulset.on_pause(target)
         };
 
         execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Pause), task)

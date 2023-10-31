@@ -1,5 +1,6 @@
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
+use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Namespace;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::api::{DeleteParams, PostParams};
@@ -77,6 +78,38 @@ pub fn get_simple_statefulset() -> StatefulSet {
           }
         }
       }
+    }))
+    .unwrap()
+}
+
+pub fn get_simple_cron_job() -> CronJob {
+    serde_json::from_value(serde_json::json!({
+           "apiVersion":"batch/v1",
+           "kind":"CronJob",
+           "metadata":{
+              "name":"pause",
+              "labels":{
+                 "app":"pause"
+              }
+           },
+           "spec":{
+              "schedule":"*/5 * * * *",
+              "jobTemplate":{
+                 "spec":{
+                    "template":{
+                       "spec":{
+                          "containers":[
+                             {
+                                "name":"pause",
+                                "image":"k8s.gcr.io/pause:latest"
+                             }
+                          ],
+                          "restartPolicy":"OnFailure"
+                       }
+                    }
+                 }
+              }
+            }
     }))
     .unwrap()
 }

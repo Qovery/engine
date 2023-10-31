@@ -3136,6 +3136,7 @@ dependencies = [
  "governor",
  "hashicorp_vault",
  "itertools",
+ "json-patch",
  "k8s-openapi",
  "kube",
  "libc",
