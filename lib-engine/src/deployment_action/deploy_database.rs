@@ -561,6 +561,7 @@ where
                 };
 
                 let _ = domain_checker.on_create(target);
+                logger.send_success(format!("✅ {} of DNS for managed database succeeded", self.action));
             }
         };
 
@@ -792,6 +793,7 @@ where
                 };
 
                 let _ = domain_checker.on_create(target);
+                logger.send_success(format!("✅ {} of DNS for container database succeeded", self.action));
             }
         };
 
