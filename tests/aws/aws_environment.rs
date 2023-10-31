@@ -3050,7 +3050,10 @@ fn deploy_helm_chart() {
             //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
             //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
             //},
-            set_values: vec![("toto".to_string(), "tata".to_string())],
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
             set_string_values: vec![("my-string".to_string(), "1".to_string())],
             set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
             command_args: vec!["--install".to_string()],
