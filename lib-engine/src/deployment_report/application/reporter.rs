@@ -1,11 +1,10 @@
 use crate::cloud_provider::service::{Action, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
-use crate::deployment_report::application::renderer::{render_app_deployment_report, render_recap_events};
+use crate::deployment_report::application::renderer::render_app_deployment_report;
 use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use std::collections::HashSet;
-use std::str::FromStr;
 
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::application::ApplicationService;
@@ -17,6 +16,7 @@ use kube::api::ListParams;
 use kube::Api;
 use std::sync::Arc;
 
+use crate::deployment_report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -73,15 +73,9 @@ impl<T> ApplicationDeploymentReporter<T> {
     }
 }
 
-pub struct DeploymentStateStruct {
-    report: String,
-    timestamp: Instant,
-    all_warning_events: Vec<Event>,
-}
-
 impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     type DeploymentResult = T;
-    type DeploymentState = DeploymentStateStruct;
+    type DeploymentState = RecapReporterDeploymentState;
     type Logger = EnvLogger;
 
     fn logger(&self) -> &Self::Logger {
@@ -89,7 +83,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
     }
 
     fn new_state(&self) -> Self::DeploymentState {
-        DeploymentStateStruct {
+        RecapReporterDeploymentState {
             report: "".to_string(),
             timestamp: Instant::now(),
             all_warning_events: vec![],
@@ -174,8 +168,10 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             .events
             .clone()
             .into_iter()
-            .filter(|event| event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()))
             .filter_map(|event| {
+                if !event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()) {
+                    return None;
+                }
                 if let Some(event_type) = &event.type_ {
                     if event_type == "Warning" {
                         return Some(event);
@@ -185,7 +181,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             })
             .for_each(|event| last_report.all_warning_events.push(event));
 
-        *last_report = DeploymentStateStruct {
+        *last_report = RecapReporterDeploymentState {
             report: rendered_report,
             timestamp: Instant::now(),
             all_warning_events: last_report.all_warning_events.clone(),
@@ -231,23 +227,20 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
         } else {
             self.stop_records(StepStatus::Error);
 
-            // TODO (mzo) checking one of sandbox app only for testing / render purposes
-            // Also, we'll need to modify the final engine error user_log_message to "force" users to take in account this recap
-            if self.long_id == Uuid::from_str("f6122dd4-7ba1-4571-9d95-dbe5a4a283e9").unwrap_or_default() {
-                let recap_report = match render_recap_events(&last_report.all_warning_events) {
-                    Ok(report) => report,
-                    Err(err) => {
-                        self.logger
-                            .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
-                        return;
-                    }
-                };
-                // Send it to user
-                for line in recap_report.trim_end().split('\n').map(str::to_string) {
-                    self.logger.send_warning(line);
+            // Send error recap
+            let recap_report = match render_recap_events(&last_report.all_warning_events) {
+                Ok(report) => report,
+                Err(err) => {
+                    self.logger
+                        .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
+                    return;
                 }
+            };
+            for line in recap_report.trim_end().split('\n').map(str::to_string) {
+                self.logger.send_recap(line);
             }
 
+            // Send error
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
                 format!(r#"

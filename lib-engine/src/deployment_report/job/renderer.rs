@@ -1,9 +1,10 @@
+use serde::Serialize;
+
 use crate::deployment_report::job::reporter::{JobDeploymentReport, JobType};
 use crate::deployment_report::utils::{
     get_tera_instance, to_job_render_context, to_pods_render_context_by_version, JobRenderContext, PodsRenderContext,
 };
 use crate::utilities::to_short_id;
-use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct JobDeploymentRenderContext {
@@ -69,16 +70,18 @@ pub(super) fn render_job_deployment_report(
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1;
+    use maplit::btreemap;
+    use tera::Tera;
+    use uuid::Uuid;
+
     use crate::cloud_provider::service::Action;
     use crate::deployment_report::utils::{
         exit_code_to_msg, fmt_event_type, DeploymentState, PodRenderContext, QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
-    use k8s_openapi::apimachinery::pkg::apis::meta::v1;
-    use maplit::btreemap;
-    use tera::Tera;
-    use uuid::Uuid;
+
+    use super::*;
 
     #[test]
     fn test_application_rendering() {
