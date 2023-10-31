@@ -55,6 +55,21 @@ impl EnvLogger {
         ));
     }
 
+    pub fn send_recap(&self, msg: String) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) == LoggerState::Progress,
+                "cannot send progress while a final state has been reached"
+            );
+        }
+
+        let mut recap_event_details = self.event_details_progress.clone();
+        recap_event_details.mut_to_recap_stage();
+        self.logger
+            .log(EngineEvent::Info(recap_event_details, EventMessage::new_from_safe(msg)));
+    }
+
     pub fn send_warning(&self, msg: String) {
         #[cfg(feature = "env-logger-check")]
         {

@@ -3,8 +3,10 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
+
 use std::sync::Arc;
 
 use k8s_openapi::api::core::v1::{Event, Pod};
@@ -12,6 +14,7 @@ use kube::api::ListParams;
 use kube::Api;
 
 use crate::deployment_report::job::renderer::render_job_deployment_report;
+use crate::deployment_report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
 use crate::deployment_report::utils::to_job_render_context;
 use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
@@ -115,7 +118,7 @@ impl<T> JobDeploymentReporter<T> {
 
 impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     type DeploymentResult = T;
-    type DeploymentState = (String, Instant);
+    type DeploymentState = RecapReporterDeploymentState;
     type Logger = EnvLogger;
 
     fn logger(&self) -> &Self::Logger {
@@ -123,7 +126,11 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     }
 
     fn new_state(&self) -> Self::DeploymentState {
-        ("".to_string(), Instant::now())
+        RecapReporterDeploymentState {
+            report: "".to_string(),
+            timestamp: Instant::now(),
+            all_warning_events: vec![],
+        }
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
@@ -195,13 +202,49 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         };
 
         // don't spam log same report unless it has been too long time elapsed without one
-        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
             return;
         }
-        *last_report = (rendered_report, Instant::now());
+
+        // Compute events' involved object ids to keep only interesting events (e.g remove warning from Horizontal Pod Autoscaler)
+        let mut event_uuids_to_keep: HashSet<String> = report
+            .pods
+            .into_iter()
+            .filter_map(|it| it.metadata.uid)
+            .collect::<HashSet<String>>();
+        event_uuids_to_keep.extend(
+            report
+                .job
+                .into_iter()
+                .filter_map(|it| it.metadata.uid)
+                .collect::<HashSet<String>>(),
+        );
+
+        report
+            .events
+            .clone()
+            .into_iter()
+            .filter_map(|event| {
+                if !event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()) {
+                    return None;
+                }
+                if let Some(event_type) = &event.type_ {
+                    if event_type == "Warning" {
+                        return Some(event);
+                    }
+                }
+                None
+            })
+            .for_each(|event| last_report.all_warning_events.push(event));
+
+        *last_report = RecapReporterDeploymentState {
+            report: rendered_report,
+            timestamp: Instant::now(),
+            all_warning_events: last_report.all_warning_events.clone(),
+        };
 
         // Send it to user
-        for line in last_report.0.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.report.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }
@@ -209,7 +252,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     fn deployment_terminated(
         &self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        _: &mut Self::DeploymentState,
+        last_report: &mut Self::DeploymentState,
     ) {
         let error = match result {
             Ok(_) => {
@@ -235,6 +278,20 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             return;
         }
         self.stop_record(StepStatus::Error);
+
+        // Send error recap
+        let recap_report = match render_recap_events(&last_report.all_warning_events) {
+            Ok(report) => report,
+            Err(err) => {
+                self.logger
+                    .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
+                return;
+            }
+        };
+        for line in recap_report.trim_end().split('\n').map(str::to_string) {
+            self.logger.send_recap(line);
+        }
+
         // Retrieve last state of the job to display it in the final message.
         let job_failure_message = match block_on(fetch_job_deployment_report(
             &self.kube_client,
