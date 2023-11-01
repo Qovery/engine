@@ -2,6 +2,7 @@ use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
 use crate::deployment_report::logger::EnvLogger;
+use crate::deployment_report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
 use crate::deployment_report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
@@ -11,6 +12,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use uuid::Uuid;
@@ -120,7 +122,7 @@ impl DatabaseDeploymentReporter {
 
 impl DeploymentReporter for DatabaseDeploymentReporter {
     type DeploymentResult = ();
-    type DeploymentState = (String, Instant);
+    type DeploymentState = RecapReporterDeploymentState;
     type Logger = EnvLogger;
 
     fn logger(&self) -> &Self::Logger {
@@ -128,7 +130,11 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     }
 
     fn new_state(&self) -> Self::DeploymentState {
-        ("".to_string(), Instant::now())
+        RecapReporterDeploymentState {
+            report: "".to_string(),
+            timestamp: Instant::now(),
+            all_warning_events: vec![],
+        }
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
@@ -193,20 +199,62 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         // Managed database don't make any progress, so display the message from time to time
-        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
             return;
         }
-        *last_report = (rendered_report, Instant::now());
+
+        // Compute events' involved object ids to keep only interesting events (e.g remove warning from Horizontal Pod Autoscaler)
+        let mut event_uuids_to_keep: HashSet<String> = report
+            .pods
+            .into_iter()
+            .filter_map(|it| it.metadata.uid)
+            .collect::<HashSet<String>>();
+        event_uuids_to_keep.extend(
+            report
+                .services
+                .into_iter()
+                .filter_map(|it| it.metadata.uid)
+                .collect::<HashSet<String>>(),
+        );
+        event_uuids_to_keep.extend(
+            report
+                .pvcs
+                .into_iter()
+                .filter_map(|it| it.metadata.uid)
+                .collect::<HashSet<String>>(),
+        );
+
+        report
+            .events
+            .clone()
+            .into_iter()
+            .filter_map(|event| {
+                if !event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()) {
+                    return None;
+                }
+                if let Some(event_type) = &event.type_ {
+                    if event_type == "Warning" {
+                        return Some(event);
+                    }
+                }
+                None
+            })
+            .for_each(|event| last_report.all_warning_events.push(event));
+        *last_report = RecapReporterDeploymentState {
+            report: rendered_report,
+            timestamp: Instant::now(),
+            all_warning_events: last_report.all_warning_events.clone(),
+        };
 
         // Send it to user
-        for line in last_report.0.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.report.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }
     fn deployment_terminated(
         &self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        _: &mut Self::DeploymentState,
+        last_report: &mut Self::DeploymentState,
     ) {
         let error = match result {
             Ok(_) => {
@@ -239,7 +287,21 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             ));
             return;
         }
-        //self.logger.send_error(*error.clone());
+
+        // Send error recap
+        let recap_report = match render_recap_events(&last_report.all_warning_events) {
+            Ok(report) => report,
+            Err(err) => {
+                self.logger
+                    .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
+                return;
+            }
+        };
+        for line in recap_report.trim_end().split('\n').map(str::to_string) {
+            self.logger.send_recap(line);
+        }
+
+        // Send error
         self.stop_records(StepStatus::Error);
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),

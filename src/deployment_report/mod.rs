@@ -11,6 +11,7 @@ pub mod helm_chart;
 pub mod job;
 pub mod logger;
 pub mod obfuscation_service;
+mod recap_reporter;
 pub mod router;
 mod utils;
 

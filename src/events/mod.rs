@@ -386,6 +386,8 @@ pub enum EnvironmentStep {
     Deleted,
     /// DeleteError: Terminal error on deleting an environment/service.
     DeletedError,
+    /// Recap: Display the error(s) recap of the whole service deployment
+    Recap,
     /// Restart: Restart service pods
     Restart,
     /// Restarted: Service pods have been restarted
@@ -448,6 +450,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::RestartedError => "restarted-error",
                 EnvironmentStep::JobOutput => "job-output",
                 EnvironmentStep::DatabaseOutput => "database-output",
+                EnvironmentStep::Recap => "recap",
             },
         )
     }
@@ -620,6 +623,7 @@ impl EventDetails {
                 | EnvironmentStep::DeletedError
                 | EnvironmentStep::RestartedError
                 | EnvironmentStep::JobOutput
+                | EnvironmentStep::Recap
                 | EnvironmentStep::DatabaseOutput => return,
             },
         };
@@ -629,6 +633,13 @@ impl EventDetails {
         // We don't support cancel for infrastructure
         if let Stage::Environment(_) = &self.stage {
             self.stage = Stage::Environment(EnvironmentStep::Cancelled)
+        }
+    }
+
+    pub(super) fn mut_to_recap_stage(&mut self) {
+        // We don't support cancel for infrastructure
+        if let Stage::Environment(_) = &self.stage {
+            self.stage = Stage::Environment(EnvironmentStep::Recap)
         }
     }
 

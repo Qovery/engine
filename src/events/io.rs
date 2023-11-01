@@ -200,6 +200,7 @@ pub enum EnvironmentStep {
     UnderMigration,
     JobOutput,
     DatabaseOutput,
+    Recap,
     Restart,
     Restarted,
     RestartedError,
@@ -235,6 +236,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::RestartedError => EnvironmentStep::RestartedError,
             events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
             events::EnvironmentStep::DatabaseOutput => EnvironmentStep::DatabaseOutput,
+            events::EnvironmentStep::Recap => EnvironmentStep::Recap,
         }
     }
 }
