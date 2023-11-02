@@ -33,3 +33,12 @@ pub trait DeploymentAction: Send + Sync {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub enum K8sResourceType {
+    Deployment,
+    StateFulSet,
+    DaemonSet,
+    Job,
+    CronJob,
+}

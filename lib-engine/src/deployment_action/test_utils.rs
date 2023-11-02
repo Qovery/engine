@@ -1,4 +1,4 @@
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
 use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
 use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Namespace;
@@ -110,6 +110,42 @@ pub fn get_simple_cron_job() -> CronJob {
                  }
               }
             }
+    }))
+    .unwrap()
+}
+
+pub fn get_simple_daemon_set() -> DaemonSet {
+    serde_json::from_value(serde_json::json!({
+           "apiVersion":"apps/v1",
+           "kind":"DaemonSet",
+           "metadata":{
+              "name":"restart",
+              "labels":{
+                 "app":"restart"
+              }
+           },
+            "spec": {
+                "selector": {
+                  "matchLabels": {
+                    "app": "restart"
+                  }
+                },
+                "template": {
+                  "metadata": {
+                    "labels": {
+                      "app": "restart"
+                    }
+                  },
+                  "spec": {
+                    "containers": [
+                      {
+                        "name": "pause",
+                        "image": "k8s.gcr.io/pause:latest"
+                      }
+                    ]
+                  }
+                }
+      }
     }))
     .unwrap()
 }
