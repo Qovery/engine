@@ -4,8 +4,9 @@ use crate::cloud_provider::helm::{ChartInfo, HelmChartError};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
-use crate::deployment_action::pause_service::{K8sResourceType, PauseServiceAction};
-use crate::deployment_action::DeploymentAction;
+use crate::deployment_action::pause_service::PauseServiceAction;
+use crate::deployment_action::restart_service::RestartServiceAction;
+use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::deployment_report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
@@ -150,11 +151,30 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
 
-        // List all deployment / statefulset / daemonset / job / cronjob for this helm release
-        // trigger a restart
+        let task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            let restart_daemon_set = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::DaemonSet,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_daemon_set.on_restart(target)?;
 
-        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
-            logger.warning("Restart for helm chart is not implemented yet".to_string());
+            let restart_deployment = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::Deployment,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_deployment.on_restart(target)?;
+
+            let restart_statefulset = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::StateFulSet,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_statefulset.on_restart(target)?;
             Ok(())
         };
 
