@@ -396,7 +396,7 @@ mod tests {
     use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
     use k8s_openapi::api::batch::v1::CronJob;
     use kube::api::PostParams;
-    use kube::runtime::wait::{await_condition, Condition};
+    use kube::runtime::wait::await_condition;
     use kube::Api;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

@@ -39,7 +39,7 @@ use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
-use qovery_engine::models::kubernetes::K8sSecretType::StringData;
+
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -213,7 +213,7 @@ pub fn environment_3_apps_3_databases(
     let database_db_name_mongo = "mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_password(CONTAINER);
-    let database_uri_mongo = format!(
+    let _database_uri_mongo = format!(
         "mongodb://{database_username_mongo}:{database_password_mongo}@{database_host_mongo}:{database_port_mongo}/{database_db_name_mongo}"
     );
     let version_mongo = "4.4";
