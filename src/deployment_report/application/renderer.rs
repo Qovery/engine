@@ -104,7 +104,7 @@ mod test {
         QContainerState, QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
-    use k8s_openapi::api::core::v1::Event;
+
     use k8s_openapi::apimachinery::pkg::apis::meta::v1;
     use maplit::btreemap;
     use tera::Tera;

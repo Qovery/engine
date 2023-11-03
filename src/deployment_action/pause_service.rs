@@ -1,5 +1,5 @@
 use crate::cloud_provider::DeploymentTarget;
-use crate::deployment_action::DeploymentAction;
+use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
@@ -113,6 +113,8 @@ async fn pause_service(
                 }
             }
         }
+        K8sResourceType::DaemonSet => {}
+        K8sResourceType::Job => {}
     };
 
     Ok(())
@@ -171,6 +173,8 @@ async fn unpause_service_if_needed(
                 }
             }
         }
+        K8sResourceType::DaemonSet => {}
+        K8sResourceType::Job => {}
     }
 
     Ok(())
@@ -230,13 +234,6 @@ pub struct PauseServiceAction {
     event_details: EventDetails,
     timeout: Duration,
     is_cluster_wide_resources_allowed: bool,
-}
-
-#[derive(Clone, Debug)]
-pub enum K8sResourceType {
-    Deployment,
-    StateFulSet,
-    CronJob,
 }
 
 impl PauseServiceAction {
@@ -396,7 +393,7 @@ mod tests {
     use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
     use k8s_openapi::api::batch::v1::CronJob;
     use kube::api::PostParams;
-    use kube::runtime::wait::{await_condition, Condition};
+    use kube::runtime::wait::await_condition;
     use kube::Api;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

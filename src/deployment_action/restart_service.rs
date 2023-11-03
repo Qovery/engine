@@ -1,28 +1,48 @@
 use crate::cloud_provider::DeploymentTarget;
-use crate::deployment_action::DeploymentAction;
+use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
 use chrono::Utc;
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::api::ListParams;
-use kube::Api;
+use kube::{Api, Client, Error};
 use std::time::Duration;
 
 pub struct RestartServiceAction {
     selector: String,
-    is_statefulset: bool,
+    k8s_resource_type: K8sResourceType,
     event_details: EventDetails,
+    is_cluster_wide_resources_allowed: bool,
 }
 
 impl RestartServiceAction {
     pub fn new(selector: String, is_statefulset: bool, event_details: EventDetails) -> RestartServiceAction {
         RestartServiceAction {
             selector,
-            is_statefulset,
+            k8s_resource_type: if is_statefulset {
+                K8sResourceType::StateFulSet
+            } else {
+                K8sResourceType::Deployment
+            },
             event_details,
+            is_cluster_wide_resources_allowed: false,
+        }
+    }
+
+    pub fn new_with_resource_type(
+        selector: String,
+        k8s_resource_type: K8sResourceType,
+        event_details: EventDetails,
+        is_cluster_wide_resources_allowed: bool,
+    ) -> RestartServiceAction {
+        RestartServiceAction {
+            selector,
+            k8s_resource_type,
+            event_details,
+            is_cluster_wide_resources_allowed,
         }
     }
 }
@@ -42,10 +62,11 @@ impl DeploymentAction for RestartServiceAction {
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let future = restart_service(
-            self.is_statefulset,
             &target.kube,
             target.environment.namespace(),
             &self.selector,
+            self.k8s_resource_type.clone(),
+            self.is_cluster_wide_resources_allowed,
         );
 
         // Set timeout at 10min
@@ -88,13 +109,67 @@ impl DeploymentAction for RestartServiceAction {
 }
 
 async fn restart_service(
-    is_statefulset: bool,
     kube: &kube::Client,
     namespace: &str,
     selector: &str,
+    k8s_resource_type: K8sResourceType,
+    is_cluster_wide_resources_allowed: bool,
 ) -> Result<(), kube::Error> {
+    match k8s_resource_type {
+        K8sResourceType::StateFulSet => {
+            let (pods_api, pods_list_params, most_recent_pod_start_time_before_restart) =
+                get_most_recent_pod_start_time(kube, namespace, selector, is_cluster_wide_resources_allowed).await?;
+            let expected_number_of_replicas =
+                restart_statefulset(kube, namespace, &pods_list_params, is_cluster_wide_resources_allowed).await?;
+            wait_until_service_pods_are_restarted(
+                &pods_api,
+                &pods_list_params,
+                expected_number_of_replicas,
+                &most_recent_pod_start_time_before_restart,
+            )
+            .await?;
+        }
+        K8sResourceType::Deployment => {
+            let (pods_api, pods_list_params, most_recent_pod_start_time_before_restart) =
+                get_most_recent_pod_start_time(kube, namespace, selector, is_cluster_wide_resources_allowed).await?;
+            let expected_number_of_replicas =
+                restart_deployment(kube, namespace, &pods_list_params, is_cluster_wide_resources_allowed).await?;
+            wait_until_service_pods_are_restarted(
+                &pods_api,
+                &pods_list_params,
+                expected_number_of_replicas,
+                &most_recent_pod_start_time_before_restart,
+            )
+            .await?;
+        }
+        K8sResourceType::DaemonSet => {
+            restart_daemon_set(
+                kube,
+                namespace,
+                &ListParams::default().labels(selector),
+                is_cluster_wide_resources_allowed,
+            )
+            .await?;
+        }
+        K8sResourceType::CronJob => {}
+        K8sResourceType::Job => {}
+    };
+
+    Ok(())
+}
+
+async fn get_most_recent_pod_start_time(
+    kube: &Client,
+    namespace: &str,
+    selector: &str,
+    is_cluster_wide_resources_allowed: bool,
+) -> Result<(Api<Pod>, ListParams, Time), Error> {
     // find current service pods running before restart
-    let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
+    let pods_api: Api<Pod> = if is_cluster_wide_resources_allowed {
+        Api::all(kube.clone())
+    } else {
+        Api::namespaced(kube.clone(), namespace)
+    };
     let pods_list_params = ListParams::default().labels(selector);
     let service_pods_before_restart = pods_api.list(&pods_list_params).await?.items;
 
@@ -106,33 +181,25 @@ async fn restart_service(
         // If no pod exists, returns current date
         .or_else(|| Some(Time(Utc::now())))
         .expect("Should retrieve either most recent pod.status.time.date_time or use DateTime<Utc> now");
-
-    // restart either deployment or statefulset
-    let expected_number_of_replicas = if is_statefulset {
-        restart_statefulset(kube, namespace, &pods_list_params).await?
-    } else {
-        restart_deployment(kube, namespace, &pods_list_params).await?
-    };
-
-    // wait
-    wait_until_service_pods_are_restarted(
-        &pods_api,
-        &pods_list_params,
-        expected_number_of_replicas,
-        &most_recent_pod_start_time_before_restart,
-    )
-    .await?;
-
-    Ok(())
+    Ok((pods_api, pods_list_params, most_recent_pod_start_time_before_restart))
 }
 
 async fn restart_deployment(
     kube: &kube::Client,
     namespace: &str,
     pods_list_params: &ListParams,
+    is_cluster_wide_resources_allowed: bool,
 ) -> Result<i32, kube::Error> {
-    let deployments_api: Api<Deployment> = Api::namespaced(kube.clone(), namespace);
+    let deployments_api: Api<Deployment> = if is_cluster_wide_resources_allowed {
+        Api::all(kube.clone())
+    } else {
+        Api::namespaced(kube.clone(), namespace)
+    };
     let deployments = deployments_api.list(pods_list_params).await?;
+
+    if deployments.items.is_empty() {
+        return Ok(0);
+    }
 
     if deployments.items.len() != 1 {
         let unexpected_list_of_deployments_error =
@@ -165,9 +232,18 @@ async fn restart_statefulset(
     kube: &kube::Client,
     namespace: &str,
     pods_list_params: &ListParams,
+    is_cluster_wide_resources_allowed: bool,
 ) -> Result<i32, kube::Error> {
-    let statefulset_api: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
+    let statefulset_api: Api<StatefulSet> = if is_cluster_wide_resources_allowed {
+        Api::all(kube.clone())
+    } else {
+        Api::namespaced(kube.clone(), namespace)
+    };
     let statefulsets = statefulset_api.list(pods_list_params).await?;
+
+    if statefulsets.items.is_empty() {
+        return Ok(0);
+    }
 
     if statefulsets.items.len() != 1 {
         let manual_kube_error = kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(format!(
@@ -192,6 +268,38 @@ async fn restart_statefulset(
     statefulset_api.restart(&statefulset_name).await?;
 
     Ok(number_of_replicas)
+}
+
+async fn restart_daemon_set(
+    kube: &kube::Client,
+    namespace: &str,
+    pods_list_params: &ListParams,
+    is_cluster_wide_resources_allowed: bool,
+) -> Result<(), kube::Error> {
+    let daemon_set_api: Api<DaemonSet> = if is_cluster_wide_resources_allowed {
+        Api::all(kube.clone())
+    } else {
+        Api::namespaced(kube.clone(), namespace)
+    };
+    let daemon_sets = daemon_set_api.list(pods_list_params).await?;
+
+    if daemon_sets.items.is_empty() {
+        return Ok(());
+    }
+
+    if daemon_sets.items.len() != 1 {
+        let manual_kube_error = kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(format!(
+            "Unexpected list of daemon set: found {} instead of 1",
+            daemon_sets.items.len()
+        )));
+        return Err(manual_kube_error);
+    }
+
+    let daemon_set = daemon_sets.items.first().unwrap();
+    let daemon_set_name = daemon_set.metadata.clone().name.unwrap_or_default();
+    daemon_set_api.restart(&daemon_set_name).await?;
+
+    Ok(())
 }
 
 async fn wait_until_service_pods_are_restarted(
@@ -231,4 +339,95 @@ async fn wait_until_service_pods_are_restarted(
     }
 
     Ok(())
+}
+
+#[cfg(feature = "test-local-kube")]
+#[cfg(test)]
+mod tests {
+    use crate::deployment_action::restart_service::restart_daemon_set;
+    use crate::deployment_action::test_utils::get_simple_daemon_set;
+    use crate::deployment_action::test_utils::NamespaceForTest;
+    use function_name::named;
+    use k8s_openapi::api::apps::v1::DaemonSet;
+    use kube::api::ListParams;
+    use kube::api::PostParams;
+    use kube::runtime::wait::{await_condition, Condition};
+    use kube::Api;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn has_daemon_set_number_ready() -> impl Condition<DaemonSet> {
+        move |daemon_set: Option<&DaemonSet>| {
+            daemon_set
+                .and_then(|d| d.status.as_ref())
+                .map(|status| status.number_ready)
+                .unwrap_or(0)
+                == 1
+        }
+    }
+
+    fn has_daemon_set_generation_annotation(expected_generation: String) -> impl Condition<DaemonSet> {
+        move |daemon_set: Option<&DaemonSet>| {
+            daemon_set
+                .and_then(|d| d.metadata.annotations.as_ref())
+                .and_then(|annotations| annotations.get("deprecated.daemonset.template.generation"))
+                == Some(&expected_generation)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[named]
+    async fn test_restart_daemon_set() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.unwrap();
+        let namespace = format!(
+            "{}-{:?}",
+            function_name!().replace('_', "-"),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        );
+        let timeout = Duration::from_secs(30);
+        let daemon_sets: Api<DaemonSet> = Api::namespaced(kube_client.clone(), &namespace);
+        let daemon_set: DaemonSet = get_simple_daemon_set();
+        let daemon_set_name = daemon_set.metadata.name.clone().unwrap_or_default();
+        let selector = format!("app={daemon_set_name}");
+
+        // create simple daemon set and wait for it to be ready
+        let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
+        daemon_sets.create(&PostParams::default(), &daemon_set).await.unwrap();
+        tokio::time::timeout(
+            timeout,
+            await_condition(daemon_sets.clone(), &daemon_set_name, has_daemon_set_number_ready()),
+        )
+        .await??;
+
+        let daemonsets: Api<DaemonSet> = Api::namespaced(kube_client.clone(), &namespace);
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &daemon_set_name,
+                has_daemon_set_generation_annotation("1".to_string()),
+            ),
+        )
+        .await??;
+
+        // restarting our daemon set
+        tokio::time::timeout(
+            timeout,
+            restart_daemon_set(&kube_client, &namespace, &ListParams::default().labels(&selector), false),
+        )
+        .await??;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let daemonsets: Api<DaemonSet> = Api::namespaced(kube_client.clone(), &namespace);
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &daemon_set_name,
+                has_daemon_set_generation_annotation("2".to_string()),
+            ),
+        )
+        .await??;
+
+        Ok(())
+    }
 }

@@ -378,7 +378,7 @@ fn test_empty_bucket_with_objects() {
         .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
 
     // execute:
-    let _result = service
+    service
         .empty_bucket(existing_bucket_name.as_str())
         .unwrap_or_else(|_| panic!("Cannot empty to bucket `{}`", &existing_bucket_name));
 
@@ -669,7 +669,7 @@ fn test_list_objects_keys_only() {
         .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name));
 
     // verify:
-    assert_eq!(object_to_be_created.iter().count(), objects_keys.iter().count());
+    assert_eq!(object_to_be_created.len(), objects_keys.len());
     assert!(object_to_be_created.iter().all(|o| objects_keys.contains(&o.key)));
 }
 
@@ -754,7 +754,7 @@ fn test_list_objects_keys_only_with_prefix() {
             .iter()
             .filter(|o| o.key.starts_with(prefix))
             .count(),
-        objects_keys.iter().count()
+        objects_keys.len()
     );
     assert!(object_to_be_created
         .iter()
@@ -830,8 +830,8 @@ fn test_list_objects() {
         .unwrap_or_else(|_| panic!("Cannot list objects from bucket `{}`", &existing_bucket_name));
 
     // verify:
-    assert_eq!(object_to_be_created.iter().count(), objects.iter().count());
-    assert!(object_to_be_created.iter().all(|o| objects.contains(&o)));
+    assert_eq!(object_to_be_created.len(), objects.len());
+    assert!(object_to_be_created.iter().all(|o| objects.contains(o)));
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -915,12 +915,12 @@ fn test_list_objects_with_prefix() {
             .iter()
             .filter(|o| o.key.starts_with(prefix))
             .count(),
-        objects.iter().count()
+        objects.len()
     );
     assert!(object_to_be_created
         .iter()
         .filter(|o| o.key.starts_with(prefix))
-        .all(|o| objects.contains(&o)));
+        .all(|o| objects.contains(o)));
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -973,7 +973,7 @@ fn test_delete_object() {
         .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
 
     // execute:
-    let _result = service
+    service
         .delete_object(existing_bucket_name.as_str(), object_key.as_str())
         .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", &object_key, &existing_bucket_name));
 

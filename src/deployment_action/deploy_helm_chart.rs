@@ -1,10 +1,12 @@
 use crate::build_platform::{Credentials, SshKey};
+
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
-use crate::deployment_action::pause_service::{K8sResourceType, PauseServiceAction};
-use crate::deployment_action::DeploymentAction;
+use crate::deployment_action::pause_service::PauseServiceAction;
+use crate::deployment_action::restart_service::RestartServiceAction;
+use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::deployment_report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
@@ -24,8 +26,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+
 use std::time::Duration;
+use uuid::Uuid;
 
 const HELM_CHART_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
@@ -148,11 +151,30 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let _event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
 
-        // List all deployment / statefulset / daemonset / job / cronjob for this helm release
-        // trigger a restart
+        let task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            let restart_daemon_set = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::DaemonSet,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_daemon_set.on_restart(target)?;
 
-        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
-            logger.warning("Restart for helm chart is not implemented yet".to_string());
+            let restart_deployment = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::Deployment,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_deployment.on_restart(target)?;
+
+            let restart_statefulset = RestartServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::StateFulSet,
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+            );
+            restart_statefulset.on_restart(target)?;
             Ok(())
         };
 
@@ -160,26 +182,85 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     }
 }
 
-fn write_helm_value_with_replacement<'a>(
-    lines: impl Iterator<Item = Cow<'a, str>>,
-    output_file_path: &Path,
+fn write_helm_value_with_replacement<'a, T: CloudProvider>(
+    mut lines: impl Iterator<Item = Cow<'a, str>>,
+    output_writer: &mut impl Write,
+    service_id: Uuid,
+    service_name: &str,
+    environment_id: Uuid,
+    project_id: Uuid,
     env_vars: &HashMap<String, VariableInfo>,
 ) -> Result<(), anyhow::Error> {
-    let mut output_writer = BufWriter::new(File::create(output_file_path)?);
-    let ret: Result<(), anyhow::Error> = lines
-        .map(|l| replace_qovery_env_variable(l, env_vars))
-        .map_ok(|l| -> Result<(), anyhow::Error> {
-            output_writer.write_all(l.as_bytes())?;
-            output_writer.write_all(&[b'\n'])?;
-            Ok(())
+    let mut output_writer = BufWriter::new(output_writer);
+    let mut lines = lines.try_fold(Vec::with_capacity(512), |mut acc, l| {
+        replace_qovery_env_variable(l, env_vars).map(|ret| {
+            acc.push(ret);
+            acc
         })
-        .flatten_ok()
-        .collect();
+    })?;
 
-    ret?;
+    let labels_replacements = vec![
+        (
+            "qovery.labels.service",
+            vec![
+                "qovery.com/service-type: helm".to_string(),
+                format!("qovery.com/service-id: {}", service_id),
+                format!("qovery.com/environment-id: {}", environment_id),
+                format!("qovery.com/project-id: {}", project_id),
+            ],
+        ),
+        (
+            "qovery.annotations.loadbalancer",
+            T::loadbalancer_l4_annotations()
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect_vec(),
+        ),
+        ("qovery.service.id", vec![service_id.to_string()]),
+        ("qovery.service.type", vec!["helm".to_string()]),
+        ("qovery.service.name", vec![service_name.to_string()]),
+        ("qovery.environment.id", vec![environment_id.to_string()]),
+        ("qovery.project.id", vec![project_id.to_string()]),
+    ];
+
+    // Replace all matching pattern by their respective replacements
+    // 1 line can generate N lines in output
+    for (pattern, replacements) in &labels_replacements {
+        let nb_lines = lines.len();
+        lines = lines
+            .into_iter()
+            .try_fold(Vec::with_capacity(nb_lines + replacements.len()), |acc, l| {
+                replace_qovery_labels(acc, l, pattern, replacements)
+            })?;
+    }
+
+    // Writes all lines into the files
+    for line in lines {
+        output_writer.write_all(line.as_bytes())?;
+        output_writer.write_all(&[b'\n'])?;
+    }
+
     output_writer.flush()?;
 
     Ok(())
+}
+
+fn replace_qovery_labels<'a>(
+    mut acc: Vec<Cow<'a, str>>,
+    line: Cow<'a, str>,
+    pattern: &str,
+    replacements: &'a [String],
+) -> Result<Vec<Cow<'a, str>>, anyhow::Error> {
+    if line.contains(pattern) {
+        replacements
+            .iter()
+            .map(move |replacement| Cow::Owned(line.replace(pattern, replacement)))
+            .for_each(|item| acc.push(item))
+    } else {
+        acc.push(line)
+    };
+
+    Ok(acc)
 }
 
 fn replace_qovery_env_variable<'a>(
@@ -195,17 +276,18 @@ fn replace_qovery_env_variable<'a>(
             break;
         };
 
+        let needle = &line[beg_pos..];
         // Built-in variable are not allowed because they contains ID in them
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
-        if line[beg_pos + PREFIX.len()..].starts_with("QOVERY_") {
+        if needle[PREFIX.len()..].starts_with("QOVERY_") {
             return Err(anyhow!("You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}", line));
         }
 
         let variable_name =
-            if let Some(end_pos) = line[beg_pos..].find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.') {
-                &line[beg_pos..end_pos]
+            if let Some(end_pos) = needle.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')) {
+                &needle[..end_pos]
             } else {
-                &line[beg_pos..]
+                needle
             };
 
         let Some(variable_infos) = envs.get(&variable_name[PREFIX.len()..]) else {
@@ -336,9 +418,16 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 logger.info(format!("Preparing Helm values file {}", &value.name));
 
                 let lines = value.content.lines().map(Cow::Borrowed);
-                write_helm_value_with_replacement(
+                let mut output_path = File::open(this.chart_workspace_directory().join(&value.name)).map_err(|e| {
+                    to_error(format!("Cannot create output helm value file {} due to {}", value.name, e))
+                })?;
+                write_helm_value_with_replacement::<T>(
                     lines,
-                    &this.chart_workspace_directory().join(&value.name),
+                    &mut output_path,
+                    *this.long_id(),
+                    this.name(),
+                    target.environment.long_id,
+                    target.environment.project_long_id,
                     this.environment_variables(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {} due to {}", value.name, e)))?;
@@ -379,9 +468,16 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     .lines()
                     .map(|l| Cow::Owned(l.unwrap_or_default()));
 
-                write_helm_value_with_replacement(
+                let mut output_path = File::open(this.chart_workspace_directory().join(filename)).map_err(|e| {
+                    to_error(format!("Cannot create output helm value file {:?} due to {}", filename, e))
+                })?;
+                write_helm_value_with_replacement::<T>(
                     lines,
-                    &this.chart_workspace_directory().join(filename),
+                    &mut output_path,
+                    *this.long_id(),
+                    this.name(),
+                    target.environment.long_id,
+                    target.environment.project_long_id,
                     this.environment_variables(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {:?} due to {}", filename, e)))?;
@@ -543,14 +639,20 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models;
+
     use maplit::hashmap;
 
     #[test]
     fn test_replace_qovery_env_variables() {
         let envs = hashmap! {
             "TOTO".to_string() => VariableInfo { value: "toto_var".to_string(), is_secret: false},
-            "LABEL_NAME".to_string() => VariableInfo {value: "toto_label".to_string(), is_secret: false}
+            "LABEL_NAME".to_string() => VariableInfo {value: "toto_label".to_string(), is_secret: false},
+            "NGNIX_TAG".to_string() => VariableInfo {value: "42".to_string(), is_secret: false}
         };
+
+        let ret = replace_qovery_env_variable(Cow::Borrowed("    tag: \"qovery.env.NGNIX_TAG\""), &envs);
+        assert!(matches!(ret, Ok(line) if line == "    tag: \"42\""));
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("toto: qovery.env.TOTO"), &envs);
         assert!(matches!(ret, Ok(line) if line == "toto: toto_var"));
@@ -569,7 +671,145 @@ mod tests {
     }
 
     #[test]
-    fn test_is_allowed_namespced_resource() {
+    fn test_replace_qovery_labels() {
+        let label_replacements = (
+            "qovery.labels.service",
+            vec![
+                "qovery.com/service-type: helm".to_string(),
+                format!(
+                    "qovery.com/service-id: {}",
+                    Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
+                ),
+                format!(
+                    "qovery.com/environment-id: {}",
+                    Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()
+                ),
+                format!(
+                    "qovery.com/project-id: {}",
+                    Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap()
+                ),
+            ],
+        );
+
+        // Replacements should happen and produces multiple lines
+        let lines = vec![];
+        let ret = replace_qovery_labels(
+            lines,
+            Cow::Borrowed("  - qovery.labels.service "),
+            label_replacements.0,
+            &label_replacements.1,
+        );
+        let golden_rod: Vec<Cow<'static, str>> = vec![
+            Cow::Owned("  - qovery.com/service-type: helm ".to_string()),
+            Cow::Owned("  - qovery.com/service-id: 00000000-0000-0000-0000-000000000000 ".to_string()),
+            Cow::Owned("  - qovery.com/environment-id: 11111111-1111-1111-1111-111111111111 ".to_string()),
+            Cow::Owned("  - qovery.com/project-id: 22222222-2222-2222-2222-222222222222 ".to_string()),
+        ];
+        assert!(matches!(ret, Ok(rod) if rod == golden_rod));
+
+        // Nothing match line should stay the same
+        let lines = vec![];
+        let ret = replace_qovery_labels(
+            lines,
+            Cow::Borrowed("  - qovery.labels.fake "),
+            label_replacements.0,
+            &label_replacements.1,
+        );
+        let golden_rod: Vec<Cow<'static, str>> = vec![Cow::Borrowed("  - qovery.labels.fake ")];
+        assert!(matches!(ret, Ok(rod) if rod == golden_rod));
+    }
+
+    #[test]
+    fn test_write_helm_value_with_replacement() {
+        let value_file = r#"
+controller:
+  name: qovery.service.name
+  image:
+    repository: quay.io/kubernetes-ingress-controller/nginx-ingress-controller
+    tag: "qovery.env.NGINX_TAG"
+    pullPolicy: IfNotPresent
+    runAsUser: 101
+    allowPrivilegeEscalation: true
+
+  # This will fix the issue of HPA not being able to read the metrics.
+  # Note that if you enable it for existing deployments, it won't work as the labels are immutable.
+  # We recommend setting this to true for new deployments.
+  useComponentLabel: false
+  labels:
+    - qovery.labels.service
+
+  loadBalancer:
+    annotations:
+      qovery.annotations.loadbalancer
+
+  # Configures the ports the nginx-controller listens on
+  containerPort:
+    http: 80
+    https: 443
+"#
+        .trim()
+        .to_string();
+
+        let service_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+        let env_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let project_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let envs = hashmap! {
+            "NGINX_TAG".to_string() => VariableInfo { value: "42".to_string(), is_secret: false},
+            "LABEL_NAME".to_string() => VariableInfo {value: "toto_label".to_string(), is_secret: false}
+        };
+        let mut output: Vec<u8> = vec![];
+
+        let ret = write_helm_value_with_replacement::<models::types::AWS>(
+            value_file.lines().map(Cow::Borrowed),
+            &mut output,
+            service_id,
+            "my_name",
+            env_id,
+            project_id,
+            &envs,
+        );
+        assert!(ret.is_ok());
+
+        let golden_rod = r#"
+controller:
+  name: my_name
+  image:
+    repository: quay.io/kubernetes-ingress-controller/nginx-ingress-controller
+    tag: "42"
+    pullPolicy: IfNotPresent
+    runAsUser: 101
+    allowPrivilegeEscalation: true
+
+  # This will fix the issue of HPA not being able to read the metrics.
+  # Note that if you enable it for existing deployments, it won't work as the labels are immutable.
+  # We recommend setting this to true for new deployments.
+  useComponentLabel: false
+  labels:
+    - qovery.com/service-type: helm
+    - qovery.com/service-id: 00000000-0000-0000-0000-000000000000
+    - qovery.com/environment-id: 11111111-1111-1111-1111-111111111111
+    - qovery.com/project-id: 22222222-2222-2222-2222-222222222222
+
+  loadBalancer:
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+  # Configures the ports the nginx-controller listens on
+  containerPort:
+    http: 80
+    https: 443
+"#
+        .trim()
+        .to_string();
+
+        let mut golden_rod = golden_rod.lines();
+        for line in output.lines() {
+            assert_eq!(line.unwrap(), golden_rod.next().unwrap())
+        }
+    }
+
+    #[test]
+    fn test_is_allowed_namespaced_resource() {
         let resource = r#"
 apiVersion: v1
 kind: Namespace
