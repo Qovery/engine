@@ -922,7 +922,7 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::{
-        CommonChart, CommonChartVpa, HelmChart, VpaConfigHelmChart, VpaTargetRefApiVersion, VpaTargetRefKind,
+        CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaTargetRefApiVersion, VpaTargetRefKind,
     };
     use crate::cloud_provider::models::KubernetesMemoryResourceUnit;
     use crate::cloud_provider::{helm::get_latest_successful_deployment, models::KubernetesCpuResourceUnit};
