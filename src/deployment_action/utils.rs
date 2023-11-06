@@ -106,11 +106,6 @@ pub fn mirror_image_if_necessary(
 }
 
 fn image_already_exist(dest_image: &ContainerImage, target: &DeploymentTarget) -> bool {
-    if target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Service {
-        // TODO remove this once we send comm to remind to don't reuse existing tags (and probably prepare a doc)
-        return false;
-    }
-
     matches!(target.docker.does_image_exist_remotely(dest_image), Ok(true))
 }
 
