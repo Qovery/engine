@@ -7,14 +7,14 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
-use crate::kubers_utils::kube_get_resources_by_selector;
+
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::container::get_mirror_repository_name;
 use crate::models::registry_image_source::RegistryImageSource;
-use crate::runtime::block_on;
+
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
-use k8s_openapi::api::core::v1::Service;
+
 use kube::api::ListParams;
 use kube::Api;
 use retry::delay::{Fibonacci, Fixed};
@@ -292,43 +292,6 @@ pub async fn get_last_deployed_image(
                     .as_ref()?
                     .to_string(),
             )
-        }
-    }
-}
-
-pub fn k8s_external_service_name_exists(
-    client: &kube::Client,
-    namespace: &str,
-    selector: &str,
-    event_details: &EventDetails,
-    service_id: &str,
-) -> Result<bool, Box<EngineError>> {
-    let result = match block_on(kube_get_resources_by_selector::<Service>(client, namespace, selector)) {
-        Err(e) => {
-            return Err(Box::new(EngineError::new_k8s_cannot_get_services(
-                event_details.clone(),
-                e,
-                service_id,
-            )))
-        }
-        Ok(result) => result.items,
-    };
-
-    let svc = result.first();
-
-    match svc {
-        None => Ok(false),
-        Some(svc) => {
-            if let Some(spec) = &svc.spec {
-                if let Some(type_) = &spec.type_ {
-                    return match type_.to_lowercase() == "externalname" {
-                        true => Ok(true),
-                        false => Ok(false),
-                    };
-                }
-                return Ok(false);
-            }
-            Ok(false)
         }
     }
 }

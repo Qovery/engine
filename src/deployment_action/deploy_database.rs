@@ -18,7 +18,7 @@ use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::database::{
     get_database_with_invalid_storage_size, Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed,
 };
-use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::runtime::block_on;
 use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
@@ -29,7 +29,6 @@ use std::collections::BTreeMap;
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
-use crate::deployment_action::utils::k8s_external_service_name_exists;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use async_trait::async_trait;
 use aws_sdk_docdb::error::DescribeDBClustersError;
@@ -449,6 +448,7 @@ impl QoveryAwsSdkConfigManagedDatabase for SdkConfig {
 fn managed_database_exists(
     db_type: service::DatabaseType,
     db_id: &str,
+    db_version: &VersionsNumber,
     event_details: &EventDetails,
     sdk_config: Option<SdkConfig>,
 ) -> Result<bool, Box<EngineError>> {
@@ -513,7 +513,14 @@ fn managed_database_exists(
             }
         }
         service::DatabaseType::Redis => {
-            let result = match block_on(aws_conn.find_managed_elasticache_database(db_id)) {
+            // Redis cluster append a suffix -001 to the db_id
+            let db_id = if db_version.major != "5" {
+                format!("{}-001", db_id)
+            } else {
+                db_id.to_string()
+            };
+
+            let result = match block_on(aws_conn.find_managed_elasticache_database(&db_id)) {
                 Ok(result) => result,
                 Err(e) => {
                     let err = e.to_string();
@@ -525,7 +532,7 @@ fn managed_database_exists(
                         _ => Err(Box::new(EngineError::new_aws_sdk_cannot_list_elasticache_clusters(
                             event_details.clone(),
                             err,
-                            Some(db_id),
+                            Some(&db_id),
                         ))),
                     };
                 }
@@ -643,20 +650,16 @@ where
                 if !managed_database_exists(
                     self.db_type(),
                     &self.fqdn_id,
+                    &self.version,
                     &event_details,
                     target.cloud_provider.aws_sdk_client(),
-                )? && !k8s_external_service_name_exists(
-                    &target.kube,
-                    target.environment.namespace(),
-                    &self.kube_label_selector(),
-                    &event_details,
-                    self.id(),
                 )? {
-                    // if no k8s ExternalName service and no result from AWS are returned, db has never been deployed. No need to go further
+                    // if db has never been deployed. No need to go further
+                    info!("Managed database not found on cloud provider. Assuming it does not exist");
                     return Ok(());
                 }
 
-                // Then if it's in a ready state
+                // Ensure it's in a ready state
                 // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
                 on_create_managed_impl(self, logger, event_details.clone(), target)?;
 
