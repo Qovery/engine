@@ -141,54 +141,63 @@ pub fn execute_long_deployment<Log, TaskRet>(
     let mut state = deployment_reporter.new_state();
 
     let logger = deployment_reporter.logger();
-    let action_state = long_task.pre_run(logger)?;
 
-    let deployment_result = thread::scope(|th_scope| {
-        // monitor thread to notify user while the blocking task is executed
-        let thread_name = format!("reporter-of-{}", thread::current().name().unwrap_or("unknown-thread"));
-        let th_handle = thread::Builder::new().name(thread_name).spawn_scoped(th_scope, {
-            // Propagate the current span into the thread. This span is only used by tests
-            let current_span = tracing::Span::current();
-            let deployment_start = deployment_start.clone();
-            let deployment_reporter = &deployment_reporter; // to avoid moving the object into the thread
-            let state = &mut state;
+    // 1. Execute pre_run and if it succeed, start the reporter thread
+    let deployment_result = match long_task.pre_run(logger) {
+        Err(err) => Err(err),
+        Ok(prerun_result) => {
+            // 2. Start the reporter thread in background
+            thread::scope(|th_scope| {
+                // monitor thread to notify user while the blocking task is executed
+                let thread_name = format!("reporter-of-{}", thread::current().name().unwrap_or("unknown-thread"));
+                let th_handle = thread::Builder::new().name(thread_name).spawn_scoped(th_scope, {
+                    // Propagate the current span into the thread. This span is only used by tests
+                    let current_span = tracing::Span::current();
+                    let deployment_start = deployment_start.clone();
+                    let deployment_reporter = &deployment_reporter; // to avoid moving the object into the thread
+                    let state = &mut state;
 
-            move || {
-                let _span = current_span.enter();
+                    move || {
+                        let _span = current_span.enter();
 
-                // Before the launch of the deployment
-                deployment_reporter.deployment_before_start(state);
+                        // Before the launch of the deployment
+                        deployment_reporter.deployment_before_start(state);
 
-                // Wait the start of the deployment
-                deployment_start.wait();
+                        // Wait the start of the deployment
+                        deployment_start.wait();
 
-                // Send deployment progress report every x secs
-                let report_frequency = deployment_reporter.report_frequency();
-                loop {
-                    match rx.recv_timeout(report_frequency) {
-                        // Deployment is terminated, we received the result of the task
-                        Ok(_) => break,
+                        // Send deployment progress report every x secs
+                        let report_frequency = deployment_reporter.report_frequency();
+                        loop {
+                            match rx.recv_timeout(report_frequency) {
+                                // Deployment is terminated, we received the result of the task
+                                Ok(_) => break,
 
-                        // Deployment is still in progress
-                        Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
+                                // Deployment is still in progress
+                                Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
 
-                        // Other side died without passing us the result ! this is a logical bug !
-                        Err(RecvTimeoutError::Disconnected) => {
-                            panic!("Haven't received task deployment result, but otherside of the channel is dead !");
+                                // Other side died without passing us the result ! this is a logical bug !
+                                Err(RecvTimeoutError::Disconnected) => {
+                                    panic!(
+                                        "Haven't received task deployment result, but otherside of the channel is dead !"
+                                    );
+                                }
+                            }
                         }
                     }
-                }
-            }
-        });
+                });
 
-        // Wait for our watcher thread to be ready before starting
-        let _ = deployment_start.wait();
-        let deployment_result = long_task.run(deployment_reporter.logger(), action_state);
-        let _ = tx.send(());
-        let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
+                // Wait for our watcher thread to be ready before starting
+                let _ = deployment_start.wait();
+                // 3. Run our task while reported is ready
+                let deployment_result = long_task.run(deployment_reporter.logger(), prerun_result);
+                let _ = tx.send(());
+                let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
 
-        deployment_result
-    });
+                deployment_result
+            })
+        }
+    };
 
     deployment_reporter.deployment_terminated(&deployment_result, &mut state);
     match deployment_result {
@@ -204,10 +213,13 @@ pub fn execute_long_deployment<Log, TaskRet>(
 mod test {
     use crate::deployment_report::{execute_long_deployment, DeploymentReporter, DeploymentTask};
     use crate::errors::EngineError;
+    use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
+    use uuid::Uuid;
 
     pub struct DeploymentReporterTest {
         pub before_deployment: Arc<AtomicBool>,
@@ -258,6 +270,7 @@ mod test {
 
     struct DeploymentAction {
         pub run_fn: Box<dyn Fn()>,
+        pub prerun_should_fail: bool,
         pub pre_run: Arc<AtomicBool>,
         pub run: Arc<AtomicBool>,
         pub post_run: Arc<AtomicBool>,
@@ -269,7 +282,22 @@ mod test {
 
         fn pre_run(&self, _logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
             self.pre_run.store(true, Ordering::SeqCst);
-            Ok(1)
+            if self.prerun_should_fail {
+                Err(Box::new(EngineError::new_unsupported_region(
+                    EventDetails::new(
+                        None,
+                        QoveryIdentifier::new(Uuid::new_v4()),
+                        QoveryIdentifier::new(Uuid::new_v4()),
+                        "exec-id".to_string(),
+                        Stage::Environment(EnvironmentStep::Deploy),
+                        Transmitter::TaskManager(Uuid::new_v4(), "test".to_string()),
+                    ),
+                    "test".to_string(),
+                    None,
+                )))
+            } else {
+                Ok(1)
+            }
         }
 
         fn run(
@@ -310,6 +338,7 @@ mod test {
                 is_task_started.store(true, Ordering::SeqCst);
                 thread::sleep(Duration::from_secs(2));
             }),
+            prerun_should_fail: false,
             pre_run: Default::default(),
             run: Default::default(),
             post_run: Default::default(),
@@ -330,5 +359,49 @@ mod test {
         assert!(pre_run.load(Ordering::SeqCst));
         assert!(run.load(Ordering::SeqCst));
         assert!(post_run.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_execute_long_deployment_prerun_fails() {
+        let reporter = DeploymentReporterTest {
+            before_deployment: Arc::new(AtomicBool::new(false)),
+            deployment_in_progress: Arc::new(AtomicBool::new(false)),
+            deployment_terminated: Arc::new(AtomicBool::new(false)),
+            thread_dead: Arc::new(AtomicBool::new(false)),
+            is_task_started: Arc::new(AtomicBool::new(false)),
+        };
+
+        let before_deployment = reporter.before_deployment.clone();
+        let deployment_in_progress = reporter.deployment_in_progress.clone();
+        let deployment_terminated = reporter.deployment_terminated.clone();
+        let thread_dead = reporter.thread_dead.clone();
+        let is_task_started = reporter.is_task_started.clone();
+
+        let task = DeploymentAction {
+            run_fn: Box::new(move || {
+                is_task_started.store(true, Ordering::SeqCst);
+                thread::sleep(Duration::from_secs(2));
+            }),
+            prerun_should_fail: true,
+            pre_run: Default::default(),
+            run: Default::default(),
+            post_run: Default::default(),
+        };
+
+        let pre_run = task.pre_run.clone();
+        let run = task.run.clone();
+        let post_run = task.post_run.clone();
+        let _ = execute_long_deployment(reporter, task);
+
+        // Check that only deployment terminated has been called if pre-run fails
+        assert!(!before_deployment.load(Ordering::SeqCst));
+        assert!(!deployment_in_progress.load(Ordering::SeqCst));
+        assert!(thread_dead.load(Ordering::SeqCst));
+        assert!(deployment_terminated.load(Ordering::SeqCst));
+
+        // Check that only pre_run has been called
+        assert!(pre_run.load(Ordering::SeqCst));
+        assert!(!run.load(Ordering::SeqCst));
+        assert!(!post_run.load(Ordering::SeqCst));
     }
 }
