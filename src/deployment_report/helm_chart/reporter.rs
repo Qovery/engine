@@ -85,10 +85,11 @@ impl DeploymentReporter for HelmChartDeploymentReporter {
         }
         //self.logger.send_error(*error.clone());
         self.stop_record(StepStatus::Error);
+        self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!("
-❌ {} of helm chart failed but we rollbacked it to previous safe/running version !
+❌ {} of helm chart failed !
 ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️
 Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
 ⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/

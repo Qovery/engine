@@ -418,9 +418,10 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 logger.info(format!("Preparing Helm values file {}", &value.name));
 
                 let lines = value.content.lines().map(Cow::Borrowed);
-                let mut output_path = File::open(this.chart_workspace_directory().join(&value.name)).map_err(|e| {
-                    to_error(format!("Cannot create output helm value file {} due to {}", value.name, e))
-                })?;
+                let mut output_path =
+                    File::create(this.chart_workspace_directory().join(&value.name)).map_err(|e| {
+                        to_error(format!("Cannot create output helm value file {} due to {}", value.name, e))
+                    })?;
                 write_helm_value_with_replacement::<T>(
                     lines,
                     &mut output_path,
@@ -461,14 +462,15 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 };
 
                 logger.info(format!("Preparing Helm values file {:?}", filename));
-                let input_file = File::open(tmpdir.path().join(value))
-                    .map_err(|e| to_error(format!("Cannot create destination file for helm value due to {}", e)))?;
+                let input_file = File::open(tmpdir.path().join(value)).map_err(|e| {
+                    to_error(format!("Cannot open value file {:?} for helm value due to {}", filename, e))
+                })?;
 
                 let lines = BufReader::new(input_file)
                     .lines()
                     .map(|l| Cow::Owned(l.unwrap_or_default()));
 
-                let mut output_path = File::open(this.chart_workspace_directory().join(filename)).map_err(|e| {
+                let mut output_path = File::create(this.chart_workspace_directory().join(filename)).map_err(|e| {
                     to_error(format!("Cannot create output helm value file {:?} due to {}", filename, e))
                 })?;
                 write_helm_value_with_replacement::<T>(
