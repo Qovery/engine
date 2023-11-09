@@ -612,7 +612,7 @@ impl Kapsule {
             headers.insert("Content-Type", "application/json".parse().unwrap());
             headers.insert("X-Auth-Token", self.options.scaleway_secret_key.parse().unwrap());
             let http = reqwest::blocking::Client::new();
-            let tag = format!("ClusterLongId:{}", self.long_id);
+            let tag = format!("ClusterLongId={}", self.long_id);
             let url = format!(
                 "https://api.scaleway.com/vpc/v2/regions/{}/private-networks?tags={}",
                 self.region(),
