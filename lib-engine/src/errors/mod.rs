@@ -1034,6 +1034,8 @@ pub enum Tag {
     RouterBasicAuthEnvVarCannotDecodeBase64Error,
     /// RouterBasicAuthEnvVarNotFound: represents an error with a router not able to find value of basic auth env variable
     RouterBasicAuthEnvVarNotFound,
+    /// CannotFetchScalewayPrivateNetworks: (only during migration VPC) We need to fetch the private networks to identify already existing clusters with no private network
+    CannotFetchScalewayPrivateNetworks,
 }
 
 impl Tag {
@@ -4423,6 +4425,17 @@ impl EngineError {
             Some(raw_error),
             None,
             None,
+        )
+    }
+
+    pub fn new_scaleway_cannot_fetch_private_networks(event_details: EventDetails, raw_error: String) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeRetrieved,
+            format!("Impossible to fetch your cluster private networks: {}", raw_error),
+            None,
+            None,
+            Some("Please check your credentials".to_string()),
         )
     }
 
