@@ -1,3 +1,9 @@
+{% if create_private_network %}
+resource "scaleway_vpc_private_network" "private_network" {
+  name = "private_network_${var.kubernetes_cluster_id}"
+  tags = local.tags_ks_list
+}
+{% endif %}
 resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   name    = var.kubernetes_cluster_name
   version = var.scaleway_ks_version
@@ -7,6 +13,9 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   region  = var.region
 
   tags    = local.tags_ks_list
+  {% if create_private_network %}
+  private_network_id = scaleway_vpc_private_network.private_network.id
+  {% endif %}
 
   autoscaler_config {
     # autoscaler FAQ https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md

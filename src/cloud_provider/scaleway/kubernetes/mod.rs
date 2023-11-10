@@ -46,7 +46,7 @@ use crate::utilities::to_short_id;
 use crate::{cmd, secret_manager};
 use ::function_name::named;
 use itertools::Itertools;
-use reqwest::StatusCode;
+use reqwest::{header, StatusCode};
 use retry::delay::Fixed;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
@@ -97,6 +97,17 @@ pub struct KapsuleOptions {
 }
 
 impl ProviderOptions for KapsuleOptions {}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct PrivateNetworksDto {
+    private_networks: Vec<PrivateNetworkDto>,
+    total_count: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+struct PrivateNetworkDto {
+    project_id: String,
+}
 
 impl KapsuleOptions {
     pub fn new(
@@ -551,7 +562,7 @@ impl Kapsule {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                         None => self.logger().log(EngineEvent::Error(
                             EngineError::new_missing_required_env_variable(
-                                event_details,
+                                event_details.clone(),
                                 "VAULT_SECRET_ID".to_string(),
                             ),
                             None,
@@ -589,6 +600,49 @@ impl Kapsule {
             "nginx_hpa_target_cpu_utilization_percentage",
             &self.advanced_settings().nginx_hpa_cpu_utilization_percentage_threshold,
         );
+
+        // Needed to resolve https://qovery.atlassian.net/browse/ENG-1621
+        // Scaleway added a new constraint on scaleway_k8s_cluster to be linked to a private network
+        // For existing clusters, exerything is OK
+        // For new clusters, we need to inject a resource scaleway_vpc_private_network
+        let create_private_network = if self.context.is_first_cluster_deployment() {
+            true
+        } else {
+            let mut headers = header::HeaderMap::new();
+            headers.insert("Content-Type", "application/json".parse().unwrap());
+            headers.insert("X-Auth-Token", self.options.scaleway_secret_key.parse().unwrap());
+            let http = reqwest::blocking::Client::new();
+            let tag = format!("ClusterLongId={}", self.long_id);
+            let url = format!(
+                "https://api.scaleway.com/vpc/v2/regions/{}/private-networks?tags={}",
+                self.region(),
+                tag
+            );
+            match http.get(url).headers(headers.clone()).send() {
+                Ok(it) => {
+                    let result: Result<PrivateNetworksDto, reqwest::Error> = it.json();
+                    match result {
+                        Ok(response) => {
+                            // if at least one private network is found, it's OK as we filter with tags
+                            !response.private_networks.is_empty()
+                        }
+                        Err(err) => {
+                            return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
+                                event_details,
+                                err.to_string(),
+                            )))
+                        }
+                    }
+                }
+                Err(err) => {
+                    return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
+                        event_details,
+                        err.to_string(),
+                    )))
+                }
+            }
+        };
+        context.insert("create_private_network", &create_private_network);
 
         Ok(context)
     }

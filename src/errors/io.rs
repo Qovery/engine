@@ -50,6 +50,7 @@ pub enum Tag {
     CannotDetermineK8sRequestedUpgradeVersion,
     CannotExecuteK8sApiCustomMetrics,
     CannotExecuteK8sVersion,
+    CannotFetchScalewayPrivateNetworks,
     CannotFindRequiredBinary,
     CannotGetAnyAvailableVPC,
     CannotGetCluster,
@@ -463,6 +464,7 @@ impl From<errors::Tag> for Tag {
                 Tag::RouterBasicAuthEnvVarCannotDecodeBase64Error
             }
             errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
+            errors::Tag::CannotFetchScalewayPrivateNetworks => Tag::CannotFetchScalewayPrivateNetworks,
         }
     }
 }
