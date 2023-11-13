@@ -843,6 +843,7 @@ impl Helm {
             chart_path.as_ref(),
             "--kubeconfig",
             self.kubernetes_config.to_str().unwrap_or_default(),
+            "--install",
             "-n",
             namespace,
         ]
