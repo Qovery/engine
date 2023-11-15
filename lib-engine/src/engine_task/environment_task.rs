@@ -130,7 +130,8 @@ impl EnvironmentTask {
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_builpacks = false;
-        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
+        let metrics_registry: Arc<dyn MetricsRegistry> =
+            Arc::from(infra_ctx.kubernetes().metrics_registry().clone_dyn());
         let services = services
             .into_iter()
             .filter(|srv| {
@@ -291,7 +292,7 @@ impl EnvironmentTask {
         resource_ttl: Option<Duration>,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
-        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        metrics_registry: Arc<dyn MetricsRegistry>,
         obfuscation_service: Arc<dyn ObfuscationService>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {

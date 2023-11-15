@@ -121,19 +121,30 @@ impl<'a> Drop for StepRecordHandle<'a> {
 }
 
 type StepRecordMap = HashMap<StepName, StepRecord>;
-type MetricsRegistryMap = HashMap<Uuid, StepRecordMap>;
+
+struct MetricsRegistryMap {
+    map: Mutex<HashMap<Uuid, StepRecordMap>>,
+}
+
+impl MetricsRegistryMap {
+    pub fn new() -> Self {
+        Self {
+            map: Mutex::new(HashMap::new()),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct StdMetricsRegistry {
-    registry: Arc<Mutex<MetricsRegistryMap>>,
-    message_publisher: Arc<Box<dyn MsgPublisher>>,
+    registry: Arc<MetricsRegistryMap>,
+    message_publisher: Arc<dyn MsgPublisher>,
 }
 
 impl StdMetricsRegistry {
     pub fn new(message_publisher: Box<dyn MsgPublisher>) -> Self {
         StdMetricsRegistry {
-            registry: Arc::new(Mutex::new(HashMap::new())),
-            message_publisher: Arc::new(message_publisher),
+            registry: Arc::new(MetricsRegistryMap::new()),
+            message_publisher: Arc::from(message_publisher),
         }
     }
 }
@@ -148,8 +159,8 @@ impl MetricsRegistry for StdMetricsRegistry {
     fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle {
         debug!("start record deployment step {:#?} for item {}", step_name, id);
 
-        let mut registry = self.registry.lock().unwrap();
-        let metrics_per_id = registry.entry(id).or_default();
+        let mut registry = self.registry.map.lock().unwrap();
+        let metrics_per_id = registry.entry(id).or_insert(HashMap::new());
 
         if metrics_per_id.contains_key(&step_name) {
             error!("key {:#?} already exist", step_name);
@@ -162,8 +173,8 @@ impl MetricsRegistry for StdMetricsRegistry {
     fn stop_record(&self, id: Uuid, step_name: StepName, status: StepStatus) {
         debug!("stop record deployment step {:#?} for item {}", step_name, id);
 
-        let mut registry = self.registry.lock().unwrap();
-        let metrics_per_id = registry.entry(id).or_default();
+        let mut registry = self.registry.map.lock().unwrap();
+        let metrics_per_id = registry.entry(id).or_insert(HashMap::new());
 
         if let Some(deployment_step_record) = metrics_per_id.get_mut(&step_name) {
             deployment_step_record.duration = Some(deployment_step_record.start_time.elapsed());
@@ -182,7 +193,7 @@ impl MetricsRegistry for StdMetricsRegistry {
     }
 
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
-        let mut locked_registry = self.registry.lock().unwrap();
+        let mut locked_registry = self.registry.map.lock().unwrap();
         let metrics_per_id = locked_registry.entry(id).or_default();
         if let Some(deployment_step_record) = metrics_per_id.get(&step_name) {
             if deployment_step_record.duration.is_some() {
@@ -195,7 +206,7 @@ impl MetricsRegistry for StdMetricsRegistry {
     fn get_records(&self, id: Uuid) -> Vec<StepRecord> {
         debug!("get step durations for item ${}", id);
 
-        let mut registry = self.registry.lock().unwrap();
+        let mut registry = self.registry.map.lock().unwrap();
         let metrics_per_service = registry.entry(id).or_default();
         metrics_per_service
             .values()
@@ -206,7 +217,7 @@ impl MetricsRegistry for StdMetricsRegistry {
 
     fn clear(&self) {
         debug!("clear the registry");
-        let mut registry = self.registry.lock().unwrap();
+        let mut registry = self.registry.map.lock().unwrap();
         registry.clear()
     }
 
@@ -215,9 +226,9 @@ impl MetricsRegistry for StdMetricsRegistry {
     }
 }
 
-impl Drop for StdMetricsRegistry {
+impl Drop for MetricsRegistryMap {
     fn drop(&mut self) {
-        let registry = self.registry.lock().unwrap();
+        let registry = self.map.lock().unwrap();
         registry.iter().for_each(|(id, step_record_map)| {
             step_record_map.values().for_each(|step_record| {
                 if step_record.status.is_none() || step_record.status == Some(StepStatus::NotSet) {

@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub struct RouterDeploymentReporter {
     long_id: Uuid,
     logger: EnvLogger,
-    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
     action: Action,
 }
 
