@@ -72,6 +72,13 @@ pub enum Registry {
         url: Url,
         credentials: Option<Credentials>,
     },
+
+    // GCP Artifact Registry
+    GcpArtifactRegistry {
+        long_id: Uuid,
+        url: Url,
+        credentials: Credentials,
+    },
 }
 
 impl Registry {
@@ -83,6 +90,7 @@ impl Registry {
             Registry::PrivateEcr { url, .. } => url,
             Registry::PublicEcr { url, .. } => url,
             Registry::GenericCr { url, .. } => url,
+            Registry::GcpArtifactRegistry { url, .. } => url,
         }
     }
 
@@ -97,6 +105,7 @@ impl Registry {
             Registry::PrivateEcr { ref mut url, .. } => *url = new_url,
             Registry::PublicEcr { ref mut url, .. } => *url = new_url,
             Registry::GenericCr { ref mut url, .. } => *url = new_url,
+            Registry::GcpArtifactRegistry { ref mut url, .. } => *url = new_url,
         }
     }
 
@@ -108,6 +117,7 @@ impl Registry {
             Registry::PrivateEcr { long_id, .. } => long_id,
             Registry::PublicEcr { long_id, .. } => long_id,
             Registry::GenericCr { long_id, .. } => long_id,
+            Registry::GcpArtifactRegistry { long_id, .. } => long_id,
         }
     }
 
@@ -164,6 +174,12 @@ impl Registry {
                     let _ = url.set_username(&credentials.login);
                     let _ = url.set_password(Some(&credentials.password));
                 }
+                url
+            }
+            Registry::GcpArtifactRegistry { url, credentials, .. } => {
+                let mut url = url.clone();
+                let _ = url.set_username(&credentials.login);
+                let _ = url.set_password(Some(&credentials.password));
                 url
             }
         };
