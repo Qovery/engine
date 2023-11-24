@@ -96,7 +96,7 @@ pub struct DatabaseDeploymentReporter {
     version: String,
     kube_client: kube::Client,
     logger: EnvLogger,
-    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
     action: Action,
 }
 

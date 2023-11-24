@@ -27,6 +27,7 @@ use qovery_engine::metrics_registry::{MetricsRegistry, StepLabel, StepName, Step
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
+use reqwest::StatusCode;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
@@ -51,7 +52,6 @@ fn aws_test_build_phase() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -61,7 +61,7 @@ fn aws_test_build_phase() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
@@ -93,7 +93,6 @@ fn aws_test_build_phase_with_git_lfs() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -103,7 +102,7 @@ fn aws_test_build_phase_with_git_lfs() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut ea = environment.clone();
@@ -134,7 +133,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+        let metrics_registry_for_deployment = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -144,10 +143,9 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let environment = helpers::environment::working_minimal_environment(&context);
 
@@ -159,7 +157,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
-        let records = metrics_registry.get_records(environment.applications.first().unwrap().long_id);
+        let records = metrics_registry_for_deployment.get_records(environment.applications.first().unwrap().long_id);
         assert_eq!(records.len(), 5);
 
         let record_provision_repo = records
@@ -206,7 +204,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_total.status, Some(StepStatus::Success));
         assert!(record_deployment.duration.is_some());
 
-        let records = metrics_registry.get_records(environment.long_id);
+        let records = metrics_registry_for_deployment.get_records(environment.long_id);
         assert_eq!(records.len(), 2);
 
         let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
@@ -244,7 +242,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -255,11 +252,10 @@ fn deploy_a_working_environment_and_pause_it_eks() {
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
 
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
 
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
@@ -282,7 +278,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
+        let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
@@ -309,7 +305,6 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -319,10 +314,9 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
@@ -355,7 +349,6 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -365,10 +358,10 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
         let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
@@ -427,7 +420,6 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -437,10 +429,10 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
         let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
@@ -499,7 +491,6 @@ fn deploy_a_working_environment_with_domain() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -509,10 +500,10 @@ fn deploy_a_working_environment_with_domain() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -550,7 +541,6 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -560,10 +550,10 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -636,7 +626,6 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -645,10 +634,10 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -711,7 +700,6 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -720,10 +708,10 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -799,7 +787,6 @@ fn redeploy_same_app_with_ebs() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -808,12 +795,12 @@ fn redeploy_same_app_with_ebs() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_bis = context.clone_not_same_execution_id();
-        let infra_ctx_bis = aws_default_infra_config(&context_bis, logger.clone(), metrics_registry.clone());
+        let infra_ctx_bis = aws_default_infra_config(&context_bis, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -895,7 +882,6 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -905,13 +891,12 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_not_working = context.clone_not_same_execution_id();
         let infra_ctx_for_not_working =
-            aws_default_infra_config(&context_for_not_working, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_not_working, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         // env part generation
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -965,7 +950,6 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // working env
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -975,13 +959,13 @@ fn deploy_ok_fail_fail_ok_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
         let infra_ctx_for_not_working_1 =
-            aws_default_infra_config(&context_for_not_working_1, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_not_working_1, logger.clone(), metrics_registry());
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -998,13 +982,12 @@ fn deploy_ok_fail_fail_ok_environment() {
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
         let infra_ctx_for_not_working_2 =
-            aws_default_infra_config(&context_for_not_working_2, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_not_working_2, logger.clone(), metrics_registry());
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -1049,7 +1032,6 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -1058,12 +1040,11 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let environment = helpers::environment::non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -1094,7 +1075,6 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1104,10 +1084,9 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
         let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -1187,6 +1166,246 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
     })
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let whitelist_all_environment =
+            helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
+                &context,
+                secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .as_str(),
+                Some("0.0.0.0/0".to_string()), // <- Allow all IPs
+            );
+
+        let mut whitelist_all_environment_for_delete = whitelist_all_environment.clone();
+        whitelist_all_environment_for_delete.action = Action::Delete;
+
+        let env_action = whitelist_all_environment.clone();
+        let env_action_for_delete = whitelist_all_environment_for_delete.clone();
+
+        let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
+        let router = whitelist_all_environment
+            .routers
+            .first()
+            .unwrap()
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::new(true, None, None, None),
+                infra_ctx.cloud_provider(),
+            )
+            .unwrap();
+        let environment_domain = whitelist_all_environment
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .unwrap();
+
+        // let some time for ingress to get its IP or hostname
+        let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
+            match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
+                kubeconfig.as_ref().unwrap().as_str(),
+                environment_domain.namespace(),
+                router.kube_name(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(res) => match res {
+                    Some(res) => retry::OperationResult::Ok(res),
+                    None => retry::OperationResult::Retry("ingress not found"),
+                },
+                Err(_) => retry::OperationResult::Retry("cannot get ingress"),
+            }
+        })
+        .expect("cannot get ingress");
+        let ingress_host = ingress
+            .ip
+            .as_ref()
+            .unwrap_or_else(|| ingress.hostname.as_ref().expect("ingress has no IP nor hostname"));
+
+        let http_client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
+            .build()
+            .expect("Cannot build reqwest client");
+
+        for router in whitelist_all_environment.routers.iter() {
+            for route in router.routes.iter() {
+                let http_request_result = http_client
+                    .get(
+                        Url::parse(format!("http://{}{}", ingress_host, route.path).as_str())
+                            .expect("cannot parse URL")
+                            .to_string(),
+                    )
+                    .header("Host", router.default_domain.as_str())
+                    .send()
+                    .expect("Cannot get HTTP response");
+
+                assert_eq!(StatusCode::OK, http_request_result.status());
+            }
+        }
+
+        let result =
+            whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let ret = env_action_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let whitelist_all_environment =
+            helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
+                &context,
+                secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .as_str(),
+                Some("0.0.0.0/32".to_string()), // <- Allow all IPs
+            );
+
+        let mut whitelist_all_environment_for_delete = whitelist_all_environment.clone();
+        whitelist_all_environment_for_delete.action = Action::Delete;
+
+        let env_action = whitelist_all_environment.clone();
+        let env_action_for_delete = whitelist_all_environment_for_delete.clone();
+
+        let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
+        let router = whitelist_all_environment
+            .routers
+            .first()
+            .unwrap()
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::new(true, None, None, None),
+                infra_ctx.cloud_provider(),
+            )
+            .unwrap();
+        let environment_domain = whitelist_all_environment
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .unwrap();
+
+        // let some time for ingress to get its IP or hostname
+        let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
+            match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
+                kubeconfig.as_ref().unwrap().as_str(),
+                environment_domain.namespace(),
+                router.kube_name(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(res) => match res {
+                    Some(res) => retry::OperationResult::Ok(res),
+                    None => retry::OperationResult::Retry("ingress not found"),
+                },
+                Err(_) => retry::OperationResult::Retry("cannot get ingress"),
+            }
+        })
+        .expect("cannot get ingress");
+        let ingress_host = ingress
+            .ip
+            .as_ref()
+            .unwrap_or_else(|| ingress.hostname.as_ref().expect("ingress has no IP nor hostname"));
+
+        let http_client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
+            .build()
+            .expect("Cannot build reqwest client");
+
+        for router in whitelist_all_environment.routers.iter() {
+            for route in router.routes.iter() {
+                let http_request_result = http_client
+                    .get(
+                        Url::parse(format!("http://{}{}", ingress_host, route.path).as_str())
+                            .expect("cannot parse URL")
+                            .to_string(),
+                    )
+                    .header("Host", router.default_domain.as_str())
+                    .send()
+                    .expect("Cannot get HTTP response");
+
+                assert_eq!(StatusCode::FORBIDDEN, http_request_result.status());
+            }
+        }
+
+        let result =
+            whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let ret = env_action_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        test_name.to_string()
+    })
+}
+
 #[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
@@ -1197,7 +1416,6 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1207,10 +1425,9 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1329,6 +1546,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             .deployment_affinity_node_required = btreemap! {
             node_selector_key.to_string() => node_selector_value.to_string()
         };
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
@@ -1387,7 +1605,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+        let metrics_registry_for_deployment = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1397,10 +1615,9 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let _infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let _infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1485,7 +1702,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let records = metrics_registry.get_records(environment.containers.first().unwrap().long_id);
+        let records = metrics_registry_for_deployment.get_records(environment.containers.first().unwrap().long_id);
         let mirror_record = records
             .iter()
             .find(|record| record.step_name == StepName::MirrorImage)
@@ -1506,7 +1723,6 @@ fn deploy_container_with_storages_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1516,10 +1732,9 @@ fn deploy_container_with_storages_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1633,7 +1848,6 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1643,10 +1857,9 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1789,7 +2002,6 @@ fn deploy_container_with_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1799,10 +2011,9 @@ fn deploy_container_with_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1910,7 +2121,7 @@ fn deploy_job_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -1920,10 +2131,9 @@ fn deploy_job_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2005,7 +2215,7 @@ fn deploy_cronjob_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2015,10 +2225,9 @@ fn deploy_cronjob_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2098,7 +2307,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2108,10 +2317,9 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2219,7 +2427,7 @@ fn build_and_deploy_job_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2229,10 +2437,9 @@ fn build_and_deploy_job_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2313,7 +2520,7 @@ fn test_restart_deployment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2323,10 +2530,9 @@ fn test_restart_deployment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2433,7 +2639,7 @@ fn test_restart_statefulset() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2443,10 +2649,9 @@ fn test_restart_statefulset() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2560,7 +2765,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2570,10 +2775,9 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -2699,7 +2903,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
@@ -2708,10 +2912,10 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
         let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2789,7 +2993,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         resized_environment.applications[0].storage[0].size_in_gib = resized_size;
         let resized_ea = resized_environment.clone();
         let resized_context = context.clone_not_same_execution_id();
-        let resized_infra_ctx = aws_default_infra_config(&resized_context, logger.clone(), metrics_registry.clone());
+        let resized_infra_ctx = aws_default_infra_config(&resized_context, logger.clone(), metrics_registry());
         let resized_ret = resized_environment.deploy_environment(&resized_ea, &resized_infra_ctx);
         assert!(matches!(resized_ret, TransactionResult::Ok));
 
@@ -2839,7 +3043,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -2849,10 +3053,9 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3008,7 +3211,7 @@ fn deploy_helm_chart() {
         let _enter = span.enter();
 
         let logger = logger();
-        let metrics_registry = metrics_registry();
+
         let secrets = FuncTestsSecrets::new();
         let context = context_for_resource(
             secrets
@@ -3018,10 +3221,9 @@ fn deploy_helm_chart() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 

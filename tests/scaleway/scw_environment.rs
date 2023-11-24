@@ -23,6 +23,7 @@ use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
+use reqwest::StatusCode;
 use retry::delay::Fibonacci;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -1128,6 +1129,270 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let whitelist_all_environment =
+            helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
+                &context,
+                secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .as_str(),
+                Some("0.0.0.0/0".to_string()), // <- Allow all IPs
+            );
+
+        let mut whitelist_all_environment_for_delete = whitelist_all_environment.clone();
+        whitelist_all_environment_for_delete.action = Action::Delete;
+
+        let env_action = whitelist_all_environment.clone();
+        let env_action_for_delete = whitelist_all_environment_for_delete.clone();
+
+        let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
+        let router = whitelist_all_environment
+            .routers
+            .first()
+            .unwrap()
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::new(true, None, None, None),
+                infra_ctx.cloud_provider(),
+            )
+            .unwrap();
+        let environment_domain = whitelist_all_environment
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .unwrap();
+
+        // let some time for ingress to get its IP or hostname
+        let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
+            match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
+                kubeconfig.as_ref().unwrap().as_str(),
+                environment_domain.namespace(),
+                router.kube_name(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(res) => match res {
+                    Some(res) => retry::OperationResult::Ok(res),
+                    None => retry::OperationResult::Retry("ingress not found"),
+                },
+                Err(_) => retry::OperationResult::Retry("cannot get ingress"),
+            }
+        })
+        .expect("cannot get ingress");
+        let ingress_host = ingress
+            .ip
+            .as_ref()
+            .unwrap_or_else(|| ingress.hostname.as_ref().expect("ingress has no IP nor hostname"));
+
+        let http_client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
+            .build()
+            .expect("Cannot build reqwest client");
+
+        for router in whitelist_all_environment.routers.iter() {
+            for route in router.routes.iter() {
+                let http_request_result = http_client
+                    .get(
+                        Url::parse(format!("http://{}{}", ingress_host, route.path).as_str())
+                            .expect("cannot parse URL")
+                            .to_string(),
+                    )
+                    .header("Host", router.default_domain.as_str())
+                    .send()
+                    .expect("Cannot get HTTP response");
+
+                assert_eq!(StatusCode::OK, http_request_result.status());
+            }
+        }
+
+        let result =
+            whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        if let Err(e) = clean_environments(&context, vec![whitelist_all_environment], secrets, region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
+    use qovery_engine::models::router::RouterAdvancedSettings;
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = ScwZone::from_str(
+            secrets
+                .SCALEWAY_TEST_CLUSTER_REGION
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown SCW region");
+        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete =
+            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let whitelist_all_environment =
+            helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
+                &context,
+                secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .as_str(),
+                Some("0.0.0.0/32".to_string()), // <- deny all IPs
+            );
+
+        let mut deny_all_environment_for_delete = whitelist_all_environment.clone();
+        deny_all_environment_for_delete.action = Action::Delete;
+
+        let env_action = whitelist_all_environment.clone();
+        let env_action_for_delete = deny_all_environment_for_delete.clone();
+
+        let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        // checking cookie is properly set on the app
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
+        let router = whitelist_all_environment
+            .routers
+            .first()
+            .unwrap()
+            .to_router_domain(
+                infra_ctx.context(),
+                RouterAdvancedSettings::new(true, None, None, None),
+                infra_ctx.cloud_provider(),
+            )
+            .unwrap();
+        let environment_domain = whitelist_all_environment
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .unwrap();
+
+        // let some time for ingress to get its IP or hostname
+        let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
+            match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
+                kubeconfig.as_ref().unwrap().as_str(),
+                environment_domain.namespace(),
+                router.kube_name(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(res) => match res {
+                    Some(res) => retry::OperationResult::Ok(res),
+                    None => retry::OperationResult::Retry("ingress not found"),
+                },
+                Err(_) => retry::OperationResult::Retry("cannot get ingress"),
+            }
+        })
+        .expect("cannot get ingress");
+        let ingress_host = ingress
+            .ip
+            .as_ref()
+            .unwrap_or_else(|| ingress.hostname.as_ref().expect("ingress has no IP nor hostname"));
+
+        let http_client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
+            .build()
+            .expect("Cannot build reqwest client");
+
+        for router in whitelist_all_environment.routers.iter() {
+            for route in router.routes.iter() {
+                let http_request_result = http_client
+                    .get(
+                        Url::parse(format!("http://{}{}", ingress_host, route.path).as_str())
+                            .expect("cannot parse URL")
+                            .to_string(),
+                    )
+                    .header("Host", router.default_domain.as_str())
+                    .send()
+                    .expect("Cannot get HTTP response");
+
+                assert_eq!(StatusCode::FORBIDDEN, http_request_result.status());
+            }
+        }
+
+        let result = deny_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        if let Err(e) = clean_environments(&context, vec![whitelist_all_environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

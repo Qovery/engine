@@ -71,7 +71,7 @@ pub fn mirror_image_if_necessary(
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
-    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
 ) -> Result<(), Box<EngineError>> {
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 

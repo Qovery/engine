@@ -516,6 +516,7 @@ pub fn environment_only_http_server(
     test_domain: &str,
     with_router: bool,
     with_sticky: bool,
+    with_ip_whitelist_source_range: Option<String>,
 ) -> EnvironmentRequest {
     let router_name = "main".to_string();
     let suffix = generate_id();
@@ -524,6 +525,7 @@ pub fn environment_only_http_server(
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let settings = ApplicationAdvancedSettings {
         network_ingress_sticky_session_enable: with_sticky,
+        network_ingress_whitelist_source_range: with_ip_whitelist_source_range.unwrap_or_else(|| "".to_string()),
         ..Default::default()
     };
 
@@ -620,14 +622,22 @@ pub fn environment_only_http_server(
 }
 
 pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    environment_only_http_server(context, test_domain, true, false)
+    environment_only_http_server(context, test_domain, true, false, None)
 }
 
 pub fn environment_only_http_server_router_with_sticky_session(
     context: &Context,
     test_domain: &str,
 ) -> EnvironmentRequest {
-    environment_only_http_server(context, test_domain, true, true)
+    environment_only_http_server(context, test_domain, true, true, None)
+}
+
+pub fn environment_only_http_server_router_with_ip_whitelist_source_range(
+    context: &Context,
+    test_domain: &str,
+    with_ip_whitelist_source_range: Option<String>,
+) -> EnvironmentRequest {
+    environment_only_http_server(context, test_domain, true, true, with_ip_whitelist_source_range)
 }
 
 /// Test if stick sessions are activated on given routers via cookie.

@@ -28,7 +28,7 @@ pub struct ApplicationDeploymentReporter<T> {
     kube_client: kube::Client,
     selector: String,
     logger: EnvLogger,
-    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
     _tag: std::marker::PhantomData<T>,
     action: Action,
 }

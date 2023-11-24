@@ -1012,7 +1012,12 @@ pub fn test_redis_configuration(
 #[named]
 #[test]
 fn redis_disk_resize() {
-    test_deploy_an_environment_with_db_and_resize_disk(DatabaseKind::Redis, "6", function_name!(), KubernetesKind::Eks)
+    test_deploy_an_environment_with_db_and_resize_disk(
+        DatabaseKind::Redis,
+        "6.2",
+        function_name!(),
+        KubernetesKind::Eks,
+    )
 }
 
 #[cfg(feature = "test-aws-self-hosted")]

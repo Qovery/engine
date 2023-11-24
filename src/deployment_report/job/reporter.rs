@@ -52,7 +52,7 @@ pub struct JobDeploymentReporter<T> {
     kube_client: kube::Client,
     selector: String,
     logger: EnvLogger,
-    metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
     send_final_deleted_status: bool,
     _phantom: PhantomData<T>,
 }

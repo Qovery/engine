@@ -119,7 +119,7 @@ impl LocalDocker {
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         logger: &EnvLogger,
-        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        metrics_registry: Arc<dyn MetricsRegistry>,
         obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
@@ -338,7 +338,7 @@ impl BuildPlatform for LocalDocker {
         &self,
         build: &mut Build,
         logger: &EnvLogger,
-        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        metrics_registry: Arc<dyn MetricsRegistry>,
         obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {

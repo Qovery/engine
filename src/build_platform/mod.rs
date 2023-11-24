@@ -88,7 +88,7 @@ pub trait BuildPlatform: Send + Sync {
         &self,
         build: &mut Build,
         logger: &EnvLogger,
-        metrics_registry: Arc<Box<dyn MetricsRegistry>>,
+        metrics_registry: Arc<dyn MetricsRegistry>,
         obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError>;
