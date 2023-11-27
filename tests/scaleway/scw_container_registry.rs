@@ -3,6 +3,7 @@ use crate::helpers::utilities::{context_for_resource, engine_run_test, init, Fun
 use function_name::named;
 use qovery_engine::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -51,7 +52,7 @@ fn test_delete_image() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-fn test_get_registry_namespace() {
+fn test_get_repository() {
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -86,20 +87,14 @@ fn test_get_registry_namespace() {
                 .expect("error while creating registry namespace");
 
             // execute:
-            debug!("test_get_registry_namespace - {}", region);
-            let result = container_registry.get_registry_namespace(&image);
+            debug!("test_get_repository - {}", region);
+            let result = container_registry.get_repository(&image);
 
             // verify:
-            assert!(result.is_some());
-
-            let result = result.unwrap();
-            assert!(result.status.is_some());
-
-            let status = result.status.unwrap();
-            assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
+            assert!(result.is_ok());
 
             // clean-up:
-            container_registry.delete_registry_namespace(&image).unwrap();
+            container_registry.delete_repository(&image).unwrap();
         }
 
         test_name.to_string()
@@ -147,14 +142,11 @@ fn test_create_registry_namespace() {
             // verify:
             assert!(result.is_ok());
 
-            let added_registry_result = container_registry.get_registry_namespace(&image);
-            assert!(added_registry_result.is_some());
-
-            let added_registry_result = added_registry_result.unwrap();
-            assert!(added_registry_result.status.is_some());
+            let added_registry_result = container_registry.get_repository(&image);
+            assert!(added_registry_result.is_ok());
 
             // clean-up:
-            container_registry.delete_registry_namespace(&image).unwrap();
+            container_registry.delete_repository(&image).unwrap();
         }
 
         test_name.to_string()
@@ -250,17 +242,14 @@ fn test_create_registry_namespace_invalid_name() {
                     None => {
                         assert!(result.is_ok());
 
-                        let added_registry_result = container_registry.get_registry_namespace(&image);
-                        assert!(added_registry_result.is_some());
-
-                        let added_registry_result = added_registry_result.unwrap();
-                        assert!(added_registry_result.status.is_some());
+                        let added_registry_result = container_registry.get_repository(&image);
+                        assert!(added_registry_result.is_ok());
 
                         // clean-up:
-                        container_registry.delete_registry_namespace(&image).unwrap();
+                        container_registry.delete_repository(&image).unwrap();
                     }
                     Some(e) => {
-                        assert_eq!(Err(e), result);
+                        assert_eq!(e, result.unwrap_err());
                     }
                 }
             }
@@ -273,7 +262,7 @@ fn test_create_registry_namespace_invalid_name() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
-fn test_delete_registry_namespace() {
+fn test_delete_repository() {
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -308,8 +297,8 @@ fn test_delete_registry_namespace() {
                 .expect("error while creating registry namespace");
 
             // execute:
-            debug!("test_delete_registry_namespace - {}", region);
-            let result = container_registry.delete_registry_namespace(&image);
+            debug!("test_delete_repository - {}", region);
+            let result = container_registry.delete_repository(&image);
 
             // verify:
             assert!(result.is_ok());
@@ -364,17 +353,8 @@ fn test_get_or_create_registry_namespace() {
             // verify:
             assert!(result.is_ok());
 
-            let result = result.unwrap();
-            assert!(result.0.status.is_some());
-
-            let status = result.0.status.unwrap();
-            assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
-
-            let added_registry_result = container_registry.get_registry_namespace(&image);
-            assert!(added_registry_result.is_some());
-
-            let added_registry_result = added_registry_result.unwrap();
-            assert!(added_registry_result.status.is_some());
+            let added_registry_result = container_registry.get_repository(&image);
+            assert!(added_registry_result.is_ok());
 
             // second try: repository already created, so should be a get only
             let result = container_registry.get_or_create_registry_namespace(&image);
@@ -382,20 +362,11 @@ fn test_get_or_create_registry_namespace() {
             // verify:
             assert!(result.is_ok());
 
-            let result = result.unwrap();
-            assert!(result.0.status.is_some());
-
-            let status = result.0.status.unwrap();
-            assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
-
-            let added_registry_result = container_registry.get_registry_namespace(&image);
-            assert!(added_registry_result.is_some());
-
-            let added_registry_result = added_registry_result.unwrap();
-            assert!(added_registry_result.status.is_some());
+            let added_registry_result = container_registry.get_repository(&image);
+            assert!(added_registry_result.is_ok());
 
             // clean-up:
-            container_registry.delete_registry_namespace(&image).unwrap();
+            container_registry.delete_repository(&image).unwrap();
         }
         test_name.to_string()
     })

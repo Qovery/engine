@@ -19,7 +19,7 @@ impl ToCloudProviderFormat for GcpRegion {
 impl Display for GcpRegion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            GcpRegion::EuropeWest9 => "europe-west-9",
+            GcpRegion::EuropeWest9 => "europe-west9",
         })
     }
 }
@@ -30,7 +30,7 @@ impl FromStr for GcpRegion {
     fn from_str(s: &str) -> Result<GcpRegion, ()> {
         let v: &str = &s.to_lowercase();
         match v {
-            "europe-west-9" => Ok(GcpRegion::EuropeWest9),
+            "europe-west9" => Ok(GcpRegion::EuropeWest9),
             // TODO(benjaminch): Add all regions GCP integration
             _ => Err(()),
         }
@@ -49,7 +49,7 @@ mod tests {
         for region in GcpRegion::iter() {
             assert_eq!(
                 match region {
-                    GcpRegion::EuropeWest9 => "europe-west-9",
+                    GcpRegion::EuropeWest9 => "europe-west9",
                 },
                 region.to_cloud_provider_format()
             );
@@ -61,7 +61,7 @@ mod tests {
         for region in GcpRegion::iter() {
             assert_eq!(
                 match region {
-                    GcpRegion::EuropeWest9 => "europe-west-9",
+                    GcpRegion::EuropeWest9 => "europe-west9",
                 },
                 region.to_string()
             );

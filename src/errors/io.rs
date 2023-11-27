@@ -82,10 +82,12 @@ pub enum Tag {
     CompressionError,
     ContainerRegistryCannotCreateRegistry,
     ContainerRegistryCannotCreateRepository,
+    ContainerRegistryCannotGetRepository,
     ContainerRegistryCannotDeleteImage,
     ContainerRegistryCannotDeleteRegistry,
     ContainerRegistryCannotDeleteRepository,
     ContainerRegistryCannotGetCredentials,
+    ContainerRegistryInvalidRegistryUrl,
     ContainerRegistryCannotLinkRegistryToCluster,
     ContainerRegistryCannotSetRepositoryLifecycleError,
     ContainerRegistryCannotSetRepositoryTags,
@@ -334,10 +336,12 @@ impl From<errors::Tag> for Tag {
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
             errors::Tag::ContainerRegistryCannotCreateRepository => Tag::ContainerRegistryCannotCreateRepository,
+            errors::Tag::ContainerRegistryCannotGetRepository => Tag::ContainerRegistryCannotGetRepository,
             errors::Tag::ContainerRegistryCannotSetRepositoryLifecycle => {
                 Tag::ContainerRegistryCannotSetRepositoryLifecycleError
             }
             errors::Tag::ContainerRegistryCannotGetCredentials => Tag::ContainerRegistryCannotGetCredentials,
+            errors::Tag::ContainerRegistryInvalidRegistryUrl => Tag::ContainerRegistryInvalidRegistryUrl,
             errors::Tag::ContainerRegistryCannotDeleteImage => Tag::ContainerRegistryCannotDeleteImage,
             errors::Tag::ContainerRegistryImageDoesntExist => Tag::ContainerRegistryImageDoesntExist,
             errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,

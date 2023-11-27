@@ -68,7 +68,7 @@ fn scaleway_test_build_phase() {
         // Check the the image exist in the registry
         let img_exist = infra_ctx
             .container_registry()
-            .does_image_exists(&env.applications[0].get_build().image);
+            .image_exists(&env.applications[0].get_build().image);
         assert!(img_exist);
 
         test_name.to_string()

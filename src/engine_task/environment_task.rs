@@ -304,7 +304,7 @@ impl EnvironmentTask {
         let image_name = build.image.full_image_name_with_tag();
 
         // If image already exists in the registry, skip the build
-        if !option.force_build && cr_registry.does_image_exists(&build.image) {
+        if !option.force_build && cr_registry.image_exists(&build.image) {
             let msg = format!("✅ Container image {image_name} already exists and ready to use");
             logger.send_success(msg);
             return Ok(());
@@ -322,7 +322,7 @@ impl EnvironmentTask {
                 provision_registry_record.stop(StepStatus::Error);
                 return Err(Box::new(cr_to_engine_error(err)));
             }
-            Ok(repository_info) => provision_registry_record.stop(if repository_info.created {
+            Ok((_repository, repository_info)) => provision_registry_record.stop(if repository_info.created {
                 StepStatus::Success
             } else {
                 StepStatus::Skip
