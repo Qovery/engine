@@ -9,14 +9,14 @@ use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
     BatchDeleteImageRequest, CreateRepositoryRequest, DeleteRepositoryError, DeleteRepositoryRequest,
     DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository, Tag,
-    TagResourceRequest,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, ListTagsForResourceRequest, PutLifecyclePolicyRequest,
+    Tag, TagResourceRequest,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, RepositoryInfo};
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
@@ -35,7 +35,7 @@ pub struct ECR {
     access_key_id: String,
     secret_access_key: String,
     region: Region,
-    registry_info: Option<ContainerRegistryInfo>,
+    registry_info: Option<ContainerRegistryInfo>, // TODO(benjamin): code smell, should not come with an Option
     logger: Box<dyn Logger>,
     tags: HashMap<String, String>,
 }
@@ -80,7 +80,7 @@ impl ECR {
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
             get_image_name: Box::new(|img_name| img_name.to_string()),
-            get_repository_name: Box::new(|imag_name| imag_name.to_string()),
+            get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
 
         cr.registry_info = Some(registry_info);
@@ -105,22 +105,6 @@ impl ECR {
 
     pub fn ecr_client(&self) -> EcrClient {
         EcrClient::new_with_client(self.client(), self.region.clone())
-    }
-
-    fn get_repository(&self, repository_name: &str) -> Option<Repository> {
-        let mut drr = DescribeRepositoriesRequest::default();
-        drr.repository_names = Some(vec![repository_name.to_string()]);
-
-        let r = block_on(self.ecr_client().describe_repositories(drr));
-
-        match r {
-            Err(_) => None,
-            Ok(res) => match res.repositories {
-                // assume there is only one repository returned - why? Because we set only one repository_names above
-                Some(repositories) => repositories.into_iter().next(),
-                _ => None,
-            },
-        }
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
@@ -314,7 +298,8 @@ impl ECR {
                         }?;
                     }
 
-                    Ok(repos[0].clone())
+                    // return the created repo via get
+                    self.get_repository(repository_name) // TODO(benjaminch): maybe extra get is avoidable here?
                 } else {
                     Err(ContainerRegistryError::Unknown {
                         raw_error_message: "Cannot get repositories".to_string(),
@@ -329,15 +314,17 @@ impl ECR {
         repository_name: &str,
         image_retention_time_in_seconds: u32,
         resource_ttl: Option<Duration>,
-    ) -> Result<RepositoryInfo, ContainerRegistryError> {
+    ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // check if the repository already exists
-        let repository = self.get_repository(repository_name);
-        if repository.is_some() {
-            return Ok(RepositoryInfo { created: false });
+        if let Ok(repository) = self.get_repository(repository_name) {
+            return Ok((repository, RepositoryInfo { created: false }));
         }
 
-        self.create_repository(repository_name, image_retention_time_in_seconds, resource_ttl)?;
-        Ok(RepositoryInfo { created: true })
+        // create it if it doesn't exist
+        match self.create_repository(repository_name, image_retention_time_in_seconds, resource_ttl) {
+            Ok(repository) => Ok((repository, RepositoryInfo { created: true })),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -419,9 +406,85 @@ impl ContainerRegistry for ECR {
         name: &str,
         image_retention_time_in_seconds: u32,
         resource_ttl: Option<Duration>,
-    ) -> Result<RepositoryInfo, ContainerRegistryError> {
+    ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds, resource_ttl)?;
         Ok(repository_info)
+    }
+
+    fn get_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+        let ecr_client = self.ecr_client();
+        let mut drr = DescribeRepositoriesRequest::default();
+        drr.repository_names = Some(vec![repository_name.to_string()]);
+
+        match block_on(ecr_client.describe_repositories(drr)) {
+            Err(e) => Err(ContainerRegistryError::CannotGetRepository {
+                registry_name: match &self.registry_info {
+                    Some(i) => i.registry_name.to_string(),
+                    None => "".to_string(),
+                },
+                repository_name: repository_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+            Ok(res) => match res.repositories {
+                // assume there is only one repository returned - why? Because we set only one repository_names above
+                Some(repositories) => {
+                    match repositories.into_iter().next() {
+                        Some(r) => {
+                            // get tags for repository
+                            let tags = match block_on(ecr_client.list_tags_for_resource(ListTagsForResourceRequest {
+                                resource_arn: r.repository_arn.unwrap_or("".to_string()),
+                            })) {
+                                Ok(tags_res) => tags_res.tags,
+                                Err(_) => None,
+                            };
+
+                            let mut ttl = None;
+                            for tag in tags.clone().unwrap_or_default() {
+                                if let (Some(k), Some(v)) = (&tag.key, &tag.value) {
+                                    if k.as_str() == "ttl" {
+                                        if let Ok(d) = v.parse() {
+                                            ttl = Some(Duration::from_secs(d));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            let created_repository_name = r.repository_name.unwrap_or_default();
+
+                            Ok(Repository {
+                                registry_id: r.registry_id.unwrap_or("".to_string()),
+                                id: created_repository_name.to_string(),
+                                name: created_repository_name.to_string(),
+                                uri: r.repository_uri,
+                                ttl,
+                                labels: tags.map(|t| {
+                                    t.into_iter()
+                                        .map(|i| (i.key.unwrap_or_default(), i.value.unwrap_or_default()))
+                                        .collect()
+                                }),
+                            })
+                        }
+                        None => Err(ContainerRegistryError::CannotGetRepository {
+                            registry_name: match &self.registry_info {
+                                Some(i) => i.registry_name.to_string(),
+                                None => "".to_string(),
+                            },
+                            repository_name: repository_name.to_string(),
+                            raw_error_message: format!("No repository found with name `{}`", repository_name),
+                        }),
+                    }
+                }
+                _ => Err(ContainerRegistryError::CannotGetRepository {
+                    registry_name: match &self.registry_info {
+                        Some(i) => i.registry_name.to_string(),
+                        None => "".to_string(),
+                    },
+                    repository_name: repository_name.to_string(),
+                    raw_error_message: format!("No repository found with name `{}`", repository_name),
+                }),
+            },
+        }
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
@@ -432,7 +495,7 @@ impl ContainerRegistry for ECR {
         self.delete_image(image)
     }
 
-    fn does_image_exists(&self, image: &Image) -> bool {
+    fn image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
     }
 }

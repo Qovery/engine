@@ -178,7 +178,7 @@ impl Drop for BuilderHandle {
 }
 
 impl Docker {
-    fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
+    pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
             builder_location: BuilderLocation::Local,
             socket_location,
@@ -422,8 +422,7 @@ impl Docker {
         }
     }
 
-    #[cfg(test)]
-    fn pull<Stdout, Stderr>(
+    pub fn pull<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,
@@ -556,8 +555,7 @@ impl Docker {
         )
     }
 
-    #[cfg(test)]
-    fn push<Stdout, Stderr>(
+    pub fn push<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,

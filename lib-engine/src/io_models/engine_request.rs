@@ -6,12 +6,14 @@ use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::gcp::regions::GcpRegion;
 use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
 use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
 use crate::container_registry::ecr::ECR;
+use crate::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::io::Kind;
@@ -25,9 +27,13 @@ use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::Domain;
+use crate::models::gcp::Credentials;
 use crate::models::scaleway::ScwZone;
+use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
 use derivative::Derivative;
+use governor::{Quota, RateLimiter};
+use nonzero_ext::nonzero;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -453,6 +459,31 @@ impl ContainerRegistry {
                 )
                 .ok()?,
             )),
+            container_registry::Kind::GoogleCr => Some(Box::new(
+                GoogleArtifactRegistry::new(
+                    context,
+                    self.id.as_str(),
+                    self.long_id,
+                    self.name.as_str(),
+                    self.options.gcp_project_id.as_ref()?.as_str(),
+                    GcpRegion::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
+                        panic!(
+                            "cannot parse `{}`, it doesn't seem to be a valid GCP region",
+                            self.options.region.as_deref().unwrap_or_default()
+                        )
+                    }),
+                    Credentials::new(self.options.gcp_credentials.as_ref()?.to_string()),
+                    Arc::new(
+                        ArtifactRegistryService::new(
+                            Credentials::new(self.options.gcp_credentials.as_ref()?.to_string()),
+                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                        )
+                        .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
+                    ),
+                )
+                .ok()?,
+            )),
         }
     }
 }
@@ -529,6 +560,9 @@ pub struct Options {
     scaleway_access_key: Option<String>,
     #[derivative(Debug = "ignore")]
     scaleway_secret_key: Option<String>,
+    #[derivative(Debug = "ignore")]
+    gcp_credentials: Option<String>,
+    gcp_project_id: Option<String>,
     #[derivative(Debug = "ignore")]
     token: Option<String>,
     region: Option<String>,

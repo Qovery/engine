@@ -98,7 +98,9 @@ scaleway_api_rs = "=0.1.2"
 
 # GCP deps
 google-cloud-auth = "0.13.0"
-google-cloud-storage = "0.14.0"
+google-cloud-storage= "0.14.0"
+google-cloud-artifact-registry = "0.1.0"
+google-cloud-googleapis = "0.11.0"
 
 [dev-dependencies]
 bstr = "1.6.2"
