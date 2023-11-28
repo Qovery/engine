@@ -159,8 +159,12 @@ impl<T: CloudProvider> HelmChart<T> {
 
     pub fn service_version(&self) -> String {
         match &self.chart_source {
-            HelmChartSource::Repository { chart_version, .. } => chart_version.clone(),
-            HelmChartSource::Git { commit_id, .. } => commit_id.clone(),
+            HelmChartSource::Repository {
+                chart_name,
+                chart_version,
+                ..
+            } => format!("{chart_name}:{chart_version}"),
+            HelmChartSource::Git { commit_id, .. } => commit_id.to_string(),
         }
     }
 
