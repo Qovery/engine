@@ -370,6 +370,9 @@ impl From<ContainerRegistryError> for CommandError {
             ContainerRegistryError::InvalidCredentials => {
                 CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
             }
+            ContainerRegistryError::InvalidRegistryUrl { registry_url} => {
+                CommandError::new_from_safe_message(format!("Container registry error, invalid registry URL: `{registry_url}`"))
+            }
             ContainerRegistryError::CannotGetCredentials => {
                 CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
             }
@@ -440,6 +443,17 @@ impl From<ContainerRegistryError> for CommandError {
             } => CommandError::new(
                 format!(
                     "Container registry error, cannot create repository `{repository_name}` in registry: `{registry_name}`"
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotGetRepository {
+                repository_name,
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot get repository `{repository_name}` in registry: `{registry_name}`"
                 ),
                 Some(raw_error_message),
                 None,
@@ -918,10 +932,14 @@ pub enum Tag {
     DockerPullImageError,
     /// ContainerRegistryCannotCreateRepository: represents an error when trying to create a repository.
     ContainerRegistryCannotCreateRepository,
+    /// ContainerRegistryCannotGetRepository: represents an error when trying to get a repository.
+    ContainerRegistryCannotGetRepository,
     /// ContainerRegistryCannotSetRepositoryLifecycle: represents an error when trying to set repository lifecycle policy.
     ContainerRegistryCannotSetRepositoryLifecycle,
     /// ContainerRegistryCannotGetCredentials: represents an error when trying to get container registry credentials.
     ContainerRegistryCannotGetCredentials,
+    /// ContainerRegistryInvalidRegistryUrl: represents an error where registry URL is invalid (cannot be parsed).
+    ContainerRegistryInvalidRegistryUrl,
     /// ContainerRegistryCannotDeleteImage: represents an error while trying to delete an image.
     ContainerRegistryCannotDeleteImage,
     /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
@@ -2968,6 +2986,14 @@ impl EngineError {
                 Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `ContainerRegistryError::InvalidCredentials`, URL is not valid.")),
                 Some("Make sure you provide proper credentials for your cloud account.".to_string()),
             ),
+            ContainerRegistryError::InvalidRegistryUrl { ref registry_url} => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryInvalidRegistryUrl,
+                format!("Container registry: invalid registry URL: `{registry_url}`"),
+                Some(error.into()),
+                None,
+                None,
+            ),
             ContainerRegistryError::CannotGetCredentials => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotGetCredentials,
@@ -3036,6 +3062,14 @@ impl EngineError {
                 event_details,
                 Tag::ContainerRegistryCannotCreateRepository,
                 format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`."),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotGetRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotGetRepository,
+                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`."),
                 Some(error.into()),
                 None,
                 None,

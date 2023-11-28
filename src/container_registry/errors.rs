@@ -15,6 +15,8 @@ pub enum RepositoryNamingRule {
 pub enum ContainerRegistryError {
     #[error("Unknown error.")]
     Unknown { raw_error_message: String },
+    #[error("Invalid registry URL error, cannot be parsed: `{registry_url}`.")]
+    InvalidRegistryUrl { registry_url: String },
     #[error("Invalid credentials error.")]
     InvalidCredentials,
     #[error("Cannot get credentials error.")]
@@ -24,6 +26,7 @@ pub enum ContainerRegistryError {
         registry_name: String,
         raw_error_message: String,
     },
+
     #[error("Cannot delete registry error for `{registry_name:?}`: {raw_error_message:?}.")]
     CannotDeleteRegistry {
         registry_name: String,
@@ -60,6 +63,12 @@ pub enum ContainerRegistryError {
     },
     #[error("Cannot create repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}.")]
     CannotCreateRepository {
+        registry_name: String,
+        repository_name: String,
+        raw_error_message: String,
+    },
+    #[error("Cannot get repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}.")]
+    CannotGetRepository {
         registry_name: String,
         repository_name: String,
         raw_error_message: String,

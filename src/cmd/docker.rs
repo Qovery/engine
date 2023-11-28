@@ -178,7 +178,7 @@ impl Drop for BuilderHandle {
 }
 
 impl Docker {
-    fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
+    pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
         let mut docker = Docker {
             builder_location: BuilderLocation::Local,
             socket_location,
@@ -355,7 +355,15 @@ impl Docker {
     }
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
-        info!("Docker login {} as user {}", registry, registry.username());
+        let username = match urlencoding::decode(registry.username()) {
+            Ok(decoded_username) => decoded_username,
+            Err(err) => {
+                return Err(DockerError::InvalidConfig {
+                    raw_error_message: format!("Cannot decode username due to: {}", err),
+                })
+            }
+        };
+        info!("Docker login {} as user {}", registry, username);
 
         let password = registry
             .password()
@@ -365,7 +373,7 @@ impl Docker {
             "login",
             registry.host_str().unwrap_or_default(),
             "-u",
-            registry.username(),
+            &username,
             "-p",
             &password,
         ];
@@ -414,8 +422,7 @@ impl Docker {
         }
     }
 
-    #[cfg(test)]
-    fn pull<Stdout, Stderr>(
+    pub fn pull<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,
@@ -548,8 +555,7 @@ impl Docker {
         )
     }
 
-    #[cfg(test)]
-    fn push<Stdout, Stderr>(
+    pub fn push<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
         stdout_output: &mut Stdout,
