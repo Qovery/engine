@@ -630,7 +630,7 @@ pub fn is_pod_restarted_env(
     match kubeconfig {
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
-                path.as_str(),
+                path,
                 environment_check.kube_name.as_str(),
                 service_id,
                 get_cloud_provider_credentials(provider_kind, &secrets),
@@ -658,7 +658,7 @@ pub fn get_pods(
     assert!(kubeconfig.is_ok());
 
     cmd::kubectl::kubectl_exec_get_pods(
-        kubeconfig.unwrap().as_str(),
+        kubeconfig.unwrap(),
         Some(environment_check.kube_name.as_str()),
         Some(&format!("qovery.com/service-id={}", service_id)),
         get_cloud_provider_credentials(provider_kind, &secrets),
@@ -738,7 +738,7 @@ pub fn get_pvc(
     match kubeconfig {
         Ok(path) => {
             match kubectl_get_pvc(
-                path.as_str(),
+                path,
                 &environment_check.kube_name,
                 get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
@@ -762,7 +762,7 @@ pub fn get_svc(
     match kubeconfig {
         Ok(path) => {
             match kubectl_get_svc(
-                path.as_str(),
+                path,
                 &environment_check.kube_name,
                 get_cloud_provider_credentials(provider_kind, &secrets),
             ) {

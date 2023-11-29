@@ -1097,7 +1097,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         // Sticky session is checked on ingress IP or hostname so we are not subjects to long DNS propagation making test less flacky.
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                kubeconfig.as_ref().unwrap(),
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
@@ -1217,7 +1217,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
         // let some time for ingress to get its IP or hostname
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                kubeconfig.as_ref().unwrap(),
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
@@ -1350,7 +1350,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         // let some time for ingress to get its IP or hostname
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                kubeconfig.as_ref().unwrap(),
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),

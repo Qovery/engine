@@ -4,7 +4,6 @@ use crate::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
 use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
-use chrono::Duration;
 use google_cloud_storage::client::{Client, ClientConfig};
 use google_cloud_storage::http::buckets::delete::DeleteBucketRequest;
 use google_cloud_storage::http::buckets::get::GetBucketRequest;
@@ -12,8 +11,8 @@ use google_cloud_storage::http::buckets::insert::{BucketCreationConfig, InsertBu
 use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, Condition};
 use google_cloud_storage::http::buckets::lifecycle::Rule;
 use google_cloud_storage::http::buckets::list::ListBucketsRequest;
-use google_cloud_storage::http::buckets::Bucket as GcpBucket;
 use google_cloud_storage::http::buckets::Lifecycle;
+use google_cloud_storage::http::buckets::{Bucket as GcpBucket, Versioning};
 use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
 use google_cloud_storage::http::objects::download::Range;
 use google_cloud_storage::http::objects::get::GetObjectRequest;
@@ -27,7 +26,7 @@ use reqwest::Body;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
@@ -83,12 +82,14 @@ enum StorageResourceKind {
     Object,
 }
 
+#[cfg_attr(test, faux::create)]
 pub struct ObjectStorageService {
     client: Client,
     write_bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     write_object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
 }
 
+#[cfg_attr(test, faux::methods)]
 impl ObjectStorageService {
     pub fn new(
         google_credentials: Credentials,
@@ -145,7 +146,7 @@ impl ObjectStorageService {
         self.get_bucket(bucket_name).is_ok()
     }
 
-    pub fn get_bucket(&self, bucket_name: &str) -> Result<Bucket<GcpStorageRegion>, ObjectStorageServiceError> {
+    pub fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageServiceError> {
         let gcp_bucket: GcpBucket = block_on(self.client.get_bucket(&GetBucketRequest {
             bucket: bucket_name.to_string(),
             if_metageneration_match: None,
@@ -170,10 +171,11 @@ impl ObjectStorageService {
         bucket_name: &str,
         bucket_location: GcpStorageRegion,
         bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
-    ) -> Result<Bucket<GcpStorageRegion>, ObjectStorageServiceError> {
+    ) -> Result<Bucket, ObjectStorageServiceError> {
         // Minimal TTL is 1 day for google storage
-        let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::days(1)));
+        let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::from_secs(60 * 60 * 24)));
 
         let mut create_bucket_request = InsertBucketRequest {
             name: bucket_name.to_string(),
@@ -184,19 +186,24 @@ impl ObjectStorageService {
             bucket: BucketCreationConfig {
                 labels: bucket_labels,
                 location: bucket_location.to_cloud_provider_format().to_uppercase(),
+                versioning: match bucket_versioning_activated {
+                    false => None,
+                    true => Some(Versioning { enabled: true }),
+                },
                 ..Default::default()
             },
         };
 
         if let Some(ttl) = bucket_ttl {
-            let bucket_ttl_max_age =
-                i32::try_from(ttl.num_days()).map_err(|_e| ObjectStorageServiceError::CannotCreateBucket {
+            let bucket_ttl_max_age = i32::try_from(ttl.as_secs() / 60 / 60 / 24).map_err(|_e| {
+                ObjectStorageServiceError::CannotCreateBucket {
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: format!(
                         "Cannot convert bucket TTL value `{}` to fit i32 as required by Google API",
-                        ttl.num_days()
+                        ttl.as_secs() / 60 / 60 / 24
                     ),
-                })?;
+                }
+            })?;
             create_bucket_request.bucket.lifecycle = Some(Lifecycle {
                 rule: vec![Rule {
                     action: Some(Action {
@@ -286,8 +293,8 @@ impl ObjectStorageService {
         &self,
         project_id: &str,
         bucket_name_prefix: Option<&str>,
-    ) -> Result<Vec<Bucket<GcpStorageRegion>>, ObjectStorageServiceError> {
-        let mut buckets: Vec<Bucket<GcpStorageRegion>> = vec![];
+    ) -> Result<Vec<Bucket>, ObjectStorageServiceError> {
+        let mut buckets: Vec<Bucket> = vec![];
         let mut next_page_token: Option<String> = None;
 
         loop {

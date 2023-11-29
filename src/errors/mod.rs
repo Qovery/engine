@@ -237,6 +237,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotGetBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot get bucket: `{bucket_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::CannotEmptyBucket {
                 bucket_name,
                 raw_error_message,
@@ -255,7 +263,7 @@ impl From<ObjectStorageError> for CommandError {
             ),
             ObjectStorageError::CannotGetObjectFile {
                 bucket_name,
-                file_name,
+                object_name: file_name,
                 raw_error_message,
             } => CommandError::new(
                 format!("Object storage error, cannot get file: `{file_name}` in bucket: `{bucket_name}`"),
@@ -264,7 +272,7 @@ impl From<ObjectStorageError> for CommandError {
             ),
             ObjectStorageError::CannotDeleteFile {
                 bucket_name,
-                file_name,
+                object_name: file_name,
                 raw_error_message,
             } => CommandError::new(
                 format!("Object storage error, cannot delete file `{file_name}` from bucket: `{bucket_name}`"),
@@ -289,7 +297,7 @@ impl From<ObjectStorageError> for CommandError {
             ),
             ObjectStorageError::CannotUploadFile {
                 bucket_name,
-                file_name,
+                object_name: file_name,
                 raw_error_message,
             } => CommandError::new(
                 format!("Object storage error, cannot upload file `{file_name}` into bucket: `{bucket_name}`"),
@@ -1000,6 +1008,8 @@ pub enum Tag {
     ObjectStorageCannotDeleteFileIntoBucket,
     /// ObjectStorageCannotDeleteBucket: represents an error while trying to delete a bucket.
     ObjectStorageCannotDeleteBucket,
+    /// ObjectStorageCannotGetBucket: represents an error while trying to get a bucket.
+    ObjectStorageCannotGetBucket,
     /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
     /// ObjectStorageQuotaExceeded: represents an error, quotas has been exceeded.
@@ -4358,6 +4368,14 @@ impl EngineError {
                 None,
                 None,
             ),
+            ObjectStorageError::CannotGetBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotGetBucket,
+                format!("Error, cannot get object storage bucket `{bucket_name}`.",),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
             ObjectStorageError::CannotEmptyBucket { ref bucket_name, .. } => EngineError::new(
                 event_details,
                 Tag::ObjectStorageCannotEmptyBucket,
@@ -4384,7 +4402,7 @@ impl EngineError {
             ),
             ObjectStorageError::CannotGetObjectFile {
                 ref bucket_name,
-                ref file_name,
+                object_name: ref file_name,
                 ..
             } => EngineError::new(
                 event_details,
@@ -4396,7 +4414,7 @@ impl EngineError {
             ),
             ObjectStorageError::CannotUploadFile {
                 ref bucket_name,
-                ref file_name,
+                object_name: ref file_name,
                 ..
             } => EngineError::new(
                 event_details,
@@ -4408,7 +4426,7 @@ impl EngineError {
             ),
             ObjectStorageError::CannotDeleteFile {
                 ref bucket_name,
-                ref file_name,
+                object_name: ref file_name,
                 ..
             } => EngineError::new(
                 event_details,

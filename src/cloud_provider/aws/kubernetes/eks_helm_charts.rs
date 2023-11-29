@@ -44,6 +44,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::models::aws::AwsStorageType;
 use crate::models::third_parties::LetsEncryptConfig;
+use crate::models::ToCloudProviderFormat;
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -279,7 +280,7 @@ pub fn eks_aws_helm_charts(
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
                 LokiS3BucketConfiguration {
-                    region: Some(chart_config_prerequisites.region.to_aws_format().to_string()), // TODO(benjaminch): region to be struct instead of String
+                    region: Some(chart_config_prerequisites.region.to_cloud_provider_format().to_string()), // TODO(benjaminch): region to be struct instead of String
                     bucketname: Some(qovery_terraform_config.aws_s3_loki_bucket_name),
                     s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
                     aws_iam_loki_role_arn: Some(qovery_terraform_config.aws_iam_loki_role_arn),
@@ -383,7 +384,7 @@ pub fn eks_aws_helm_charts(
                     loki_chart_name: LokiChart::chart_name(),
                     loki_namespace: loki_namespace.to_string(),
                     cloudwatch_config: Some(CloudWatchConfig::new(
-                        chart_config_prerequisites.region.to_aws_format().to_string(), // TODO(benjaminch): region to be struct instead of String
+                        chart_config_prerequisites.region.to_cloud_provider_format().to_string(), // TODO(benjaminch): region to be struct instead of String
                         qovery_terraform_config.aws_iam_cloudwatch_role_arn,
                     )),
                 },
@@ -553,7 +554,7 @@ pub fn eks_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
-                    value: chart_config_prerequisites.region.to_aws_format().to_string(),
+                    value: chart_config_prerequisites.region.to_cloud_provider_format().to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LIB_ROOT_DIR".to_string(),
