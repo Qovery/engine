@@ -12,6 +12,10 @@ sso:
   enabled: false
   iamSSORoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/aws-reserved/sso.amazonaws.com/[AWS_REGION]/AWSReservedSSO_AdministratorAccess_53b82e109c5e2cac"
 
+karpenter:
+  enabled: false
+  iamKarpenterRoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/[ROLE_NAME]"
+
 aws:
   defaultRegion: ""
   roleArn: ""
@@ -38,9 +42,10 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: "iam-eks-user-mapper"
 
-resources: {}
+resources:
+  {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following

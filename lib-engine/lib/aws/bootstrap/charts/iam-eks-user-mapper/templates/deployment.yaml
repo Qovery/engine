@@ -48,6 +48,10 @@ spec:
               value: "{{ .Values.sso.enabled }}"
             - name: "IAM_SSO_ROLE_ARN"
               value: "{{ .Values.sso.iamSSORoleArn }}"
+            {{ if .Values.karpenter.enabled }}
+            - name: "KARPENTER_ROLE_ARN"
+              value: "{{ .Values.karpenter.iamKarpenterRoleArn }}"
+            {{ end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           command:
