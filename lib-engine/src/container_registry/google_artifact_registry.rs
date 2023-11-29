@@ -43,7 +43,7 @@ impl GoogleArtifactRegistry {
                 registry_url: registry_raw_url,
             })?;
         let _ = registry.set_username(&login);
-        let _ = registry.set_password(Some(&secret_token));
+        let _ = registry.set_password(Some(secret_token));
 
         if context.docker.login(&registry).is_err() {
             return Err(ContainerRegistryError::InvalidCredentials);

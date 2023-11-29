@@ -20,7 +20,7 @@ impl Credentials {
 }
 
 impl ToCloudProviderFormat for Credentials {
-    fn to_cloud_provider_format(&self) -> String {
-        self.raw_content_json_string.to_string()
+    fn to_cloud_provider_format(&self) -> &str {
+        self.raw_content_json_string.as_str()
     }
 }

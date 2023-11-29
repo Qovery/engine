@@ -13,6 +13,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 
 #[cfg(feature = "test-aws-infra")]
@@ -34,7 +35,7 @@ fn create_and_destroy_eks_cluster(
             context_for_cluster(organization_id, cluster_id, Some(KKind::Eks)),
             logger(),
             metrics_registry(),
-            region.to_aws_format(),
+            region.to_cloud_provider_format(),
             Some(zones),
             test_type,
             &ClusterDomain::Default {
@@ -66,7 +67,7 @@ fn create_and_destroy_arm64_eks_cluster(
             context_for_cluster(organization_id, cluster_id, Some(KKind::Eks)),
             logger(),
             metrics_registry(),
-            region.to_aws_format(),
+            region.to_cloud_provider_format(),
             Some(zones),
             test_type,
             &ClusterDomain::Default {

@@ -4,8 +4,9 @@ use kube::api::{Patch, PatchParams};
 use kube::Api;
 
 use std::collections::HashSet;
+use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use retry::delay::Fixed;
@@ -46,7 +47,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
-use crate::io_models::context::{Context, Features};
+use crate::io_models::context::Features;
 use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::kubernetes::K8sPod;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -210,16 +211,13 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, resource_ttl: Option<Duration>) -> S3 {
+fn s3(region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
     S3::new(
-        context.clone(),
         "s3-temp-id".to_string(),
         "default-s3".to_string(),
         cloud_provider.access_key_id(),
         cloud_provider.secret_access_key(),
         region.clone(),
-        true,
-        resource_ttl,
     )
 }
 
@@ -1163,7 +1161,7 @@ fn create(
             }
         };
         match kubernetes.get_kubeconfig_file() {
-            Ok((path, _)) => match is_kubernetes_upgrade_required(
+            Ok(path) => match is_kubernetes_upgrade_required(
                 path,
                 kubernetes.version(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1209,7 +1207,7 @@ fn create(
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
             let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
-            kubernetes.put_kubeconfig_file_to_object_storage(current_kubeconfig_path.as_str())?;
+            kubernetes.put_kubeconfig_file_to_object_storage(&current_kubeconfig_path)?;
             current_kubeconfig_path
         }
         Kind::Ec2 => {
@@ -1238,7 +1236,7 @@ fn create(
         event_details.clone(),
         qovery_terraform_config_file.clone(),
         cluster_secrets,
-        Some(kubeconfig_path.clone()),
+        Some(&kubeconfig_path),
     );
 
     // kubernetes helm deployments on the cluster
@@ -1444,7 +1442,7 @@ fn create(
 
 fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-    let (kubeconfig_path, _) = kubernetes.get_kubeconfig_file()?;
+    let kubeconfig_path = kubernetes.get_kubeconfig_file()?;
     let environment_variables = kubernetes.cloud_provider().credentials_environment_variables();
 
     kubernetes.logger().log(EngineEvent::Warning(
@@ -1825,7 +1823,7 @@ fn delete(
 
     // // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
     if kubernetes.kind() != Kind::Ec2 {
-        let _ = kubernetes.ensure_kubeconfig_is_not_in_object_storage();
+        let _ = kubernetes.delete_kubeconfig_from_object_storage();
     };
 
     let kubernetes_config_file_path = match kubernetes.kind() {
@@ -1839,7 +1837,7 @@ fn delete(
                 ));
 
                 skip_kubernetes_step = true;
-                "".to_string()
+                PathBuf::from("")
             }
         },
         Kind::Ec2 => {
@@ -1905,10 +1903,11 @@ fn delete(
                 if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
                     return OperationResult::Err(e);
                 };
-                let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
-                    Ok(x) => x,
+                let current_kubeconfig_path = match kubernetes.get_kubeconfig_file() {
+                    Ok(p) => p,
                     Err(e) => return OperationResult::Retry(e),
                 };
+                let mut kubeconfig_file = File::open(&current_kubeconfig_path).expect("Cannot open kubeconfig file");
 
                 // ensure the kubeconfig content address match with the current instance dns
                 let mut buffer = String::new();
@@ -1951,7 +1950,7 @@ fn delete(
                 EventMessage::new_from_safe(safe_message.to_string()),
             ));
             skip_kubernetes_step = true;
-            "".to_string()
+            PathBuf::from("")
         }
     };
 

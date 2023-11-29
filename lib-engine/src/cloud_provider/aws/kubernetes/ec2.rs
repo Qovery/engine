@@ -21,6 +21,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
@@ -35,7 +36,9 @@ use retry::{Error, OperationResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -86,7 +89,7 @@ impl EC2 {
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
-        let s3 = kubernetes::s3(&context, &region, &*cloud_provider, advanced_settings.resource_ttl());
+        let s3 = kubernetes::s3(&region, &*cloud_provider);
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
@@ -154,7 +157,7 @@ impl EC2 {
         kubernetes: &dyn Kubernetes,
         event_details: EventDetails,
         qovery_terraform_config: AwsEc2QoveryTerraformConfig,
-    ) -> Result<String, Box<EngineError>> {
+    ) -> Result<PathBuf, Box<EngineError>> {
         let port = match qovery_terraform_config.kubernetes_port_to_u16() {
             Ok(p) => p,
             Err(e) => {
@@ -194,14 +197,17 @@ impl EC2 {
             if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
                 return OperationResult::Err(e);
             };
-            let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
-                Ok(x) => x,
+            let current_kubeconfig_path = match kubernetes.get_kubeconfig_file() {
+                Ok(p) => p,
                 Err(e) => return OperationResult::Retry(e),
             };
+            let mut kubeconfig_file = File::open(&current_kubeconfig_path).expect("Cannot open file");
 
             // ensure the kubeconfig content address match with the current instance dns
             let mut buffer = String::new();
-            let _ = kubeconfig_file.read_to_string(&mut buffer);
+            if let Err(e) = kubeconfig_file.read_to_string(&mut buffer) {
+                warn!("Cannot read kubeconfig file, error: {e}");
+            }
             match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
                 true => {
                     kubernetes.logger().log(EngineEvent::Info(
@@ -261,7 +267,7 @@ impl Kubernetes for EC2 {
     }
 
     fn region(&self) -> &str {
-        self.region.to_aws_format()
+        self.region.to_cloud_provider_format()
     }
 
     fn zone(&self) -> &str {
@@ -421,12 +427,12 @@ impl Kubernetes for EC2 {
         ));
 
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
-        if let Ok((k3s_kubeconfig, _)) = self.get_kubeconfig_file() {
+        if let Ok(k3s_kubeconfig) = self.get_kubeconfig_file() {
             if let Err(e) = self.update_vault_config(
                 event_details.clone(),
                 qovery_terraform_config_file,
                 cluster_secrets,
-                Some(k3s_kubeconfig),
+                Some(&k3s_kubeconfig),
             ) {
                 self.logger().log(EngineEvent::Warning(
                     event_details.clone(),
@@ -547,7 +553,7 @@ impl Kubernetes for EC2 {
         event_details: EventDetails,
         qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
-        kubeconfig_file_path: Option<String>,
+        kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {
         // read config generated after terraform infra bootstrap/update
         let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
@@ -566,11 +572,14 @@ impl Kubernetes for EC2 {
             match kubeconfig_file_path {
                 Some(x) => {
                     // encode base64 kubeconfig
-                    let kubeconfig = fs::read_to_string(x.clone())
+                    let kubeconfig = fs::read_to_string(x)
                         .map_err(|e| {
                             EngineError::new_cannot_retrieve_cluster_config_file(
                                 event_details.clone(),
-                                CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                                CommandError::new_from_safe_message(format!(
+                                    "Cannot read kubeconfig file {}: {e}",
+                                    x.to_str().unwrap_or_default()
+                                )),
                             )
                         })
                         .expect("kubeconfig was not found while it should be present");

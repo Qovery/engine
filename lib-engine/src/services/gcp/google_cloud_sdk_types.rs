@@ -2,10 +2,9 @@ use crate::cloud_provider::gcp::regions::GcpRegion;
 use crate::container_registry::{DockerImage, Repository};
 use crate::models::gcp::{Credentials, CredentialsError};
 use crate::models::ToCloudProviderFormat;
-use crate::object_storage::Bucket;
+use crate::object_storage::{Bucket, BucketRegion};
 use crate::runtime::block_on;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
-use chrono::Duration;
 use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_googleapis::devtools::artifact_registry::v1::{
     DockerImage as GcpDockerImage, Package as GcpPackage, Repository as GcpRepository,
@@ -14,6 +13,7 @@ use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use google_cloud_storage::http::buckets::Bucket as GcpBucket;
 use regex::Regex;
 use std::str::FromStr;
+use std::time::Duration;
 
 /// Handle conversion and deal with external types for Google cloud
 /// defined here https://github.com/yoshidan/google-cloud-rust
@@ -22,14 +22,14 @@ use std::str::FromStr;
 pub fn new_gcp_credentials_file_from_credentials(
     credentials: Credentials,
 ) -> Result<CredentialsFile, CredentialsError> {
-    block_on(CredentialsFile::new_from_str(credentials.to_cloud_provider_format().as_str())).map_err(|e| {
+    block_on(CredentialsFile::new_from_str(credentials.to_cloud_provider_format())).map_err(|e| {
         CredentialsError::CannotCreateCredentials {
             raw_error_message: e.to_string(),
         }
     })
 }
 
-impl TryFrom<GcpBucket> for Bucket<GcpStorageRegion> {
+impl TryFrom<GcpBucket> for Bucket {
     type Error = String;
 
     fn try_from(gcp_bucket: GcpBucket) -> Result<Self, Self::Error> {
@@ -49,10 +49,14 @@ impl TryFrom<GcpBucket> for Bucket<GcpStorageRegion> {
                         _ => false,
                     })
                     .and_then(|r| r.condition.clone())
-                    .map(|c| Duration::days(i64::from(c.age))),
+                    .map(|c| Duration::from_secs(c.age as u64 * 60 * 60 * 24)),
                 None => None,
             },
-            location: gcp_storage_region,
+            versioning_activated: match gcp_bucket.versioning {
+                None => false,
+                Some(v) => v.enabled,
+            },
+            location: BucketRegion::GcpRegion(gcp_storage_region.clone()),
             labels: gcp_bucket.labels,
         })
     }

@@ -6,6 +6,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::errors::CommandError;
+use crate::models::ToCloudProviderFormat;
 use kube::Client;
 
 pub struct ClusterAutoscalerChart {
@@ -68,7 +69,7 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                     },
                     ChartSetValue {
                         key: "awsRegion".to_string(),
-                        value: self.chart_image_region.to_aws_format().to_string(),
+                        value: self.chart_image_region.to_cloud_provider_format().to_string(),
                     },
                     ChartSetValue {
                         key: "autoDiscovery.clusterName".to_string(),

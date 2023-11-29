@@ -1,6 +1,8 @@
 use crate::cloud_provider::aws::regions::AwsZones::*;
 use crate::cloud_provider::aws::regions::RegionAndZoneErrors::*;
 use crate::models::domain::ToTerraformString;
+use crate::models::ToCloudProviderFormat;
+use crate::object_storage::StorageRegion;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -166,12 +168,10 @@ impl FromStr for AwsRegion {
     }
 }
 
-impl AwsRegion {
-    pub fn new(&self) -> &AwsRegion {
-        self
-    }
+impl StorageRegion for AwsRegion {}
 
-    pub fn to_aws_format(&self) -> &str {
+impl ToCloudProviderFormat for AwsRegion {
+    fn to_cloud_provider_format(&self) -> &str {
         match self {
             AwsRegion::UsEast1 => "us-east-1",
             AwsRegion::UsEast2 => "us-east-2",
@@ -196,6 +196,12 @@ impl AwsRegion {
             AwsRegion::MeSouth1 => "me-south-1",
             AwsRegion::SaEast1 => "sa-east-1",
         }
+    }
+}
+
+impl AwsRegion {
+    pub fn new(&self) -> &AwsRegion {
+        self
     }
 
     pub fn get_zones_to_string(&self) -> Vec<String> {
@@ -413,6 +419,7 @@ impl Display for AwsZones {
 mod tests {
     use crate::cloud_provider::aws::regions::AwsZones::{EuWest3A, EuWest3B, EuWest3C};
     use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones, RegionAndZoneErrors};
+    use crate::models::ToCloudProviderFormat;
     use std::str::FromStr;
     use strum::IntoEnumIterator;
 
@@ -442,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_aws_region() {
-        assert_eq!(AwsRegion::EuWest3.to_aws_format(), "eu-west-3");
+        assert_eq!(AwsRegion::EuWest3.to_cloud_provider_format(), "eu-west-3");
         assert_eq!(AwsRegion::EuWest3.to_string(), "EuWest3");
         assert_eq!(AwsRegion::EuWest3.get_zones(), vec![EuWest3A, EuWest3B, EuWest3C]);
         assert_eq!(AwsRegion::from_str("eu-west-3"), Ok(AwsRegion::EuWest3));

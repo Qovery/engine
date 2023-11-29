@@ -1,12 +1,11 @@
 use chrono::{DateTime, Utc};
-use std::fs::File;
+use std::collections::HashMap;
+use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::models::domain::StringPath;
-use crate::object_storage::{Kind, ObjectStorage};
+use crate::object_storage::{Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, Kind, ObjectStorage};
 
-use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::runtime::block_on;
@@ -14,51 +13,28 @@ use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
-    DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
-    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
+    DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketTaggingRequest, GetBucketVersioningRequest,
+    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
+    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
 };
-use tokio::io;
-
-pub enum BucketDeleteStrategy {
-    HardDelete,
-    Empty,
-}
 
 // doc: https://www.scaleway.com/en/docs/object-storage-feature/
 pub struct ScalewayOS {
-    context: Context,
     id: String,
     name: String,
     access_key: String,
     secret_token: String,
     zone: ScwZone,
-    bucket_delete_strategy: BucketDeleteStrategy,
-    bucket_versioning_activated: bool,
-    resource_ttl: Option<Duration>,
 }
 
 impl ScalewayOS {
-    pub fn new(
-        context: Context,
-        id: String,
-        name: String,
-        access_key: String,
-        secret_token: String,
-        zone: ScwZone,
-        bucket_delete_strategy: BucketDeleteStrategy,
-        bucket_versioning_activated: bool,
-        resource_ttl: Option<Duration>,
-    ) -> ScalewayOS {
+    pub fn new(id: String, name: String, access_key: String, secret_token: String, zone: ScwZone) -> ScalewayOS {
         ScalewayOS {
-            context,
             id,
             name,
             access_key,
             secret_token,
             zone,
-            bucket_delete_strategy,
-            bucket_versioning_activated,
-            resource_ttl,
         }
     }
 
@@ -147,23 +123,9 @@ impl ScalewayOS {
 
         Ok(())
     }
-
-    pub fn bucket_exists(&self, bucket_name: &str) -> bool {
-        let s3_client = self.get_s3_client();
-
-        block_on(s3_client.head_bucket(HeadBucketRequest {
-            bucket: bucket_name.to_string(),
-            expected_bucket_owner: None,
-        }))
-        .is_ok()
-    }
 }
 
 impl ObjectStorage for ScalewayOS {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
     fn kind(&self) -> Kind {
         Kind::ScalewayOs
     }
@@ -180,7 +142,22 @@ impl ObjectStorage for ScalewayOS {
         Ok(())
     }
 
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+    fn bucket_exists(&self, bucket_name: &str) -> bool {
+        let s3_client = self.get_s3_client();
+
+        block_on(s3_client.head_bucket(HeadBucketRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        }))
+        .is_ok()
+    }
+
+    fn create_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
@@ -189,8 +166,8 @@ impl ObjectStorage for ScalewayOS {
         // check if bucket already exists, if so, no need to recreate it
         // note: we are not deleting buckets since it takes up to 24 hours to be taken into account
         // so we better reuse existing ones
-        if self.bucket_exists(bucket_name) {
-            return Ok(());
+        if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
+            return Ok(existing_bucket);
         }
 
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
@@ -223,7 +200,7 @@ impl ObjectStorage for ScalewayOS {
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("Ttl={}", self.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                        value: format!("Ttl={}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     },
                 ],
             },
@@ -235,7 +212,7 @@ impl ObjectStorage for ScalewayOS {
             });
         }
 
-        if self.bucket_versioning_activated {
+        if bucket_versioning_activated {
             if let Err(_e) = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
@@ -246,10 +223,71 @@ impl ObjectStorage for ScalewayOS {
             }
         }
 
-        Ok(())
+        self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
     }
 
-    fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+    fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
+        // if bucket doesn't exist, then return an error
+        if !self.bucket_exists(bucket_name) {
+            return Err(ObjectStorageError::CannotGetBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Bucket `{}` doesn't exist", bucket_name),
+            });
+        }
+
+        // Get TTL
+        let mut ttl: Option<Duration> = None;
+        if let Ok(bl) = block_on(self.get_s3_client().get_bucket_lifecycle(GetBucketLifecycleRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(rules) = bl.rules {
+                for r in rules {
+                    if let Some(expiration) = r.expiration {
+                        ttl = expiration
+                            .days
+                            .map(|days| Duration::from_secs(days.unsigned_abs() * 24 * 60 * 60));
+                    }
+                }
+            }
+        }
+
+        // Get versioning
+        let mut versioning_activated = false;
+        if let Ok(versioning) = block_on(self.get_s3_client().get_bucket_versioning(GetBucketVersioningRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(status) = versioning.status.map(|s| s.to_lowercase()) {
+                if status == "enabled" {
+                    versioning_activated = true;
+                }
+            }
+        }
+
+        // Get labels
+        let mut labels: Option<HashMap<String, String>> = None;
+        if let Ok(tagging) = block_on(self.get_s3_client().get_bucket_tagging(GetBucketTaggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            labels = Some(HashMap::from_iter(tagging.tag_set.into_iter().map(|t| (t.key, t.value))));
+        }
+
+        Ok(Bucket {
+            name: bucket_name.to_string(),
+            ttl,
+            versioning_activated,
+            location: BucketRegion::ScwRegion(self.zone),
+            labels,
+        })
+    }
+
+    fn delete_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_delete_strategy: BucketDeleteStrategy,
+    ) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
@@ -261,7 +299,7 @@ impl ObjectStorage for ScalewayOS {
         // Note: Do not delete the bucket entirely but empty its content.
         // Bucket deletion might take up to 24 hours and during this time we are not able to create a bucket with the same name.
         // So emptying bucket allows future reuse.
-        match &self.bucket_delete_strategy {
+        match bucket_delete_strategy {
             BucketDeleteStrategy::HardDelete => match block_on(s3_client.delete_bucket(DeleteBucketRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
@@ -276,34 +314,9 @@ impl ObjectStorage for ScalewayOS {
         }
     }
 
-    fn get(
-        &self,
-        bucket_name: &str,
-        object_key: &str,
-        use_cache: bool,
-    ) -> Result<(StringPath, File), ObjectStorageError> {
+    fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
-
-        let workspace_directory = crate::fs::workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("object-storage/scaleway_os/{}", self.name()),
-        )
-        .map_err(|err| ObjectStorageError::CannotGetObjectFile {
-            bucket_name: bucket_name.to_string(),
-            file_name: object_key.to_string(),
-            raw_error_message: err.to_string(),
-        })?;
-
-        let file_path = format!("{workspace_directory}/{bucket_name}/{object_key}");
-
-        if use_cache {
-            // does config file already exists?
-            if let Ok(file) = File::open(file_path.as_str()) {
-                return Ok((file_path, file));
-            }
-        }
 
         let s3_client = self.get_s3_client();
 
@@ -312,87 +325,84 @@ impl ObjectStorage for ScalewayOS {
             key: object_key.to_string(),
             ..Default::default()
         })) {
-            Ok(mut res) => {
-                let body = res.body.take();
-                let mut body = body.unwrap().into_async_read();
-
-                // create parent dir
-                let path = Path::new(file_path.as_str());
-                let parent_dir = path.parent().unwrap();
-                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
-
-                // create file
-                match block_on(
-                    tokio::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path),
-                ) {
-                    Ok(mut created_file) => match block_on(io::copy(&mut body, &mut created_file)) {
-                        Ok(_) => {
-                            let file = File::open(path).unwrap();
-                            Ok((file_path, file))
-                        }
-                        Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
+            Ok(res) => {
+                let mut stream = match res.body {
+                    Some(b) => b.into_blocking_read(),
+                    None => {
+                        return Err(ObjectStorageError::CannotGetObjectFile {
                             bucket_name: bucket_name.to_string(),
-                            file_name: object_key.to_string(),
-                            raw_error_message: e.to_string(),
-                        }),
-                    },
-                    Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
+                            object_name: object_key.to_string(),
+                            raw_error_message: "Cannot get response body".to_string(),
+                        })
+                    }
+                };
+                let mut body = Vec::new();
+                stream
+                    .read_to_end(&mut body)
+                    .map_err(|e| ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
-                        file_name: object_key.to_string(),
-                        raw_error_message: e.to_string(),
-                    }),
-                }
+                        object_name: object_key.to_string(),
+                        raw_error_message: format!("Cannot read response body: {}", e).to_string(),
+                    })?;
+
+                Ok(BucketObject {
+                    bucket_name: bucket_name.to_string(),
+                    key: object_key.to_string(),
+                    value: body,
+                })
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
     }
 
-    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
+    fn put_object(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        file_path: &Path,
+    ) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
+        let file_content = std::fs::read(file_path).map_err(|e| ObjectStorageError::CannotUploadFile {
+            bucket_name: bucket_name.to_string(),
+            object_name: object_key.to_string(),
+            raw_error_message: e.to_string(),
+        })?;
+
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path) {
-                Ok(x) => x,
-                Err(e) => {
-                    return Err(ObjectStorageError::CannotUploadFile {
-                        bucket_name: bucket_name.to_string(),
-                        file_name: object_key.to_string(),
-                        raw_error_message: e.to_string(),
-                    })
-                }
-            })),
+            body: Some(StreamingBody::from(file_content.clone())),
             ..Default::default()
         })) {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(BucketObject {
+                bucket_name: bucket_name.to_string(),
+                key: object_key.to_string(),
+                value: file_content.clone(),
+            }),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
     }
 
-    fn delete(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+    fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
         if ScalewayOS::is_bucket_name_valid(bucket_name).is_err() {
             // bucket is missing it's ok as file can't be present
             return Ok(());
         };
 
         // check if file already exists
-        if self.get(bucket_name, object_key, false).is_err() {
+        if self.get_object(bucket_name, object_key).is_err() {
             return Ok(());
         };
 
@@ -406,7 +416,7 @@ impl ObjectStorage for ScalewayOS {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }

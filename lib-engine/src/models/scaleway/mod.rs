@@ -9,6 +9,8 @@ use crate::cloud_provider::Kind;
 use crate::errors::CommandError;
 use crate::models::types::CloudProvider;
 use crate::models::types::SCW;
+use crate::models::ToCloudProviderFormat;
+use crate::object_storage::StorageRegion;
 use std::fmt;
 use std::str::FromStr;
 
@@ -158,13 +160,7 @@ impl ScwZone {
 
 impl fmt::Display for ScwZone {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ScwZone::Paris1 => write!(f, "fr-par-1"),
-            ScwZone::Paris2 => write!(f, "fr-par-2"),
-            ScwZone::Paris3 => write!(f, "fr-par-3"),
-            ScwZone::Amsterdam1 => write!(f, "nl-ams-1"),
-            ScwZone::Warsaw1 => write!(f, "pl-waw-1"),
-        }
+        f.write_str(self.to_cloud_provider_format())
     }
 }
 
@@ -179,6 +175,20 @@ impl FromStr for ScwZone {
             "nl-ams-1" => Ok(ScwZone::Amsterdam1),
             "pl-waw-1" => Ok(ScwZone::Warsaw1),
             _ => Err(CommandError::new_from_safe_message(format!("`{s}` zone is not supported"))),
+        }
+    }
+}
+
+impl StorageRegion for ScwZone {}
+
+impl ToCloudProviderFormat for ScwZone {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            ScwZone::Paris1 => "fr-par-1",
+            ScwZone::Paris2 => "fr-par-2",
+            ScwZone::Paris3 => "fr-par-3",
+            ScwZone::Amsterdam1 => "nl-ams-1",
+            ScwZone::Warsaw1 => "pl-waw-1",
         }
     }
 }

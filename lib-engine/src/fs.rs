@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cmd::structs::SecretItem;
 use crate::errors::CommandError;
@@ -14,8 +14,8 @@ use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
-pub fn delete_file_if_exists(file: &str) -> Result<(), Error> {
-    if !Path::new(&file).exists() {
+pub fn delete_file_if_exists(file: &Path) -> Result<(), Error> {
+    if !file.exists() {
         return Ok(());
     }
 
@@ -79,10 +79,10 @@ where
         .ok_or_else(|| Error::from(ErrorKind::NotFound))
 }
 
-fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, Error> {
+fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<PathBuf, Error> {
     let workspace_dir = root_workspace_directory(working_root_dir, execution_id)?;
-    let tgz_file_path = format!("{working_root_dir}/.qovery-workspace/{execution_id}.tgz");
-    let tgz_file = File::create(tgz_file_path.as_str())?;
+    let tgz_file_path = PathBuf::from(format!("{working_root_dir}/.qovery-workspace/{execution_id}.tgz").as_str());
+    let tgz_file = File::create(&tgz_file_path)?;
 
     let enc = GzEncoder::new(tgz_file, Compression::fast());
     let mut tar = tar::Builder::new(enc);
@@ -147,7 +147,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
     };
 }
 
-pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, Error> {
+pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<PathBuf, Error> {
     info!("archive workspace directory in progress");
 
     match archive_workspace_directory(working_root_dir, execution_id) {

@@ -13,6 +13,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::Withou
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 
 fn create_and_destroy_aws_ec2_k3s_cluster(
@@ -31,8 +32,8 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
         )
         .expect("Invalid AWS region");
         let zones = localisation.get_zones();
-        let cluster_id = generate_cluster_id(localisation.to_aws_format());
-        let organization_id = generate_organization_id(localisation.to_aws_format());
+        let cluster_id = generate_cluster_id(localisation.to_cloud_provider_format());
+        let organization_id = generate_organization_id(localisation.to_cloud_provider_format());
         cluster_test(
             test_name,
             Kind::Aws,
@@ -40,7 +41,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             context_for_ec2(organization_id, cluster_id),
             logger(),
             metrics_registry(),
-            localisation.to_aws_format(),
+            localisation.to_cloud_provider_format(),
             Some(zones),
             test_type,
             &ClusterDomain::Default {

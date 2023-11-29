@@ -622,7 +622,7 @@ This is a general/global message. Look at your services deployment status to kno
                 Ok(file) => match super::upload_s3_file(
                     infra_context.context(),
                     self.request.archive.as_ref(),
-                    file.as_str(),
+                    &file,
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
                 ) {

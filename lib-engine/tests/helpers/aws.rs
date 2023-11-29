@@ -16,6 +16,7 @@ use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
+use qovery_engine::models::ToCloudProviderFormat;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
@@ -184,7 +185,7 @@ impl Cluster<AWS, Options> for AWS {
                 .AWS_SECRET_ACCESS_KEY
                 .expect("AWS_SECRET_ACCESS_KEY is not set")
                 .as_str(),
-            aws_region.to_aws_format(),
+            aws_region.to_cloud_provider_format(),
             aws_region.get_zones_to_string(),
             kubernetes_kind,
             TerraformStateCredentials {
