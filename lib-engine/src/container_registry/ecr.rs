@@ -1,5 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -336,7 +338,7 @@ impl ECR {
                     let ad = authorization_data.first().unwrap();
                     let b64_token = ad.authorization_token.as_ref().unwrap();
 
-                    let decoded_token = base64::decode(b64_token).unwrap();
+                    let decoded_token = general_purpose::STANDARD.decode(b64_token).unwrap();
                     let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
 
                     let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();

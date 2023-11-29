@@ -1,4 +1,6 @@
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
+use base64::engine::general_purpose;
+use base64::Engine;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str;
@@ -183,7 +185,7 @@ pub struct CustomerHelmChartsOverrideEncoded {
 
 impl CustomerHelmChartsOverrideEncoded {
     pub fn to_decoded_customer_helm_chart_override(b64_chart_values: String) -> Result<String, String> {
-        match base64::decode(b64_chart_values) {
+        match general_purpose::STANDARD.decode(b64_chart_values) {
             Ok(x) => match str::from_utf8(&x) {
                 Ok(content) => Ok(content.to_string()),
                 Err(e) => Err(e.to_string()),

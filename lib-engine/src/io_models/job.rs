@@ -21,6 +21,8 @@ use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::{AWSEc2, AWS, SCW};
 use crate::utilities::to_short_id;
+use base64::engine::general_purpose;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -200,9 +202,12 @@ impl Job {
                 .iter()
                 .filter_map(|(k, variable_infos)| {
                     // Remove special vars
-                    let v =
-                        String::from_utf8_lossy(&base64::decode(variable_infos.value.as_bytes()).unwrap_or_default())
-                            .into_owned();
+                    let v = String::from_utf8_lossy(
+                        &general_purpose::STANDARD
+                            .decode(variable_infos.value.as_bytes())
+                            .unwrap_or_default(),
+                    )
+                    .into_owned();
                     if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
                         disable_build_cache = true;
                         return None;

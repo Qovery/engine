@@ -5,6 +5,8 @@ use crate::cloud_provider::service::ServiceType;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
+use base64::engine::general_purpose;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -133,21 +135,22 @@ pub fn ssh_keys_from_env_vars(environment_vars: &BTreeMap<String, VariableInfo>)
     // Get passphrase and public key if provided by the user
     let mut ssh_keys: Vec<SshKey> = Vec::with_capacity(env_ssh_keys.len());
     for (ssh_key_name, private_key) in env_ssh_keys {
-        let private_key = if let Ok(Ok(private_key)) = base64::decode(private_key).map(String::from_utf8) {
-            private_key
-        } else {
-            error!("Invalid base64 environment variable for {}", ssh_key_name);
-            continue;
-        };
+        let private_key =
+            if let Ok(Ok(private_key)) = general_purpose::STANDARD.decode(private_key).map(String::from_utf8) {
+                private_key
+            } else {
+                error!("Invalid base64 environment variable for {}", ssh_key_name);
+                continue;
+            };
 
         let passphrase = environment_vars
             .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-            .and_then(|variable_infos| base64::decode(variable_infos.value.clone()).ok())
+            .and_then(|variable_infos| general_purpose::STANDARD.decode(variable_infos.value.clone()).ok())
             .and_then(|str| String::from_utf8(str).ok());
 
         let public_key = environment_vars
             .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-            .and_then(|variable_infos| base64::decode(variable_infos.value.clone()).ok())
+            .and_then(|variable_infos| general_purpose::STANDARD.decode(variable_infos.value.clone()).ok())
             .and_then(|str| String::from_utf8(str).ok());
 
         ssh_keys.push(SshKey {

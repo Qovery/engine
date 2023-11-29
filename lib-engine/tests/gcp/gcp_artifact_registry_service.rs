@@ -6,7 +6,7 @@ use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
-use qovery_engine::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
+use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::{ContainerImage, Docker};
 use qovery_engine::container_registry::{DockerImage, Repository};
 use qovery_engine::models::gcp::Credentials;
