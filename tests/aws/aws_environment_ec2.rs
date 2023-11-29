@@ -5,6 +5,8 @@ use crate::helpers::utilities::{
     context_for_resource, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
+use base64::engine::general_purpose;
+use base64::Engine;
 use bstr::ByteSlice;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol};
@@ -53,7 +55,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         let environment =
@@ -89,7 +91,8 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -139,7 +142,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         environment.applications = vec![];
@@ -215,7 +218,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value:  base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value:  general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
         }];
@@ -244,7 +247,8 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -291,9 +295,8 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist.json".to_string(),
-            file_content_b64: base64::encode(
-                "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}",
-            ),
+            file_content_b64: general_purpose::STANDARD
+                .encode("{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}"),
         };
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
@@ -378,7 +381,8 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data

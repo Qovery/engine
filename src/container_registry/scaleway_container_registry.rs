@@ -8,6 +8,8 @@ use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, 
 use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::collections::HashSet;
 use std::time::Duration;
 use url::Url;
@@ -224,11 +226,11 @@ impl ScalewayCR {
     }
 
     fn get_docker_json_config_raw(login: &str, secret_token: &str, region: &str) -> String {
-        base64::encode(
+        general_purpose::STANDARD.encode(
             format!(
                 r#"{{"auths":{{"rg.{}.scw.cloud":{{"auth":"{}"}}}}}}"#,
                 region,
-                base64::encode(format!("{login}:{secret_token}").as_bytes())
+                general_purpose::STANDARD.encode(format!("{login}:{secret_token}").as_bytes())
             )
             .as_bytes(),
         )

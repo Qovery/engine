@@ -45,6 +45,8 @@ use crate::string::terraform_list_format;
 use crate::utilities::to_short_id;
 use crate::{cmd, secret_manager};
 use ::function_name::named;
+use base64::engine::general_purpose;
+use base64::Engine;
 use itertools::Itertools;
 use reqwest::{header, StatusCode};
 use retry::delay::Fixed;
@@ -1959,7 +1961,7 @@ impl Kubernetes for Kapsule {
                     .expect("kubeconfig was not found while it should be present"),
                 None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
             };
-            let kubeconfig_b64 = base64::encode(kubeconfig);
+            let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
             let mut cluster_secrets_update = cluster_secrets;
             cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
 

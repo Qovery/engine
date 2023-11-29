@@ -29,6 +29,8 @@ use async_trait::async_trait;
 use aws_sdk_ec2::model::{Filter, VolumeState};
 use aws_sdk_ec2::types::SdkError;
 use aws_types::SdkConfig;
+use base64::engine::general_purpose;
+use base64::Engine;
 use chrono::Duration;
 use function_name::named;
 use retry::delay::Fixed;
@@ -583,7 +585,7 @@ impl Kubernetes for EC2 {
                             )
                         })
                         .expect("kubeconfig was not found while it should be present");
-                    let kubeconfig_b64 = base64::encode(kubeconfig);
+                    let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
                     let mut cluster_secrets_update = cluster_secrets;
                     cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
                     cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;

@@ -40,6 +40,8 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -259,11 +261,11 @@ pub fn environment_3_apps_3_databases(
                 git_credentials: None,
                 storage: vec![],
                 environment_vars_with_infos: btreemap! {
-                     "PG_DBNAME".to_string() => VariableInfo{value: base64::encode(database_name.clone()), is_secret: false},
-                     "PG_HOST".to_string() => VariableInfo{value: base64::encode(fqdn.clone()),is_secret: false},
-                     "PG_PORT".to_string() => VariableInfo{value: base64::encode(database_port.to_string()), is_secret: false},
-                     "PG_USERNAME".to_string() => VariableInfo{value: base64::encode(database_username.clone()), is_secret: false},
-                     "PG_PASSWORD".to_string() => VariableInfo{value: base64::encode(database_password.clone()), is_secret: false},
+                     "PG_DBNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_name.clone()), is_secret: false},
+                     "PG_HOST".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(fqdn.clone()),is_secret: false},
+                     "PG_PORT".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_port.to_string()), is_secret: false},
+                     "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
+                     "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
                 mounted_files: vec![],
                 public_domain: format!("{}.example.com", app_id),
@@ -319,11 +321,11 @@ pub fn environment_3_apps_3_databases(
                 git_credentials: None,
                 storage: vec![],
                 environment_vars_with_infos: btreemap! {
-                     "PG_DBNAME".to_string() => VariableInfo {value: base64::encode(database_name_2.clone()), is_secret: false },
-                     "PG_HOST".to_string() =>VariableInfo {value: base64::encode(fqdn_2.clone()), is_secret: false },
-                     "PG_PORT".to_string() => VariableInfo {value:base64::encode(database_port.to_string()), is_secret: false },
-                     "PG_USERNAME".to_string() =>VariableInfo {value: base64::encode(database_username_2.clone()), is_secret: false },
-                     "PG_PASSWORD".to_string() => VariableInfo {value:base64::encode(database_password.clone()), is_secret: false },
+                     "PG_DBNAME".to_string() => VariableInfo {value: general_purpose::STANDARD.encode(database_name_2.clone()), is_secret: false },
+                     "PG_HOST".to_string() =>VariableInfo {value: general_purpose::STANDARD.encode(fqdn_2.clone()), is_secret: false },
+                     "PG_PORT".to_string() => VariableInfo {value:general_purpose::STANDARD.encode(database_port.to_string()), is_secret: false },
+                     "PG_USERNAME".to_string() =>VariableInfo {value: general_purpose::STANDARD.encode(database_username_2.clone()), is_secret: false },
+                     "PG_PASSWORD".to_string() => VariableInfo {value:general_purpose::STANDARD.encode(database_password.clone()), is_secret: false },
                 },
                 mounted_files: vec![],
                 ports: vec![Port {
