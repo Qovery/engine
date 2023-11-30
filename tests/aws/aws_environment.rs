@@ -1106,8 +1106,10 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
-        assert!(kubeconfig.is_ok());
+        let kubeconfig = infra_ctx
+            .kubernetes()
+            .get_kubeconfig_file_path()
+            .expect("Cannot get kubeconfig file path");
         let router = environment
             .routers
             .first()
@@ -1131,7 +1133,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         // Sticky session is checked on ingress IP or hostname so we are not subjects to long DNS propagation making test less flacky.
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                &kubeconfig,
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
@@ -1212,8 +1214,10 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
-        assert!(kubeconfig.is_ok());
+        let kubeconfig = infra_ctx
+            .kubernetes()
+            .get_kubeconfig_file_path()
+            .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
             .first()
@@ -1236,7 +1240,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
         // let some time for ingress to get its IP or hostname
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                &kubeconfig,
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
@@ -1332,8 +1336,10 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
-        assert!(kubeconfig.is_ok());
+        let kubeconfig = infra_ctx
+            .kubernetes()
+            .get_kubeconfig_file_path()
+            .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
             .first()
@@ -1356,7 +1362,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         // let some time for ingress to get its IP or hostname
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                kubeconfig.as_ref().unwrap().as_str(),
+                &kubeconfig,
                 environment_domain.namespace(),
                 router.kube_name(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),

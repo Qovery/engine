@@ -221,7 +221,7 @@ impl Task for InfrastructureTask {
                 Ok(file) => match super::upload_s3_file(
                     &self.info_context(),
                     self.request.archive.as_ref(),
-                    file.as_str(),
+                    &file,
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
                 ) {

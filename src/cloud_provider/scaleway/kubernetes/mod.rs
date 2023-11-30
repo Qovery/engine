@@ -36,7 +36,7 @@ use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
-use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+use crate::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
@@ -225,15 +225,11 @@ impl Kapsule {
         advanced_settings.validate(event_details)?;
 
         let object_storage = ScalewayOS::new(
-            context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
             cloud_provider.access_key_id(),
             cloud_provider.secret_access_key(),
             zone,
-            BucketDeleteStrategy::Empty,
-            false,
-            advanced_settings.resource_ttl(),
         );
 
         Ok(Kapsule {
@@ -677,7 +673,7 @@ impl Kapsule {
 
         // upgrade cluster instead if required
         match self.get_kubeconfig_file() {
-            Ok((path, _)) => match is_kubernetes_upgrade_required(
+            Ok(path) => match is_kubernetes_upgrade_required(
                 path,
                 self.version.clone(),
                 self.cloud_provider.credentials_environment_variables(),
@@ -761,17 +757,22 @@ impl Kapsule {
             event_details.clone(),
             EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
         ));
-        if let Err(e) = self
-            .object_storage
-            .create_bucket(self.kubeconfig_bucket_name().as_str())
-        {
+        if let Err(e) = self.object_storage.create_bucket(
+            self.kubeconfig_bucket_name().as_str(),
+            self.advanced_settings.resource_ttl(),
+            false,
+        ) {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(Box::new(error));
         }
 
         // Logs bucket
-        if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
+        if let Err(e) = self.object_storage.create_bucket(
+            self.logs_bucket_name().as_str(),
+            self.advanced_settings.resource_ttl(),
+            false,
+        ) {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(Box::new(error));
@@ -786,10 +787,10 @@ impl Kapsule {
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
         let kubeconfig_name = self.get_kubeconfig_filename();
-        if let Err(e) = self.object_storage.put(
+        if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
             kubeconfig_name.as_str(),
-            kubeconfig_path.to_str().expect("No path for Kubeconfig"),
+            kubeconfig_path,
         ) {
             let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
@@ -832,7 +833,7 @@ impl Kapsule {
             event_details.clone(),
             qovery_terraform_config_file,
             cluster_secrets,
-            Some(kubeconfig_path.to_string_lossy().to_string()),
+            Some(kubeconfig_path),
         );
 
         let current_nodegroups = match self
@@ -1074,7 +1075,7 @@ impl Kapsule {
 
     fn create_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
+        let kubeconfig_path = self.get_kubeconfig_file()?;
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
 
         self.logger().log(EngineEvent::Warning(
@@ -1936,7 +1937,7 @@ impl Kubernetes for Kapsule {
         event_details: EventDetails,
         _qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
-        kubeconfig_file_path: Option<String>,
+        kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {
         let vault_conn = match QVaultClient::new(event_details.clone()) {
             Ok(x) => Some(x),
@@ -1945,18 +1946,18 @@ impl Kubernetes for Kapsule {
         if let Some(vault) = vault_conn {
             // encode base64 kubeconfig
             let kubeconfig = match kubeconfig_file_path {
-                Some(x) => fs::read_to_string(x.clone())
+                Some(x) => fs::read_to_string(x)
                     .map_err(|e| {
                         EngineError::new_cannot_retrieve_cluster_config_file(
                             event_details.clone(),
-                            CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                            CommandError::new_from_safe_message(format!(
+                                "Cannot read kubeconfig file {}: {e}",
+                                x.to_str().unwrap_or_default()
+                            )),
                         )
                     })
                     .expect("kubeconfig was not found while it should be present"),
-                None => {
-                    let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
-                    kubeconfig_path
-                }
+                None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
             };
             let kubeconfig_b64 = base64::encode(kubeconfig);
             let mut cluster_secrets_update = cluster_secrets;

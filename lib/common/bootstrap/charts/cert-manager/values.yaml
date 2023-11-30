@@ -60,8 +60,20 @@ strategy: {}
   #   maxSurge: 0
   #   maxUnavailable: 1
 
-# Comma separated list of feature gates that should be enabled on the
-# controller pod & webhook pod.
+podDisruptionBudget:
+  enabled: false
+
+  minAvailable: 1
+  # maxUnavailable: 1
+
+  # minAvailable and maxUnavailable can either be set to an integer (e.g. 1)
+  # or a percentage value (e.g. 25%)
+
+# Comma separated list of feature gates that should be enabled on the controller
+# Note: do not use this field to pass feature gate values into webhook
+# component as this behaviour relies on a bug that will be fixed in cert-manager 1.13
+# https://github.com/cert-manager/cert-manager/pull/6093
+# Use webhook.extraArgs to pass --feature-gates flag directly instead.
 featureGates: ""
 
 # The maximum number of challenges that can be scheduled as 'processing' at once
@@ -107,11 +119,22 @@ serviceAccount:
 # Automounting API credentials for a particular pod
 # automountServiceAccountToken: true
 
+# When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
+enableCertificateOwnerRef: false
+
+# Setting Nameservers for DNS01 Self Check
+# See: https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
+
+# Comma separated string with host and port of the recursive nameservers cert-manager should query
+dns01RecursiveNameservers: ""
+
+# Forces cert-manager to only use the recursive nameservers for verification.
+# Enabling this option could cause the DNS01 self check to take longer due to caching performed by the recursive nameservers
+dns01RecursiveNameserversOnly: false
+
 # Additional command line flags to pass to cert-manager controller binary.
 # To see all available flags run docker run quay.io/jetstack/cert-manager-controller:<version> --help
 extraArgs: []
-  # When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
-  # - --enable-certificate-owner-ref=true
   # Use this flag to enable or disable arbitrary controllers, for example, disable the CertificiateRequests approver
   # - --controllers=*,-certificaterequests-approver
 
@@ -197,7 +220,7 @@ prometheus:
 # https_proxy: "https://proxy:8080"
 # no_proxy: 127.0.0.1,localhost
 
-# expects input structure as per specification https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#affinity-v1-core
+# A Kubernetes Affinty, if required; see https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#affinity-v1-core
 # for example:
 #   affinity:
 #     nodeAffinity:
@@ -210,7 +233,7 @@ prometheus:
 #            - master
 affinity: {}
 
-# expects input structure as per specification https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#toleration-v1-core
+# A list of Kubernetes Tolerations, if required; see https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#toleration-v1-core
 # for example:
 #   tolerations:
 #   - key: foo.bar.com/role
@@ -219,7 +242,7 @@ affinity: {}
 #     effect: NoSchedule
 tolerations: []
 
-# expects input structure as per specification https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#topologyspreadconstraint-v1-core
+# A list of Kubernetes TopologySpreadConstraints, if required; see https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#topologyspreadconstraint-v1-core
 # for example:
 #   topologySpreadConstraints:
 #   - maxSkew: 2
@@ -230,6 +253,22 @@ tolerations: []
 #         app.kubernetes.io/instance: cert-manager
 #         app.kubernetes.io/component: controller
 topologySpreadConstraints: []
+
+# LivenessProbe settings for the controller container of the controller Pod.
+#
+# Disabled by default, because the controller has a leader election mechanism
+# which should cause it to exit if it is unable to renew its leader election
+# record.
+# LivenessProbe durations and thresholds are based on those used for the Kubernetes
+# controller-manager. See:
+# https://github.com/kubernetes/kubernetes/blob/806b30170c61a38fedd54cc9ede4cd6275a1ad3b/cmd/kubeadm/app/util/staticpod/utils.go#L241-L245
+livenessProbe:
+  enabled: false
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 15
+  successThreshold: 1
+  failureThreshold: 8
 
 webhook:
   replicaCount: 1
@@ -264,6 +303,15 @@ webhook:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
+
+  podDisruptionBudget:
+    enabled: false
+
+    minAvailable: 1
+    # maxUnavailable: 1
+
+    # minAvailable and maxUnavailable can either be set to an integer (e.g. 1)
+    # or a percentage value (e.g. 25%)
 
   # Container Security Context to be set on the webhook component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -409,9 +457,16 @@ webhook:
         protocol: TCP
       - port: 53
         protocol: UDP
+      # On OpenShift and OKD, the Kubernetes API server listens on
+      # port 6443.
+      - port: 6443
+        protocol: TCP
       to:
       - ipBlock:
           cidr: 0.0.0.0/0
+
+  volumes: []
+  volumeMounts: []
 
 cainjector:
   enabled: true
@@ -429,6 +484,15 @@ cainjector:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
+
+  podDisruptionBudget:
+    enabled: false
+
+    minAvailable: 1
+    # maxUnavailable: 1
+
+    # minAvailable and maxUnavailable can either be set to an integer (e.g. 1)
+    # or a percentage value (e.g. 25%)
 
   # Container Security Context to be set on the cainjector component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -500,6 +564,9 @@ cainjector:
 
   # Automounting API credentials for a particular pod
   # automountServiceAccountToken: true
+
+  volumes: []
+  volumeMounts: []
 
 acmesolver:
   image:
@@ -598,6 +665,9 @@ startupapicheck:
       helm.sh/hook-weight: "-5"
       helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 
+  # Automounting API credentials for a particular pod
+  # automountServiceAccountToken: true
+
   serviceAccount:
     # Specifies whether a service account should be created
     create: true
@@ -617,3 +687,6 @@ startupapicheck:
 
     # Optional additional labels to add to the startupapicheck's ServiceAccount
     # labels: {}
+
+  volumes: []
+  volumeMounts: []

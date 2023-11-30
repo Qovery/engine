@@ -18,5 +18,5 @@ pub mod types;
 
 pub trait ToCloudProviderFormat {
     /// Returns cloud provider string representation.
-    fn to_cloud_provider_format(&self) -> String;
+    fn to_cloud_provider_format(&self) -> &str;
 }

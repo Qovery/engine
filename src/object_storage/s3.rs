@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use retry::delay::Fixed;
-use std::fs::File;
+use std::collections::HashMap;
+use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
@@ -10,49 +11,32 @@ use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
-    DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
-    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging,
-    S3 as RusotoS3,
+    DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketTaggingRequest, GetBucketVersioningRequest,
+    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
+    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3 as RusotoS3,
 };
-use tokio::io;
 
-use crate::io_models::context::Context;
-use crate::models::domain::StringPath;
+use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
-use crate::object_storage::{Kind, ObjectStorage};
+use crate::object_storage::{Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, Kind, ObjectStorage};
 use crate::runtime::block_on;
 
 pub struct S3 {
-    context: Context,
     id: String,
     name: String,
     access_key_id: String,
     secret_access_key: String,
     region: AwsRegion,
-    bucket_versioning_activated: bool,
-    resource_ttl: Option<Duration>,
 }
 
 impl S3 {
-    pub fn new(
-        context: Context,
-        id: String,
-        name: String,
-        access_key_id: String,
-        secret_access_key: String,
-        region: AwsRegion,
-        bucket_versioning_activated: bool,
-        resource_ttl: Option<Duration>,
-    ) -> Self {
+    pub fn new(id: String, name: String, access_key_id: String, secret_access_key: String, region: AwsRegion) -> Self {
         S3 {
-            context,
             id,
             name,
             access_key_id,
             secret_access_key,
             region,
-            bucket_versioning_activated,
-            resource_ttl,
         }
     }
 
@@ -61,8 +45,12 @@ impl S3 {
     }
 
     fn get_s3_client(&self) -> S3Client {
-        let region = RusotoRegion::from_str(self.region.to_aws_format())
-            .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
+        let region = RusotoRegion::from_str(self.region.to_cloud_provider_format()).unwrap_or_else(|_| {
+            panic!(
+                "S3 region `{}` doesn't seems to be valid.",
+                self.region.to_cloud_provider_format()
+            )
+        });
         let client = Client::new_with(
             self.get_credentials(),
             HttpClient::new().expect("unable to create new Http client"),
@@ -80,20 +68,6 @@ impl S3 {
         }
 
         Ok(())
-    }
-
-    pub fn bucket_exists(&self, bucket_name: &str) -> bool {
-        let s3_client = self.get_s3_client();
-
-        // Note: Using rusoto here for convenience, should be possible via CLI but would be way less convenient.
-        // Using retry here since there is a lag after bucket creation
-        retry::retry(Fixed::from_millis(1000).take(10), || {
-            block_on(s3_client.head_bucket(HeadBucketRequest {
-                bucket: bucket_name.to_string(),
-                expected_bucket_owner: None,
-            }))
-        })
-        .is_ok()
     }
 
     fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
@@ -142,10 +116,6 @@ impl S3 {
 }
 
 impl ObjectStorage for S3 {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
     fn kind(&self) -> Kind {
         Kind::S3
     }
@@ -163,20 +133,39 @@ impl ObjectStorage for S3 {
         Ok(())
     }
 
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+    fn bucket_exists(&self, bucket_name: &str) -> bool {
+        let s3_client = self.get_s3_client();
+
+        // Note: Using rusoto here for convenience, should be possible via CLI but would be way less convenient.
+        // Using retry here since there is a lag after bucket creation
+        retry::retry(Fixed::from_millis(1000).take(10), || {
+            block_on(s3_client.head_bucket(HeadBucketRequest {
+                bucket: bucket_name.to_string(),
+                expected_bucket_owner: None,
+            }))
+        })
+        .is_ok()
+    }
+
+    fn create_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
         // check if bucket already exists, if so, no need to recreate it
-        if self.bucket_exists(bucket_name) {
-            return Ok(());
+        if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
+            return Ok(existing_bucket);
         }
 
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
             bucket: bucket_name.to_string(),
             create_bucket_configuration: Some(CreateBucketConfiguration {
-                location_constraint: Some(self.region.to_aws_format().to_string()),
+                location_constraint: Some(self.region.to_cloud_provider_format().to_string()),
             }),
             ..Default::default()
         })) {
@@ -198,7 +187,7 @@ impl ObjectStorage for S3 {
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("{}", self.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                        value: format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     },
                 ],
             },
@@ -210,18 +199,79 @@ impl ObjectStorage for S3 {
             });
         }
 
-        if self.bucket_versioning_activated {
-            // Not blocking if fails for the ttime being
+        if bucket_versioning_activated {
+            // Not blocking if fails for the time being
             let _ = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
             }));
         }
 
-        Ok(())
+        self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
     }
 
-    fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+    fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
+        // if bucket doesn't exist, then return an error
+        if !self.bucket_exists(bucket_name) {
+            return Err(ObjectStorageError::CannotGetBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Bucket `{}` doesn't exist", bucket_name),
+            });
+        }
+
+        // Get TTL
+        let mut ttl: Option<Duration> = None;
+        if let Ok(bl) = block_on(self.get_s3_client().get_bucket_lifecycle(GetBucketLifecycleRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(rules) = bl.rules {
+                for r in rules {
+                    if let Some(expiration) = r.expiration {
+                        ttl = expiration
+                            .days
+                            .map(|days| Duration::from_secs(days.unsigned_abs() * 24 * 60 * 60));
+                    }
+                }
+            }
+        }
+
+        // Get versioning
+        let mut versioning_activated = false;
+        if let Ok(versioning) = block_on(self.get_s3_client().get_bucket_versioning(GetBucketVersioningRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(status) = versioning.status.map(|s| s.to_lowercase()) {
+                if status == "enabled" {
+                    versioning_activated = true;
+                }
+            }
+        }
+
+        // Get labels
+        let mut labels: Option<HashMap<String, String>> = None;
+        if let Ok(tagging) = block_on(self.get_s3_client().get_bucket_tagging(GetBucketTaggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            labels = Some(HashMap::from_iter(tagging.tag_set.into_iter().map(|t| (t.key, t.value))));
+        }
+
+        Ok(Bucket {
+            name: bucket_name.to_string(),
+            ttl,
+            versioning_activated,
+            location: BucketRegion::AwsRegion(self.region.clone()),
+            labels,
+        })
+    }
+
+    fn delete_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_delete_strategy: BucketDeleteStrategy,
+    ) -> Result<(), ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
@@ -229,45 +279,23 @@ impl ObjectStorage for S3 {
         // make sure to delete all bucket content before trying to delete the bucket
         self.empty_bucket(bucket_name)?;
 
-        match block_on(s3_client.delete_bucket(DeleteBucketRequest {
-            bucket: bucket_name.to_string(),
-            expected_bucket_owner: None,
-        })) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(ObjectStorageError::CannotDeleteBucket {
-                bucket_name: bucket_name.to_string(),
-                raw_error_message: e.to_string(),
-            }),
+        match bucket_delete_strategy {
+            BucketDeleteStrategy::HardDelete => match block_on(s3_client.delete_bucket(DeleteBucketRequest {
+                bucket: bucket_name.to_string(),
+                expected_bucket_owner: None,
+            })) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(ObjectStorageError::CannotDeleteBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                }),
+            },
+            BucketDeleteStrategy::Empty => Ok(()),
         }
     }
 
-    fn get(
-        &self,
-        bucket_name: &str,
-        object_key: &str,
-        use_cache: bool,
-    ) -> Result<(StringPath, File), ObjectStorageError> {
+    fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
-
-        let workspace_directory = crate::fs::workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            self.workspace_dir_relative_path(),
-        )
-        .map_err(|err| ObjectStorageError::CannotGetObjectFile {
-            bucket_name: bucket_name.to_string(),
-            file_name: object_key.to_string(),
-            raw_error_message: err.to_string(),
-        })?;
-
-        let file_path = format!("{workspace_directory}/{bucket_name}/{object_key}");
-
-        if use_cache {
-            // does config file already exists?
-            if let Ok(file) = File::open(file_path.as_str()) {
-                return Ok((file_path, file));
-            }
-        }
 
         let s3_client = self.get_s3_client();
 
@@ -277,87 +305,84 @@ impl ObjectStorage for S3 {
             expected_bucket_owner: None,
             ..Default::default()
         })) {
-            Ok(mut res) => {
-                let body = res.body.take();
-                let mut body = body.unwrap().into_async_read();
-
-                // create parent dir
-                let path = Path::new(file_path.as_str());
-                let parent_dir = path.parent().unwrap();
-                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
-
-                // create file
-                match block_on(
-                    tokio::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path),
-                ) {
-                    Ok(mut created_file) => match block_on(io::copy(&mut body, &mut created_file)) {
-                        Ok(_) => {
-                            let file = File::open(path).unwrap();
-                            Ok((file_path, file))
-                        }
-                        Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
+            Ok(res) => {
+                let mut stream = match res.body {
+                    Some(b) => b.into_blocking_read(),
+                    None => {
+                        return Err(ObjectStorageError::CannotGetObjectFile {
                             bucket_name: bucket_name.to_string(),
-                            file_name: object_key.to_string(),
-                            raw_error_message: e.to_string(),
-                        }),
-                    },
-                    Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
+                            object_name: object_key.to_string(),
+                            raw_error_message: "Cannot get response body".to_string(),
+                        })
+                    }
+                };
+                let mut body = Vec::new();
+                stream
+                    .read_to_end(&mut body)
+                    .map_err(|e| ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
-                        file_name: object_key.to_string(),
-                        raw_error_message: e.to_string(),
-                    }),
-                }
+                        object_name: object_key.to_string(),
+                        raw_error_message: format!("Cannot read response body: {}", e).to_string(),
+                    })?;
+
+                Ok(BucketObject {
+                    bucket_name: bucket_name.to_string(),
+                    key: object_key.to_string(),
+                    value: body,
+                })
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
     }
 
-    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
+    fn put_object(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        file_path: &Path,
+    ) -> Result<BucketObject, ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
+        let file_content = std::fs::read(file_path).map_err(|e| ObjectStorageError::CannotUploadFile {
+            bucket_name: bucket_name.to_string(),
+            object_name: object_key.to_string(),
+            raw_error_message: e.to_string(),
+        })?;
+
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path) {
-                Ok(x) => x,
-                Err(e) => {
-                    return Err(ObjectStorageError::CannotUploadFile {
-                        bucket_name: bucket_name.to_string(),
-                        file_name: object_key.to_string(),
-                        raw_error_message: e.to_string(),
-                    })
-                }
-            })),
+            body: Some(StreamingBody::from(file_content.clone())),
             expected_bucket_owner: None,
             ..Default::default()
         })) {
-            Ok(_) => Ok(()),
+            Ok(_o) => Ok(BucketObject {
+                bucket_name: bucket_name.to_string(),
+                key: object_key.to_string(),
+                value: file_content.clone(),
+            }),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
     }
 
-    fn delete(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+    fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
         if S3::is_bucket_name_valid(bucket_name).is_err() {
             // bucket is missing it's ok as file can't be present
             return Ok(());
         };
 
         // check if file already exists
-        if self.get(bucket_name, object_key, false).is_err() {
+        if self.get_object(bucket_name, object_key).is_err() {
             return Ok(());
         };
 
@@ -371,7 +396,7 @@ impl ObjectStorage for S3 {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
-                file_name: object_key.to_string(),
+                object_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }

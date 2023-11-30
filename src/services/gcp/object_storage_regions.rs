@@ -1,5 +1,6 @@
 use crate::cloud_provider::gcp::regions::GcpRegion;
 use crate::models::ToCloudProviderFormat;
+use crate::object_storage::StorageRegion;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;
@@ -17,17 +18,19 @@ impl From<GcpRegion> for GcpStorageRegion {
     }
 }
 
+impl StorageRegion for GcpStorageRegion {}
+
 impl ToCloudProviderFormat for GcpStorageRegion {
-    fn to_cloud_provider_format(&self) -> String {
-        self.to_string()
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            GcpStorageRegion::EuropeWest9 => "EUROPE-WEST9",
+        }
     }
 }
 
 impl Display for GcpStorageRegion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            GcpStorageRegion::EuropeWest9 => "EUROPE-WEST9",
-        })
+        f.write_str(self.to_cloud_provider_format())
     }
 }
 

@@ -17,6 +17,11 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot get bucket error for `{bucket_name:?}`: {raw_error_message:?}.")]
+    CannotGetBucket {
+        bucket_name: String,
+        raw_error_message: String,
+    },
     #[error("Cannot delete bucket error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotDeleteBucket {
         bucket_name: String,
@@ -37,22 +42,22 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot get object file `{file_name:?}` error in `{bucket_name:?}`: {raw_error_message:?}.")]
+    #[error("Cannot get object object `{object_name:?}` error in `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotGetObjectFile {
         bucket_name: String,
-        file_name: String,
+        object_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot upload file error for `{bucket_name:?}`: {raw_error_message:?}.")]
+    #[error("Cannot upload object `{object_name:?}` error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotUploadFile {
         bucket_name: String,
-        file_name: String,
+        object_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot delete file error for `{bucket_name:?}`: {raw_error_message:?}.")]
+    #[error("Cannot delete object `{object_name:?}` error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotDeleteFile {
         bucket_name: String,
-        file_name: String,
+        object_name: String,
         raw_error_message: String,
     },
 }

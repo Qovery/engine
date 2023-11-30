@@ -797,6 +797,7 @@ controller:
     - qovery.com/service-id: 00000000-0000-0000-0000-000000000000
     - qovery.com/environment-id: 11111111-1111-1111-1111-111111111111
     - qovery.com/project-id: 22222222-2222-2222-2222-222222222222
+    - qovery.com/service-version: 42
 
   loadBalancer:
     annotations:

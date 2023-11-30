@@ -5,6 +5,7 @@ use crate::io_models::engine_request::Archive;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
 use std::borrow::Cow;
+use std::path::Path;
 use std::time::Duration;
 use tokio::sync::broadcast;
 
@@ -32,9 +33,9 @@ fn basename(path: &str, sep: char) -> Cow<str> {
 fn upload_s3_file(
     context: &Context,
     archive: Option<&Archive>,
-    file_path: &str,
+    file_path: &Path,
     region: AwsRegion,
-    resource_ttl: Option<Duration>,
+    _resource_ttl: Option<Duration>, // TODO(benjaminch): propagate TTL for object
 ) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,
@@ -44,11 +45,15 @@ fn upload_s3_file(
         }
     };
 
-    let object_key = format!("{}/{}", context.organization_short_id(), basename(file_path, '/'));
+    let object_key = format!(
+        "{}/{}",
+        context.organization_short_id(),
+        basename(file_path.to_str().unwrap_or_default(), '/')
+    );
 
     info!(
         "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
-        file_path,
+        file_path.to_str().unwrap_or_default(),
         archive.bucket_name.as_str(),
         object_key.as_str(),
         archive.access_key_id.as_str(),
@@ -57,17 +62,14 @@ fn upload_s3_file(
 
     // I am using this s3 object directly to avoid reinventing the wheel.
     let s3 = crate::object_storage::s3::S3::new(
-        context.clone(),
         "archive-123abc".to_string(),
         "archive-s3".to_string(),
         archive.access_key_id.to_string(),
         archive.secret_access_key.to_string(),
         region,
-        true,
-        resource_ttl,
     );
 
-    match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
+    match s3.put_object(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
         Ok(_) => {
             info!("Archive successfully pushed to Qovery S3");
             Ok(())

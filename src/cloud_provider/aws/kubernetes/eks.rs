@@ -39,10 +39,12 @@ use aws_sdk_eks::output::{
 };
 use aws_smithy_client::SdkError;
 
+use crate::models::ToCloudProviderFormat;
 use function_name::named;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -104,7 +106,7 @@ impl EKS {
         };
         advanced_settings.validate(event_details)?;
 
-        let s3 = kubernetes::s3(&context, &region, &*cloud_provider, advanced_settings.resource_ttl());
+        let s3 = kubernetes::s3(&region, &*cloud_provider);
 
         // copy listeners from CloudProvider
         Ok(EKS {
@@ -173,7 +175,7 @@ impl EKS {
             event_details.clone(),
             EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{autoscaler_new_state}`.")),
         ));
-        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
+        let kubeconfig_path = self.get_kubeconfig_file()?;
         let selector = "cluster-autoscaler-aws-cluster-autoscaler";
         let namespace = "kube-system";
         kubectl_exec_scale_replicas(
@@ -232,7 +234,7 @@ impl Kubernetes for EKS {
     }
 
     fn region(&self) -> &str {
-        self.region.to_aws_format()
+        self.region.to_cloud_provider_format()
     }
 
     fn zone(&self) -> &str {
@@ -721,7 +723,7 @@ impl Kubernetes for EKS {
         event_details: EventDetails,
         _qovery_terraform_config_file: String,
         cluster_secrets: crate::cloud_provider::vault::ClusterSecrets,
-        kubeconfig_file_path: Option<String>,
+        kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {
         let vault_conn = match QVaultClient::new(event_details.clone()) {
             Ok(x) => Some(x),
@@ -730,18 +732,18 @@ impl Kubernetes for EKS {
         if let Some(vault) = vault_conn {
             // encode base64 kubeconfig
             let kubeconfig = match kubeconfig_file_path {
-                Some(x) => fs::read_to_string(x.clone())
+                Some(x) => fs::read_to_string(x)
                     .map_err(|e| {
                         EngineError::new_cannot_retrieve_cluster_config_file(
                             event_details.clone(),
-                            CommandError::new_from_safe_message(format!("Cannot read kubeconfig file {x}: {e}",)),
+                            CommandError::new_from_safe_message(format!(
+                                "Cannot read kubeconfig file {}: {e}",
+                                x.to_str().unwrap_or_default()
+                            )),
                         )
                     })
                     .expect("kubeconfig was not found while it should be present"),
-                None => {
-                    let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
-                    kubeconfig_path
-                }
+                None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
             };
             let kubeconfig_b64 = base64::encode(kubeconfig);
 

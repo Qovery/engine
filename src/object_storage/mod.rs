@@ -1,20 +1,38 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
+use std::time::Duration;
 
-use crate::io_models::context::Context;
-use crate::models::domain::StringPath;
+use crate::cloud_provider::aws::regions::AwsRegion;
+use crate::models::scaleway::ScwZone;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
-use chrono::Duration;
-use std::fs::File;
+use crate::services::gcp::object_storage_regions::GcpStorageRegion;
+use enum_dispatch::enum_dispatch;
 
 pub mod errors;
 pub mod google_object_storage;
 pub mod s3;
 pub mod scaleway_object_storage;
 
+#[derive(Clone)]
+pub enum BucketDeleteStrategy {
+    HardDelete,
+    Empty,
+}
+
+#[enum_dispatch]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BucketRegion {
+    AwsRegion(AwsRegion),
+    ScwRegion(ScwZone),
+    GcpRegion(GcpStorageRegion),
+}
+
+#[enum_dispatch(StorageRegion)]
+pub trait StorageRegion: ToCloudProviderFormat {}
+
 pub trait ObjectStorage {
-    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn name(&self) -> &str;
@@ -25,24 +43,27 @@ pub trait ObjectStorage {
     fn workspace_dir_relative_path(&self) -> String {
         "object-storage/s3".to_string()
     }
-    fn workspace_dir_full_path(&self) -> String {
-        format!(
-            "{}/.qovery-workspace/{}/{}",
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            self.workspace_dir_relative_path()
-        )
-    }
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
-    fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
-    fn get(
+    fn bucket_exists(&self, bucket_name: &str) -> bool;
+    fn create_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError>;
+    fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError>;
+    fn delete_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_delete_strategy: BucketDeleteStrategy,
+    ) -> Result<(), ObjectStorageError>;
+    fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError>;
+    fn put_object(
         &self,
         bucket_name: &str,
         object_key: &str,
-        use_cache: bool,
-    ) -> Result<(StringPath, File), ObjectStorageError>;
-    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError>;
-    fn delete(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
+        file_path: &Path,
+    ) -> Result<BucketObject, ObjectStorageError>;
+    fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -55,31 +76,33 @@ pub enum Kind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Bucket<R>
-where
-    R: ToCloudProviderFormat,
-{
+pub struct Bucket {
     pub name: String,
     pub ttl: Option<Duration>,
-    pub location: R,
+    pub versioning_activated: bool,
+    pub location: BucketRegion,
     pub labels: Option<HashMap<String, String>>,
 }
 
-impl<R> Bucket<R>
-where
-    R: ToCloudProviderFormat,
-{
-    pub fn new(name: String, ttl: Option<Duration>, location: R, labels: Option<HashMap<String, String>>) -> Self {
+impl Bucket {
+    pub fn new(
+        name: String,
+        ttl: Option<Duration>,
+        versioning_activated: bool,
+        location: BucketRegion,
+        labels: Option<HashMap<String, String>>,
+    ) -> Self {
         Self {
             name,
             ttl,
+            versioning_activated,
             location,
             labels,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BucketObject {
     pub bucket_name: String,
     pub key: String,

@@ -10,8 +10,9 @@ use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{mpsc, Arc};
@@ -44,7 +45,6 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::models::domain::StringPath;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -299,7 +299,7 @@ pub trait Kubernetes: Send + Sync {
     // this method should replace kube_client
     fn q_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
+        let kubeconfig_path = self.get_kubeconfig_file_path()?;
         let kube_credentials: Vec<(String, String)> = self
             .cloud_provider()
             .credentials_environment_variables()
@@ -309,14 +309,14 @@ pub trait Kubernetes: Send + Sync {
 
         QubeClient::new(
             self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-            kubeconfig_path,
+            kubeconfig_path.to_str().unwrap_or_default().to_string(),
             kube_credentials,
         )
     }
     // AVOID USE: to be replaced by q_kube_client
     fn kube_client(&self) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
+        let kubeconfig_path = self.get_kubeconfig_file_path()?;
         let kube_credentials: Vec<(String, String)> = self
             .cloud_provider()
             .credentials_environment_variables()
@@ -348,8 +348,8 @@ pub trait Kubernetes: Send + Sync {
         format!("{}.yaml", self.id())
     }
 
-    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), Box<EngineError>> {
-        if let Err(e) = self.config_file_store().put(
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &Path) -> Result<(), Box<EngineError>> {
+        if let Err(e) = self.config_file_store().put_object(
             self.get_bucket_name().as_str(),
             self.get_kubeconfig_filename().as_str(),
             file_path,
@@ -360,10 +360,10 @@ pub trait Kubernetes: Send + Sync {
         Ok(())
     }
 
-    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), Box<EngineError>> {
+    fn delete_kubeconfig_from_object_storage(&self) -> Result<(), Box<EngineError>> {
         if let Err(e) = self
             .config_file_store()
-            .delete(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+            .delete_object(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
         {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
             return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
@@ -375,18 +375,18 @@ pub trait Kubernetes: Send + Sync {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn kubeconfig_local_file_path(&self) -> Result<String, Box<EngineError>> {
+    fn kubeconfig_local_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = self.get_bucket_name();
         let object_key = self.get_kubeconfig_filename();
 
         match self.get_temp_dir(event_details) {
-            Ok(x) => Ok(format!("{}/{}/{}", &x, &bucket_name, &object_key)),
+            Ok(x) => Ok(PathBuf::from(format!("{}/{}/{}", &x, &bucket_name, &object_key))),
             Err(e) => Err(e),
         }
     }
 
-    fn get_kubeconfig_file(&self) -> Result<(String, File), Box<EngineError>> {
+    fn get_kubeconfig_file(&self) -> Result<PathBuf, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let object_key = self.get_kubeconfig_filename();
         let bucket_name = self.get_bucket_name();
@@ -403,7 +403,10 @@ pub trait Kubernetes: Send + Sync {
                                 self.get_event_details(stage.clone()),
                                 EventMessage::new(
                                     err.to_string(),
-                                    Some(format!("Error, couldn't open {} file", &kubeconfig_local_file_path)),
+                                    Some(format!(
+                                        "Error, couldn't open {} file",
+                                        kubeconfig_local_file_path.to_str().unwrap_or_default()
+                                    )),
                                 ),
                             ));
                             None
@@ -422,14 +425,62 @@ pub trait Kubernetes: Send + Sync {
                 let kubeconfig_file =
                     File::open(&local_kubeconfig_generated).expect("couldn't read kubeconfig file, but file exists");
 
-                (StringPath::from(&local_kubeconfig_generated), kubeconfig_file)
+                (local_kubeconfig_generated, kubeconfig_file)
             }
             None => match retry::retry(Fibonacci::from_millis(5000).take(5), || {
                 match self
                     .config_file_store()
-                    .get(bucket_name.as_str(), object_key.as_str(), true)
+                    .get_object(bucket_name.as_str(), object_key.as_str())
                 {
-                    Ok((path, file)) => OperationResult::Ok((path, file)),
+                    Ok(bucket_object) => {
+                        let file_path = match self.kubeconfig_local_file_path() {
+                            Ok(p) => p,
+                            Err(e) => return OperationResult::Retry(*e),
+                        };
+
+                        // Save content to file
+                        // create parent dir
+                        let parent_dir = match file_path.parent() {
+                            Some(d) => d,
+                            None => {
+                                return OperationResult::Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                                    self.get_event_details(stage.clone()),
+                                    CommandError::new_from_safe_message(format!(
+                                        "Cannot get parent directory for `{}`",
+                                        file_path.to_str().unwrap_or_default()
+                                    )),
+                                ))
+                            }
+                        };
+                        let _ = block_on(tokio::fs::create_dir_all(parent_dir));
+
+                        // create file
+                        match std::fs::OpenOptions::new()
+                            .create(true)
+                            .write(true)
+                            .truncate(true)
+                            .open(&file_path)
+                            .map_err(|err| {
+                                EngineError::new_cannot_retrieve_cluster_config_file(
+                                    self.get_event_details(stage.clone()),
+                                    err.into(),
+                                )
+                            }) {
+                            Ok(mut f) => {
+                                if let Err(e) = f.write(bucket_object.value.as_slice()).map_err(|err| {
+                                    EngineError::new_cannot_retrieve_cluster_config_file(
+                                        self.get_event_details(stage.clone()),
+                                        err.into(),
+                                    )
+                                }) {
+                                    return OperationResult::Retry(e);
+                                }
+
+                                OperationResult::Ok(file_path)
+                            }
+                            Err(e) => OperationResult::Retry(e),
+                        }
+                    }
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
                             self.get_event_details(stage.clone()),
@@ -440,7 +491,7 @@ pub trait Kubernetes: Send + Sync {
                     }
                 }
             }) {
-                Ok((path, file)) => (path, file),
+                Ok(path) => (path.clone(), File::open(path).unwrap()), // Return file as read only mode
                 Err(retry::Error { error, .. }) => {
                     // If existing cluster, it should be a warning.
                     if self.context().is_first_cluster_deployment() {
@@ -487,7 +538,7 @@ pub trait Kubernetes: Send + Sync {
 
         let mut permissions = metadata.permissions();
         permissions.set_mode(0o400);
-        if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
+        if let Err(err) = std::fs::set_permissions(&string_path, permissions) {
             let error = EngineError::new_cannot_retrieve_cluster_config_file(
                 self.get_event_details(stage),
                 CommandError::new("Error getting file permissions.".to_string(), Some(err.to_string()), None),
@@ -496,22 +547,21 @@ pub trait Kubernetes: Send + Sync {
             return Err(Box::new(error));
         }
 
-        Ok((string_path, file))
+        Ok(string_path)
     }
 
-    fn get_kubeconfig_file_path(&self) -> Result<String, Box<EngineError>> {
-        let (path, _) = self.get_kubeconfig_file()?;
-        Ok(path)
+    fn get_kubeconfig_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
+        self.get_kubeconfig_file()
     }
 
     fn delete_local_kubeconfig_terraform(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let file = self.kubeconfig_local_file_path()?;
 
-        delete_file_if_exists(file.as_str()).map_err(|e| {
+        delete_file_if_exists(&file).map_err(|e| {
             Box::new(EngineError::new_delete_local_kubeconfig_file_error(
                 event_details,
-                file.as_str(),
+                file.to_str().unwrap_or_default(),
                 e,
             ))
         })
@@ -519,17 +569,15 @@ pub trait Kubernetes: Send + Sync {
 
     fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let file = format!(
-            "{}/{}/{}",
-            self.config_file_store().workspace_dir_full_path(),
-            self.get_bucket_name(),
-            self.get_kubeconfig_filename()
-        );
+        let file_path = match self.kubeconfig_local_file_path() {
+            Ok(p) => p,
+            Err(e) => return Err(e),
+        };
 
-        delete_file_if_exists(file.as_str()).map_err(|e| {
+        delete_file_if_exists(&file_path).map_err(|e| {
             Box::new(EngineError::new_delete_local_kubeconfig_file_error(
                 event_details,
-                file.as_str(),
+                file_path.to_str().unwrap_or_default(),
                 e,
             ))
         })
@@ -585,7 +633,7 @@ pub trait Kubernetes: Send + Sync {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
             let kubeconfig = match self.get_kubeconfig_file() {
-                Ok((path, _)) => path,
+                Ok(path) => path,
                 Err(e) => return Err(e),
             };
 
@@ -629,7 +677,7 @@ pub trait Kubernetes: Send + Sync {
         Self: Sized,
     {
         let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
+            Ok(path) => path,
             Err(e) => return Err(e.underlying_error().unwrap_or_default()),
         };
 
@@ -643,7 +691,7 @@ pub trait Kubernetes: Send + Sync {
         Self: Sized,
     {
         let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
+            Ok(path) => path,
             Err(e) => return Err(e.underlying_error().unwrap_or_default()),
         };
 
@@ -684,7 +732,7 @@ pub trait Kubernetes: Send + Sync {
 
         match self.get_kubeconfig_file() {
             Err(e) => return Err(e),
-            Ok((config_path, _)) => match kubectl_get_crash_looping_pods(
+            Ok(config_path) => match kubectl_get_crash_looping_pods(
                 &config_path,
                 namespace,
                 selector,
@@ -721,7 +769,7 @@ pub trait Kubernetes: Send + Sync {
 
         match self.get_kubeconfig_file() {
             Err(e) => return Err(e),
-            Ok((config_path, _)) => {
+            Ok(config_path) => {
                 if let Err(e) = kubectl_delete_completed_jobs(config_path, envs) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e)));
                 };
@@ -736,7 +784,7 @@ pub trait Kubernetes: Send + Sync {
         event_details: EventDetails,
         qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
-        kubeconfig_file_path: Option<String>,
+        kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;

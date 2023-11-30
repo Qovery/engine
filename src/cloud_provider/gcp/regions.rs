@@ -11,16 +11,16 @@ pub enum GcpRegion {
 }
 
 impl ToCloudProviderFormat for GcpRegion {
-    fn to_cloud_provider_format(&self) -> String {
-        self.to_string()
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            GcpRegion::EuropeWest9 => "europe-west9",
+        }
     }
 }
 
 impl Display for GcpRegion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            GcpRegion::EuropeWest9 => "europe-west9",
-        })
+        f.write_str(self.to_cloud_provider_format())
     }
 }
 

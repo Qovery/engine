@@ -1,6 +1,5 @@
 use crate::helpers::gcp::{GCP_REGION, GCP_RESOURCE_TTL};
 use crate::helpers::utilities::FuncTestsSecrets;
-use chrono::Duration;
 use function_name::named;
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
@@ -8,12 +7,13 @@ use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::*;
 use once_cell::sync::Lazy;
 use qovery_engine::models::gcp::Credentials;
-use qovery_engine::object_storage::{Bucket, BucketObject};
+use qovery_engine::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on bucket / objects
@@ -42,13 +42,18 @@ struct BucketParams {
 
 impl BucketParams {
     /// Check if current bucket params matches google bucket.
-    fn matches(&self, bucket: &Bucket<GcpStorageRegion>) -> bool {
+    fn matches(&self, bucket: &Bucket) -> bool {
+        let bucket_location = match &bucket.location {
+            BucketRegion::GcpRegion(gcp_location) => gcp_location,
+            _ => return false,
+        };
+
         self.bucket_name == bucket.name
-            && self.bucket_location == bucket.location
+            && &self.bucket_location == bucket_location
             && self.bucket_labels == bucket.labels
             // TTL
             && match (self.bucket_ttl, bucket.ttl) {
-            (Some(self_bucket_ttl), Some(bucket_ttl)) => bucket_ttl == max(self_bucket_ttl, Duration::days(1)),
+            (Some(self_bucket_ttl), Some(bucket_ttl)) => bucket_ttl == max(self_bucket_ttl, Duration::from_secs(1 * 24 * 60 * 60)),
             (None, None) => true,
             _ => false,
         }
@@ -83,6 +88,7 @@ fn test_bucket_exists() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -128,6 +134,7 @@ fn test_get_bucket() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -178,7 +185,7 @@ fn test_create_bucket_success() {
                 project_id: google_project_id.to_string(),
                 bucket_name: format!("test-bucket-1-{}", Uuid::new_v4()),
                 bucket_location: GcpStorageRegion::EuropeWest9,
-                bucket_ttl: Some(Duration::weeks(1)),
+                bucket_ttl: Some(Duration::from_secs(7 * 60 * 60 * 24)), // 1 week
                 bucket_labels: Some(HashMap::from([
                     ("bucket_name".to_string(), "bucket_1".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),
@@ -191,7 +198,7 @@ fn test_create_bucket_success() {
                 project_id: google_project_id.to_string(),
                 bucket_name: format!("test-bucket-2-{}", Uuid::new_v4()),
                 bucket_location: GcpStorageRegion::EuropeWest9,
-                bucket_ttl: Some(Duration::hours(1)),
+                bucket_ttl: Some(Duration::from_secs(1 * 60 * 60)), // 1 hour
                 bucket_labels: Some(HashMap::from([
                     ("bucket_name".to_string(), "bucket_2".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),
@@ -222,6 +229,7 @@ fn test_create_bucket_success() {
                 tc.input.bucket_name.as_str(),
                 tc.input.bucket_location.clone(),
                 tc.input.bucket_ttl,
+                false,
                 tc.input.bucket_labels.clone(),
             )
             .unwrap_or_else(|_| panic!("Cannot create bucket for test `{}`", tc.description));
@@ -265,6 +273,7 @@ fn test_delete_bucket_success() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -305,6 +314,7 @@ fn test_delete_bucket_with_objects() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -355,6 +365,7 @@ fn test_empty_bucket_with_objects() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -416,6 +427,7 @@ fn test_list_bucket() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -465,6 +477,7 @@ fn test_list_bucket_from_prefix() {
             format!("{}-test-bucket-{}", bucket_prefix, Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -513,6 +526,7 @@ fn test_put_object() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -569,6 +583,7 @@ fn test_get_object() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -628,6 +643,7 @@ fn test_list_objects_keys_only() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -700,6 +716,7 @@ fn test_list_objects_keys_only_with_prefix() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -789,6 +806,7 @@ fn test_list_objects() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -861,6 +879,7 @@ fn test_list_objects_with_prefix() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -950,6 +969,7 @@ fn test_delete_object() {
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")

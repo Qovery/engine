@@ -6,6 +6,7 @@ use crate::cloud_provider::helm_charts::{
 };
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::errors::CommandError;
+use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
 use chrono::Duration;
 use itertools::Itertools;
@@ -97,7 +98,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 values: vec![
                     ChartSetValue {
                         key: "aws.defaultRegion".to_string(),
-                        value: self.aws_region.to_aws_format().to_string(),
+                        value: self.aws_region.to_cloud_provider_format().to_string(),
                     },
                     ChartSetValue {
                         key: "aws.roleArn".to_string(),
