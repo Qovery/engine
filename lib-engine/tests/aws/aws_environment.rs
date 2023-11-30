@@ -160,7 +160,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
         let records = metrics_registry_for_deployment.get_records(environment.applications.first().unwrap().long_id);
-        assert_eq!(records.len(), 5);
+        assert_eq!(records.len(), 6);
 
         let record_provision_repo = records
             .iter()
@@ -204,7 +204,17 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_total.label, StepLabel::Service);
         assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
         assert_eq!(record_total.status, Some(StepStatus::Success));
-        assert!(record_deployment.duration.is_some());
+        assert!(record_total.duration.is_some());
+
+        let queueing_total = records
+            .iter()
+            .find(|step| step.step_name == StepName::DeploymentQueueing)
+            .unwrap();
+        assert_eq!(queueing_total.step_name, StepName::DeploymentQueueing);
+        assert_eq!(queueing_total.label, StepLabel::Service);
+        assert_eq!(queueing_total.id, environment.applications.first().unwrap().long_id);
+        assert_eq!(queueing_total.status, Some(StepStatus::Success));
+        assert!(queueing_total.duration.is_some());
 
         let records = metrics_registry_for_deployment.get_records(environment.long_id);
         assert_eq!(records.len(), 2);
