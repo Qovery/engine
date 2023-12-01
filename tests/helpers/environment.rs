@@ -1,4 +1,6 @@
 use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
+use base64::engine::general_purpose;
+use base64::Engine;
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol, StorageType};
@@ -165,14 +167,14 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
         (
             "APP_FILE_PATH_TO_BE_CHECKED".to_string(),
             VariableInfo {
-                value: base64::encode(&mount_file_env_var_value),
+                value: general_purpose::STANDARD.encode(&mount_file_env_var_value),
                 is_secret: false,
             }, // TODO check secret value
         ), // <- https://github.com/Qovery/engine-testing/blob/app-crashing-if-file-doesnt-exist/src/main.rs#L19
         (
             mount_file_env_var_key.to_string(),
             VariableInfo {
-                value: base64::encode(&mount_file_env_var_value),
+                value: general_purpose::STANDARD.encode(&mount_file_env_var_value),
                 is_secret: false,
             },
         ), // <- mounted file PATH
@@ -450,7 +452,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             git_credentials: None,
             storage: vec![],
             environment_vars_with_infos: btreemap! {
-                "ECHO_TEXT".to_string() => VariableInfo {value: base64::encode("42"), is_secret: false},
+                "ECHO_TEXT".to_string() => VariableInfo {value: general_purpose::STANDARD.encode("42"), is_secret: false},
             },
             mounted_files: vec![],
             branch: "echo-app".to_string(),

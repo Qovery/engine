@@ -1,3 +1,5 @@
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::{collections::BTreeMap, io::Read};
 
 use chrono::Duration;
@@ -357,7 +359,7 @@ impl K8sSecret {
                     Some(encoded_release) => {
                         let encoded_release = encoded_release.1.clone();
                         // base64 decode release secret
-                        let decoded_secret = match base64::decode(encoded_release.0) {
+                        let decoded_secret = match general_purpose::STANDARD.decode(encoded_release.0) {
                             Ok(x) => x,
                             Err(e) => {
                                 return Err(Box::new(EngineError::new_base64_decode_issue(

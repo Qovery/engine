@@ -15,6 +15,8 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
@@ -718,7 +720,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         let environment =
@@ -754,7 +756,8 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -945,7 +948,7 @@ fn deploy_ok_fail_fail_ok_environment() {
     engine_run_test(|| {
         init();
 
-        let span = span!(Level::INFO, "test", name = "deploy_ok_fail_fail_ok_environment");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         // working env
@@ -1489,7 +1492,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 },
             ],
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: base64::encode("my_value"), is_secret: false}},
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: general_purpose::STANDARD.encode("my_value"), is_secret: false}},
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1679,7 +1682,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 },
             ],
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1874,7 +1877,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         environment.applications = vec![];
@@ -1950,7 +1953,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
         }];
@@ -1979,7 +1982,8 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -2086,7 +2090,7 @@ fn deploy_container_with_router_on_aws_eks() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret:false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
@@ -2119,11 +2123,12 @@ fn deploy_container_with_router_on_aws_eks() {
 }
 
 #[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn deploy_job_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_job_on_aws_eks");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -2213,11 +2218,12 @@ fn deploy_job_on_aws_eks() {
 }
 
 #[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn deploy_cronjob_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_aws_eks");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -2305,11 +2311,12 @@ fn deploy_cronjob_on_aws_eks() {
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_cronjob_force_trigger_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_aws_eks");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -2425,11 +2432,12 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
 }
 
 #[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn build_and_deploy_job_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_aws_eks");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -2613,7 +2621,7 @@ fn test_restart_deployment() {
             }),
             storages: vec![],
             mounted_files: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
         }];
 
@@ -2740,7 +2748,7 @@ fn test_restart_statefulset() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
         }];
 
@@ -2763,11 +2771,12 @@ fn test_restart_statefulset() {
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_aws_eks");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -2790,9 +2799,8 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist.json".to_string(),
-            file_content_b64: base64::encode(
-                r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#,
-            ),
+            file_content_b64: general_purpose::STANDARD
+                .encode(r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#),
         };
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
@@ -2877,7 +2885,8 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -3128,7 +3137,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 },
             ],
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -3209,11 +3218,12 @@ fn deploy_container_with_udp_tcp_public_ports() {
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
+#[named]
 #[test]
 fn deploy_helm_chart() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -3290,7 +3300,7 @@ fn deploy_helm_chart() {
 fn deploy_helm_chart_and_pause_it() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -3390,7 +3400,7 @@ fn deploy_helm_chart_and_pause_it() {
 fn deploy_helm_chart_and_restart_it() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
         let logger = logger();

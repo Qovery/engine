@@ -40,6 +40,8 @@ use aws_sdk_eks::output::{
 use aws_smithy_client::SdkError;
 
 use crate::models::ToCloudProviderFormat;
+use base64::engine::general_purpose;
+use base64::Engine;
 use function_name::named;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -745,7 +747,7 @@ impl Kubernetes for EKS {
                     .expect("kubeconfig was not found while it should be present"),
                 None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
             };
-            let kubeconfig_b64 = base64::encode(kubeconfig);
+            let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
 
             let mut cluster_secrets_update = cluster_secrets;
             cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);

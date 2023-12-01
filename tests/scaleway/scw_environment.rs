@@ -13,6 +13,8 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
@@ -548,7 +550,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         let environment =
@@ -584,7 +586,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -1498,7 +1501,7 @@ fn deploy_container_with_no_router_on_scw() {
                 failure_threshold: 5,
             }),
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];
@@ -1548,7 +1551,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
-            file_content_b64: base64::encode("I exist !"),
+            file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
 
         environment.routers = vec![];
@@ -1607,7 +1610,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 },
             ],
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() =>  VariableInfo{ value: base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() =>  VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1654,7 +1657,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -1742,7 +1746,7 @@ fn deploy_container_with_router_on_scw() {
                 },
             ],
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value:base64::encode("my_value"), is_secret: false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value:general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2195,9 +2199,8 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist.json".to_string(),
-            file_content_b64: base64::encode(
-                "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}",
-            ),
+            file_content_b64: general_purpose::STANDARD
+                .encode("{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}"),
         };
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
@@ -2282,7 +2285,8 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         assert!(!config_maps.is_empty());
         for cm in config_maps {
             assert_eq!(
-                base64::decode(&mounted_file.file_content_b64)
+                general_purpose::STANDARD
+                    .decode(&mounted_file.file_content_b64)
                     .expect("mounted file content cannot be b64 decoded")
                     .to_str(),
                 cm.data
@@ -2408,7 +2412,7 @@ fn deploy_container_with_tcp_public_port() {
                 failure_threshold: 50,
             }),
             storages: vec![],
-            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: base64::encode("my_value"), is_secret:false} },
+            environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
         }];

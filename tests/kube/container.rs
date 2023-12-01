@@ -2,6 +2,8 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::database::StorageSize::Resize;
 use crate::helpers::utilities::{engine_run_test, init};
 use crate::kube::{kube_test_env, TestEnvOption};
+use base64::engine::general_purpose;
+use base64::Engine;
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::cloud_provider::io::RegistryMirroringMode;
@@ -219,7 +221,7 @@ fn should_have_mounted_files_as_volume() {
             id: mounted_file_id.short().to_string(),
             long_id: mounted_file_id.to_uuid(),
             mount_path: "/tmp/app.config.json".to_string(),
-            file_content_b64: base64::encode(r#"{"name": "config"}"#),
+            file_content_b64: general_purpose::STANDARD.encode(r#"{"name": "config"}"#),
         };
         let mount_file_env_var_key = "APP_CONFIG";
         let mount_file_env_var_value = mounted_file.mount_path.to_string();
@@ -237,7 +239,7 @@ fn should_have_mounted_files_as_volume() {
             (
                 mount_file_env_var_key.to_string(),
                 VariableInfo {
-                    value: base64::encode(mount_file_env_var_value),
+                    value: general_purpose::STANDARD.encode(mount_file_env_var_value),
                     is_secret: false,
                 },
             ), // <- mounted file PATH

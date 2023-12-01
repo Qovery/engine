@@ -1,3 +1,5 @@
+use base64::engine::general_purpose;
+use base64::Engine;
 use serde_json::Value;
 use std::collections::HashMap;
 use tera::{try_get_value, Error};
@@ -17,7 +19,7 @@ pub struct Base64EncodeFilter {}
 
 impl Base64EncodeFilter {
     fn base64_encode(s: &str) -> String {
-        base64::encode(s)
+        general_purpose::STANDARD.encode(s)
     }
 }
 
@@ -76,7 +78,7 @@ mod tests {
 
             // verify:
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), to_value(base64::encode(tc)).unwrap());
+            assert_eq!(result.unwrap(), to_value(general_purpose::STANDARD.encode(tc)).unwrap());
         }
     }
 

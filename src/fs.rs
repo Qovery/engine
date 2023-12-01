@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 use crate::cmd::structs::SecretItem;
 use crate::errors::CommandError;
-use base64::decode;
+use base64::engine::general_purpose;
+use base64::Engine;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use itertools::Itertools;
@@ -372,7 +373,7 @@ where
         false => return Err(CommandError::new_from_safe_message(message)),
     };
 
-    let content = match decode(secret_content) {
+    let content = match general_purpose::STANDARD.decode(secret_content) {
         Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
         Err(e) => return Err(CommandError::new(message, Some(e.to_string()), None)),
     };

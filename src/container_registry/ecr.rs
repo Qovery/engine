@@ -1,5 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -20,7 +22,7 @@ use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, 
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
-use crate::runtime::{block_on, block_on_with_timeout};
+use crate::runtime::block_on_with_timeout;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use serde_json::json;
@@ -138,11 +140,11 @@ impl ECR {
         image_identifier.image_tag = Some(image.tag.to_string());
         dir.image_ids = Some(vec![image_identifier]);
 
-        let r = block_on(self.ecr_client().describe_images(dir));
+        let r = block_on_with_timeout(self.ecr_client().describe_images(dir));
 
         match r {
-            Err(_) => None,
-            Ok(res) => match res.image_details {
+            Err(_) | Ok(Err(_)) => None,
+            Ok(Ok(res)) => match res.image_details {
                 // assume there is only one repository returned - why? Because we set only one repository_names above
                 Some(image_details) => image_details.into_iter().next(),
                 _ => None,
@@ -207,7 +209,7 @@ impl ECR {
                 Ok(result) => OperationResult::Ok(result.repositories),
                 Err(e) => match e {
                     RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_)) => {
-                        match block_on(self.ecr_client().create_repository(crr.clone())) {
+                        match block_on_with_timeout(self.ecr_client().create_repository(crr.clone())) {
                             // The Repo should be created at this point, but we want to verify that the describe/list return it now.
                             // So we reloop in order to be sure it is available when we do a describe
                             Ok(_) => OperationResult::Retry(e),
@@ -266,7 +268,7 @@ impl ECR {
                         ..Default::default()
                     };
 
-                    match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
+                    match block_on_with_timeout(self.ecr_client().put_lifecycle_policy(plp)) {
                         Err(err) => Err(ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
                             registry_name: self.name.to_string(),
                             repository_name: repository_name.to_string(),
@@ -288,7 +290,7 @@ impl ECR {
                             tags: ecr_tags,
                         };
 
-                        match block_on(self.ecr_client().tag_resource(trr)) {
+                        match block_on_with_timeout(self.ecr_client().tag_resource(trr)) {
                             Err(err) => Err(ContainerRegistryError::CannotSetRepositoryTags {
                                 registry_name: self.name.to_string(),
                                 repository_name: repository_name.to_string(),
@@ -328,15 +330,15 @@ impl ECR {
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
-        let r = block_on(ecr_client.get_authorization_token(GetAuthorizationTokenRequest::default()));
+        let r = block_on_with_timeout(ecr_client.get_authorization_token(GetAuthorizationTokenRequest::default()));
 
         let (access_token, password, endpoint_url) = match r {
-            Ok(t) => match t.authorization_data {
+            Ok(Ok(t)) => match t.authorization_data {
                 Some(authorization_data) => {
                     let ad = authorization_data.first().unwrap();
                     let b64_token = ad.authorization_token.as_ref().unwrap();
 
-                    let decoded_token = base64::decode(b64_token).unwrap();
+                    let decoded_token = general_purpose::STANDARD.decode(b64_token).unwrap();
                     let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
 
                     let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();
@@ -361,7 +363,7 @@ impl ECR {
 
     fn is_credentials_valid(&self) -> Result<(), ContainerRegistryError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
-        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
+        let s = block_on_with_timeout(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_) => Ok(()),
@@ -416,7 +418,7 @@ impl ContainerRegistry for ECR {
         let mut drr = DescribeRepositoriesRequest::default();
         drr.repository_names = Some(vec![repository_name.to_string()]);
 
-        match block_on(ecr_client.describe_repositories(drr)) {
+        match block_on_with_timeout(ecr_client.describe_repositories(drr)) {
             Err(e) => Err(ContainerRegistryError::CannotGetRepository {
                 registry_name: match &self.registry_info {
                     Some(i) => i.registry_name.to_string(),
@@ -425,17 +427,27 @@ impl ContainerRegistry for ECR {
                 repository_name: repository_name.to_string(),
                 raw_error_message: e.to_string(),
             }),
-            Ok(res) => match res.repositories {
+            Ok(Err(e)) => Err(ContainerRegistryError::CannotGetRepository {
+                registry_name: match &self.registry_info {
+                    Some(i) => i.registry_name.to_string(),
+                    None => "".to_string(),
+                },
+                repository_name: repository_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+            Ok(Ok(res)) => match res.repositories {
                 // assume there is only one repository returned - why? Because we set only one repository_names above
                 Some(repositories) => {
                     match repositories.into_iter().next() {
                         Some(r) => {
                             // get tags for repository
-                            let tags = match block_on(ecr_client.list_tags_for_resource(ListTagsForResourceRequest {
-                                resource_arn: r.repository_arn.unwrap_or("".to_string()),
-                            })) {
-                                Ok(tags_res) => tags_res.tags,
-                                Err(_) => None,
+                            let tags = match block_on_with_timeout(ecr_client.list_tags_for_resource(
+                                ListTagsForResourceRequest {
+                                    resource_arn: r.repository_arn.unwrap_or("".to_string()),
+                                },
+                            )) {
+                                Ok(Ok(tags_res)) => tags_res.tags,
+                                _ => None,
                             };
 
                             let mut ttl = None;

@@ -1,4 +1,5 @@
-use base64::DecodeError;
+use base64::engine::general_purpose;
+use base64::{DecodeError, Engine};
 use kube::config::{KubeConfigOptions, Kubeconfig, KubeconfigError};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
@@ -91,15 +92,17 @@ pub async fn create_kube_client<P: AsRef<Path>>(
 }
 
 pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<String, DecodeError> {
-    let decoded_value_byte = base64::decode(multiple_credentials)?;
+    let decoded_value_byte = general_purpose::STANDARD.decode(multiple_credentials)?;
     let decoded_value = decoded_value_byte.iter().map(|c| *c as char).collect::<String>();
     let replaced_comma = decoded_value.replace(',', "\n");
-    Ok(base64::encode(replaced_comma))
+    Ok(general_purpose::STANDARD.encode(replaced_comma))
 }
 
 #[cfg(test)]
 mod tests_utilities {
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
+    use base64::engine::general_purpose;
+    use base64::Engine;
     use std::collections::BTreeMap;
 
     #[test]
@@ -161,9 +164,9 @@ mod tests_utilities {
     #[test]
     pub fn test_comma_to_new_line_base64_replacement() {
         // check basic_auth vars replacement
-        let env_var_base64 = base64::encode(b"dennis:ritchie,linus:torvalds");
+        let env_var_base64 = general_purpose::STANDARD.encode(b"dennis:ritchie,linus:torvalds");
         let basic_auth_replacement = base64_replace_comma_to_new_line(env_var_base64).unwrap();
-        let decoded_res = base64::decode(basic_auth_replacement).unwrap();
+        let decoded_res = general_purpose::STANDARD.decode(basic_auth_replacement).unwrap();
         let decoded_res_string = decoded_res.iter().map(|c| *c as char).collect::<String>();
         assert_eq!(decoded_res_string, "dennis:ritchie\nlinus:torvalds".to_string());
     }

@@ -18,6 +18,8 @@ use crate::helpers::scaleway::{
     clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
 };
+use base64::engine::general_purpose;
+use base64::Engine;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
@@ -373,11 +375,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 });
                 app.liveness_probe = None;
                 app.environment_vars_with_infos = btreemap! {
-                     "PG_DBNAME".to_string() => VariableInfo{ value: base64::encode(database_db_name.clone()), is_secret:false},
-                     "PG_HOST".to_string() => VariableInfo{ value:base64::encode(database_host.clone()), is_secret:false},
-                     "PG_PORT".to_string() => VariableInfo{ value:base64::encode(database_port.to_string()), is_secret:false},
-                     "PG_USERNAME".to_string() => VariableInfo{ value:base64::encode(database_username.clone()), is_secret:false},
-                     "PG_PASSWORD".to_string() => VariableInfo{ value:base64::encode(database_password.clone()), is_secret:false},
+                     "PG_DBNAME".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode(database_db_name.clone()), is_secret:false},
+                     "PG_HOST".to_string() => VariableInfo{ value:general_purpose::STANDARD.encode(database_host.clone()), is_secret:false},
+                     "PG_PORT".to_string() => VariableInfo{ value:general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
+                     "PG_USERNAME".to_string() => VariableInfo{ value:general_purpose::STANDARD.encode(database_username.clone()), is_secret:false},
+                     "PG_PASSWORD".to_string() => VariableInfo{ value:general_purpose::STANDARD.encode(database_password.clone()), is_secret:false},
                 };
                 app
             })

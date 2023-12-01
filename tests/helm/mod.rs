@@ -1,6 +1,8 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
+use base64::engine::general_purpose;
+use base64::Engine;
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
@@ -198,7 +200,7 @@ fn test_mounted_file() -> MountedFile {
         id: mounted_file_identifier.short().to_string(),
         long_id: mounted_file_identifier.to_uuid(),
         mount_path: "/etc/mounted_file.json".to_string(),
-        file_content_b64: base64::encode(r#"{"mounted_file_key": "hello"}"#),
+        file_content_b64: general_purpose::STANDARD.encode(r#"{"mounted_file_key": "hello"}"#),
     }
 }
 
