@@ -2,7 +2,7 @@ use crate::build_platform::SshKey;
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::engine_task::qovery_api::QoveryApi;
-use crate::io_models::application::GitCredentials;
+use crate::io_models::application::{GitCredentials, Port};
 use crate::io_models::context::Context;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
@@ -28,7 +28,52 @@ pub struct HelmCredentials {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 #[derive(Default)]
-pub struct HelmChartAdvancedSettings {}
+pub struct HelmChartAdvancedSettings {
+    // Ingress
+    #[serde(alias = "network.ingress.proxy_body_size_mb")]
+    pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.enable_cors")]
+    pub network_ingress_cors_enable: bool,
+    #[serde(alias = "network.ingress.enable_sticky_session")]
+    pub network_ingress_sticky_session_enable: bool,
+    #[serde(alias = "network.ingress.cors_allow_origin")]
+    pub network_ingress_cors_allow_origin: String,
+    #[serde(alias = "network.ingress.cors_allow_methods")]
+    pub network_ingress_cors_allow_methods: String,
+    #[serde(alias = "network.ingress.cors_allow_headers")]
+    pub network_ingress_cors_allow_headers: String,
+    #[serde(alias = "network.ingress.keepalive_time_seconds")]
+    pub network_ingress_keepalive_time_seconds: u32,
+    #[serde(alias = "network.ingress.keepalive_timeout_seconds")]
+    pub network_ingress_keepalive_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.send_timeout_seconds")]
+    pub network_ingress_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.extra_headers")]
+    pub network_ingress_extra_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
+    pub network_ingress_proxy_connect_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
+    pub network_ingress_proxy_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_read_timeout_seconds")]
+    pub network_ingress_proxy_read_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_request_buffering")]
+    pub network_ingress_proxy_request_buffering: String,
+    #[serde(alias = "network.ingress.proxy_buffering")]
+    pub network_ingress_proxy_buffering: String,
+    #[serde(alias = "network.ingress.proxy_buffer_size_kb")]
+    pub network_ingress_proxy_buffer_size_kb: u32,
+    #[serde(alias = "network.ingress.whitelist_source_range")]
+    pub network_ingress_whitelist_source_range: String,
+    #[serde(alias = "network.ingress.denylist_source_range")]
+    pub network_ingress_denylist_source_range: String,
+    #[serde(alias = "network.ingress.basic_auth_env_var")]
+    pub network_ingress_basic_auth_env_var: String,
+
+    #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
+    pub network_ingress_grpc_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.grpc_read_timeout_seconds")]
+    pub network_ingress_grpc_read_timeout_seconds: u32,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -88,6 +133,7 @@ pub struct HelmChart {
     #[serde(default = "default_environment_vars_with_info")]
     pub environment_vars_with_infos: BTreeMap<String, VariableInfo>,
     pub advanced_settings: HelmChartAdvancedSettings,
+    pub ports: Vec<Port>,
 }
 
 impl HelmChart {
@@ -190,6 +236,7 @@ impl HelmChart {
                 self.advanced_settings,
                 AwsAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                self.ports,
             )?),
             kubernetes::Kind::Ec2 => Box::new(models::helm_chart::HelmChart::<AWSEc2>::new(
                 context,
@@ -214,6 +261,7 @@ impl HelmChart {
                 self.advanced_settings,
                 AwsEc2AppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                self.ports,
             )?),
             kubernetes::Kind::ScwKapsule => Box::new(models::helm_chart::HelmChart::<SCW>::new(
                 context,
@@ -238,6 +286,7 @@ impl HelmChart {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                self.ports,
             )?),
             kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
         };
@@ -279,13 +328,33 @@ mod tests {
   "timeout_sec": 0,
   "allow_cluster_wide_resources": false,
   "environment_vars": {{ "key": "value" }},
-  "advanced_settings": {{}}
+  "advanced_settings": {{}},
+  "ports": [{{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null}},
+  {{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}}]
         }}"#
         );
 
         let helm_chart: HelmChart = serde_json::from_str(data.as_str()).unwrap();
         assert_eq!(helm_chart.name, "name");
         assert_eq!(helm_chart.environment_vars_with_infos.len(), 0);
+        assert_eq!(helm_chart.ports.len(), 2);
+        assert_eq!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace == None && service_name == None),
+            true
+        );
+        assert_eq!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
+                    && service_name == Some("service_1".to_string())),
+            true
+        );
     }
 }
 
@@ -319,7 +388,8 @@ fn test_helm_deserialization_with_env_variables_with_infos() {
   "allow_cluster_wide_resources": false,
   "environment_vars": {{ "key": "value" }},
   "environment_vars_with_infos":{{"variable":{{"value":"value","is_secret":false}},"secret":{{"value":"my password","is_secret":true}}}},
-  "advanced_settings": {{}}
+  "advanced_settings": {{}},
+  "ports": []
         }}"#
     );
 

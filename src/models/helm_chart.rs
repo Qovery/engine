@@ -3,11 +3,13 @@ use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::application::Port;
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::models::types::CloudProvider;
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -46,6 +48,7 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) workspace_directory: PathBuf,
     pub(super) chart_workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) ports: Vec<Port>,
 }
 
 // Here we define the common behavior among all providers
@@ -68,6 +71,7 @@ impl<T: CloudProvider> HelmChart<T> {
         advanced_settings: HelmChartAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        ports: Vec<Port>,
     ) -> Result<Self, HelmChartError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -122,7 +126,12 @@ impl<T: CloudProvider> HelmChart<T> {
             chart_workspace_directory: workspace_directory.join("chart"),
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            ports,
         })
+    }
+
+    fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
+        self.ports.iter().filter(|port| port.publicly_accessible)
     }
 
     pub fn helm_selector(&self) -> Option<String> {
@@ -307,6 +316,8 @@ impl<T: CloudProvider> Service for HelmChart<T> {
 }
 
 pub trait HelmChartService: Service + DeploymentAction + Send {
+    fn public_ports(&self) -> Vec<&Port>;
+    fn advanced_settings(&self) -> &HelmChartAdvancedSettings;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
@@ -314,6 +325,12 @@ impl<T: CloudProvider> HelmChartService for HelmChart<T>
 where
     HelmChart<T>: Service + DeploymentAction,
 {
+    fn public_ports(&self) -> Vec<&Port> {
+        self.public_ports().collect_vec()
+    }
+    fn advanced_settings(&self) -> &HelmChartAdvancedSettings {
+        &self.advanced_settings
+    }
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
     }
