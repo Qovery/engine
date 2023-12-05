@@ -189,6 +189,8 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                     name: "http".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -197,6 +199,8 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                     name: "grpc".to_string(),
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
