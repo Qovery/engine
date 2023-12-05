@@ -603,7 +603,7 @@ impl Kapsule {
         // Scaleway added a new constraint on scaleway_k8s_cluster to be linked to a private network
         // For existing clusters, exerything is OK
         // For new clusters, we need to inject a resource scaleway_vpc_private_network
-        let create_private_network = if self.context.is_first_cluster_deployment() {
+        let mut create_private_network = if self.context.is_first_cluster_deployment() {
             true
         } else {
             let mut headers = header::HeaderMap::new();
@@ -640,6 +640,9 @@ impl Kapsule {
                 }
             }
         };
+        if self.advanced_settings.scaleway_enable_private_network_migration {
+            create_private_network = true;
+        }
         context.insert("create_private_network", &create_private_network);
 
         Ok(context)
