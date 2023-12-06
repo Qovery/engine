@@ -318,6 +318,8 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                     is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }];
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -406,6 +408,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 name: "grpc".to_string(),
                 publicly_accessible: true,
                 protocol: Protocol::GRPC,
+                service_name: None,
+                namespace: None,
             });
             // disable custom domain check
             application.advanced_settings.deployment_custom_domain_check_enabled = false;
@@ -1472,6 +1476,8 @@ fn deploy_container_with_no_router_on_scw() {
                     is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1480,6 +1486,8 @@ fn deploy_container_with_no_router_on_scw() {
                     is_default: false,
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -1599,6 +1607,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1607,6 +1617,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     is_default: false,
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
@@ -1735,6 +1747,8 @@ fn deploy_container_with_router_on_scw() {
                     is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1743,6 +1757,8 @@ fn deploy_container_with_router_on_scw() {
                     is_default: false,
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
@@ -2375,6 +2391,8 @@ fn deploy_container_with_tcp_public_port() {
                     name: "p443".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2383,6 +2401,8 @@ fn deploy_container_with_tcp_public_port() {
                     name: "p5432".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2391,6 +2411,8 @@ fn deploy_container_with_tcp_public_port() {
                     name: "p80".to_string(),
                     publicly_accessible: false, // scaleway don't support udp loabalancer
                     protocol: Protocol::UDP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {

@@ -53,6 +53,8 @@ pub struct Port {
     pub name: String,
     pub publicly_accessible: bool,
     pub protocol: Protocol,
+    pub service_name: Option<String>,
+    pub namespace: Option<String>,
 }
 
 pub fn to_environment_variable(env_vars: BTreeMap<String, VariableInfo>) -> Vec<EnvironmentVariable> {

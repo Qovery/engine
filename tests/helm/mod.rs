@@ -171,6 +171,8 @@ fn test_port() -> Port {
         name: "my_port_name".to_string(),
         publicly_accessible: true,
         protocol: Protocol::HTTP,
+        service_name: None,
+        namespace: None,
     }
 }
 

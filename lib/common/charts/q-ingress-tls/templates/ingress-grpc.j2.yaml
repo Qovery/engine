@@ -1,10 +1,11 @@
+{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
 {%- if grpc_hosts|length >= 1  %}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ sanitized_name }}-grpc
-  namespace: {{ namespace }}
+  namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
@@ -89,3 +90,4 @@ spec:
                 number: {{ host.service_port }}
     {%- endfor %}
 {%- endif %}
+{%- endfor %}

@@ -142,6 +142,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     name: "http".to_string(),
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }],
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Tcp { host: None },
@@ -235,6 +237,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     name: "p80".to_string(),
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }],
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {

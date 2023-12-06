@@ -17,6 +17,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 
 use base64::engine::general_purpose;
 use base64::Engine;
+use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
@@ -25,7 +26,7 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
+use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
@@ -385,7 +386,9 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                     name: "p3000".to_string(),
                     is_default: true,
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 }];
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -456,7 +459,9 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                     is_default: true,
                     name: "p3000".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 }];
                 app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -601,6 +606,8 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 name: "grpc".to_string(),
                 publicly_accessible: true,
                 protocol: Protocol::GRPC,
+                service_name: None,
+                namespace: None,
             });
             // disable custom domain check
             advanced_settings.deployment_custom_domain_check_enabled = false;
@@ -1490,7 +1497,9 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     is_default: true,
                     name: "p8080".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1498,7 +1507,9 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
@@ -1680,7 +1691,9 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     is_default: true,
                     name: "p8080".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1688,7 +1701,9 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
@@ -1799,7 +1814,9 @@ fn deploy_container_with_storages_on_aws_eks() {
                 is_default: true,
                 name: "http".to_string(),
                 publicly_accessible: false,
-                protocol: Protocol::HTTP,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
             }],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1933,7 +1950,9 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     is_default: true,
                     name: "http".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1941,7 +1960,9 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2067,7 +2088,9 @@ fn deploy_container_with_router_on_aws_eks() {
                     is_default: true,
                     name: "http".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2075,7 +2098,9 @@ fn deploy_container_with_router_on_aws_eks() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2600,7 +2625,9 @@ fn test_restart_deployment() {
                     is_default: true,
                     name: "http".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2608,7 +2635,9 @@ fn test_restart_deployment() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2729,7 +2758,9 @@ fn test_restart_statefulset() {
                     is_default: true,
                     name: "http".to_string(),
                     publicly_accessible: true,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2737,7 +2768,9 @@ fn test_restart_statefulset() {
                     is_default: false,
                     name: "grpc".to_string(),
                     publicly_accessible: false,
-                    protocol: Protocol::HTTP,
+                    protocol: HTTP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -3128,6 +3161,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     name: format!("p{}", main_port),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -3136,6 +3171,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     name: "p5432".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
+                    service_name: None,
+                    namespace: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -3144,6 +3181,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     name: "p80".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::UDP,
+                    service_name: None,
+                    namespace: None,
                 },
             ],
             storages: vec![],
@@ -3289,6 +3328,7 @@ fn deploy_helm_chart() {
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
+            ports: vec![],
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3366,6 +3406,7 @@ fn deploy_helm_chart_and_pause_it() {
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
+            ports: vec![],
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3466,6 +3507,7 @@ fn deploy_helm_chart_and_restart_it() {
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
+            ports: vec![],
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3479,6 +3521,121 @@ fn deploy_helm_chart_and_restart_it() {
         assert!(!ret.unwrap().items.is_empty());
 
         let ret = environment.restart_environment(&environment, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_helm_chart_with_router() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete =
+            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        // generate an extra namespace to deploy a service and ingress
+        let extra_namespace = format!("extra-env-{}", Uuid::new_v4());
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my special chart ****".to_string(),
+            kube_name: "my-special-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "8acb6e06d98c0c1b8f2285d5c5bc7f1a837a782a".to_string(),
+                root_path: PathBuf::from("/several_services"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            //chart_values: HelmValueSource::Git {
+            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+            //    git_credentials: None,
+            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+            //},
+            set_values: vec![
+                ("service2.namespace".to_string(), extra_namespace.clone()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![],
+            set_json_values: vec![],
+            command_args: vec![],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: true,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: false,
+                    name: "service1-p8080".to_string(),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                    namespace: None,
+                    service_name: Some("inner-namespace-service1".to_string()),
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: false,
+                    name: "service2-p8080".to_string(),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                    namespace: Some(extra_namespace.clone()),
+                    service_name: Some("outside-namespace-service2".to_string()),
+                },
+            ],
+        }];
+        environment.routers = vec![Router {
+            long_id: Uuid::new_v4(),
+            name: "default-router".to_string(),
+            kube_name: "default-router".to_string(),
+            action: Action::Create,
+            default_domain: "main".to_string(),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: environment.helms[0].long_id,
+            }],
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         "".to_string()

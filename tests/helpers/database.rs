@@ -276,6 +276,8 @@ pub fn environment_3_apps_3_databases(
                     name: "p1234".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
@@ -335,6 +337,8 @@ pub fn environment_3_apps_3_databases(
                     name: "p1234".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
@@ -390,6 +394,8 @@ pub fn environment_3_apps_3_databases(
                     name: "p1234".to_string(),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
+                    service_name: None,
+                    namespace: None,
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
@@ -728,6 +734,8 @@ pub fn test_db(
                 name: "p1234".to_string(),
                 publicly_accessible: true,
                 protocol: Protocol::HTTP,
+                service_name: None,
+                namespace: None,
             }];
             app.dockerfile_path = match db_kind {
                 // to be able to support outdated container image versions, we jump to a higher version
@@ -1324,6 +1332,8 @@ pub fn test_db_on_upgrade(
                 name: "p1234".to_string(),
                 publicly_accessible: true,
                 protocol: Protocol::HTTP,
+                service_name: None,
+                namespace: None,
             }];
             app.dockerfile_path = Some(format!("Dockerfile-{version}"));
             app.environment_vars_with_infos = db_infos.app_env_vars.clone();
