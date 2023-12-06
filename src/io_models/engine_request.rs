@@ -287,6 +287,7 @@ pub struct Kubernetes {
     pub nodes_groups: Vec<NodeGroups>,
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub kubeconfig: Option<String>,
 }
 
 impl Kubernetes {
