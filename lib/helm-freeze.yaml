@@ -5,7 +5,7 @@ charts:
     comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns
     repo_name: bitnami
-    version: 6.17.0
+    version: 6.28.5
     comment: https://artifacthub.io/packages/helm/bitnami/external-dns
   - name: grafana
     version: 6.16.10
