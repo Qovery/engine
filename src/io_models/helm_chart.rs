@@ -213,31 +213,33 @@ impl HelmChart {
         let environment_variables_with_infos: HashMap<String, VariableInfo> =
             self.environment_vars_with_infos.clone().into_iter().collect();
         let service: Box<dyn HelmChartService> = match cloud_provider.kubernetes_kind() {
-            kubernetes::Kind::Eks => Box::new(models::helm_chart::HelmChart::<AWS>::new(
-                context,
-                self.long_id,
-                self.name,
-                self.kube_name,
-                self.action.to_service_action(),
-                Self::to_chart_source_domain(
-                    self.chart_source.clone(),
-                    &ssh_keys,
-                    context.qovery_api.clone(),
+            kubernetes::Kind::Eks | kubernetes::Kind::EksSelfManaged => {
+                Box::new(models::helm_chart::HelmChart::<AWS>::new(
+                    context,
                     self.long_id,
-                ),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
-                self.set_values,
-                self.set_string_values,
-                self.set_json_values,
-                self.command_args,
-                std::time::Duration::from_secs(self.timeout_sec),
-                self.allow_cluster_wide_resources,
-                environment_variables_with_infos,
-                self.advanced_settings,
-                AwsAppExtraSettings {},
-                |transmitter| context.get_event_details(transmitter),
-                self.ports,
-            )?),
+                    self.name,
+                    self.kube_name,
+                    self.action.to_service_action(),
+                    Self::to_chart_source_domain(
+                        self.chart_source.clone(),
+                        &ssh_keys,
+                        context.qovery_api.clone(),
+                        self.long_id,
+                    ),
+                    Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
+                    self.set_values,
+                    self.set_string_values,
+                    self.set_json_values,
+                    self.command_args,
+                    std::time::Duration::from_secs(self.timeout_sec),
+                    self.allow_cluster_wide_resources,
+                    environment_variables_with_infos,
+                    self.advanced_settings,
+                    AwsAppExtraSettings {},
+                    |transmitter| context.get_event_details(transmitter),
+                    self.ports,
+                )?)
+            }
             kubernetes::Kind::Ec2 => Box::new(models::helm_chart::HelmChart::<AWSEc2>::new(
                 context,
                 self.long_id,
@@ -263,32 +265,34 @@ impl HelmChart {
                 |transmitter| context.get_event_details(transmitter),
                 self.ports,
             )?),
-            kubernetes::Kind::ScwKapsule => Box::new(models::helm_chart::HelmChart::<SCW>::new(
-                context,
-                self.long_id,
-                self.name,
-                self.kube_name,
-                self.action.to_service_action(),
-                Self::to_chart_source_domain(
-                    self.chart_source.clone(),
-                    &ssh_keys,
-                    context.qovery_api.clone(),
+            kubernetes::Kind::ScwKapsule | kubernetes::Kind::ScwSelfManaged => {
+                Box::new(models::helm_chart::HelmChart::<SCW>::new(
+                    context,
                     self.long_id,
-                ),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
-                self.set_values,
-                self.set_string_values,
-                self.set_json_values,
-                self.command_args,
-                std::time::Duration::from_secs(self.timeout_sec),
-                self.allow_cluster_wide_resources,
-                environment_variables_with_infos,
-                self.advanced_settings,
-                ScwAppExtraSettings {},
-                |transmitter| context.get_event_details(transmitter),
-                self.ports,
-            )?),
-            kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                    self.name,
+                    self.kube_name,
+                    self.action.to_service_action(),
+                    Self::to_chart_source_domain(
+                        self.chart_source.clone(),
+                        &ssh_keys,
+                        context.qovery_api.clone(),
+                        self.long_id,
+                    ),
+                    Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
+                    self.set_values,
+                    self.set_string_values,
+                    self.set_json_values,
+                    self.command_args,
+                    std::time::Duration::from_secs(self.timeout_sec),
+                    self.allow_cluster_wide_resources,
+                    environment_variables_with_infos,
+                    self.advanced_settings,
+                    ScwAppExtraSettings {},
+                    |transmitter| context.get_event_details(transmitter),
+                    self.ports,
+                )?)
+            }
+            kubernetes::Kind::Gke | kubernetes::Kind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
         };
 
         Ok(service)
