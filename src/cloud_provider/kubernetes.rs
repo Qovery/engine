@@ -438,6 +438,15 @@ pub trait Kubernetes: Send + Sync {
                             Err(e) => return OperationResult::Retry(*e),
                         };
 
+                        // Upload kubeconfig, so we can store it
+                        if let Err(err) = self
+                            .context()
+                            .qovery_api
+                            .update_cluster_credentials(String::from_utf8_lossy(&bucket_object.value).to_string())
+                        {
+                            error!("Cannot update cluster credentials {}", err);
+                        }
+
                         // Save content to file
                         // create parent dir
                         let parent_dir = match file_path.parent() {
