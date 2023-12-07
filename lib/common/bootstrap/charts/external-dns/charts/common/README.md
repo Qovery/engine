@@ -1,14 +1,14 @@
 # Bitnami Common Library Chart
 
-A [Helm Library Chart](https://helm.sh/docs/topics/library_charts/#helm) for grouping common logic between Bitnami charts.
+A [Helm Library Chart](https://helm.sh/docs/topics/library_charts/#helm) for grouping common logic between bitnami charts.
 
 ## TL;DR
 
 ```yaml
 dependencies:
   - name: common
-    version: 2.x.x
-    repository: oci://registry-1.docker.io/bitnamicharts
+    version: 1.x.x
+    repository: https://charts.bitnami.com/bitnami
 ```
 
 ```console
@@ -30,12 +30,10 @@ This chart provides a common template helpers which can be used to develop new c
 
 Bitnami charts can be used with [Kubeapps](https://kubeapps.dev/) for deployment and management of Helm Charts in clusters.
 
-Looking to use our applications in production? Try [VMware Application Catalog](https://bitnami.com/enterprise), the enterprise edition of Bitnami Application Catalog.
-
 ## Prerequisites
 
-- Kubernetes 1.23+
-- Helm 3.8.0+
+- Kubernetes 1.19+
+- Helm 3.2.0+
 
 ## Parameters
 
@@ -220,7 +218,7 @@ helm install test mychart --set path.to.value00="",path.to.value01=""
 
 ## License
 
-Copyright &copy; 2023 VMware, Inc.
+Copyright &copy; 2023 Bitnami
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
