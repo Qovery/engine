@@ -755,10 +755,10 @@ pub fn test_db(
     let ea_delete = environment_delete.clone();
 
     let kubernetes_version = match kubernetes_kind {
-        KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
-        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
+        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
+        KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
-        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -766,7 +766,7 @@ pub fn test_db(
         Some(c) => c,
         None => {
             computed_infra_ctx = match kubernetes_kind {
-                KubernetesKind::Eks => AWS::docker_cr_engine(
+                KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
@@ -794,7 +794,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
+                KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
@@ -808,7 +808,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
-                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
             };
             &computed_infra_ctx
         }
@@ -929,6 +929,9 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
             };
             &computed_infra_ctx_for_delete
         }
@@ -1114,6 +1117,9 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
             };
             &computed_infra_ctx
         }
@@ -1223,6 +1229,9 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
             };
             &computed_infra_ctx_for_delete
         }

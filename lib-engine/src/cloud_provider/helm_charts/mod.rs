@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::cloud_provider::helm::CommonChart;
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
@@ -250,10 +250,10 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
         }
         HelmChartType::CloudProviderSpecific(provider_kind) => match &helm_chart_location.contains("/common/") {
             false => match provider_kind {
-                KubernetesKind::Eks => "aws",
+                KubernetesKind::Eks | Kind::EksSelfManaged => "aws",
                 KubernetesKind::Ec2 => "aws-ec2",
-                KubernetesKind::ScwKapsule => "scaleway",
-                KubernetesKind::Gke => "gcp",
+                KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
+                KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
             },
             true => "undefined-cloud-provider", // There is something weird
         },

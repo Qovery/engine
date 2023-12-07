@@ -146,7 +146,10 @@ pub fn get_cluster_test_kubernetes<'a>(
             )
             .unwrap(),
         ),
-        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke => todo!(),            // TODO(benjaminch): GKE integration
+        KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
     };
 
     kubernetes
@@ -173,10 +176,10 @@ pub fn cluster_test(
     let _enter = span.enter();
 
     let kubernetes_boot_version = match kubernetes_kind {
-        KubernetesKind::Eks => AWS_KUBERNETES_VERSION,
+        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
-        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+        KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
+        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
     };
 
     let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
@@ -505,7 +508,10 @@ pub fn get_environment_test_kubernetes(
                 .unwrap(),
             )
         }
-        KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke => todo!(),            // TODO(benjaminch): GKE integration
+        KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
     };
 
     kubernetes

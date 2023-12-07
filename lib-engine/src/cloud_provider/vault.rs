@@ -169,7 +169,7 @@ impl ClusterSecrets {
         };
 
         match cloud_provider {
-            Kind::Eks => match qvault_client.get_secret(mount.as_str(), cluster_id) {
+            Kind::Eks | Kind::EksSelfManaged => match qvault_client.get_secret(mount.as_str(), cluster_id) {
                 Ok(x) => Ok(ClusterSecrets::Eks(x)),
                 Err(e) => Err(err(e)),
             },
@@ -177,11 +177,11 @@ impl ClusterSecrets {
                 Ok(x) => Ok(ClusterSecrets::Ec2(x)),
                 Err(e) => Err(err(e)),
             },
-            Kind::ScwKapsule => match qvault_client.get_secret(mount.as_str(), cluster_id) {
+            Kind::ScwKapsule | Kind::ScwSelfManaged => match qvault_client.get_secret(mount.as_str(), cluster_id) {
                 Ok(x) => Ok(ClusterSecrets::Scaleway(x)),
                 Err(e) => Err(err(e)),
             },
-            Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
+            Kind::Gke | Kind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
         }
     }
 

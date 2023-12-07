@@ -812,15 +812,17 @@ pub enum Kind {
     Ec2,
     ScwKapsule,
     Gke,
+    EksSelfManaged,
+    GkeSelfManaged,
+    ScwSelfManaged,
 }
 
 impl Kind {
     pub fn get_cloud_provider_kind(&self) -> CloudProviderKind {
         match self {
-            Kind::Eks => CloudProviderKind::Aws,
-            Kind::Ec2 => CloudProviderKind::Aws,
-            Kind::ScwKapsule => CloudProviderKind::Scw,
-            Kind::Gke => CloudProviderKind::Gcp,
+            Kind::Eks | Kind::EksSelfManaged | Kind::Ec2 => CloudProviderKind::Aws,
+            Kind::ScwKapsule | Kind::ScwSelfManaged => CloudProviderKind::Scw,
+            Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
         }
     }
 }
@@ -832,6 +834,9 @@ impl Display for Kind {
             Kind::Ec2 => "K3S",
             Kind::ScwKapsule => "ScwKapsule",
             Kind::Gke => "GKE",
+            Kind::EksSelfManaged => "EKS Self Managed",
+            Kind::GkeSelfManaged => "GKE Self Managed",
+            Kind::ScwSelfManaged => "Scw Self Managed",
         })
     }
 }
