@@ -903,7 +903,7 @@ impl Kapsule {
         for ng in current_nodegroups {
             let res = retry::retry(
                 // retry 10 min max per nodegroup until they are ready
-                Fixed::from_millis(15000).take(40),
+                Fixed::from_millis(15000).take(80),
                 || {
                     self.logger().log(EngineEvent::Info(
                         event_details.clone(),

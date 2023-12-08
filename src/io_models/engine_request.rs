@@ -408,6 +408,9 @@ impl Kubernetes {
                 }
             }
             cloud_provider::kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
+            cloud_provider::kubernetes::Kind::EksSelfManaged => todo!(), // TODO: BYOK integration
+            cloud_provider::kubernetes::Kind::GkeSelfManaged => todo!(), // TODO: BYOK integration
+            cloud_provider::kubernetes::Kind::ScwSelfManaged => todo!(), // TODO: BYOK integration
         }
     }
 }

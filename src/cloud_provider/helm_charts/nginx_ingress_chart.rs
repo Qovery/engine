@@ -312,7 +312,12 @@ mod tests {
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // TODO(benjaminch): GKE integration
-        for cloud_provider in KubernetesKind::iter().filter(|k| k != &KubernetesKind::Gke) {
+        for cloud_provider in KubernetesKind::iter().filter(|k| {
+            k != &KubernetesKind::Gke
+                && k != &KubernetesKind::EksSelfManaged
+                && k != &KubernetesKind::ScwSelfManaged
+                && k != &KubernetesKind::GkeSelfManaged
+        }) {
             let values_file_lib_path = format!(
                 "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
                 get_helm_path_kubernetes_provider_sub_folder_name(
