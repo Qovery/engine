@@ -10,6 +10,8 @@ use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on_with_timeout;
 use base64::engine::general_purpose;
 use base64::Engine;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use std::collections::HashSet;
 use std::time::Duration;
 use url::Url;
@@ -381,11 +383,15 @@ impl ContainerRegistry for ScalewayCR {
     fn image_exists(&self, image: &Image) -> bool {
         let image =
             docker::ContainerImage::new(self.registry_info.endpoint.clone(), image.name(), vec![image.tag.clone()]);
-        match self.context.docker.does_image_exist_remotely(&image) {
-            Ok(true) => true,
-            Ok(false) => false,
-            Err(_) => false,
-        }
+        // SCW container registry is sometimes flaky, stick a retry just to be sure there is no sync issue
+        let image_exists = retry::retry(Fixed::from_millis(1000).take(5), || {
+            match self.context.docker.does_image_exist_remotely(&image) {
+                Ok(true) => OperationResult::Ok(true),
+                _ => OperationResult::Retry(false),
+            }
+        });
+
+        image_exists.is_ok()
     }
 }
 
