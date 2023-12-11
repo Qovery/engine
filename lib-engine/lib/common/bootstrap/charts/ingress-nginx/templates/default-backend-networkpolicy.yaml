@@ -1,7 +1,6 @@
-{{- if .Values.defaultBackend.enabled -}}
-{{- if or (gt (.Values.defaultBackend.replicaCount | int) 1) (gt (.Values.defaultBackend.autoscaling.minReplicas | int) 1) }}
-apiVersion: {{ ternary "policy/v1" "policy/v1beta1" (semverCompare ">=1.21.0-0" .Capabilities.KubeVersion.Version) }}
-kind: PodDisruptionBudget
+{{- if and .Values.defaultBackend.enabled .Values.defaultBackend.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata:
   labels:
     {{- include "ingress-nginx.labels" . | nindent 4 }}
@@ -12,10 +11,15 @@ metadata:
   name: {{ include "ingress-nginx.defaultBackend.fullname" . }}
   namespace: {{ include "ingress-nginx.namespace" . }}
 spec:
-  selector:
+  podSelector:
     matchLabels:
       {{- include "ingress-nginx.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: default-backend
-  minAvailable: {{ .Values.defaultBackend.minAvailable }}
-{{- end }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.defaultBackend.port }}
 {{- end }}
