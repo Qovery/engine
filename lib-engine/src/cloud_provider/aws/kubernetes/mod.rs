@@ -1305,7 +1305,6 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
-                disable_pleco: kubernetes.context().disable_pleco(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             eks_aws_helm_charts(
@@ -1354,7 +1353,6 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
-                disable_pleco: kubernetes.context().disable_pleco(),
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
