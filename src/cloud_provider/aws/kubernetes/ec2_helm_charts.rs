@@ -79,7 +79,6 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
 }

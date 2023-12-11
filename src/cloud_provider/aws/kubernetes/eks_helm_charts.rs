@@ -89,7 +89,6 @@ pub struct EksChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -462,37 +461,6 @@ pub fn eks_aws_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let pleco = match chart_config_prerequisites.disable_pleco {
-        true => None,
-        false => Some(CommonChart {
-            chart_info: ChartInfo {
-                name: "pleco".to_string(),
-                path: chart_path("common/charts/pleco"),
-                values_files: vec![chart_path("chart_values/pleco-aws.yaml")],
-                values: vec![
-                    ChartSetValue {
-                        key: "environmentVariables.AWS_ACCESS_KEY_ID".to_string(),
-                        value: chart_config_prerequisites.aws_access_key_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.AWS_SECRET_ACCESS_KEY".to_string(),
-                        value: chart_config_prerequisites.aws_secret_access_key.clone(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
-                        value: chart_config_prerequisites.cluster_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.LOG_LEVEL".to_string(),
-                        value: "debug".to_string(),
-                    },
-                ],
-                ..Default::default()
-            },
-            ..Default::default()
-        }),
-    };
-
     // Qovery cluster agent
     let cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
@@ -656,7 +624,7 @@ pub fn eks_aws_helm_charts(
         Box::new(external_dns),
     ];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
@@ -683,11 +651,6 @@ pub fn eks_aws_helm_charts(
     }
     if let Some(grafana_chart) = grafana {
         level_2.push(Box::new(grafana_chart))
-    }
-
-    // pleco
-    if let Some(pleco_chart) = pleco {
-        level_6.push(Box::new(pleco_chart));
     }
 
     info!("charts configuration preparation finished");
