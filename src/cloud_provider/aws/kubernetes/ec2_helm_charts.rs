@@ -319,6 +319,9 @@ pub fn ec2_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         false, // no metrics history on EC2 ATM
         get_chart_overrride_fn.clone(),
+        None,
+        None,
+        None,
     )
     .to_common_helm_chart()?;
 

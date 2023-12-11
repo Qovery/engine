@@ -586,18 +586,6 @@ impl Kapsule {
         // Advanced settings
         context.insert("load_balancer_size", &self.advanced_settings().load_balancer_size);
         context.insert("resource_expiration_in_seconds", &self.advanced_settings().pleco_resources_ttl);
-        context.insert(
-            "nginx_hpa_minimum_replicas",
-            &self.advanced_settings().nginx_hpa_min_number_instances,
-        );
-        context.insert(
-            "nginx_hpa_maximum_replicas",
-            &self.advanced_settings().nginx_hpa_max_number_instances,
-        );
-        context.insert(
-            "nginx_hpa_target_cpu_utilization_percentage",
-            &self.advanced_settings().nginx_hpa_cpu_utilization_percentage_threshold,
-        );
 
         // Needed to resolve https://qovery.atlassian.net/browse/ENG-1621
         // Scaleway added a new constraint on scaleway_k8s_cluster to be linked to a private network

@@ -18,9 +18,9 @@ controller:
 
   autoscaling:
     enabled: true
-    minReplicas: {{ nginx_hpa_minimum_replicas }}
-    maxReplicas: {{ nginx_hpa_maximum_replicas }}
-    targetCPUUtilizationPercentage: {{ nginx_hpa_target_cpu_utilization_percentage }}
+    minReplicas: set-by-engine-code
+    maxReplicas: set-by-engine-code
+    targetCPUUtilizationPercentage: set-by-engine-code
 
   publishService:
     enabled: true
