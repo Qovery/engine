@@ -18,6 +18,7 @@ impl AwsEbsCsiAddon {
                 KubernetesVersion::V1_24 { .. } => "v1.19.0-eksbuild.1",
                 KubernetesVersion::V1_25 { .. } => "v1.19.0-eksbuild.2",
                 KubernetesVersion::V1_26 { .. } => "v1.20.0-eksbuild.1",
+                KubernetesVersion::V1_27 { .. } => todo!(), // TODO(k8s upgrade to 1.27),
             }
             .to_string(),
         }
