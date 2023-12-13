@@ -357,6 +357,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
     match this.chart_source() {
         HelmChartSource::Repository {
             chart_name,
+            engine_helm_registry,
             chart_version,
             url: repository,
             skip_tls_verify,
@@ -379,6 +380,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 .helm
                 .download_chart(
                     repository,
+                    engine_helm_registry,
                     chart_name,
                     chart_version,
                     this.chart_workspace_directory(),
