@@ -5,16 +5,20 @@ use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::helm::HelmCommand::{FETCH, LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
-use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
+use crate::cmd::helm::HelmCommand::{FETCH, LIST, LOGIN, PULL, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmError::{
+    CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist,
+};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::io_models::container::Registry;
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
 use std::str::FromStr;
+use tempfile::TempDir;
 use url::Url;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
@@ -59,6 +63,9 @@ pub enum HelmError {
 
     #[error("Helm command `{1:?}` for release {0} terminated with an error: {2:?}")]
     CmdError(String, HelmCommand, errors::CommandError),
+
+    #[error("Invalid Helm Repository Config: {0}")]
+    InvalidRepositoryConfig(String),
 }
 
 #[derive(Debug)]
@@ -77,6 +84,8 @@ pub enum HelmCommand {
     DIFF,
     TEMPLATE,
     FETCH,
+    PULL,
+    LOGIN,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -372,6 +381,7 @@ impl Helm {
     pub fn download_chart(
         &self,
         repository: &Url,
+        engine_helm_registry: &Registry,
         chart_name: &str,
         chart_version: &str,
         target_directory: &Path,
@@ -379,36 +389,214 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
     ) -> Result<(), HelmError> {
-        if !target_directory.is_dir() {
-            return Err(CmdError(
-                chart_name.to_string(),
-                FETCH,
-                errors::CommandError::new(
-                    "Target directory where to download the chart does not exist or is not a directory".to_string(),
-                    None,
-                    Some(vec![]),
-                ),
-            ));
-        }
+        return match repository.scheme() {
+            "https" => self.download_https_chart(
+                repository,
+                chart_name,
+                chart_version,
+                target_directory,
+                skip_tls_verification,
+                envs,
+                cmd_killer,
+            ),
+            "oci" => self.download_oci_chart(
+                engine_helm_registry,
+                chart_name,
+                chart_version,
+                target_directory,
+                skip_tls_verification,
+                envs,
+                cmd_killer,
+            ),
+            _ => Err(InvalidRepositoryConfig(format!(
+                "Invalid repository scheme {}",
+                repository.scheme()
+            ))),
+        };
+    }
 
+    pub fn download_oci_chart(
+        &self,
+        engine_helm_registry: &Registry,
+        chart_name: &str,
+        chart_version: &str,
+        target_directory: &Path,
+        skip_tls_verification: bool,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<(), HelmError> {
         // Try to use the parent directory to create a tmp dir, because later moving directory
         // does work across mount point. In test, on our laptop, /tmp is always on a separate mount point using tmpfs
         // So use same target dir, to avoid issues
-        let tmpdir = target_directory
-            .parent()
-            .map(tempfile::tempdir_in)
-            .unwrap_or_else(tempfile::tempdir)
-            .map_err(|err| {
-                CmdError(
-                    chart_name.to_string(),
-                    FETCH,
-                    errors::CommandError::new(
-                        "Cannot create tmp dir to fetch chart".to_string(),
-                        Some(err.to_string()),
-                        Some(vec![]),
+        let tmpdir = Self::get_temp_dir(target_directory, chart_name, PULL)?;
+
+        let url_with_credentials = engine_helm_registry.get_url_with_credentials();
+        if let Some((registry_url, username, password)) =
+            Self::get_registry_with_username_password(&url_with_credentials)
+        {
+            let envs = self.get_all_envs(envs);
+            let mut helm_registry =
+                HelmRegistry::new(&registry_url, &username, &password, tmpdir.path(), &envs, cmd_killer);
+
+            // Will be logout when HelmRegistry will be dropped.
+            helm_registry.login(skip_tls_verification)?;
+
+            self.helm_pull(
+                engine_helm_registry,
+                chart_name,
+                chart_version,
+                &envs,
+                cmd_killer,
+                &tmpdir,
+                &url_with_credentials,
+                skip_tls_verification,
+            )?;
+        } else {
+            self.helm_pull(
+                engine_helm_registry,
+                chart_name,
+                chart_version,
+                envs,
+                cmd_killer,
+                &tmpdir,
+                &url_with_credentials,
+                skip_tls_verification,
+            )?;
+        }
+
+        // Move the chart from tmpdir to the target_directory of the user
+        // Rename must not cross mount point boundaries. It is ok as we don't have a tmpfs inside our container and we use user provided target_dir
+        let name = chart_name.split('/').last().unwrap_or_default();
+        std::fs::rename(tmpdir.path().join(name), target_directory).map_err(|err| {
+            CmdError(
+                chart_name.to_string(),
+                PULL,
+                errors::CommandError::new(
+                    format!(
+                        "Cannot move chart folder out of the tmpdir from {:?} to {:?}",
+                        tmpdir.path().join(chart_name),
+                        target_directory
                     ),
-                )
-            })?;
+                    Some(err.to_string()),
+                    Some(vec![]),
+                ),
+            )
+        })?;
+
+        Ok(())
+    }
+
+    fn helm_pull(
+        &self,
+        engine_helm_registry: &Registry,
+        chart_name: &str,
+        chart_version: &str,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        tmpdir: &TempDir,
+        url_with_credentials: &Url,
+        skip_tls_verification: bool,
+    ) -> Result<(), HelmError> {
+        let url_with_chart_name = match engine_helm_registry.get_url().join(chart_name) {
+            Ok(url_with_chart_name) => url_with_chart_name,
+            Err(_) => {
+                error!("Can't join chart_name to registry url");
+                return Err(InvalidRepositoryConfig("Can't join chart_name to registry url".to_string()));
+            }
+        };
+
+        let (registry_config_path, repository_config_path, repository_cache_path) =
+            Self::get_helm_cmd_paths(tmpdir.path());
+        let mut helm_pull_args = vec![
+            "pull",
+            "--debug", // there is no debug log but if someday they appear
+            url_with_chart_name.as_str(),
+            "--version",
+            chart_version,
+            "--untar",
+            "--untardir",
+            tmpdir.path().to_str().unwrap_or_default(),
+            "--registry-config",
+            &registry_config_path,
+            "--repository-config",
+            &repository_config_path,
+            "--repository-cache",
+            &repository_cache_path,
+        ];
+
+        if skip_tls_verification {
+            helm_pull_args.push("--insecure-skip-tls-verify");
+        }
+
+        let mut error_message: Vec<String> = Vec::new();
+        let helm_ret = helm_exec_with_output(
+            helm_pull_args.as_slice(),
+            envs,
+            &mut |line| {
+                info!("{}", line);
+            },
+            &mut |line| {
+                warn!("chart {}: {}", chart_name, line);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
+                error_message.push(line);
+            },
+            cmd_killer,
+        );
+
+        if let Err(err) = helm_ret {
+            error!("Helm error: {:?}", err);
+
+            // Try do define/specify a bit more the message
+            let stderr_msg: String = error_message.into_iter().collect();
+            let stderr_msg = format!("{stderr_msg}: {err}");
+
+            // If the helm command has been canceled by the user, propagate correctly the killed error
+            return match err {
+                CommandError::TimeoutError(_) => Err(HelmError::Timeout(chart_name.to_string(), PULL, stderr_msg)),
+                CommandError::Killed(_) => Err(HelmError::Killed(chart_name.to_string(), PULL)),
+                _ => Err(CmdError(
+                    chart_name.to_string(),
+                    PULL,
+                    errors::CommandError::new(
+                        format!(
+                            "Helm failed to pull chart {} at version {} from {}",
+                            chart_name,
+                            chart_version,
+                            url_with_credentials.as_str()
+                        ),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
+                )),
+            };
+        };
+        Ok(())
+    }
+
+    fn get_helm_cmd_paths(helm_cmd_path: &Path) -> (String, String, String) {
+        let registry_config_path = helm_cmd_path.join("config.json").display().to_string();
+        let repository_config_path = helm_cmd_path.join("repositories.yaml").display().to_string();
+        let repository_cache_path = helm_cmd_path.display().to_string();
+        (registry_config_path, repository_config_path, repository_cache_path)
+    }
+
+    pub fn download_https_chart(
+        &self,
+        repository: &Url,
+        chart_name: &str,
+        chart_version: &str,
+        target_directory: &Path,
+        skip_tls_verification: bool,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<(), HelmError> {
+        // Try to use the parent directory to create a tmp dir, because later moving directory
+        // does work across mount point. In test, on our laptop, /tmp is always on a separate mount point using tmpfs
+        // So use same target dir, to avoid issues
+        let tmpdir = Self::get_temp_dir(target_directory, chart_name, FETCH)?;
 
         let mut helm_args = vec![
             "fetch",
@@ -499,6 +687,72 @@ impl Helm {
         })?;
 
         Ok(())
+    }
+
+    fn get_temp_dir(
+        target_directory: &Path,
+        chart_name: &str,
+        helm_command: HelmCommand,
+    ) -> Result<TempDir, HelmError> {
+        if !target_directory.is_dir() {
+            return Err(CmdError(
+                chart_name.to_string(),
+                helm_command,
+                errors::CommandError::new(
+                    "Target directory where to download the chart does not exist or is not a directory".to_string(),
+                    None,
+                    Some(vec![]),
+                ),
+            ));
+        }
+
+        let tmpdir = target_directory
+            .parent()
+            .map(tempfile::tempdir_in)
+            .unwrap_or_else(tempfile::tempdir)
+            .map_err(|err| {
+                CmdError(
+                    chart_name.to_string(),
+                    helm_command,
+                    errors::CommandError::new(
+                        "Cannot create tmp dir to fetch chart".to_string(),
+                        Some(err.to_string()),
+                        Some(vec![]),
+                    ),
+                )
+            })?;
+        Ok(tmpdir)
+    }
+
+    fn get_registry_with_username_password(url_with_credentials: &Url) -> Option<(String, String, String)> {
+        let registry_url = match url_with_credentials.host_str() {
+            Some(registry_url) => registry_url.to_string(),
+            None => {
+                warn!("can't get the host of the registry url");
+                return None;
+            }
+        };
+
+        let username = match urlencoding::decode(url_with_credentials.username()) {
+            Ok(decoded_username) => decoded_username.to_string(),
+            Err(_) => {
+                warn!("can't get the username of the registry");
+                return None;
+            }
+        };
+
+        let password = match url_with_credentials
+            .password()
+            .and_then(|password| urlencoding::decode(password).ok())
+        {
+            Some(password) => password.to_string(),
+            None => {
+                warn!("can't get the password of the registry");
+                return None;
+            }
+        };
+
+        Some((registry_url, username, password))
     }
 
     pub fn upgrade_diff(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
@@ -1023,6 +1277,155 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
     EngineError::new_helm_error(event_details.clone(), error)
 }
 
+struct HelmRegistry<'a> {
+    registry_url: &'a str,
+    username: &'a str,
+    password: &'a str,
+    repository_cache_path: &'a Path,
+    envs: &'a [(&'a str, &'a str)],
+    cmd_killer: &'a CommandKiller<'a>,
+    login: bool,
+}
+
+impl<'a> HelmRegistry<'a> {
+    fn new(
+        registry_url: &'a str,
+        username: &'a str,
+        password: &'a str,
+        repository_cache_path: &'a Path,
+        envs: &'a [(&'a str, &'a str)],
+        cmd_killer: &'a CommandKiller,
+    ) -> Self {
+        HelmRegistry {
+            registry_url,
+            username,
+            password,
+            repository_cache_path,
+            envs,
+            cmd_killer,
+            login: false,
+        }
+    }
+
+    fn login(&mut self, skip_tls_verification: bool) -> Result<(), HelmError> {
+        let (registry_config_path, repository_config_path, repository_cache_path) =
+            Helm::get_helm_cmd_paths(self.repository_cache_path);
+        let mut helm_login_args = vec![
+            "registry",
+            "--debug", // there is no debug log but if someday they appear
+            "login",
+            self.registry_url,
+            "--username",
+            self.username,
+            "--password",
+            self.password,
+            "--registry-config",
+            &registry_config_path,
+            "--repository-config",
+            &repository_config_path,
+            "--repository-cache",
+            &repository_cache_path,
+        ];
+
+        if skip_tls_verification {
+            helm_login_args.push("--insecure");
+        }
+
+        let mut error_message: Vec<String> = Vec::new();
+        let helm_ret = helm_exec_with_output(
+            helm_login_args.as_slice(),
+            self.envs,
+            &mut |line| {
+                info!("{}", line);
+            },
+            &mut |line| {
+                warn!("repository {}: {}", self.registry_url, self.username);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
+                error_message.push(line);
+            },
+            self.cmd_killer,
+        );
+
+        if let Err(err) = helm_ret {
+            error!("Helm error: {:?}", err);
+
+            // Try do define/specify a bit more the message
+            let stderr_msg: String = error_message.into_iter().collect();
+            let stderr_msg = format!("{stderr_msg}: {err}");
+
+            // If the helm command has been canceled by the user, propagate correctly the killed error
+            return match err {
+                CommandError::TimeoutError(_) => {
+                    Err(HelmError::Timeout(self.registry_url.to_string(), LOGIN, stderr_msg))
+                }
+                CommandError::Killed(_) => Err(HelmError::Killed(self.registry_url.to_string(), LOGIN)),
+                _ => Err(CmdError(
+                    self.registry_url.to_string(),
+                    LOGIN,
+                    errors::CommandError::new(
+                        format!(
+                            "Helm failed to login repository {} for username {}",
+                            self.registry_url, self.username,
+                        ),
+                        Some(stderr_msg),
+                        Some(self.envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
+                )),
+            };
+        };
+
+        self.login = true;
+        Ok(())
+    }
+}
+
+impl Drop for HelmRegistry<'_> {
+    fn drop(&mut self) {
+        if !self.login {
+            return;
+        }
+
+        let (registry_config_path, repository_config_path, repository_cache_path) =
+            Helm::get_helm_cmd_paths(self.repository_cache_path);
+        let helm_logout_args = vec![
+            "registry",
+            "--debug", // there is no debug log but if someday they appear
+            "logout",
+            self.registry_url,
+            "--registry-config",
+            &registry_config_path,
+            "--repository-config",
+            &repository_config_path,
+            "--repository-cache",
+            &repository_cache_path,
+        ];
+
+        let mut error_message: Vec<String> = Vec::new();
+        let helm_ret = helm_exec_with_output(
+            helm_logout_args.as_slice(),
+            self.envs,
+            &mut |line| {
+                info!("{}", line);
+            },
+            &mut |line| {
+                warn!("repository {}: {}", self.registry_url, self.username);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
+                error_message.push(line);
+            },
+            self.cmd_killer,
+        );
+        if let Err(err) = helm_ret {
+            error!("Helm logout error: {:?}", err);
+        };
+    }
+}
+
 #[cfg(feature = "test-local-kube")]
 #[cfg(test)]
 mod tests {
@@ -1030,12 +1433,14 @@ mod tests {
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
     use crate::deployment_action::deploy_helm::default_helm_timeout;
+    use crate::io_models::container::Registry::GenericCr;
     use semver::Version;
     use std::path::Path;
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
     use url::Url;
+    use uuid::Uuid;
 
     struct HelmTestCtx {
         helm: Helm,
@@ -1356,6 +1761,11 @@ mod tests {
         // Invalid target directory should fail
         let ret = helm.download_chart(
             &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
             "ingress-nginx",
             "4.4.9999",
             Path::new("/xxxxxxxxxx"),
@@ -1368,6 +1778,11 @@ mod tests {
         // Non existing version should fail
         let ret = helm.download_chart(
             &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
             "ingress-nginx",
             "4.4.9999",
             target_dir.path(),
@@ -1383,8 +1798,78 @@ mod tests {
         assert!(!target_dir.path().join("values.yaml").exists());
         let ret = helm.download_chart(
             &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
             "ingress-nginx",
             "4.4.2",
+            target_dir.path(),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(ret.is_ok());
+
+        // Check that the files are there
+        assert!(target_dir.path().join("values.yaml").exists());
+    }
+
+    #[test]
+    fn test_fetching_chart_generic_cr_public() {
+        let HelmTestCtx { ref helm, .. } = HelmTestCtx::new("test-download-chart");
+
+        let target_dir = tempfile::tempdir().unwrap();
+        let repository = Url::parse("oci://registry-1.docker.io").unwrap();
+
+        // Invalid target directory should fail
+        let ret = helm.download_chart(
+            &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
+            "bitnamicharts/multus-cni",
+            "1.1.7",
+            Path::new("/xxxxxxxxxx"),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(matches!(ret, Err(HelmError::CmdError(_, _, _))));
+
+        // Non existing version should fail
+        let ret = helm.download_chart(
+            &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
+            "bitnamicharts/multus-cni",
+            "invalid",
+            target_dir.path(),
+            false,
+            &[],
+            &CommandKiller::never(),
+        );
+        assert!(
+            matches!(ret, Err(HelmError::CmdError(_, _, ref err)) if err.message_raw().unwrap().contains("invalid: Command terminated with a non success exit status code"))
+        );
+
+        // Happy path
+        assert!(!target_dir.path().join("values.yaml").exists());
+        let ret = helm.download_chart(
+            &repository,
+            &GenericCr {
+                long_id: Uuid::new_v4(),
+                url: repository.clone(),
+                credentials: None,
+            },
+            "bitnamicharts/multus-cni",
+            "1.1.7",
             target_dir.path(),
             false,
             &[],
