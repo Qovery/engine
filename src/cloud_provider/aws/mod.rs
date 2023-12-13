@@ -135,10 +135,6 @@ impl CloudProvider for AWS {
         ))
     }
 
-    fn token(&self) -> &str {
-        todo!()
-    }
-
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
         let client = StsClient::new_with_client(self.client(), Region::default());
@@ -152,8 +148,8 @@ impl CloudProvider for AWS {
         }
     }
 
-    fn zones(&self) -> &Vec<String> {
-        &self.zones
+    fn zones(&self) -> Vec<String> {
+        self.zones.clone()
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {

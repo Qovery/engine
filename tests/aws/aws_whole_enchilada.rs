@@ -5,11 +5,12 @@ use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
+use qovery_engine::cloud_provider::models::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 
@@ -52,7 +53,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             logger(),
             metrics_registry(),
             region,
-            Some(aws_zones),
+            Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::Classic,
             &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),
@@ -98,7 +99,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             logger(),
             metrics_registry(),
             region,
-            Some(aws_zones),
+            Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithNodesResize,
             &ClusterDomain::Custom { domain: cluster_domain },
             None,
@@ -145,7 +146,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             logger(),
             metrics_registry(),
             region,
-            Some(aws_zones),
+            Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithPause,
             &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),
@@ -192,7 +193,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             logger(),
             metrics_registry(),
             region,
-            Some(aws_zones),
+            Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithUpgrade,
             &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),

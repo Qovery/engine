@@ -6,9 +6,8 @@ use tracing::error;
 use uuid::Uuid;
 
 use qovery_engine::build_platform::Build;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;

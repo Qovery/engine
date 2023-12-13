@@ -1,6 +1,8 @@
+use crate::cloud_provider::gcp::locations::{GcpRegion, GcpZone};
 use crate::cloud_provider::kubernetes::Kind;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
+use crate::models::gcp::io::JsonCredentials;
 use crate::secret_manager::vault::get_vault_mount_name;
 use crate::secret_manager::vault::QVaultClient;
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ pub enum ClusterSecrets {
     Eks(ClusterSecretsAws),
     Ec2(ClusterSecretsAws),
     Scaleway(ClusterSecretsScaleway),
+    Gke(ClusterSecretsGcp),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -128,6 +131,61 @@ impl ClusterSecretsScaleway {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ClusterSecretsGcp {
+    #[serde(rename = "GOOGLE_CREDENTIALS")]
+    pub google_credentials: JsonCredentials,
+    #[serde(rename = "GOOGLE_PROJECT")]
+    pub google_project: String,
+    #[serde(rename = "GOOGLE_REGION")]
+    pub google_region: GcpRegion,
+    pub google_zones: Vec<GcpZone>,
+    pub kubeconfig_b64: Option<String>,
+    pub k8s_cluster_endpoint: Option<String>,
+    pub cloud_provider: Kind,
+    pub cluster_name: String,
+    pub cluster_id: String,
+    pub grafana_login: String,
+    pub grafana_password: String,
+    pub organization_id: String,
+    pub test_cluster: bool,
+    pub vault_mount_name: String,
+}
+
+impl ClusterSecretsGcp {
+    pub fn new(
+        google_credentials: JsonCredentials,
+        google_project: String,
+        google_region: GcpRegion,
+        kubeconfig_b64: Option<String>,
+        k8s_cluster_endpoint: Option<String>,
+        cloud_provider: Kind,
+        cluster_name: String,
+        cluster_id: String,
+        grafana_login: String,
+        grafana_password: String,
+        organization_id: String,
+        test_cluster: bool,
+    ) -> Self {
+        Self {
+            google_credentials,
+            google_project,
+            google_region: google_region.clone(),
+            google_zones: google_region.zones().to_vec(),
+            kubeconfig_b64,
+            k8s_cluster_endpoint,
+            cloud_provider,
+            cluster_name,
+            cluster_id,
+            grafana_login,
+            grafana_password,
+            organization_id,
+            test_cluster,
+            vault_mount_name: get_vault_mount_name(test_cluster),
+        }
+    }
+}
+
 impl ClusterSecrets {
     pub fn new(cluster_secrets: ClusterSecrets) -> ClusterSecrets {
         cluster_secrets
@@ -141,10 +199,15 @@ impl ClusterSecrets {
         ClusterSecrets::Scaleway(cluster_secrets)
     }
 
+    pub fn new_google_gke(cluster_secrets: ClusterSecretsGcp) -> ClusterSecrets {
+        ClusterSecrets::Gke(cluster_secrets)
+    }
+
     pub fn get_vault_mount_name(&self) -> String {
         let is_test_cluster = match self {
             ClusterSecrets::Eks(aws) | ClusterSecrets::Ec2(aws) => aws.test_cluster,
             ClusterSecrets::Scaleway(scaleway) => scaleway.test_cluster,
+            ClusterSecrets::Gke(gke) => gke.test_cluster,
         };
         get_vault_mount_name(is_test_cluster)
     }
@@ -181,7 +244,10 @@ impl ClusterSecrets {
                 Ok(x) => Ok(ClusterSecrets::Scaleway(x)),
                 Err(e) => Err(err(e)),
             },
-            Kind::Gke | Kind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
+            Kind::Gke | Kind::GkeSelfManaged => match qvault_client.get_secret(mount.as_str(), cluster_id) {
+                Ok(x) => Ok(ClusterSecrets::Gke(x)),
+                Err(e) => Err(err(e)),
+            },
         }
     }
 
@@ -190,6 +256,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(_) => Kind::Eks,
             ClusterSecrets::Ec2(_) => Kind::Ec2,
             ClusterSecrets::Scaleway(_) => Kind::ScwKapsule,
+            ClusterSecrets::Gke(_) => Kind::Gke,
         }
     }
 
@@ -197,6 +264,7 @@ impl ClusterSecrets {
         match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.cluster_id.as_str(),
             ClusterSecrets::Scaleway(x) => x.cluster_id.as_str(),
+            ClusterSecrets::Gke(x) => x.cluster_id.as_str(),
         }
     }
 
@@ -204,6 +272,7 @@ impl ClusterSecrets {
         match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.test_cluster,
             ClusterSecrets::Scaleway(x) => x.test_cluster,
+            ClusterSecrets::Gke(x) => x.test_cluster,
         }
     }
 
@@ -211,6 +280,7 @@ impl ClusterSecrets {
         match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
             ClusterSecrets::Scaleway(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
+            ClusterSecrets::Gke(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
         }
     }
 
@@ -218,6 +288,7 @@ impl ClusterSecrets {
         match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
             ClusterSecrets::Scaleway(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
+            ClusterSecrets::Gke(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
         }
     }
 
@@ -225,6 +296,7 @@ impl ClusterSecrets {
         match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.organization_id = organization_id,
             ClusterSecrets::Scaleway(x) => x.organization_id = organization_id,
+            ClusterSecrets::Gke(x) => x.organization_id = organization_id,
         }
     }
 
@@ -251,11 +323,13 @@ impl ClusterSecrets {
                 match x {
                     ClusterSecrets::Eks(ref mut x) | ClusterSecrets::Ec2(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
+                    ClusterSecrets::Gke(ref mut x) => x.kubeconfig_b64 = None,
                 }
                 let mut current_secret = x.clone();
                 match current_secret {
                     ClusterSecrets::Eks(ref mut x) | ClusterSecrets::Ec2(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
+                    ClusterSecrets::Gke(ref mut x) => x.kubeconfig_b64 = None,
                 }
                 if x == current_secret {
                     return Ok(None);
@@ -273,6 +347,7 @@ impl ClusterSecrets {
         let (vault_mount_name, secret_name) = match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
+            ClusterSecrets::Gke(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
         };
 
         match qvault_client.crate_update_secret(vault_mount_name, secret_name, self) {
@@ -298,6 +373,7 @@ impl ClusterSecrets {
         let (vault_mount_name, secret_name) = match self {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
+            ClusterSecrets::Gke(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
         };
 
         match qvault_client.delete_secret(vault_mount_name, secret_name) {

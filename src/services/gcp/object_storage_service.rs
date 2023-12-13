@@ -1,4 +1,4 @@
-use crate::models::gcp::Credentials;
+use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
@@ -92,7 +92,7 @@ pub struct ObjectStorageService {
 #[cfg_attr(test, faux::methods)]
 impl ObjectStorageService {
     pub fn new(
-        google_credentials: Credentials,
+        google_credentials: JsonCredentials,
         bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
         object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     ) -> Result<Self, ObjectStorageServiceError> {

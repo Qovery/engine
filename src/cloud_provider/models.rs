@@ -83,7 +83,24 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
-//
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VpcQoveryNetworkMode {
+    WithNatGateways,
+    WithoutNatGateways,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VpcCustomRoutingTable {
+    description: String,
+    destination: String,
+    target: String,
+}
+
+impl fmt::Display for VpcQoveryNetworkMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CpuLimits {
     pub cpu_request: String, // TODO(benjaminch): Replace String by KubernetesCpuResourceUnit to leverage conversion and type

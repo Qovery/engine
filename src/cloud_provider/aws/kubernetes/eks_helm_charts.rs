@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
+use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
     UpdateStrategy,
@@ -13,6 +13,7 @@ use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesC
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+    VpcQoveryNetworkMode,
 };
 use crate::cloud_provider::qovery::EngineLocation;
 

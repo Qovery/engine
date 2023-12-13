@@ -8,7 +8,7 @@ use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::{
     kubernetes::eks::EKS,
-    regions::{AwsRegion, AwsZones},
+    regions::{AwsRegion, AwsZone},
     AWS,
 };
 use qovery_engine::cloud_provider::environment::Environment;
@@ -90,9 +90,9 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             },
             AwsRegion::UsEast2,
             vec![
-                AwsZones::UsEast2A.to_string(),
-                AwsZones::UsEast2B.to_string(),
-                AwsZones::UsEast2C.to_string(),
+                AwsZone::UsEast2A.to_string(),
+                AwsZone::UsEast2B.to_string(),
+                AwsZone::UsEast2C.to_string(),
             ],
             Arc::from(cloud_provider),
             Arc::from(dns_provider_qoverydns(

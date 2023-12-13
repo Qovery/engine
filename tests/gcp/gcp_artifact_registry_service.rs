@@ -1,41 +1,23 @@
-use crate::helpers::gcp::GCP_REGION;
+use crate::helpers::gcp::{
+    try_parse_json_credentials_from_str, GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER,
+    GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER, GCP_REGION,
+};
 use crate::helpers::utilities::{engine_run_test, init, FuncTestsSecrets};
 use function_name::named;
-use governor::middleware::NoOpMiddleware;
-use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, Quota, RateLimiter};
-use nonzero_ext::nonzero;
-use once_cell::sync::Lazy;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::{ContainerImage, Docker};
 use qovery_engine::container_registry::{DockerImage, Repository};
-use qovery_engine::models::gcp::Credentials;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::{thread, time::Duration};
 use tracing::{error, info, span, Level};
 use url::Url;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on repositories / images
-
-/// A rate limiter making sure we do not send too many repository write requests while testing
-/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 10 seconds)
-/// more info here https://cloud.google.com/artifact-registry/quotas
-static GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
-    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
-
-/// A rate limiter making sure we do not send too many repository write requests while testing
-/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 10 seconds)
-/// more info here https://cloud.google.com/artifact-registry/quotas
-static GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
-    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
 
 #[cfg(feature = "test-gcp-minimal")]
 #[test]
@@ -54,12 +36,15 @@ fn test_get_repository() {
             .GCP_PROJECT_NAME
             .as_ref()
             .expect("GCP_PROJECT_NAME should be defined in secrets");
+        let credentials = try_parse_json_credentials_from_str(
+            secrets
+                .GCP_CREDENTIALS
+                .as_ref()
+                .expect("GCP_CREDENTIALS is not set in secrets"),
+        )
+        .expect("Cannot parse GCP_CREDENTIALS");
         let service = ArtifactRegistryService::new(
-            Credentials::new(
-                secrets
-                    .GCP_CREDENTIALS
-                    .expect("GCP_CREDENTIALS should be defined in secrets"),
-            ),
+            credentials,
             Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
             Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
         )
@@ -134,12 +119,15 @@ fn test_create_repository() {
             .GCP_PROJECT_NAME
             .as_ref()
             .expect("GCP_PROJECT_NAME should be defined in secrets");
+        let credentials = try_parse_json_credentials_from_str(
+            secrets
+                .GCP_CREDENTIALS
+                .as_ref()
+                .expect("GCP_CREDENTIALS is not set in secrets"),
+        )
+        .expect("Cannot parse GCP_CREDENTIALS");
         let service = ArtifactRegistryService::new(
-            Credentials::new(
-                secrets
-                    .GCP_CREDENTIALS
-                    .expect("GCP_CREDENTIALS should be defined in secrets"),
-            ),
+            credentials,
             Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
             Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
         )
@@ -210,12 +198,15 @@ fn test_delete_repository() {
             .GCP_PROJECT_NAME
             .as_ref()
             .expect("GCP_PROJECT_NAME should be defined in secrets");
+        let credentials = try_parse_json_credentials_from_str(
+            secrets
+                .GCP_CREDENTIALS
+                .as_ref()
+                .expect("GCP_CREDENTIALS is not set in secrets"),
+        )
+        .expect("Cannot parse GCP_CREDENTIALS");
         let service = ArtifactRegistryService::new(
-            Credentials::new(
-                secrets
-                    .GCP_CREDENTIALS
-                    .expect("GCP_CREDENTIALS should be defined in secrets"),
-            ),
+            credentials,
             Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
             Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
         )
@@ -260,14 +251,15 @@ fn test_get_docker_image() {
             .GCP_PROJECT_NAME
             .as_ref()
             .expect("GCP_PROJECT_NAME should be defined in secrets");
+        let credentials = try_parse_json_credentials_from_str(
+            secrets
+                .GCP_CREDENTIALS
+                .as_ref()
+                .expect("GCP_CREDENTIALS is not set in secrets"),
+        )
+        .expect("Cannot parse GCP_CREDENTIALS");
         let service = ArtifactRegistryService::new(
-            Credentials::new(
-                secrets
-                    .GCP_CREDENTIALS
-                    .as_ref()
-                    .expect("GCP_CREDENTIALS should be defined in secrets")
-                    .to_string(),
-            ),
+            credentials,
             Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
             Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
         )
@@ -393,14 +385,15 @@ fn test_delete_docker_image() {
             .GCP_PROJECT_NAME
             .as_ref()
             .expect("GCP_PROJECT_NAME should be defined in secrets");
+        let credentials = try_parse_json_credentials_from_str(
+            secrets
+                .GCP_CREDENTIALS
+                .as_ref()
+                .expect("GCP_CREDENTIALS is not set in secrets"),
+        )
+        .expect("Cannot parse GCP_CREDENTIALS");
         let service = ArtifactRegistryService::new(
-            Credentials::new(
-                secrets
-                    .GCP_CREDENTIALS
-                    .as_ref()
-                    .expect("GCP_CREDENTIALS should be defined in secrets")
-                    .to_string(),
-            ),
+            credentials,
             Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
             Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
         )
