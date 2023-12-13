@@ -20,7 +20,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.72-2023-09-05T13-25-02 as engine_ci
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.72-2023-12-12T12-14-04 as engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -36,7 +36,7 @@ ARG CONTAINERD_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
-  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs \
+  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg \
   docker-ce=$DOCKER_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
   containerd.io=$CONTAINERD_VERSION \
@@ -144,7 +144,7 @@ RUN apt-get update && apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
-  procps netcat-openbsd iproute2 dumb-init git-lfs unzip && \
+  procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
@@ -152,6 +152,8 @@ RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-archit
   unzip awscliv2.zip && \
   ./aws/install && \
   rm -rf awscliv2.zip aws
+
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin -y
 
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip terraform.zip && \

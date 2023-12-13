@@ -432,8 +432,8 @@ aws_ec2_self_hosted)
 scw_self_hosted)
   run_tests test-scw-self-hosted $commit_id 20
   ;;
-do_self_hosted)
-  run_tests test-do-self-hosted $commit_id 20
+gcp_self_hosted)
+  run_tests test-gcp-self-hosted $commit_id 20
   ;;
 all_self_hosted)
   run_tests test-all-self-hosted $commit_id 20
@@ -450,8 +450,8 @@ aws_ec2_managed_services)
 scw_managed_services)
   run_tests test-scw-managed-services $commit_id 20
   ;;
-do_managed_services)
-  run_tests test-do-managed-services $commit_id 20
+gcp_managed_services)
+  run_tests test-gcp-managed-services $commit_id 20
   ;;
 all_managed_services)
   run_tests test-all-managed-services $commit_id 20
@@ -465,8 +465,8 @@ aws_ec2_whole_enchilada)
 scw_whole_enchilada)
   run_tests test-scw-whole-enchilada $commit_id 20
   ;;
-do_whole_enchilada)
-  run_tests test-do-whole-enchilada $commit_id 20
+gcp_whole_enchilada)
+  run_tests test-gcp-whole-enchilada $commit_id 20
   ;;
 aws_infra)
   run_tests test-aws-infra $commit_id 20
@@ -477,8 +477,8 @@ aws_ec2_infra)
 scw_infra)
   run_tests test-scw-infra $commit_id 20
   ;;
-do_infra)
-  run_tests test-do-infra $commit_id 20
+gcp_infra)
+  run_tests test-gcp-infra $commit_id 20
   ;;
 test_all)
   run_tests test-all $commit_id 20

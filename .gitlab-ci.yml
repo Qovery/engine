@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-09-04T08-41-26
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2023-12-12T14-23-43
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
@@ -489,6 +489,116 @@ scw-whole-enchilada:
   timeout: 4 hours
   script:
     - ./helper.sh scw_whole_enchilada
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-2cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+  when: manual
+
+gcp-infra:
+  stage: tests
+  retry: 1
+  timeout: 4 hours
+  script:
+    - ./helper.sh gcp_infra
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-2cpu-6gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+gcp-managed-services:
+  stage: tests
+  retry: 1
+  timeout: 3 hours
+  script:
+    - ./helper.sh gcp_managed_services
+  tags:
+    - vm-2cpu-6gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+gcp-self-hosted:
+  stage: tests
+  retry: 1
+  timeout: 3 hours
+  dependencies:
+    - build-and-lint-code
+  script:
+    - ./helper.sh gcp_self_hosted
+  tags:
+    - vm-2cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+gcp-whole-enchilada:
+  stage: tests
+  retry: 1
+  timeout: 4 hours
+  script:
+    - ./helper.sh gcp_whole_enchilada
   dependencies:
     - build-and-lint-code
   tags:

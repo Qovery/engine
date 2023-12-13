@@ -107,7 +107,7 @@ locals {
 
   // cluster ID is in the form project/location/name
   cluster_name_computed                      = element(split("/", local.cluster_id), length(split("/", local.cluster_id)) - 1)
-  cluster_network_tag                        = "gke-${var.name}"
+  cluster_network_tag                        = "gke-${var.kubernetes_cluster_name}"
   cluster_ca_certificate                     = local.cluster_master_auth_map["cluster_ca_certificate"]
   cluster_master_version                     = local.cluster_output_master_version
   cluster_min_master_version                 = local.cluster_output_min_master_version

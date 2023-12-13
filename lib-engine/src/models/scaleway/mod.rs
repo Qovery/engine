@@ -145,17 +145,6 @@ impl ScwZone {
             ScwZone::Warsaw1 => ScwRegion::Warsaw,
         }
     }
-
-    // TODO(benjaminch): improve / refactor this!
-    pub fn region_str(&self) -> &str {
-        match self {
-            ScwZone::Paris1 => "fr-par",
-            ScwZone::Paris2 => "fr-par",
-            ScwZone::Paris3 => "fr-par",
-            ScwZone::Amsterdam1 => "nl-ams",
-            ScwZone::Warsaw1 => "pl-waw",
-        }
-    }
 }
 
 impl fmt::Display for ScwZone {

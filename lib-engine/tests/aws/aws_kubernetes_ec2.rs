@@ -8,10 +8,9 @@ use std::str::FromStr;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::generate_cluster_id;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithoutNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::models::CpuArchitecture;
+use qovery_engine::cloud_provider::models::VpcQoveryNetworkMode::WithoutNatGateways;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
@@ -42,7 +41,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             logger(),
             metrics_registry(),
             localisation.to_cloud_provider_format(),
-            Some(zones),
+            Some(zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             test_type,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),

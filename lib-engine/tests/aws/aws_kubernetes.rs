@@ -7,11 +7,10 @@ use crate::helpers::utilities::{
 use ::function_name::named;
 
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::models::CpuArchitecture;
+use qovery_engine::cloud_provider::models::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
@@ -36,7 +35,7 @@ fn create_and_destroy_eks_cluster(
             logger(),
             metrics_registry(),
             region.to_cloud_provider_format(),
-            Some(zones),
+            Some(zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             test_type,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -68,7 +67,7 @@ fn create_and_destroy_arm64_eks_cluster(
             logger(),
             metrics_registry(),
             region.to_cloud_provider_format(),
-            Some(zones),
+            Some(zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             test_type,
             &ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),

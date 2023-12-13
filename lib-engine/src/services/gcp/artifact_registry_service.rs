@@ -1,6 +1,6 @@
-use crate::cloud_provider::gcp::regions::GcpRegion;
+use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::container_registry::{DockerImage, Repository};
-use crate::models::gcp::Credentials;
+use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
 use crate::services::gcp::google_cloud_sdk_types::{from_gcp_repository, new_gcp_credentials_file_from_credentials};
@@ -71,7 +71,7 @@ pub struct ArtifactRegistryService {
 
 impl ArtifactRegistryService {
     pub fn new(
-        google_credentials: Credentials,
+        google_credentials: JsonCredentials,
         write_repository_rate_limiter: Option<
             Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
         >,

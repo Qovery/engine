@@ -315,7 +315,7 @@ where
         };
 
         // Multi AZ: AWS best practices recommend to use multi AZ for production databases, so we force it
-        let aws_azs = kubernetes.aws_zones().unwrap_or_default();
+        let aws_azs = kubernetes.zones().unwrap_or_default();
         if aws_azs.len() != 3 {
             return Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
                 event_details,

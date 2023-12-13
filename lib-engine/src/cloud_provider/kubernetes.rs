@@ -22,7 +22,6 @@ use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
 
-use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
@@ -312,8 +311,13 @@ pub trait Kubernetes: Send + Sync {
     }
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
-    fn zone(&self) -> &str;
-    fn aws_zones(&self) -> Option<Vec<AwsZones>>;
+    fn zones(&self) -> Option<Vec<&str>>;
+    fn default_zone(&self) -> &str {
+        match &self.zones() {
+            None => "",
+            Some(zones) => zones.first().unwrap_or(&""),
+        }
+    }
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
@@ -822,6 +826,7 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
+
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
 }
 
