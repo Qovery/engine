@@ -15,8 +15,8 @@ subjects:
     namespace: {{ include "grafana.namespace" . }}
 roleRef:
   kind: ClusterRole
-  {{- if .Values.rbac.useExistingRole }}
-  name: {{ .Values.rbac.useExistingRole }}
+  {{- if .Values.rbac.useExistingClusterRole }}
+  name: {{ .Values.rbac.useExistingClusterRole }}
   {{- else }}
   name: {{ include "grafana.fullname" . }}-clusterrole
   {{- end }}

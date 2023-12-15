@@ -36,6 +36,9 @@ spec:
   externalIPs:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- with .Values.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
   ports:
     - name: {{ .Values.service.portName }}
       port: {{ .Values.service.port }}

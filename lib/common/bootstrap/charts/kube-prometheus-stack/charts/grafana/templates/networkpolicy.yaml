@@ -27,8 +27,17 @@ spec:
 
   {{- if .Values.networkPolicy.egress.enabled }}
   egress:
+    {{- if not .Values.networkPolicy.egress.blockDNSResolution }}
+    - ports:
+        - port: 53
+          protocol: UDP
+    {{- end }}
     - ports:
         {{ .Values.networkPolicy.egress.ports | toJson }}
+      {{- with .Values.networkPolicy.egress.to }}
+      to:
+        {{- toYaml . | nindent 12 }}
+      {{- end }}
   {{- end }}
   {{- if .Values.networkPolicy.ingress }}
   ingress:
