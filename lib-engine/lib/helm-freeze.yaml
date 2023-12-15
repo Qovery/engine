@@ -20,7 +20,7 @@ charts:
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 51.0.2
+    version: 55.4.1
     comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: aws-node-termination-handler
     repo_name: aws

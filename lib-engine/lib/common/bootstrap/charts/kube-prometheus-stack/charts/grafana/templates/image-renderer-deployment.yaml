@@ -65,10 +65,11 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}-image-renderer
+          {{- $registry := .Values.global.imageRegistry | default .Values.imageRenderer.image.registry -}}
           {{- if .Values.imageRenderer.image.sha }}
-          image: "{{ .Values.imageRenderer.image.repository }}:{{ .Values.imageRenderer.image.tag }}@sha256:{{ .Values.imageRenderer.image.sha }}"
+          image: "{{ $registry }}/{{ .Values.imageRenderer.image.repository }}:{{ .Values.imageRenderer.image.tag }}@sha256:{{ .Values.imageRenderer.image.sha }}"
           {{- else }}
-          image: "{{ .Values.imageRenderer.image.repository }}:{{ .Values.imageRenderer.image.tag }}"
+          image: "{{ $registry }}/{{ .Values.imageRenderer.image.repository }}:{{ .Values.imageRenderer.image.tag }}"
           {{- end }}
           imagePullPolicy: {{ .Values.imageRenderer.image.pullPolicy }}
           {{- if .Values.imageRenderer.command }}
