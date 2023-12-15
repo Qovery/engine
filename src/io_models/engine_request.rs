@@ -497,7 +497,7 @@ impl ContainerRegistry {
                 )
                 .ok()?,
             )),
-            container_registry::Kind::GoogleCr => {
+            container_registry::Kind::GcpArtifactRegistry => {
                 let credentials = JsonCredentials::try_from(
                     self.options
                         .gcp_credentials
