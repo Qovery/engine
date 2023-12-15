@@ -99,7 +99,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
     }
 
     fn kind(&self) -> Kind {
-        Kind::GoogleCr
+        Kind::GcpArtifactRegistry
     }
 
     fn id(&self) -> &str {

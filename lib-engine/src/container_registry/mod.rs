@@ -107,7 +107,7 @@ pub struct ContainerRegistryInfo {
 pub enum Kind {
     Ecr,
     ScalewayCr,
-    GoogleCr,
+    GcpArtifactRegistry,
 }
 
 #[derive(Clone, PartialEq, Debug)]
