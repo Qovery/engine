@@ -3,6 +3,8 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::models::gcp::io::JsonCredentials;
 use crate::models::gcp::JsonCredentials as GkeJsonCredentials;
 use serde_derive::{Deserialize, Serialize};
+use serde_with::json::JsonString;
+use serde_with::serde_as;
 use time::format_description::well_known::Rfc3339;
 use time::Time;
 
@@ -24,6 +26,7 @@ impl From<VpcMode> for GkeVpcMode {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct GkeOptions {
     // Qovery
@@ -40,7 +43,9 @@ pub struct GkeOptions {
     pub qovery_engine_location: EngineLocation,
 
     // GCP
-    pub gcp_json_credentials: JsonCredentials,
+    #[serde(alias = "json_credentials")]
+    #[serde_as(as = "JsonString")]
+    pub gcp_credentials: JsonCredentials,
 
     // VPC
     pub vpc_mode: VpcMode,
@@ -68,7 +73,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             value.grafana_admin_user,
             value.grafana_admin_password,
             value.qovery_engine_location,
-            GkeJsonCredentials::try_from(value.gcp_json_credentials)
+            GkeJsonCredentials::try_from(value.gcp_credentials)
                 .map_err(|e| format!("Cannot parse JSON credentials: {e}"))?,
             value.vpc_mode.into(),
             value.tls_email_report,
