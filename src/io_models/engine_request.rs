@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::json::JsonString;
+use serde_with::serde_as;
 
 use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
@@ -8,6 +10,7 @@ use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::cloud_provider::gcp::locations::GcpRegion;
+use crate::cloud_provider::gcp::Google;
 use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
 use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
 use crate::cloud_provider::models::NodeGroups;
@@ -262,7 +265,27 @@ impl CloudProvider {
                 region,
                 terraform_state_credentials,
             ))),
-            cloud_provider::Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            cloud_provider::Kind::Gcp => {
+                let credentials = match &self.options.gcp_credentials {
+                    Some(creds) => match JsonCredentials::try_from(creds.clone()) {
+                        Ok(c) => c,
+                        Err(_e) => return None,
+                    },
+                    None => return None,
+                };
+                let region = match GcpRegion::from_str(region) {
+                    Ok(r) => r,
+                    Err(_e) => return None,
+                };
+                Some(Box::new(Google::new(
+                    context,
+                    self.long_id,
+                    self.name.as_str(),
+                    credentials,
+                    region,
+                    terraform_state_credentials,
+                )))
+            }
         }
     }
 }
@@ -591,6 +614,7 @@ impl DnsProvider {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Options {
@@ -609,6 +633,9 @@ pub struct Options {
     #[derivative(Debug = "ignore")]
     scaleway_secret_key: Option<String>,
     #[derivative(Debug = "ignore")]
+    #[serde(alias = "json_credentials")]
+    #[serde_as(as = "JsonString")] // Allow to deserialize string field to its struct counterpart
+    #[serde(default)]
     gcp_credentials: Option<JsonCredentialsIo>,
     #[derivative(Debug = "ignore")]
     token: Option<String>,
