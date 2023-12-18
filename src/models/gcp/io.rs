@@ -41,6 +41,13 @@ pub struct JsonCredentials {
     pub universe_domain: String,
 }
 
+impl JsonCredentials {
+    pub fn try_new_from_json_str(json_str: &str) -> Result<JsonCredentials, String> {
+        let cleaned_raw = json_str.replace('\n', "\\n").to_string(); // escape newlines from keys strings
+        serde_json::from_str(&cleaned_raw).map_err(|e| e.to_string())
+    }
+}
+
 impl TryFrom<JsonCredentials> for GkeJsonCredentials {
     type Error = String;
 
