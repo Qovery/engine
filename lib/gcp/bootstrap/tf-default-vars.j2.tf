@@ -5,12 +5,6 @@ variable "cloud_provider" {
   type = string
 }
 
-# variable "region" {
-#   description = "AWS region to store terraform state and lock"
-#   default     = "{{ aws_region }}"
-#   type        = string
-# }
-
 variable "organization_id" {
   description = "Qovery Organization ID"
   default     = "{{ organization_id }}"
@@ -22,57 +16,103 @@ variable "organization_long_id" {
   default     = "{{ organization_long_id }}"
   type        = string
 }
-variable "project_id" {
+
+variable "object_storage_kubeconfig_bucket" {
+  description = "Object storage bucket name containing cluster's kubeconfig"
+  default     = "{{ object_storage_kubeconfig_bucket }}"
   type        = string
-  // todo(bchastanier): to variabilize (it's not the number id but the project name)
-  default     = "qovery-gcp-tests"
-  description = "The project ID to host the cluster in (required)"
 }
+
+variable "object_storage_logs_bucket" {
+  description = "Object storage bucket name containing cluster's logs"
+  default     = "{{ object_storage_logs_bucket }}"
+  type        = string
+}
+
+{%- if resource_expiration_in_seconds > -1 %}
+# Pleco ttl
+variable "resource_expiration_in_seconds" {
+  description = "Resource expiration in seconds"
+  default = {{ resource_expiration_in_seconds }}
+  type = number
+}
+{% endif %}
 
 # GCP specific
-
-variable "vpc_name" {
-  description = "Kubernetes cluster name"
-  // todo(bchastanier): to variabilize
-  default     = "qovery-cluster-short-id"
+variable "project_id" {
+  description = "The project ID to host the cluster in (required)"
+  default     = "{{ gcp_project_id }}"
   type        = string
 }
 
-variable "name" {
+variable "vpc_use_existing" {
+  description = "True if reusing an existing VPC, False otherwise. VPC name has to be set for this option."
+  default     = "{{ vpc_use_existing }}"
   type        = string
-  // todo(bchastanier): to variabilize
-  default     = "pmavro-test"
-  description = "The name of the cluster (required)"
+}
+
+variable "vpc_name" {
+  description = "Cluster VPC name"
+  default     = "{{ vpc_name }}"
+  type        = string
 }
 
 variable "description" {
+  # TODO(benjaminch): check if we should pass the one from the Core
+  default     = "Qovery managed cluster {{ kubernetes_cluster_name }}"
+  description = "The description of the cluster"
   type        = string
-  // todo(bchastanier): to variabilize
-  default     = "Qovery managed cluster (cluster-id)"
-  description = "Required description for GKE"
 }
 
 variable "regional" {
-  type        = bool
   description = "Whether is a regional cluster (zonal cluster if set false. WARNING: changing this after cluster creation is destructive!)"
   default     = true
+  type        = bool
 }
 
 variable "region" {
-  type        = string
-  // todo(bchastanier): to variabilize
   description = "The region to host the cluster in (optional if zonal cluster / required if regional)"
-  # default     = null
-  default     = "europe-west9"
+  default     = "{{ gcp_region }}"
+  type        = string
 }
 
 variable "zones" {
-  type        = list(string)
-  // todo(bchastanier): we must fill this with our own zones and not let TF choose
   description = "The zones to host the cluster in (optional if regional cluster / required if zonal)"
-  default     = ["europe-west9-a", "europe-west9-b", "europe-west9-c"]
+  default     = ["{{ gcp_zones | join(sep='", "') }}"]
+  type        = list(string)
 }
 
+// Kubernetes
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long id"
+  default     = "{{ kubernetes_cluster_long_id }}"
+  type        = string
+}
+
+variable "kubernetes_cluster_id" {
+  description = "Kubernetes cluster id"
+  default     = "{{ kubernetes_cluster_id }}"
+  type        = string
+}
+
+variable "kubernetes_cluster_name" {
+  description = "Kubernetes cluster name"
+  default     = "{{ kubernetes_cluster_name }}"
+  type        = string
+}
+
+variable "kubernetes_version" {
+  description = "The Kubernetes version of the masters. If set to 'latest' it will pull latest available version in the selected region."
+  default     = "{{ kubernetes_cluster_version }}"
+  type        = string
+}
+
+variable "master_authorized_networks" {
+  # TODO(benjaminch): to be discussed
+  type        = list(object({ cidr_block = string, display_name = string }))
+  description = "List of master authorized networks. If none are provided, disallow external access (except the cluster node IPs, which GKE automatically whitelists)."
+  default     = []
+}
 
 variable "auto_create_subnetworks" {
   type        = bool
@@ -82,50 +122,16 @@ variable "auto_create_subnetworks" {
 
 variable "network_project_id" {
   type        = string
-  // todo(bchastanier): to variabilize
+  # TODO(benjaminch): to be discussed
   description = "The project ID of the shared VPC's host (for shared vpc support)"
   default     = ""
 }
 
 variable "subnetwork" {
+# TODO(benjaminch): to be discussed
   type        = string
-  description = "The subnetwork to host the cluster in (required)"
-  default     = ""
-}
-
-// Kubernetes
-variable "kubernetes_cluster_long_id" {
-  description = "Kubernetes cluster long id"
-  // todo(bchastanier): to variabilize
-  default     = "cluster-long-id"
-  type        = string
-}
-
-variable "kubernetes_cluster_id" {
-  description = "Kubernetes cluster id"
-  // todo(bchastanier): to variabilize
-  default     = "cluster-short-id"
-  type        = string
-}
-
-variable "kubernetes_cluster_name" {
-  description = "Kubernetes cluster name"
-  // todo(bchastanier): to variabilize
-  default     = "qovery-cluster-short-id"
-  type        = string
-}
-
-variable "kubernetes_version" {
-  type        = string
-  // todo(bchastanier): to variabilize
-  description = "The Kubernetes version of the masters. If set to 'latest' it will pull latest available version in the selected region."
-  default     = "1.26"
-}
-
-variable "master_authorized_networks" {
-  type        = list(object({ cidr_block = string, display_name = string }))
-  description = "List of master authorized networks. If none are provided, disallow external access (except the cluster node IPs, which GKE automatically whitelists)."
-  default     = []
+  description = "(Optional) The name or self_link of the Google Compute Engine subnetwork in which the cluster's instances are launched."
+  default     = "{{ kubernetes_cluster_name }}"
 }
 
 variable "enable_vertical_pod_autoscaling" {
@@ -143,7 +149,7 @@ variable "horizontal_pod_autoscaling" {
 variable "http_load_balancing" {
   type        = bool
   description = "Enable httpload balancer addon"
-  default     = true
+  default     = true # needed for auto-pilot
 }
 
 variable "service_external_ips" {
@@ -155,7 +161,13 @@ variable "service_external_ips" {
 variable "maintenance_start_time" {
   type        = string
   description = "Time window specified for daily or recurring maintenance operations in RFC3339 format"
-  default     = "05:00"
+  default     = "{{ cluster_maintenance_start_time }}"
+}
+
+variable "maintenance_end_time" {
+  type        = string
+  description = "Time window specified for recurring maintenance operations in RFC3339 format"
+  default     = "{{ cluster_maintenance_end_time }}"
 }
 
 variable "maintenance_exclusions" {
@@ -164,16 +176,16 @@ variable "maintenance_exclusions" {
   default     = []
 }
 
-variable "maintenance_end_time" {
-  type        = string
-  description = "Time window specified for recurring maintenance operations in RFC3339 format"
-  default     = ""
-}
-
 variable "maintenance_recurrence" {
   type        = string
   description = "Frequency of the recurring maintenance window in RFC5545 format."
   default     = ""
+}
+
+variable "stack_type" {
+  type        = string
+  description = "The IP Stack Type of the cluster. Default value is IPV4. Possible values are IPV4 and IPV4_IPV6"
+  default     = "IPV4"
 }
 
 variable "ip_range_pods" {
@@ -194,12 +206,13 @@ variable "ip_range_services" {
   default     = ""
 }
 
-
 variable "enable_cost_allocation" {
+  # TODO(benjaminch): To be an advanced settings
   type        = bool
   description = "Enables Cost Allocation Feature and the cluster name and namespace of your GKE workloads appear in the labels field of the billing export to BigQuery"
   default     = false
 }
+
 variable "resource_usage_export_dataset_id" {
   type        = string
   description = "The ID of a BigQuery Dataset for using BigQuery as the destination of resource usage export."
@@ -218,12 +231,12 @@ variable "enable_resource_consumption_export" {
   default     = true
 }
 
-
 variable "network_tags" {
   description = "(Optional, Beta) - List of network tags applied to auto-provisioned node pools."
   type        = list(string)
   default     = []
 }
+
 variable "stub_domains" {
   type        = map(list(string))
   description = "Map of stub domains and their resolvers to forward DNS queries for a certain domain to an external DNS server"
@@ -260,12 +273,6 @@ variable "configure_ip_masq" {
   default     = false
 }
 
-variable "create_service_account" {
-  type        = bool
-  description = "Defines if service account specified to run nodes should be created."
-  default     = true
-}
-
 variable "grant_registry_access" {
   type        = bool
   description = "Grants created cluster-specific service account storage.objectViewer and artifactregistry.reader roles."
@@ -276,6 +283,12 @@ variable "registry_project_ids" {
   type        = list(string)
   description = "Projects holding Google Container Registries. If empty, we use the cluster project. If a service account is created and the `grant_registry_access` variable is set to `true`, the `storage.objectViewer` and `artifactregsitry.reader` roles are assigned on these projects."
   default     = []
+}
+
+variable "create_service_account" {
+  type        = bool
+  description = "Defines if service account specified to run nodes should be created."
+  default     = true
 }
 
 variable "service_account" {
@@ -302,14 +315,6 @@ variable "cluster_ipv4_cidr" {
   description = "The IP address range of the kubernetes pods in this cluster. Default is an automatically assigned CIDR."
 }
 
-variable "cluster_resource_labels" {
-  type        = map(string)
-  // todo(pmavro): add labels ike AWS
-  description = "The GCE resource labels (a map of key/value pairs) to be applied to the cluster"
-  default     = {}
-}
-
-
 variable "dns_cache" {
   type        = bool
   description = "The status of the NodeLocal DNSCache addon."
@@ -327,7 +332,6 @@ variable "identity_namespace" {
   type        = string
   default     = "enabled"
 }
-
 
 variable "release_channel" {
   type        = string
@@ -396,6 +400,7 @@ variable "enable_confidential_nodes" {
   description = "An optional flag to enable confidential node config."
   default     = false
 }
+
 variable "workload_vulnerability_mode" {
   description = "(beta) Vulnerability mode."
   type        = string
@@ -425,6 +430,7 @@ variable "enable_tpu" {
   description = "Enable Cloud TPU resources in the cluster. WARNING: changing this after cluster creation is destructive!"
   default     = false
 }
+
 variable "database_encryption" {
   description = "Application-layer Secrets Encryption settings. The object format is {state = string, key_name = string}. Valid values of state are: \"ENCRYPTED\"; \"DECRYPTED\". key_name is the name of a CloudKMS key."
   type        = list(object({ state = string, key_name = string }))

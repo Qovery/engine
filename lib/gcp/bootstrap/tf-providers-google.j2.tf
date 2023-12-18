@@ -35,6 +35,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 2.1"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "0.9.0"
+    }
   }
   provider_meta "google-beta" {
     module_name = "blueprints/terraform/terraform-google-kubernetes-engine:beta-autopilot-public-cluster/v28.0.0"
@@ -42,7 +46,6 @@ terraform {
 }
 
 provider "google" {
-  # todo(bchastanier): variabilize it
-  project     = "<PROJECT_ID>"
-  region      = "<REGION>"
+  project     = var.project_id
+  region      = var.region
 }

@@ -22,7 +22,6 @@ use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
 
-use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
@@ -94,7 +93,7 @@ impl Display for KubernetesAddon {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, EnumIter)]
 pub enum KubernetesVersion {
     V1_23 {
         prefix: Option<Arc<str>>,
@@ -116,6 +115,11 @@ pub enum KubernetesVersion {
         patch: Option<u8>,
         suffix: Option<Arc<str>>,
     },
+    V1_27 {
+        prefix: Option<Arc<str>>,
+        patch: Option<u8>,
+        suffix: Option<Arc<str>>,
+    },
 }
 
 impl KubernetesVersion {
@@ -125,6 +129,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_24 { prefix, .. } => prefix,
             KubernetesVersion::V1_25 { prefix, .. } => prefix,
             KubernetesVersion::V1_26 { prefix, .. } => prefix,
+            KubernetesVersion::V1_27 { prefix, .. } => prefix,
         }
     }
 
@@ -134,6 +139,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_24 { .. } => 1,
             KubernetesVersion::V1_25 { .. } => 1,
             KubernetesVersion::V1_26 { .. } => 1,
+            KubernetesVersion::V1_27 { .. } => 1,
         }
     }
 
@@ -143,6 +149,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_24 { .. } => 24,
             KubernetesVersion::V1_25 { .. } => 25,
             KubernetesVersion::V1_26 { .. } => 26,
+            KubernetesVersion::V1_27 { .. } => 27,
         }
     }
 
@@ -152,6 +159,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_24 { patch, .. } => patch,
             KubernetesVersion::V1_25 { patch, .. } => patch,
             KubernetesVersion::V1_26 { patch, .. } => patch,
+            KubernetesVersion::V1_27 { patch, .. } => patch,
         }
     }
 
@@ -161,6 +169,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_24 { suffix, .. } => suffix,
             KubernetesVersion::V1_25 { suffix, .. } => suffix,
             KubernetesVersion::V1_26 { suffix, .. } => suffix,
+            KubernetesVersion::V1_27 { suffix, .. } => suffix,
         }
     }
 
@@ -181,7 +190,12 @@ impl KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            KubernetesVersion::V1_26 { .. } => None,
+            KubernetesVersion::V1_26 { .. } => Some(KubernetesVersion::V1_27 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_27 { .. } => None,
         }
     }
 }
@@ -247,6 +261,11 @@ impl FromStr for KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
+            "1.27" => Ok(KubernetesVersion::V1_27 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
             // EC2 specifics
             "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
                 prefix: Some(Arc::from("v")),
@@ -268,6 +287,11 @@ impl FromStr for KubernetesVersion {
                 patch: Some(6),
                 suffix: Some(Arc::from("+k3s1")),
             }),
+            "v1.27.8+k3s2" => Ok(KubernetesVersion::V1_27 {
+                prefix: Some(Arc::from("v")),
+                patch: Some(8),
+                suffix: Some(Arc::from("+k3s2")),
+            }),
             _ => Err(()),
         }
     }
@@ -287,8 +311,13 @@ pub trait Kubernetes: Send + Sync {
     }
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
-    fn zone(&self) -> &str;
-    fn aws_zones(&self) -> Option<Vec<AwsZones>>;
+    fn zones(&self) -> Option<Vec<&str>>;
+    fn default_zone(&self) -> &str {
+        match &self.zones() {
+            None => "",
+            Some(zones) => zones.first().unwrap_or(&""),
+        }
+    }
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
@@ -797,6 +826,7 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
+
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
 }
 
@@ -1698,6 +1728,7 @@ mod tests {
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
     use std::collections::BTreeMap;
 
+    use crate::cloud_provider::kubernetes;
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         filter_svc_loadbalancers, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
@@ -1717,6 +1748,7 @@ mod tests {
     use std::env;
     use std::str::FromStr;
     use std::sync::Arc;
+    use strum::IntoEnumIterator;
     use uuid::Uuid;
 
     pub fn kubeconfig_path() -> String {
@@ -2262,41 +2294,81 @@ mod tests {
 
     #[test]
     pub fn test_kubernetes_version_from_string() {
-        // EKS / Kapsule
-        assert_eq!(
-            K8sVersion::from_str("1.23"),
-            Ok(K8sVersion::V1_23 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            })
-        );
+        // EKS / Kapsule / GKE
+        for k8s_version_str in K8sVersion::iter().map(|v| v.to_string()) {
+            assert_eq!(
+                match k8s_version_str.as_str() {
+                    "1.23" => Ok(kubernetes::KubernetesVersion::V1_23 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
+                    "1.24" => Ok(kubernetes::KubernetesVersion::V1_24 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
+                    "1.25" => Ok(kubernetes::KubernetesVersion::V1_25 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
+                    "1.26" => Ok(kubernetes::KubernetesVersion::V1_26 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
+                    "1.27" => Ok(kubernetes::KubernetesVersion::V1_27 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
+                    _ => panic!("unsupported k8s version string"),
+                },
+                K8sVersion::from_str(&k8s_version_str)
+            );
+        }
 
         // K3S
-        assert_eq!(
-            K8sVersion::from_str("v1.23.16+k3s1"),
-            Ok(K8sVersion::V1_23 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(16),
-                suffix: Some(Arc::from("+k3s1")),
-            })
-        );
-        assert_eq!(
-            K8sVersion::from_str("v1.24.14+k3s1"),
-            Ok(K8sVersion::V1_24 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(14),
-                suffix: Some(Arc::from("+k3s1")),
-            })
-        );
-        assert_eq!(
-            K8sVersion::from_str("v1.25.11+k3s1"),
-            Ok(K8sVersion::V1_25 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(11),
-                suffix: Some(Arc::from("+k3s1")),
-            })
-        );
+        for k3s_versions in vec![
+            "v1.23.16+k3s1",
+            "v1.24.14+k3s1",
+            "v1.25.11+k3s1",
+            "v1.26.6+k3s1",
+            "v1.27.8+k3s2",
+        ] {
+            assert_eq!(
+                match k3s_versions {
+                    "v1.23.16+k3s1" => Ok(kubernetes::KubernetesVersion::V1_23 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(16),
+                        suffix: Some(Arc::from("+k3s1")),
+                    }),
+                    "v1.24.14+k3s1" => Ok(kubernetes::KubernetesVersion::V1_24 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(14),
+                        suffix: Some(Arc::from("+k3s1")),
+                    }),
+                    "v1.25.11+k3s1" => Ok(kubernetes::KubernetesVersion::V1_25 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(11),
+                        suffix: Some(Arc::from("+k3s1")),
+                    }),
+                    "v1.26.6+k3s1" => Ok(kubernetes::KubernetesVersion::V1_26 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(6),
+                        suffix: Some(Arc::from("+k3s1")),
+                    }),
+                    "v1.27.8+k3s2" => Ok(kubernetes::KubernetesVersion::V1_27 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(8),
+                        suffix: Some(Arc::from("+k3s2")),
+                    }),
+                    _ => panic!("unsupported k3s version string"),
+                },
+                K8sVersion::from_str(&k3s_versions)
+            );
+        }
 
         // failing tests
         assert!(K8sVersion::from_str("toto").is_err());
@@ -2304,81 +2376,108 @@ mod tests {
 
     #[test]
     pub fn test_kubernetes_version_into_version_number() {
-        // EKS / Kapsule
-        assert_eq!(
-            VersionsNumber::from(K8sVersion::V1_23 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            }),
-            VersionsNumber::new(1.to_string(), Some(23.to_string()), None, None)
-        );
+        // EKS / Kapsule / GKE
+        for k8s_version in K8sVersion::iter() {
+            assert_eq!(
+                VersionsNumber::new(
+                    k8s_version.major().to_string(),
+                    Some(k8s_version.minor().to_string()),
+                    None,
+                    None
+                ),
+                VersionsNumber::from(k8s_version)
+            );
+        }
 
         // K3S
-        assert_eq!(
-            VersionsNumber::from(K8sVersion::V1_23 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(16),
-                suffix: Some(Arc::from("+k3s1")),
-            }),
-            VersionsNumber::new(
-                1.to_string(),
-                Some(23.to_string()),
-                Some(16.to_string()),
-                Some("+k3s1".to_string())
-            )
-        );
+        for k3s_version_str in vec![
+            "v1.23.16+k3s1",
+            "v1.24.14+k3s1",
+            "v1.25.11+k3s1",
+            "v1.26.6+k3s1",
+            "v1.27.8+k3s2",
+        ] {
+            let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
+            assert_eq!(
+                VersionsNumber::new(
+                    k3s_version.major().to_string(),
+                    Some(k3s_version.minor().to_string()),
+                    k3s_version.patch().as_ref().map(|p| p.to_string()),
+                    k3s_version.suffix().as_ref().map(|s| s.to_string()),
+                ),
+                VersionsNumber::from(k3s_version),
+            );
+        }
     }
 
     #[test]
     pub fn test_kubernetes_version_next_version() {
-        // EKS / Kapsule
-        assert_eq!(
-            K8sVersion::V1_25 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            }
-            .next_version(),
-            Some(K8sVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            })
-        );
-        assert_eq!(
-            K8sVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            }
-            .next_version(),
-            None
-        );
+        // EKS / Kapsule / GCP
+        for k8s_version in K8sVersion::iter() {
+            assert_eq!(
+                match k8s_version {
+                    K8sVersion::V1_23 { .. } => Some(K8sVersion::V1_24 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_24 { .. } => Some(K8sVersion::V1_25 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_25 { .. } => Some(K8sVersion::V1_26 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_26 { .. } => Some(K8sVersion::V1_27 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_27 { .. } => None,
+                },
+                k8s_version.next_version(),
+            );
+        }
 
         // K3S
-        assert_eq!(
-            K8sVersion::V1_25 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(11),
-                suffix: Some(Arc::from("+k3s1")),
-            }
-            .next_version(),
-            Some(K8sVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            })
-        );
-        assert_eq!(
-            K8sVersion::V1_26 {
-                prefix: Some(Arc::from("v")),
-                patch: Some(6),
-                suffix: Some(Arc::from("+k3s1")),
-            }
-            .next_version(),
-            None
-        );
+        for k3s_version_str in vec![
+            "v1.23.16+k3s1",
+            "v1.24.14+k3s1",
+            "v1.25.11+k3s1",
+            "v1.26.6+k3s1",
+            "v1.27.8+k3s2",
+        ] {
+            let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
+            assert_eq!(
+                match k3s_version {
+                    K8sVersion::V1_23 { .. } => Some(K8sVersion::V1_24 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_24 { .. } => Some(K8sVersion::V1_25 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_25 { .. } => Some(K8sVersion::V1_26 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_26 { .. } => Some(K8sVersion::V1_27 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_27 { .. } => None,
+                },
+                k3s_version.next_version(),
+            );
+        }
     }
 
     #[test]

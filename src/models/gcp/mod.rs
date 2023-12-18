@@ -1,5 +1,8 @@
-use crate::models::ToCloudProviderFormat;
+pub mod io;
+
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
+use url::Url;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum CredentialsError {
@@ -7,20 +10,31 @@ pub enum CredentialsError {
     CannotCreateCredentials { raw_error_message: String },
 }
 
-pub struct Credentials {
-    raw_content_json_string: String,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JsonCredentialsType {
+    ServiceAccount,
 }
 
-impl Credentials {
-    pub fn new(raw_content_json_string: String) -> Self {
-        Self {
-            raw_content_json_string,
-        }
+impl Display for JsonCredentialsType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            JsonCredentialsType::ServiceAccount => "service_account",
+        })
     }
 }
 
-impl ToCloudProviderFormat for Credentials {
-    fn to_cloud_provider_format(&self) -> &str {
-        self.raw_content_json_string.as_str()
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsonCredentials {
+    pub r#type: JsonCredentialsType,
+    // Service account fields
+    pub client_email: String,
+    pub client_id: String,
+    pub private_key_id: String,
+    pub private_key: String,
+    pub auth_uri: Url,
+    pub token_uri: Url,
+    pub auth_provider_x509_cert_url: Url,
+    pub client_x509_cert_url: Url,
+    pub project_id: String,
+    pub universe_domain: String,
 }

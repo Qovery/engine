@@ -3,18 +3,20 @@ use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
 use crate::helpers::aws::AWS_KUBERNETES_VERSION;
+use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
 use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
 use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
-use qovery_engine::cloud_provider::models::CpuArchitecture;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -49,7 +51,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     cluster_name: String,
     boot_version: KubernetesVersion,
     localisation: &str,
-    aws_zones: Option<Vec<AwsZones>>,
+    aws_zones: Option<Vec<AwsZone>>,
     cloud_provider: Arc<dyn CloudProvider>,
     kubernetes_provider: KubernetesKind,
     dns_provider: Arc<dyn DnsProvider>,
@@ -162,8 +164,8 @@ pub fn cluster_test(
     context: Context,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-    localisation: &str,
-    aws_zones: Option<Vec<AwsZones>>,
+    region: &str,
+    zones: Option<Vec<&str>>,
     test_type: ClusterTestType,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -179,14 +181,7 @@ pub fn cluster_test(
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
-    };
-
-    let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
-    if let Some(aws_zones) = aws_zones {
-        for zone in aws_zones {
-            aws_zones_string.push(zone.to_string())
-        }
+        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
     };
 
     let mut engine = match provider_kind {
@@ -194,7 +189,7 @@ pub fn cluster_test(
             &context,
             logger.clone(),
             metrics_registry.clone(),
-            localisation,
+            region,
             kubernetes_kind,
             kubernetes_boot_version.clone(),
             cluster_domain,
@@ -208,7 +203,7 @@ pub fn cluster_test(
             &context,
             logger.clone(),
             metrics_registry.clone(),
-            localisation,
+            region,
             kubernetes_kind,
             kubernetes_boot_version.clone(),
             cluster_domain,
@@ -218,7 +213,20 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
-        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::Gcp => Gke::docker_cr_engine(
+            &context,
+            logger.clone(),
+            metrics_registry.clone(),
+            region,
+            kubernetes_kind,
+            kubernetes_boot_version.clone(),
+            cluster_domain,
+            vpc_network_mode.clone(),
+            i32::MIN, // NA due to GKE autopilot
+            i32::MAX, // NA due to GKE autopilot
+            CpuArchitecture::AMD64,
+            EngineLocation::ClientSide,
+        ),
     };
     // Bootstrap
     let mut bootstrap_tx = Transaction::new(&engine).unwrap();
@@ -281,7 +289,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    localisation,
+                    region.clone(),
                     KubernetesKind::Eks,
                     upgrade_to_version,
                     cluster_domain,
@@ -295,7 +303,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    localisation,
+                    region.clone(),
                     KubernetesKind::ScwKapsule,
                     upgrade_to_version,
                     cluster_domain,
@@ -332,7 +340,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    localisation,
+                    region.clone(),
                     KubernetesKind::Eks,
                     kubernetes_boot_version,
                     cluster_domain,
@@ -346,7 +354,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    localisation,
+                    region.clone(),
                     KubernetesKind::ScwKapsule,
                     kubernetes_boot_version,
                     cluster_domain,
@@ -481,7 +489,7 @@ pub fn get_environment_test_kubernetes(
                     },
                     None,
                 )
-                .unwrap(),
+                .expect("Cannot instantiate AWS EKS"),
             )
         }
         KubernetesKind::ScwKapsule => {
@@ -505,10 +513,33 @@ pub fn get_environment_test_kubernetes(
                     },
                     None,
                 )
-                .unwrap(),
+                .expect("Cannot instantiate SCW Kapsule"),
             )
         }
-        KubernetesKind::Gke => todo!(),            // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke => {
+            let region = GcpRegion::from_str(localisation).expect("GCP zone not supported");
+            Box::new(
+                Gke::new(
+                    context.clone(),
+                    context.cluster_short_id(),
+                    Uuid::new_v4(),
+                    format!("qovery-{}", context.cluster_short_id()).as_str(),
+                    kubernetes_version,
+                    region,
+                    cloud_provider,
+                    dns_provider,
+                    Gke::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
+                    logger,
+                    metrics_registry,
+                    ClusterAdvancedSettings {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
+                    None,
+                )
+                .expect("Cannot instantiate GKE"),
+            )
+        }
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration

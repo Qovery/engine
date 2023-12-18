@@ -72,6 +72,11 @@ To create a valid configuration, follow instructions for your cloud provider:
 - [GCE](#gce)
 - [Azure AKS](#azure-aks)
 - [OpenStack Magnum](#openstack-magnum)
+- [Cluster API](#cluster-api)
+
+### Templating the autoDiscovery.clusterName
+
+The cluster name can be templated in the `autoDiscovery.clusterName` variable. This is useful when the cluster name is dynamically generated based on other values coming from external systems like Argo CD or Flux. This also allows you to use global Helm values to set the cluster name, e.g., `autoDiscovery.clusterName=\{\{ .Values.global.clusterName }}`, so that you don't need to set it in more than 1 location in the values file.
 
 ### AWS - Using auto-discovery of tagged instance groups
 
@@ -230,6 +235,32 @@ Additional config parameters available, see the `values.yaml` for more details
 - `clusterAPIWorkloadKubeconfigPath`
 - `clusterAPICloudConfigPath`
 
+### Exoscale
+
+The following parameters are required:
+
+- `cloudProvider=exoscale`
+- `autoDiscovery.clusterName=<CLUSTER NAME>`
+
+Create an Exoscale API key with appropriate permissions as described in [cluster-autoscaler/cloudprovider/exoscale/README.md](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/exoscale/README.md).
+A secret of name `<release-name>-exoscale-cluster-autoscaler` needs to be created, containing the api key and secret, as well as the zone.
+
+```console
+$ kubectl create secret generic my-release-exoscale-cluster-autoscaler \
+    --from-literal=api-key="EXOxxxxxxxxxxxxxxxxxxxxxxxx" \
+    --from-literal=api-secret="xxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" --from-literal=api-zone="ch-gva-2"
+```
+
+After creating the secret, the chart may be installed:
+
+```console
+$ helm install my-release autoscaler/cluster-autoscaler \
+    --set cloudProvider=exoscale \
+    --set autoDiscovery.clusterName=<CLUSTER NAME>
+```
+
+Read [cluster-autoscaler/cloudprovider/exoscale/README.md](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/exoscale/README.md) for further information on the setup without helm.
+
 ## Uninstalling the Chart
 
 To uninstall `my-release`:
@@ -320,7 +351,10 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 
 ### VerticalPodAutoscaler
 
-The chart can install a [`VerticalPodAutoscaler`](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/README.md) for the Deployment if needed. A VPA can help minimize wasted resources when usage spikes periodically or remediate containers that are being OOMKilled.
+The CA Helm Chart can install a [`VerticalPodAutoscaler`](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/README.md) object from Chart version `9.27.0`
+onwards for the Cluster Autoscaler Deployment to scale the CA as appropriate, but for that, we
+need to install the VPA to the cluster separately. A VPA can help minimize wasted resources
+when usage spikes periodically or remediate containers that are being OOMKilled.
 
 The following example snippet can be used to install VPA that allows scaling down from the default recommendations of the deployment template:
 
@@ -383,8 +417,9 @@ vpa:
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.pullSecrets | list | `[]` | Image pull secrets |
 | image.repository | string | `"registry.k8s.io/autoscaling/cluster-autoscaler"` | Image repository |
-| image.tag | string | `"v1.26.2"` | Image tag |
+| image.tag | string | `"v1.27.2"` | Image tag |
 | kubeTargetVersionOverride | string | `""` | Allow overriding the `.Capabilities.KubeVersion.GitVersion` check. Useful for `helm template` commands. |
+| kwokConfigMapName | string | `"kwok-provider-config"` | configmap for configuring kwok provider |
 | magnumCABundlePath | string | `"/etc/kubernetes/ca-bundle.crt"` | Path to the host's CA bundle, from `ca-file` in the cloud-config file. |
 | magnumClusterName | string | `""` | Cluster name or ID in Magnum. Required if `cloudProvider=magnum` and not setting `autoDiscovery.clusterName`. |
 | nameOverride | string | `""` | String to partially override `cluster-autoscaler.fullname` template (will maintain the release name) |
@@ -408,6 +443,8 @@ vpa:
 | rbac.serviceAccount.name | string | `""` | The name of the ServiceAccount to use. If not set and create is `true`, a name is generated using the fullname template. |
 | replicaCount | int | `1` | Desired number of pods |
 | resources | object | `{}` | Pod resource requests and limits. |
+| revisionHistoryLimit | int | `10` | The number of revisions to keep. |
+| secretKeyRefNameOverride | string | `""` | Overrides the name of the Secret to use when loading the secretKeyRef for AWS and Azure env variables |
 | securityContext | object | `{}` | [Security context for pod](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) |
 | service.annotations | object | `{}` | Annotations to add to service |
 | service.create | bool | `true` | If `true`, a Service will be created. |

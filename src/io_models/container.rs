@@ -31,7 +31,7 @@ pub struct Credentials {
     pub password: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Registry {
     DockerHub {
         long_id: Uuid,
@@ -185,6 +185,18 @@ impl Registry {
         };
 
         url
+    }
+
+    pub(crate) fn get_url(&self) -> Url {
+        match self {
+            Registry::DockerHub { url, .. } => url.clone(),
+            Registry::DoCr { url, .. } => url.clone(),
+            Registry::ScalewayCr { url, .. } => url.clone(),
+            Registry::PrivateEcr { url, .. } => url.clone(),
+            Registry::PublicEcr { url, .. } => url.clone(),
+            Registry::GenericCr { url, .. } => url.clone(),
+            Registry::GcpArtifactRegistry { url, .. } => url.clone(),
+        }
     }
 }
 

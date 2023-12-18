@@ -213,6 +213,11 @@ impl From<ObjectStorageError> for CommandError {
     fn from(object_storage_error: ObjectStorageError) -> Self {
         // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
         match object_storage_error {
+            ObjectStorageError::CannotInstantiateClient { raw_error_message } => CommandError::new(
+                "Object storage error, cannot instantiate client".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::InvalidBucketName {
                 bucket_name,
                 raw_error_message,
@@ -375,6 +380,9 @@ impl From<ContainerRegistryError> for CommandError {
     fn from(container_registry_error: ContainerRegistryError) -> Self {
         // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
         match container_registry_error {
+            ContainerRegistryError::CannotInstantiateClient { raw_error_message} => {
+                CommandError::new("Container registry error, cannot instantiate client".to_string(), Some(raw_error_message), None)
+            }
             ContainerRegistryError::InvalidCredentials => {
                 CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
             }
@@ -962,6 +970,8 @@ pub enum Tag {
     ContainerRegistryCannotDeleteRepository,
     /// ContainerRegistryInvalidInformation: represents an error on container registry information provided.
     ContainerRegistryInvalidInformation,
+    /// ContainerRegistryCannotInstantiateClient: represents an error where the container registry client cannot be instantiated.
+    ContainerRegistryCannotInstantiateClient,
     /// ContainerRegistryInvalidCredentials: represents an error on container registry, credentials are not valid.
     ContainerRegistryInvalidCredentials,
     /// ContainerRegistryRepositoryNameInvalid: represents an error on container registry repository name is not valid.
@@ -1000,6 +1010,8 @@ pub enum Tag {
     DnsProviderInvalidCredentials,
     /// DnsProviderInvalidApiUrl: represent an error on invalid DNS provider api url.
     DnsProviderInvalidApiUrl,
+    /// ObjectStorageCannotInstantiateClient: represents an error while trying to instantiate object storage client.
+    ObjectStorageCannotInstantiateClient,
     /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
     ObjectStorageCannotCreateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
@@ -2988,6 +3000,14 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
         match error {
+            ContainerRegistryError::CannotInstantiateClient {.. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotInstantiateClient,
+                "Container registry: cannot instantiate client.".to_string(),
+                Some(error.into()),
+                None,
+                None,
+            ),
             ContainerRegistryError::InvalidCredentials => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryInvalidCredentials,
@@ -4321,6 +4341,14 @@ impl EngineError {
         object_storage_error: ObjectStorageError,
     ) -> EngineError {
         match object_storage_error {
+            ObjectStorageError::CannotInstantiateClient { .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotInstantiateClient,
+                "Cannot instantiate object storage client.".to_string(),
+                Some(object_storage_error.into()),
+                None,
+                Some("Please contact Qovery team for help.".to_string()),
+            ),
             ObjectStorageError::QuotasExceeded { .. } => {
                 if event_details.provider_kind() == Some(Kind::Scw) {
                     // Scaleway specifics

@@ -2,7 +2,7 @@ use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
-use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
@@ -55,7 +55,7 @@ pub struct EC2 {
     name: String,
     version: KubernetesVersion,
     region: AwsRegion,
-    zones: Vec<AwsZones>,
+    zones: Vec<AwsZone>,
     cloud_provider: Arc<dyn CloudProvider>,
     dns_provider: Arc<dyn DnsProvider>,
     s3: S3,
@@ -272,12 +272,8 @@ impl Kubernetes for EC2 {
         self.region.to_cloud_provider_format()
     }
 
-    fn zone(&self) -> &str {
-        ""
-    }
-
-    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
-        Some(self.zones.clone())
+    fn zones(&self) -> Option<Vec<&str>> {
+        Some(self.zones.iter().map(|z| z.to_cloud_provider_format()).collect())
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {

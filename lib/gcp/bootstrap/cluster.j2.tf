@@ -22,10 +22,10 @@
 resource "google_container_cluster" "primary" {
   provider = google-beta
 
-  name            = var.kubernetes_cluster_id
+  name            = var.kubernetes_cluster_name
   description     = var.description
   project         = var.project_id
-  resource_labels = var.cluster_resource_labels
+  resource_labels = local.tags_gke
 
   location          = local.location
   node_locations    = local.node_locations
@@ -135,9 +135,11 @@ resource "google_container_cluster" "primary" {
     }
     workload_vulnerability_mode = var.workload_vulnerability_mode
   }
+
   ip_allocation_policy {
     cluster_secondary_range_name  = var.ip_range_pods
     services_secondary_range_name = var.ip_range_services
+    stack_type = var.stack_type
     dynamic "additional_pod_ranges_config" {
       for_each = length(var.additional_ip_range_pods) != 0 ? [1] : []
       content {
@@ -203,8 +205,6 @@ resource "google_container_cluster" "primary" {
     }
   }
 
-
-
   dynamic "database_encryption" {
     for_each = var.database_encryption
 
@@ -213,8 +213,6 @@ resource "google_container_cluster" "primary" {
       state    = database_encryption.value.state
     }
   }
-
-
 
   dynamic "authenticator_groups_config" {
     for_each = local.cluster_authenticator_security_group
@@ -229,4 +227,30 @@ resource "google_container_cluster" "primary" {
       topic   = var.notification_config_topic
     }
   }
+
+  depends_on = [
+    google_compute_network.vpc_network
+  ]
+}
+
+resource "time_static" "on_cluster_create" {}
+
+locals {
+  tags_common = {
+    cluster_id = var.kubernetes_cluster_id
+    cluster_long_id = var.kubernetes_cluster_long_id
+    organization_id = var.organization_id,
+    organization_long_id = var.organization_long_id,
+    region = var.region
+    creation_date = time_static.on_cluster_create.unix
+    qovery_product = "gke"
+    {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
+  }
+
+  tags_gke = merge(
+    local.tags_common,
+    {
+      "service" = "gke"
+    }
+  )
 }

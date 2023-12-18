@@ -3,6 +3,7 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::application::{GitCredentials, Port};
+use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
@@ -75,12 +76,13 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_grpc_read_timeout_seconds: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum HelmChartSource {
     Repository {
         url: Url,
         credentials: Option<HelmCredentials>,
+        engine_helm_registry: Box<Registry>,
         skip_tls_verify: bool,
         chart_name: String,
         chart_version: String,
@@ -147,12 +149,14 @@ impl HelmChart {
             HelmChartSource::Repository {
                 url,
                 credentials,
+                engine_helm_registry,
                 skip_tls_verify,
                 chart_name,
                 chart_version,
             } => models::helm_chart::HelmChartSource::Repository {
                 url,
                 credentials,
+                engine_helm_registry,
                 skip_tls_verify,
                 chart_name,
                 chart_version,
@@ -412,6 +416,82 @@ fn test_helm_deserialization_with_env_variables_with_infos() {
         &VariableInfo {
             value: "my password".to_string(),
             is_secret: true,
+        }
+    );
+}
+
+#[test]
+fn test_helm_deserialization_repository_source() {
+    let data = format!(
+        r#"
+        {{
+            "long_id": "f84d837d-717e-4c39-bba4-573b22c5f848",
+  "name": "name",
+  "kube_name": "kube name",
+  "action": "CREATE",
+  "chart_source": {{
+    "repository": {{
+        "url": "oci://default.com/",
+        "credentials": {{
+            "login": "mon_nom",
+            "password": "toto"
+        }},
+        "engine_helm_registry": {{
+            "GenericCr": {{
+                "long_id": "bda696e6-de3a-4607-bd47-e8854e1c2880",
+                "url": "oci://default.com/",
+                "credentials": {{
+                    "login": "mon_nom",
+                    "password": "toto"
+                }}
+            }}
+        }},
+        "chart_name": "name of chart",
+        "chart_version": "version of chart",
+         "skip_tls_verify": false
+        }}
+    }},
+  "chart_values": {{
+    "raw": {{
+      "values": []
+    }}
+  }},
+  "set_values": [],
+  "set_string_values": [],
+  "set_json_values": [],
+  "command_args": [],
+  "timeout_sec": 0,
+  "allow_cluster_wide_resources": false,
+  "environment_vars": {{ "key": "value" }},
+  "advanced_settings": {{}},
+  "ports": [{{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null}},
+  {{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}}]
+        }}"#
+    );
+
+    let helm_chart: HelmChart = serde_json::from_str(data.as_str()).unwrap();
+    assert_eq!(helm_chart.name, "name");
+    assert_eq!(helm_chart.environment_vars_with_infos.len(), 0);
+    assert_eq!(helm_chart.ports.len(), 2);
+    assert_eq!(
+        helm_chart.chart_source,
+        HelmChartSource::Repository {
+            url: Url::parse("oci://default.com/").unwrap(),
+            credentials: Some(HelmCredentials {
+                login: "mon_nom".to_string(),
+                password: "toto".to_string()
+            }),
+            chart_name: "name of chart".to_string(),
+            chart_version: "version of chart".to_string(),
+            skip_tls_verify: false,
+            engine_helm_registry: Box::new(Registry::GenericCr {
+                long_id: Uuid::parse_str("bda696e6-de3a-4607-bd47-e8854e1c2880").unwrap(),
+                url: Url::parse("oci://default.com/").unwrap(),
+                credentials: Some(crate::io_models::container::Credentials {
+                    login: "mon_nom".to_string(),
+                    password: "toto".to_string()
+                })
+            })
         }
     );
 }

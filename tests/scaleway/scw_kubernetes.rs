@@ -2,12 +2,11 @@ use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
-use qovery_engine::cloud_provider::models::CpuArchitecture;
+use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;

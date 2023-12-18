@@ -21,13 +21,18 @@ data "google_compute_subnetwork" "gke_subnetwork" {
 
   count   = var.add_cluster_firewall_rules ? 1 : 0
   name    = var.subnetwork
-  region  = local.region
+  region  = var.region
   project = local.network_project_id
 }
 
-// todo(bchastanier): set this IF VPC is created by Qovery
+{% if vpc_use_existing %}
+data "google_compute_network" "vpc_network" {
+  name = var.vpc_name
+}
+{% else %}
 resource "google_compute_network" "vpc_network" {
   project                 = var.project_id
   name                    = var.vpc_name
   auto_create_subnetworks = var.auto_create_subnetworks
 }
+{% endif %}

@@ -144,7 +144,7 @@ pub fn default_tera_context(
     context.insert("environment_id", environment.id.as_str());
     context.insert("environment_long_id", &environment.long_id);
     context.insert("region", kubernetes.region());
-    context.insert("zone", kubernetes.zone());
+    context.insert("zone", kubernetes.default_zone());
     context.insert("name", service.name());
     context.insert("sanitized_name", &service.kube_name());
     context.insert("namespace", environment.namespace());

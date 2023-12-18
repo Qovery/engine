@@ -68,7 +68,7 @@ pub fn to_environment_variable(env_vars: BTreeMap<String, VariableInfo>) -> Vec<
         .collect()
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct GitCredentials {
     pub login: String,
     pub access_token: String,

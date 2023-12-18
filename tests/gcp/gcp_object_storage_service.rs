@@ -1,36 +1,16 @@
-use crate::helpers::gcp::{GCP_REGION, GCP_RESOURCE_TTL};
+use crate::helpers::gcp::{try_parse_json_credentials_from_str, GCP_REGION, GCP_RESOURCE_TTL};
+use crate::helpers::gcp::{GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER, GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER};
 use crate::helpers::utilities::FuncTestsSecrets;
 use function_name::named;
-use governor::middleware::NoOpMiddleware;
-use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, Quota, RateLimiter};
-use nonzero_ext::*;
-use once_cell::sync::Lazy;
-use qovery_engine::models::gcp::Credentials;
 use qovery_engine::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
 use std::cmp::max;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on bucket / objects
-
-/// A rate limiter making sure we do not send too many bucket write requests while testing
-/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 10 seconds)
-/// more info here https://cloud.google.com/storage/quotas?hl=fr
-static GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER: Lazy<
-    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
-
-/// A rate limiter making sure we do not send too many object write requests while testing
-/// Max default quotas are 1 RPS, let's take some room and use 10x less (1 per 5 seconds)
-/// more info here https://cloud.google.com/storage/quotas?hl=fr
-static GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
-    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(20_u32)))));
 
 struct BucketParams {
     project_id: String,
@@ -67,12 +47,15 @@ impl BucketParams {
 fn test_bucket_exists() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -113,12 +96,15 @@ fn test_bucket_exists() {
 fn test_get_bucket() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -159,12 +145,15 @@ fn test_get_bucket() {
 fn test_create_bucket_success() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -252,12 +241,15 @@ fn test_create_bucket_success() {
 fn test_delete_bucket_success() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -293,12 +285,15 @@ fn test_delete_bucket_success() {
 fn test_delete_bucket_with_objects() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -344,12 +339,15 @@ fn test_delete_bucket_with_objects() {
 fn test_empty_bucket_with_objects() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -406,12 +404,15 @@ fn test_empty_bucket_with_objects() {
 fn test_list_bucket() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -455,12 +456,15 @@ fn test_list_bucket() {
 fn test_list_bucket_from_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -505,12 +509,15 @@ fn test_list_bucket_from_prefix() {
 fn test_put_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -562,12 +569,15 @@ fn test_put_object() {
 fn test_get_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -622,12 +632,15 @@ fn test_get_object() {
 fn test_list_objects_keys_only() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -695,12 +708,15 @@ fn test_list_objects_keys_only() {
 fn test_list_objects_keys_only_with_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -785,12 +801,15 @@ fn test_list_objects_keys_only_with_prefix() {
 fn test_list_objects() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -858,12 +877,15 @@ fn test_list_objects() {
 fn test_list_objects_with_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )
@@ -948,12 +970,15 @@ fn test_list_objects_with_prefix() {
 fn test_delete_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
     let service = ObjectStorageService::new(
-        Credentials::new(
-            secrets
-                .GCP_CREDENTIALS
-                .expect("GCP_CREDENTIALS should be defined in secrets"),
-        ),
+        credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
         Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
     )

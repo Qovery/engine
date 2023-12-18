@@ -6,3 +6,6 @@ pub const KUBECONFIG: &str = "KUBECONFIG";
 pub const SCW_ACCESS_KEY: &str = "SCW_ACCESS_KEY";
 pub const SCW_SECRET_KEY: &str = "SCW_SECRET_KEY";
 pub const SCW_DEFAULT_PROJECT_ID: &str = "SCW_DEFAULT_PROJECT_ID";
+pub const GCP_PROJECT: &str = "GOOGLE_PROJECT";
+pub const GCP_REGION: &str = "GOOGLE_REGION";
+pub const GCP_CREDENTIALS: &str = "GOOGLE_CREDENTIALS";

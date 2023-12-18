@@ -4,6 +4,7 @@ use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
+use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
 use crate::io_models::variable_utils::VariableInfo;
@@ -340,6 +341,7 @@ pub enum HelmChartSource {
     Repository {
         url: Url,
         credentials: Option<HelmCredentials>,
+        engine_helm_registry: Box<Registry>,
         skip_tls_verify: bool,
         chart_name: String,
         chart_version: String,

@@ -107,9 +107,9 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "nginx.hpa.cpu_utilization_percentage_threshold")]
     pub nginx_hpa_cpu_utilization_percentage_threshold: u32,
     #[serde(alias = "nginx.hpa.min_number_instances")]
-    pub nginx_hpa_min_number_instances: i32,
+    pub nginx_hpa_min_number_instances: u32,
     #[serde(alias = "nginx.hpa.max_number_instances")]
-    pub nginx_hpa_max_number_instances: i32,
+    pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
 }

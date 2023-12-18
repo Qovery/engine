@@ -8,9 +8,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use uuid::Uuid;
 
 pub struct GoogleOS {
     id: String,
+    _long_id: Uuid,
     name: String,
     project_id: String,
     region: GcpStorageRegion,
@@ -20,6 +22,7 @@ pub struct GoogleOS {
 impl GoogleOS {
     pub fn new(
         id: &str,
+        long_id: Uuid,
         name: &str,
         project_id: &str,
         region: GcpStorageRegion,
@@ -27,6 +30,7 @@ impl GoogleOS {
     ) -> GoogleOS {
         Self {
             id: id.to_string(),
+            _long_id: long_id,
             name: name.to_string(),
             project_id: project_id.to_string(),
             region,
@@ -63,6 +67,10 @@ impl ObjectStorage for GoogleOS {
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
     ) -> Result<Bucket, ObjectStorageError> {
+        if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
+            return Ok(existing_bucket);
+        }
+
         let creation_date: DateTime<Utc> = Utc::now();
         // TODO(benjaminch): Add bucket versioning option
         match self.service.create_bucket(
@@ -72,9 +80,11 @@ impl ObjectStorage for GoogleOS {
             bucket_ttl,
             bucket_versioning_activated,
             Some(HashMap::from([
-                ("CreationDate".to_string(), creation_date.to_rfc3339()),
+                // Tags keys rule: Only hyphens (-), underscores (_), lowercase characters, and numbers are allowed.
+                // Keys must start with a lowercase character. International characters are allowed.
+                ("creation_date".to_string(), creation_date.timestamp().to_string()),
                 (
-                    "Ttl".to_string(),
+                    "ttl".to_string(),
                     format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                 ),
             ])),
@@ -186,6 +196,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tempfile::tempdir;
+    use uuid::Uuid;
 
     #[test]
     fn bucket_exists_test() {
@@ -199,6 +210,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -251,9 +263,87 @@ mod tests {
                 _, // labels
             ))
             .then_return(Ok(expected_bucket.clone()));
+            faux::when!(service_mock.get_bucket(bucket_name,)).then_return(Err(
+                ObjectStorageServiceError::CannotGetBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: "Bucket doesn't exist".to_string(),
+                },
+            ));
 
-            let object_storage =
-                GoogleOS::new("123", "test_123", "project_123", bucket_region.clone(), Arc::from(service_mock));
+            let object_storage = GoogleOS::new(
+                "123",
+                Uuid::new_v4(),
+                "test_123",
+                "project_123",
+                GcpStorageRegion::EuropeWest9,
+                Arc::from(service_mock),
+            );
+
+            // execute:
+            let created_bucket = object_storage
+                .create_bucket(bucket_name, bucket_ttl, bucket_versioning)
+                .expect("Error creating bucket");
+
+            // verify:
+            assert_eq!(expected_bucket, created_bucket);
+        }
+    }
+
+    #[test]
+    fn create_bucket_existing_test() {
+        // setup:
+        let bucket_region = GcpStorageRegion::EuropeWest9;
+
+        let bucket_name_test_cases = vec!["abc", "abcabc", "ABC_abc"];
+        let bucket_ttl_test_cases = vec![
+            None,
+            Some(Duration::from_secs(1 * 60 * 60 * 24)), // 1 day
+            Some(Duration::from_secs(7 * 60 * 60 * 24)), // 7 day
+        ];
+        let bucket_versioning_test_cases = vec![true, false];
+
+        for (bucket_name, bucket_ttl, bucket_versioning) in
+            izip!(bucket_name_test_cases, bucket_ttl_test_cases, bucket_versioning_test_cases)
+        {
+            let expected_bucket = Bucket {
+                name: bucket_name.to_string(),
+                ttl: bucket_ttl,
+                versioning_activated: bucket_versioning,
+                location: BucketRegion::GcpRegion(bucket_region.clone()),
+                labels: Some(HashMap::from([
+                    ("CreationDate".to_string(), Utc::now().to_rfc3339()),
+                    (
+                        "Ttl".to_string(),
+                        format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                    ),
+                ])),
+            };
+
+            let mut service_mock = ObjectStorageService::faux();
+
+            // Make create service returns an error if called, making sure success comes from the get
+            faux::when!(service_mock.create_bucket(
+                _, // project_id,
+                bucket_name,
+                _, // location
+                bucket_ttl,
+                bucket_versioning,
+                _, // labels
+            ))
+            .then_return(Err(ObjectStorageServiceError::CannotCreateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: "Bucket doesn't exist".to_string(),
+            }));
+            faux::when!(service_mock.get_bucket(bucket_name,)).then_return(Ok(expected_bucket.clone()));
+
+            let object_storage = GoogleOS::new(
+                "123",
+                Uuid::new_v4(),
+                "test_123",
+                "project_123",
+                GcpStorageRegion::EuropeWest9,
+                Arc::from(service_mock),
+            );
 
             // execute:
             let created_bucket = object_storage
@@ -281,6 +371,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -324,6 +415,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -353,6 +445,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -382,6 +475,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -411,6 +505,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -454,6 +549,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -494,6 +590,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -535,6 +632,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -542,12 +640,10 @@ mod tests {
         );
 
         // execute:
-        let delete_object_result = object_storage
-            .delete_object(bucket_name, object_key)
-            .expect("Cannot delete object from bucket");
+        let delete_object_result = object_storage.delete_object(bucket_name, object_key);
 
         // verify:
-        assert_eq!((), delete_object_result);
+        assert!(delete_object_result.is_ok());
     }
 
     #[test]
@@ -575,6 +671,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -615,6 +712,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,
@@ -648,6 +746,7 @@ mod tests {
 
         let object_storage = GoogleOS::new(
             "123",
+            Uuid::new_v4(),
             "test_123",
             "project_123",
             GcpStorageRegion::EuropeWest9,

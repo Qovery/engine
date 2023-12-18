@@ -399,6 +399,21 @@ pub fn scw_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_overrride_fn.clone(),
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_min_number_instances,
+        ),
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_max_number_instances,
+        ),
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_cpu_utilization_percentage_threshold,
+        ),
     )
     .to_common_helm_chart()?;
 

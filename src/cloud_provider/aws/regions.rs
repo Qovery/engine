@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::regions::AwsZones::*;
+use crate::cloud_provider::aws::regions::AwsZone::*;
 use crate::cloud_provider::aws::regions::RegionAndZoneErrors::*;
 use crate::models::domain::ToTerraformString;
 use crate::models::ToCloudProviderFormat;
@@ -11,7 +11,7 @@ use strum_macros::EnumIter;
 
 // Sync with Qovery Core team if you update this content
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter)]
-pub enum AwsZones {
+pub enum AwsZone {
     // North Virginia
     UsEast1A,
     UsEast1B,
@@ -102,9 +102,159 @@ pub enum AwsZones {
     SaEast1C,
 }
 
-impl ToTerraformString for AwsZones {
+impl ToTerraformString for AwsZone {
     fn to_terraform_format_string(&self) -> String {
         format!("\"{self}\"")
+    }
+}
+
+impl ToCloudProviderFormat for AwsZone {
+    fn to_cloud_provider_format(&self) -> &str {
+        match &self {
+            UsEast1A => "us-east-1a",
+            UsEast1B => "us-east-1b",
+            UsEast1C => "us-east-1c",
+            UsEast2A => "us-east-2b",
+            UsEast2B => "us-east-2b",
+            UsEast2C => "us-east-2b",
+            UsWest2A => "us-west-2a",
+            UsWest2B => "us-west-2b",
+            UsWest2C => "us-west-2c",
+            AfSouth1A => "af-south-1a",
+            AfSouth1B => "af-south-1b",
+            AfSouth1C => "af-south-1c",
+            ApEast1A => "ap-east-1a",
+            ApEast1B => "ap-east-1b",
+            ApEast1C => "ap-east-1c",
+            ApSouth1A => "ap-south-1a",
+            ApSouth1B => "ap-south-1b",
+            ApSouth1C => "ap-south-1c",
+            ApNortheast1A => "ap-northeast-1a",
+            ApNortheast1C => "ap-northeast-1c",
+            ApNortheast1D => "ap-northeast-1d",
+            ApNortheast2A => "ap-northeast-2a",
+            ApNortheast2B => "ap-northeast-2b",
+            ApNortheast2C => "ap-northeast-2c",
+            ApNortheast3A => "ap-northeast-3a",
+            ApNortheast3B => "ap-northeast-3b",
+            ApNortheast3C => "ap-northeast-3c",
+            ApSoutheast1A => "ap-southeast-1a",
+            ApSoutheast1B => "ap-southeast-1b",
+            ApSoutheast1C => "ap-southeast-1c",
+            ApSoutheast2A => "ap-southeast-2a",
+            ApSoutheast2B => "ap-southeast-2b",
+            ApSoutheast2C => "ap-southeast-2c",
+            CaCentral1A => "ca-central-1a",
+            CaCentral1B => "ca-central-1b",
+            CaCentral1D => "ca-central-1d",
+            CnNorth1A => "cn-north-1a",
+            CnNorth1B => "cn-north-1b",
+            CnNorth1C => "cn-north-1c",
+            CnNorthwest1A => "cn-northwest-1a",
+            CnNorthwest1B => "cn-northwest-1b",
+            CnNorthwest1C => "cn-northwest-1c",
+            EuCentral1A => "eu-central-1a",
+            EuCentral1B => "eu-central-1b",
+            EuCentral1C => "eu-central-1c",
+            EuWest1A => "eu-west-1a",
+            EuWest1B => "eu-west-1b",
+            EuWest1C => "eu-west-1c",
+            EuWest2A => "eu-west-2a",
+            EuWest2B => "eu-west-2b",
+            EuWest2C => "eu-west-2c",
+            EuWest3A => "eu-west-3a",
+            EuWest3B => "eu-west-3b",
+            EuWest3C => "eu-west-3c",
+            EuNorth1A => "eu-north-1a",
+            EuNorth1B => "eu-north-1b",
+            EuNorth1C => "eu-north-1c",
+            EuSouth1A => "eu-south-1a",
+            EuSouth1B => "eu-south-1b",
+            EuSouth1C => "eu-south-1c",
+            MeSouth1A => "me-south-1a",
+            MeSouth1B => "me-south-1b",
+            MeSouth1C => "me-south-1c",
+            SaEast1A => "sa-east-1a",
+            SaEast1B => "sa-east-1b",
+            SaEast1C => "sa-east-1c",
+        }
+    }
+}
+
+impl FromStr for AwsZone {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<AwsZone, ()> {
+        let v: &str = &s.to_lowercase();
+        match v {
+            "us-east-1a" => Ok(UsEast1A),
+            "us-east-1b" => Ok(UsEast1B),
+            "us-east-1c" => Ok(UsEast1C),
+            "us-east-2a" => Ok(UsEast2A),
+            "us-east-2b" => Ok(UsEast2B),
+            "us-east-2c" => Ok(UsEast2C),
+            "us-west-2a" => Ok(UsWest2A),
+            "us-west-2b" => Ok(UsWest2B),
+            "us-west-2c" => Ok(UsWest2C),
+            "af-south-1a" => Ok(AfSouth1A),
+            "af-south-1b" => Ok(AfSouth1B),
+            "af-south-1c" => Ok(AfSouth1C),
+            "ap-east-1a" => Ok(ApEast1A),
+            "ap-east-1b" => Ok(ApEast1B),
+            "ap-east-1c" => Ok(ApEast1C),
+            "ap-south-1a" => Ok(ApSouth1A),
+            "ap-south-1b" => Ok(ApSouth1B),
+            "ap-south-1c" => Ok(ApSouth1C),
+            "ap-northeast-1a" => Ok(ApNortheast1A),
+            "ap-northeast-1c" => Ok(ApNortheast1C),
+            "ap-northeast-1d" => Ok(ApNortheast1D),
+            "ap-northeast-2a" => Ok(ApNortheast2A),
+            "ap-northeast-2b" => Ok(ApNortheast2B),
+            "ap-northeast-2c" => Ok(ApNortheast2C),
+            "ap-northeast-3a" => Ok(ApNortheast3A),
+            "ap-northeast-3b" => Ok(ApNortheast3B),
+            "ap-northeast-3c" => Ok(ApNortheast3C),
+            "ap-southeast-1a" => Ok(ApSoutheast1A),
+            "ap-southeast-1b" => Ok(ApSoutheast1B),
+            "ap-southeast-1c" => Ok(ApSoutheast1C),
+            "ap-southeast-2a" => Ok(ApSoutheast2A),
+            "ap-southeast-2b" => Ok(ApSoutheast2B),
+            "ap-southeast-2c" => Ok(ApSoutheast2C),
+            "ca-central-1a" => Ok(CaCentral1A),
+            "ca-central-1b" => Ok(CaCentral1B),
+            "ca-central-1d" => Ok(CaCentral1D),
+            "cn-north-1a" => Ok(CnNorth1A),
+            "cn-north-1b" => Ok(CnNorth1B),
+            "cn-north-1c" => Ok(CnNorth1C),
+            "cn-northwest-1a" => Ok(CnNorthwest1A),
+            "cn-northwest-1b" => Ok(CnNorthwest1B),
+            "cn-northwest-1c" => Ok(CnNorthwest1C),
+            "eu-central-1a" => Ok(EuCentral1A),
+            "eu-central-1b" => Ok(EuCentral1B),
+            "eu-central-1c" => Ok(EuCentral1C),
+            "eu-west-1a" => Ok(EuWest1A),
+            "eu-west-1b" => Ok(EuWest1B),
+            "eu-west-1c" => Ok(EuWest1C),
+            "eu-west-2a" => Ok(EuWest2A),
+            "eu-west-2b" => Ok(EuWest2B),
+            "eu-west-2c" => Ok(EuWest2C),
+            "eu-west-3a" => Ok(EuWest3A),
+            "eu-west-3b" => Ok(EuWest3B),
+            "eu-west-3c" => Ok(EuWest3C),
+            "eu-north-1a" => Ok(EuNorth1A),
+            "eu-north-1b" => Ok(EuNorth1B),
+            "eu-north-1c" => Ok(EuNorth1C),
+            "eu-south-1a" => Ok(EuSouth1A),
+            "eu-south-1b" => Ok(EuSouth1B),
+            "eu-south-1c" => Ok(EuSouth1C),
+            "me-south-1a" => Ok(MeSouth1A),
+            "me-south-1b" => Ok(MeSouth1B),
+            "me-south-1c" => Ok(MeSouth1C),
+            "sa-east-1a" => Ok(SaEast1A),
+            "sa-east-1b" => Ok(SaEast1B),
+            "sa-east-1c" => Ok(SaEast1C),
+            _ => Err(()),
+        }
     }
 }
 
@@ -210,7 +360,7 @@ impl AwsRegion {
         zones_to_string
     }
 
-    pub fn get_zones(&self) -> Vec<AwsZones> {
+    pub fn get_zones(&self) -> Vec<AwsZone> {
         // Warning, order matters
         match self {
             AwsRegion::UsEast1 => {
@@ -302,8 +452,8 @@ impl Display for RegionAndZoneErrors {
     }
 }
 
-impl AwsZones {
-    pub fn from_string(zone: String) -> Result<AwsZones, RegionAndZoneErrors> {
+impl AwsZone {
+    pub fn from_string(zone: String) -> Result<AwsZone, RegionAndZoneErrors> {
         // create tmp region from zone and get zone name (one letter)
         let sanitized_zone_name = zone.to_lowercase().replace(['-', '_'], "");
         let mut sanitized_region = sanitized_zone_name.clone();
@@ -340,7 +490,7 @@ impl Display for AwsRegion {
     }
 }
 
-impl Display for AwsZones {
+impl Display for AwsZone {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let str = match self {
             UsEast1A => "us-east-1a",
@@ -417,8 +567,8 @@ impl Display for AwsZones {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::regions::AwsZones::{EuWest3A, EuWest3B, EuWest3C};
-    use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones, RegionAndZoneErrors};
+    use crate::cloud_provider::aws::regions::AwsZone::{EuWest3A, EuWest3B, EuWest3C};
+    use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone, RegionAndZoneErrors};
     use crate::models::ToCloudProviderFormat;
     use std::str::FromStr;
     use strum::IntoEnumIterator;
@@ -426,17 +576,17 @@ mod tests {
     #[test]
     fn test_aws_zones() {
         assert_eq!(EuWest3A.to_string(), "eu-west-3a".to_string());
-        assert_eq!(AwsZones::ApNortheast1D.to_string(), "ap-northeast-1d".to_string());
-        assert_eq!(AwsZones::from_string("eu-west-3a".to_string()), Ok(EuWest3A));
+        assert_eq!(AwsZone::ApNortheast1D.to_string(), "ap-northeast-1d".to_string());
+        assert_eq!(AwsZone::from_string("eu-west-3a".to_string()), Ok(EuWest3A));
 
         // ensure all zones are supported
-        for zone in AwsZones::iter() {
+        for zone in AwsZone::iter() {
             let sanitized_zone = format!("{zone:?}");
-            let current_zone = AwsZones::from_string(sanitized_zone.to_lowercase());
+            let current_zone = AwsZone::from_string(sanitized_zone.to_lowercase());
             assert_eq!(current_zone.unwrap(), zone);
         }
         assert_eq!(
-            AwsZones::from_string("eu-west-3x".to_string()),
+            AwsZone::from_string("eu-west-3x".to_string()),
             Err(RegionAndZoneErrors::ZoneNotSupported)
         );
     }
@@ -444,7 +594,7 @@ mod tests {
     #[test]
     fn test_aws_get_region_from_zone() {
         assert_eq!(EuWest3A.get_region(), "eu-west-3".to_string());
-        assert_eq!(AwsZones::ApNortheast1D.get_region(), "ap-northeast-1".to_string());
+        assert_eq!(AwsZone::ApNortheast1D.get_region(), "ap-northeast-1".to_string());
     }
 
     #[test]

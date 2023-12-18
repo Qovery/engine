@@ -15,6 +15,8 @@ pub enum RepositoryNamingRule {
 pub enum ContainerRegistryError {
     #[error("Unknown error.")]
     Unknown { raw_error_message: String },
+    #[error("Cannot instantiate client: `{raw_error_message}`.")]
+    CannotInstantiateClient { raw_error_message: String },
     #[error("Invalid registry URL error, cannot be parsed: `{registry_url}`.")]
     InvalidRegistryUrl { registry_url: String },
     #[error("Invalid credentials error.")]

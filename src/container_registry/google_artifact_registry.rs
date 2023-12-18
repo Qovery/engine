@@ -1,9 +1,10 @@
 use crate::build_platform::Image;
-use crate::cloud_provider::gcp::regions::GcpRegion;
+use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
 use crate::io_models::context::Context;
-use crate::models::gcp::Credentials;
+use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use std::sync::Arc;
@@ -30,12 +31,16 @@ impl GoogleArtifactRegistry {
         name: &str,
         project_id: &str,
         region: GcpRegion,
-        credentials: Credentials,
+        credentials: JsonCredentials,
         service: Arc<ArtifactRegistryService>,
     ) -> Result<Self, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "_json_key".to_string();
-        let secret_token = credentials.to_cloud_provider_format();
+        let secret_token = serde_json::to_string(&JsonCredentialsIo::from(credentials)).map_err(|e| {
+            ContainerRegistryError::CannotInstantiateClient {
+                raw_error_message: e.to_string(),
+            }
+        })?;
         let registry_raw_url = format!("https://{}-docker.pkg.dev", region.to_cloud_provider_format(),);
 
         let mut registry =
@@ -43,7 +48,7 @@ impl GoogleArtifactRegistry {
                 registry_url: registry_raw_url,
             })?;
         let _ = registry.set_username(&login);
-        let _ = registry.set_password(Some(secret_token));
+        let _ = registry.set_password(Some(&secret_token));
 
         if context.docker.login(&registry).is_err() {
             return Err(ContainerRegistryError::InvalidCredentials);
@@ -94,7 +99,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
     }
 
     fn kind(&self) -> Kind {
-        Kind::GoogleCr
+        Kind::GcpArtifactRegistry
     }
 
     fn id(&self) -> &str {

@@ -23,6 +23,9 @@ pub struct NginxIngressChart {
     default_backend_resources: HelmChartResources,
     ff_metrics_history_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    nginx_hpa_minimum_replicas: Option<u32>,
+    nginx_hpa_maximum_replicas: Option<u32>,
+    nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
 }
 
 impl NginxIngressChart {
@@ -32,6 +35,9 @@ impl NginxIngressChart {
         default_backend_resources: HelmChartResourcesConstraintType,
         ff_metrics_history_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        nginx_hpa_minimum_replicas: Option<u32>,
+        nginx_hpa_maximum_replicas: Option<u32>,
+        nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -64,6 +70,9 @@ impl NginxIngressChart {
             },
             ff_metrics_history_enabled,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            nginx_hpa_minimum_replicas,
+            nginx_hpa_maximum_replicas,
+            nginx_hpa_target_cpu_utilization_percentage,
         }
     }
 
@@ -146,6 +155,40 @@ defaultBackend:
                 })?,
         );
 
+        let mut chart_set_values = vec![
+            ChartSetValue {
+                key: "controller.admissionWebhooks.enabled".to_string(),
+                value: false.to_string(),
+            },
+            // enable metrics for customers who wants to manage it by their own
+            ChartSetValue {
+                key: "controller.metrics.enabled".to_string(),
+                value: true.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.metrics.serviceMonitor.enabled".to_string(),
+                value: self.ff_metrics_history_enabled.to_string(),
+            },
+        ];
+        if let Some(value) = self.nginx_hpa_minimum_replicas {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.autoscaling.minReplicas".to_string(),
+                value: value.to_string(),
+            })
+        }
+        if let Some(value) = self.nginx_hpa_maximum_replicas {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.autoscaling.maxReplicas".to_string(),
+                value: value.to_string(),
+            })
+        }
+        if let Some(value) = self.nginx_hpa_target_cpu_utilization_percentage {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.autoscaling.targetCPUUtilizationPercentage".to_string(),
+                value: value.to_string(),
+            })
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
@@ -154,21 +197,7 @@ defaultBackend:
                 // Because of NLB, svc can take some time to start
                 timeout_in_seconds: 300,
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "controller.admissionWebhooks.enabled".to_string(),
-                        value: "false".to_string(),
-                    },
-                    // enable metrics for customers who wants to manage it by their own
-                    ChartSetValue {
-                        key: "controller.metrics.enabled".to_string(),
-                        value: true.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "controller.metrics.serviceMonitor.enabled".to_string(),
-                        value: self.ff_metrics_history_enabled.to_string(),
-                    },
-                ],
+                values: chart_set_values,
                 yaml_files_content: {
                     // order matters: last one overrides previous ones, so customer override should be last
                     let mut x = vec![rendered_nginx_overrride];
@@ -245,6 +274,9 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            Some(1),
+            Some(10),
+            Some(50),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -275,6 +307,9 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            Some(1),
+            Some(10),
+            Some(50),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -300,7 +335,7 @@ mod tests {
     // Make sure rust code doesn't set a value not declared inside values file.
     // All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test() {
+    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test_but_not_on_ec2() {
         // setup:
         let chart = NginxIngressChart::new(
             None,
@@ -308,12 +343,16 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            Some(1),
+            Some(10),
+            Some(50),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // TODO(benjaminch): GKE integration
         for cloud_provider in KubernetesKind::iter().filter(|k| {
             k != &KubernetesKind::Gke
+                && k != &KubernetesKind::Ec2
                 && k != &KubernetesKind::EksSelfManaged
                 && k != &KubernetesKind::ScwSelfManaged
                 && k != &KubernetesKind::GkeSelfManaged
@@ -334,5 +373,39 @@ mod tests {
             // verify:
             assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
         }
+    }
+
+    // Make sure rust code doesn't set a value not declared inside values file.
+    // All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn nginx_ingress_chart_rust_overridden_values_exists_in_ec2_values_yaml_test() {
+        // setup:
+        let chart = NginxIngressChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            true,
+            get_nginx_ingress_chart_override(),
+            None,
+            None,
+            None,
+        );
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        let values_file_lib_path = format!(
+            "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2)
+            ),
+            NginxIngressChart::chart_old_name(),
+        );
+
+        // execute:
+        let missing_fields =
+            get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }

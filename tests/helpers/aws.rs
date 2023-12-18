@@ -3,11 +3,11 @@ extern crate serde_derive;
 
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::aws::kubernetes::Options;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
@@ -94,7 +94,7 @@ impl Cluster<AWS, Options> for AWS {
         context: &Context,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
-        localisation: &str,
+        region: &str,
         kubernetes_kind: KubernetesKind,
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
@@ -107,7 +107,7 @@ impl Cluster<AWS, Options> for AWS {
         // use ECR
         let container_registry = match kubernetes_kind {
             Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
-            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), localisation)),
+            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), region)),
             _ => panic!("Invalid cluster kind {kubernetes_kind}"),
         };
 
@@ -115,7 +115,7 @@ impl Cluster<AWS, Options> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use AWS
-        let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(context, kubernetes_kind, localisation);
+        let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(context, kubernetes_kind, region);
         let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
         let cloud_provider: Arc<dyn CloudProvider> = Arc::from(cloud_provider);
@@ -127,7 +127,7 @@ impl Cluster<AWS, Options> for AWS {
             dns_provider.clone(),
             logger.clone(),
             metrics_registry.clone(),
-            localisation,
+            region,
             vpc_network_mode,
             min_nodes,
             max_nodes,

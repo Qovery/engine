@@ -53,10 +53,10 @@ pub trait CloudProvider: Send + Sync {
     fn access_key_id(&self) -> String;
     fn secret_access_key(&self) -> String;
     fn region(&self) -> String;
+    // TODO(benjaminch): Remove client from here
     fn aws_sdk_client(&self) -> Option<SdkConfig>;
-    fn token(&self) -> &str;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
-    fn zones(&self) -> &Vec<String>;
+    fn zones(&self) -> Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates

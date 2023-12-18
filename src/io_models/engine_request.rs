@@ -1,12 +1,16 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::json::JsonString;
+use serde_with::serde_as;
 
 use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::gcp::regions::GcpRegion;
+use crate::cloud_provider::gcp::kubernetes::Gke;
+use crate::cloud_provider::gcp::locations::GcpRegion;
+use crate::cloud_provider::gcp::Google;
 use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
 use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
 use crate::cloud_provider::models::NodeGroups;
@@ -27,7 +31,8 @@ use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::Domain;
-use crate::models::gcp::Credentials;
+use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::models::gcp::JsonCredentials;
 use crate::models::scaleway::ScwZone;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
@@ -260,7 +265,27 @@ impl CloudProvider {
                 region,
                 terraform_state_credentials,
             ))),
-            cloud_provider::Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            cloud_provider::Kind::Gcp => {
+                let credentials = match &self.options.gcp_credentials {
+                    Some(creds) => match JsonCredentials::try_from(creds.clone()) {
+                        Ok(c) => c,
+                        Err(_e) => return None,
+                    },
+                    None => return None,
+                };
+                let region = match GcpRegion::from_str(region) {
+                    Ok(r) => r,
+                    Err(_e) => return None,
+                };
+                Some(Box::new(Google::new(
+                    context,
+                    self.long_id,
+                    self.name.as_str(),
+                    credentials,
+                    region,
+                    terraform_state_credentials,
+                )))
+            }
         }
     }
 }
@@ -407,7 +432,39 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
-            cloud_provider::kubernetes::Kind::Gke => todo!(), // TODO(benjaminch): GKE integration
+            cloud_provider::kubernetes::Kind::Gke => {
+                let options =
+                    serde_json::from_value::<cloud_provider::gcp::kubernetes::io::GkeOptions>(self.options.clone())
+                        .expect("What's wronnnnng -- JSON Options payload for GCP is not the expected one")
+                        .try_into()
+                        .map_err(|e: String| {
+                            Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
+                        })?;
+                match Gke::new(
+                    context.clone(),
+                    &self.id,
+                    self.long_id,
+                    &self.name,
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    GcpRegion::from_str(self.region.as_str()).unwrap_or_else(|_| {
+                        panic!(
+                            "cannot parse `{}`, it doesn't seem to be a valid GCP region",
+                            self.region.as_str()
+                        )
+                    }),
+                    cloud_provider,
+                    dns_provider,
+                    options,
+                    logger,
+                    metrics_registry,
+                    self.advanced_settings.clone(),
+                    decoded_helm_charts_override,
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
             cloud_provider::kubernetes::Kind::EksSelfManaged => todo!(), // TODO: BYOK integration
             cloud_provider::kubernetes::Kind::GkeSelfManaged => todo!(), // TODO: BYOK integration
             cloud_provider::kubernetes::Kind::ScwSelfManaged => todo!(), // TODO: BYOK integration
@@ -463,31 +520,41 @@ impl ContainerRegistry {
                 )
                 .ok()?,
             )),
-            container_registry::Kind::GoogleCr => Some(Box::new(
-                GoogleArtifactRegistry::new(
-                    context,
-                    self.id.as_str(),
-                    self.long_id,
-                    self.name.as_str(),
-                    self.options.gcp_project_id.as_ref()?.as_str(),
-                    GcpRegion::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
-                        panic!(
-                            "cannot parse `{}`, it doesn't seem to be a valid GCP region",
-                            self.options.region.as_deref().unwrap_or_default()
-                        )
-                    }),
-                    Credentials::new(self.options.gcp_credentials.as_ref()?.to_string()),
-                    Arc::new(
-                        ArtifactRegistryService::new(
-                            Credentials::new(self.options.gcp_credentials.as_ref()?.to_string()),
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                        )
-                        .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
-                    ),
+            container_registry::Kind::GcpArtifactRegistry => {
+                let credentials = JsonCredentials::try_from(
+                    self.options
+                        .gcp_credentials
+                        .clone()
+                        .unwrap_or_else(|| panic!("gcp_credentials not set",)),
                 )
-                .ok()?,
-            )),
+                .unwrap_or_else(|_| panic!("Cannot parse gcp_credentials",));
+
+                Some(Box::new(
+                    GoogleArtifactRegistry::new(
+                        context,
+                        self.id.as_str(),
+                        self.long_id,
+                        self.name.as_str(),
+                        credentials.project_id.as_str(),
+                        GcpRegion::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
+                            panic!(
+                                "cannot parse `{}`, it doesn't seem to be a valid GCP region",
+                                self.options.region.as_deref().unwrap_or_default()
+                            )
+                        }),
+                        credentials.clone(),
+                        Arc::new(
+                            ArtifactRegistryService::new(
+                                credentials.clone(),
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                            )
+                            .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
+                        ),
+                    )
+                    .ok()?,
+                ))
+            }
         }
     }
 }
@@ -547,6 +614,7 @@ impl DnsProvider {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Options {
@@ -565,8 +633,10 @@ pub struct Options {
     #[derivative(Debug = "ignore")]
     scaleway_secret_key: Option<String>,
     #[derivative(Debug = "ignore")]
-    gcp_credentials: Option<String>,
-    gcp_project_id: Option<String>,
+    #[serde(alias = "json_credentials")]
+    #[serde_as(as = "JsonString")] // Allow to deserialize string field to its struct counterpart
+    #[serde(default)]
+    gcp_credentials: Option<JsonCredentialsIo>,
     #[derivative(Debug = "ignore")]
     token: Option<String>,
     region: Option<String>,

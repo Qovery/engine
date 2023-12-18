@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ObjectStorageError {
+    #[error("Cannot instantiate client: `{raw_error_message}`.")]
+    CannotInstantiateClient { raw_error_message: String },
     #[error("Quotas exceeded while performing action on `{bucket_name:?}`: {raw_error_message:?}.")]
     QuotasExceeded {
         bucket_name: String,

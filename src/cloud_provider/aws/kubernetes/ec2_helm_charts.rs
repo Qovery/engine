@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
+use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
     UpdateStrategy,
@@ -21,6 +21,7 @@ use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::Qover
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+    VpcQoveryNetworkMode,
 };
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
@@ -79,7 +80,6 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
 }
@@ -319,6 +319,9 @@ pub fn ec2_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         false, // no metrics history on EC2 ATM
         get_chart_overrride_fn.clone(),
+        None,
+        None,
+        None,
     )
     .to_common_helm_chart()?;
 

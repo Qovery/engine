@@ -95,16 +95,12 @@ impl CloudProvider for Scaleway {
         None
     }
 
-    fn token(&self) -> &str {
-        todo!()
-    }
-
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         // TODO(benjaminch): To be implemented
         Ok(())
     }
 
-    fn zones(&self) -> &Vec<String> {
+    fn zones(&self) -> Vec<String> {
         todo!()
     }
 

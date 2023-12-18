@@ -1,4 +1,3 @@
-use core::fmt;
 use k8s_openapi::api::apps::v1::DaemonSet;
 use kube::api::{Patch, PatchParams};
 use kube::Api;
@@ -24,13 +23,14 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
-use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
 use crate::cloud_provider::models::{
     CpuArchitecture, KubernetesClusterAction, NodeGroups, NodeGroupsFormat, NodeGroupsWithDesiredState,
+    VpcCustomRoutingTable, VpcQoveryNetworkMode,
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
@@ -44,7 +44,6 @@ use crate::cmd::terraform::{
     terraform_init_validate_plan_apply, terraform_init_validate_state_list, TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Features;
@@ -84,24 +83,6 @@ static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::ne
 static AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::new(|| ChronoDuration::minutes(15));
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VpcQoveryNetworkMode {
-    WithNatGateways,
-    WithoutNatGateways,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VpcCustomRoutingTable {
-    description: String,
-    destination: String,
-    target: String,
-}
-
-impl fmt::Display for VpcQoveryNetworkMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Options {
@@ -191,11 +172,11 @@ fn aws_zones(
     zones: Vec<String>,
     region: &AwsRegion,
     event_details: &EventDetails,
-) -> Result<Vec<AwsZones>, Box<EngineError>> {
+) -> Result<Vec<AwsZone>, Box<EngineError>> {
     let mut aws_zones = vec![];
 
     for zone in zones {
-        match AwsZones::from_string(zone.to_string()) {
+        match AwsZone::from_string(zone.to_string()) {
             Ok(x) => aws_zones.push(x),
             Err(e) => {
                 return Err(Box::new(EngineError::new_unsupported_zone(
@@ -238,19 +219,9 @@ fn check_odd_subnets(
     Ok(subnet_block.len() / 2)
 }
 
-fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> String {
-    let managed_dns_resolvers = dns_provider
-        .resolvers()
-        .iter()
-        .map(|x| format!("{}", x.clone()))
-        .collect::<Vec<_>>();
-
-    terraform_list_format(managed_dns_resolvers)
-}
-
 fn tera_context(
     kubernetes: &dyn Kubernetes,
-    zones: &[AwsZones],
+    zones: &[AwsZone],
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
     eks_upgrade_timeout_in_min: ChronoDuration,
@@ -417,7 +388,14 @@ fn tera_context(
         terraform_list_format(vec![kubernetes.dns_provider().domain().to_string()]);
     let managed_dns_domains_root_terraform_format =
         terraform_list_format(vec![kubernetes.dns_provider().domain().root_domain().to_string()]);
-    let managed_dns_resolvers_terraform_format = managed_dns_resolvers_terraform_format(kubernetes.dns_provider());
+    let managed_dns_resolvers_terraform_format = terraform_list_format(
+        kubernetes
+            .dns_provider()
+            .resolvers()
+            .iter()
+            .map(|x| x.clone().to_string())
+            .collect(),
+    );
 
     context.insert("managed_dns", &managed_dns_list);
     context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
@@ -617,21 +595,6 @@ fn tera_context(
     context.insert(
         "aws_iam_user_mapper_sso_role_arn",
         &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
-    );
-
-    context.insert(
-        "nginx_hpa_minimum_replicas",
-        &kubernetes.advanced_settings().nginx_hpa_min_number_instances,
-    );
-    context.insert(
-        "nginx_hpa_maximum_replicas",
-        &kubernetes.advanced_settings().nginx_hpa_max_number_instances,
-    );
-    context.insert(
-        "nginx_hpa_target_cpu_utilization_percentage",
-        &kubernetes
-            .advanced_settings()
-            .nginx_hpa_cpu_utilization_percentage_threshold,
     );
 
     // EKS Addons
@@ -894,7 +857,7 @@ fn create(
     kubernetes: &dyn Kubernetes,
     kubernetes_long_id: uuid::Uuid,
     template_directory: &str,
-    aws_zones: &[AwsZones],
+    aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), Box<EngineError>> {
@@ -1239,6 +1202,11 @@ fn create(
         Some(&kubeconfig_path),
     );
 
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
+    ));
+
     // kubernetes helm deployments on the cluster
     let kubeconfig_path = Path::new(&kubeconfig_path);
 
@@ -1306,8 +1274,13 @@ fn create(
                 ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
-                managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
-                    kubernetes.dns_provider(),
+                managed_dns_resolvers_terraform_format: terraform_list_format(
+                    kubernetes
+                        .dns_provider()
+                        .resolvers()
+                        .iter()
+                        .map(|x| x.clone().to_string())
+                        .collect(),
                 ),
                 managed_dns_root_domain_helm_format: kubernetes
                     .dns_provider()
@@ -1320,7 +1293,6 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
-                disable_pleco: kubernetes.context().disable_pleco(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             eks_aws_helm_charts(
@@ -1355,8 +1327,13 @@ fn create(
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
                 managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
-                managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
-                    kubernetes.dns_provider(),
+                managed_dns_resolvers_terraform_format: terraform_list_format(
+                    kubernetes
+                        .dns_provider()
+                        .resolvers()
+                        .iter()
+                        .map(|x| x.clone().to_string())
+                        .collect(),
                 ),
                 managed_dns_root_domain_helm_format: kubernetes
                     .dns_provider()
@@ -1369,7 +1346,6 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
-                disable_pleco: kubernetes.context().disable_pleco(),
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
@@ -1478,7 +1454,7 @@ fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
 fn pause(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
-    aws_zones: &[AwsZones],
+    aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), Box<EngineError>> {
@@ -1685,7 +1661,7 @@ fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
 fn delete(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
-    aws_zones: &[AwsZones],
+    aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), Box<EngineError>> {

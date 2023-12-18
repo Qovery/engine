@@ -1,7 +1,6 @@
 mod helm_charts;
 pub mod node;
 
-use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
@@ -36,6 +35,7 @@ use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
+use crate::models::ToCloudProviderFormat;
 use crate::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -116,7 +116,7 @@ impl KapsuleOptions {
         qovery_api_url: String,
         qovery_grpc_url: String,
         qovery_engine_url: String,
-        qoverry_cluster_jwt_token: String,
+        qovery_cluster_jwt_token: String,
         qovery_ssh_key: String,
         grafana_admin_user: String,
         grafana_admin_password: String,
@@ -130,7 +130,7 @@ impl KapsuleOptions {
             qovery_api_url,
             qovery_grpc_url,
             qovery_engine_url,
-            jwt_token: qoverry_cluster_jwt_token,
+            jwt_token: qovery_cluster_jwt_token,
             qovery_ssh_key,
             user_ssh_keys: vec![],
             grafana_admin_user,
@@ -478,7 +478,13 @@ impl Kapsule {
         let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
         let managed_dns_domains_root_terraform_format =
             terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
-        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
+        let managed_dns_resolvers_terraform_format = terraform_list_format(
+            self.dns_provider()
+                .resolvers()
+                .iter()
+                .map(|x| x.clone().to_string())
+                .collect(),
+        );
 
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
@@ -544,7 +550,12 @@ impl Kapsule {
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
         // TLS
-        context.insert("acme_server_url", &self.lets_encrypt_url());
+        context.insert(
+            "acme_server_url",
+            LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster())
+                .acme_url()
+                .as_str(),
+        );
 
         // Vault
         context.insert("vault_auth_method", "none");
@@ -586,18 +597,6 @@ impl Kapsule {
         // Advanced settings
         context.insert("load_balancer_size", &self.advanced_settings().load_balancer_size);
         context.insert("resource_expiration_in_seconds", &self.advanced_settings().pleco_resources_ttl);
-        context.insert(
-            "nginx_hpa_minimum_replicas",
-            &self.advanced_settings().nginx_hpa_min_number_instances,
-        );
-        context.insert(
-            "nginx_hpa_maximum_replicas",
-            &self.advanced_settings().nginx_hpa_max_number_instances,
-        );
-        context.insert(
-            "nginx_hpa_target_cpu_utilization_percentage",
-            &self.advanced_settings().nginx_hpa_cpu_utilization_percentage_threshold,
-        );
 
         // Needed to resolve https://qovery.atlassian.net/browse/ENG-1621
         // Scaleway added a new constraint on scaleway_k8s_cluster to be linked to a private network
@@ -646,25 +645,6 @@ impl Kapsule {
         context.insert("create_private_network", &create_private_network);
 
         Ok(context)
-    }
-
-    fn managed_dns_resolvers_terraform_format(&self) -> String {
-        let managed_dns_resolvers: Vec<String> = self
-            .dns_provider
-            .resolvers()
-            .iter()
-            .map(|x| x.clone().to_string())
-            .collect();
-
-        terraform_list_format(managed_dns_resolvers)
-    }
-
-    fn lets_encrypt_url(&self) -> String {
-        match &self.context.is_test_cluster() {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
-        }
-        .to_string()
     }
 
     fn create(&self) -> Result<(), Box<EngineError>> {
@@ -790,7 +770,6 @@ impl Kapsule {
 
         // push config file to object storage
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
-        let kubeconfig_path = Path::new(kubeconfig_path);
         let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
@@ -819,7 +798,7 @@ impl Kapsule {
             self.cloud_provider.secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.region().to_string(),
-            self.zone().to_string(),
+            self.default_zone().to_string(),
             None,
             cluster_endpoint,
             self.kind(),
@@ -1039,7 +1018,13 @@ impl Kapsule {
             self.context.is_feature_enabled(&Features::Grafana),
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
-            self.managed_dns_resolvers_terraform_format(),
+            terraform_list_format(
+                self.dns_provider()
+                    .resolvers()
+                    .iter()
+                    .map(|x| x.clone().to_string())
+                    .collect(),
+            ),
             self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
@@ -1605,15 +1590,11 @@ impl Kubernetes for Kapsule {
     }
 
     fn region(&self) -> &str {
-        self.zone.region_str()
+        self.zone.to_cloud_provider_format()
     }
 
-    fn zone(&self) -> &str {
-        self.zone.as_str()
-    }
-
-    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
-        None
+    fn zones(&self) -> Option<Vec<&str>> {
+        Some(vec![self.zone.as_str()])
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {

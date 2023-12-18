@@ -1,6 +1,7 @@
-use crate::cloud_provider::gcp::regions::GcpRegion;
+use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::container_registry::{DockerImage, Repository};
-use crate::models::gcp::{Credentials, CredentialsError};
+use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::models::gcp::{CredentialsError, JsonCredentials};
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::{Bucket, BucketRegion};
 use crate::runtime::block_on;
@@ -20,9 +21,15 @@ use std::time::Duration;
 /// Keeping it isolated prevent from high coupling with third party crate
 
 pub fn new_gcp_credentials_file_from_credentials(
-    credentials: Credentials,
+    credentials: JsonCredentials,
 ) -> Result<CredentialsFile, CredentialsError> {
-    block_on(CredentialsFile::new_from_str(credentials.to_cloud_provider_format())).map_err(|e| {
+    let credentials_json_str = serde_json::to_string(&JsonCredentialsIo::from(credentials)).map_err(|e| {
+        CredentialsError::CannotCreateCredentials {
+            raw_error_message: e.to_string(),
+        }
+    })?;
+
+    block_on(CredentialsFile::new_from_str(&credentials_json_str)).map_err(|e| {
         CredentialsError::CannotCreateCredentials {
             raw_error_message: e.to_string(),
         }

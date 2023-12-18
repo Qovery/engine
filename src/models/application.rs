@@ -156,7 +156,7 @@ impl<T: CloudProvider> Application<T> {
                 long_id: *kubernetes.long_id(),
                 name: kubernetes.name().to_string(),
                 region: kubernetes.region().to_string(),
-                zone: kubernetes.zone().to_string(),
+                zone: kubernetes.default_zone().to_string(),
             },
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
