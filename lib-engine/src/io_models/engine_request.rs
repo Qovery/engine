@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use serde_with::json::JsonString;
-use serde_with::serde_as;
 
 use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
@@ -614,7 +612,6 @@ impl DnsProvider {
     }
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Options {
@@ -634,12 +631,29 @@ pub struct Options {
     scaleway_secret_key: Option<String>,
     #[derivative(Debug = "ignore")]
     #[serde(alias = "json_credentials")]
-    #[serde_as(as = "JsonString")] // Allow to deserialize string field to its struct counterpart
+    #[serde(deserialize_with = "gcp_credentials_from_str")] // Allow to deserialize string field to its struct counterpart
     #[serde(default)]
     gcp_credentials: Option<JsonCredentialsIo>,
     #[derivative(Debug = "ignore")]
     token: Option<String>,
     region: Option<String>,
+}
+
+/// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
+fn gcp_credentials_from_str<'de, D>(
+    deserializer: D,
+) -> Result<Option<crate::models::gcp::io::JsonCredentials>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let gcp_credentials_option: Option<String> = Option::deserialize(deserializer)?;
+    match gcp_credentials_option {
+        Some(c) => match crate::models::gcp::io::JsonCredentials::try_new_from_json_str(&c) {
+            Ok(credentials) => Ok(Some(credentials)),
+            Err(e) => Err(de::Error::custom(e.to_string())),
+        },
+        None => Ok(None),
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
