@@ -1590,7 +1590,7 @@ impl Kubernetes for Kapsule {
     }
 
     fn region(&self) -> &str {
-        self.zone.to_cloud_provider_format()
+        self.zone.region().as_str()
     }
 
     fn zones(&self) -> Option<Vec<&str>> {
