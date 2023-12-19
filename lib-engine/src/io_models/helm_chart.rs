@@ -80,8 +80,6 @@ pub struct HelmChartAdvancedSettings {
 #[serde(rename_all = "snake_case")]
 pub enum HelmChartSource {
     Repository {
-        url: Url,
-        credentials: Option<HelmCredentials>,
         engine_helm_registry: Box<Registry>,
         skip_tls_verify: bool,
         chart_name: String,
@@ -147,15 +145,11 @@ impl HelmChart {
     ) -> models::helm_chart::HelmChartSource {
         match src {
             HelmChartSource::Repository {
-                url,
-                credentials,
                 engine_helm_registry,
                 skip_tls_verify,
                 chart_name,
                 chart_version,
             } => models::helm_chart::HelmChartSource::Repository {
-                url,
-                credentials,
                 engine_helm_registry,
                 skip_tls_verify,
                 chart_name,
@@ -476,11 +470,6 @@ fn test_helm_deserialization_repository_source() {
     assert_eq!(
         helm_chart.chart_source,
         HelmChartSource::Repository {
-            url: Url::parse("oci://default.com/").unwrap(),
-            credentials: Some(HelmCredentials {
-                login: "mon_nom".to_string(),
-                password: "toto".to_string()
-            }),
             chart_name: "name of chart".to_string(),
             chart_version: "version of chart".to_string(),
             skip_tls_verify: false,
