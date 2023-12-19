@@ -2,10 +2,8 @@ use crate::cloud_provider::gcp::kubernetes::{GkeOptions as GkeOptionsModel, VpcM
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::models::gcp::io::JsonCredentials;
 use crate::models::gcp::JsonCredentials as GkeJsonCredentials;
-use serde_derive::{Deserialize, Serialize};
-use serde_with::json::JsonString;
-use serde_with::serde_as;
-use time::format_description::well_known::Rfc3339;
+use serde::{de, Deserialize, Deserializer, Serialize};
+use time::macros::format_description;
 use time::Time;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -26,7 +24,6 @@ impl From<VpcMode> for GkeVpcMode {
     }
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct GkeOptions {
     // Qovery
@@ -44,7 +41,8 @@ pub struct GkeOptions {
 
     // GCP
     #[serde(alias = "json_credentials")]
-    #[serde_as(as = "JsonString")]
+    #[serde(deserialize_with = "gcp_credentials_from_str")]
+    // Allow to deserialize string field to its struct counterpart
     pub gcp_credentials: JsonCredentials,
 
     // VPC
@@ -57,6 +55,18 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+}
+
+/// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
+fn gcp_credentials_from_str<'de, D>(deserializer: D) -> Result<JsonCredentials, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let gcp_credentials: String = String::deserialize(deserializer)?;
+    match JsonCredentials::try_new_from_json_str(&gcp_credentials) {
+        Ok(credentials) => Ok(credentials),
+        Err(e) => Err(de::Error::custom(e.to_string())),
+    }
 }
 
 impl TryFrom<GkeOptions> for GkeOptionsModel {
@@ -77,13 +87,17 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
                 .map_err(|e| format!("Cannot parse JSON credentials: {e}"))?,
             value.vpc_mode.into(),
             value.tls_email_report,
-            Time::parse(value.cluster_maintenance_start_time.as_str(), &Rfc3339)
-                .map_err(|_e| "Cannot parse cluster_maintenance_start_time")?,
+            Time::parse(
+                value.cluster_maintenance_start_time.as_str(),
+                format_description!("[hour]:[minute]Z"),
+            )
+            .map_err(|_e| "Cannot parse cluster_maintenance_start_time")?,
             match value.cluster_maintenance_end_time {
                 None => None,
-                Some(t) => {
-                    Some(Time::parse(t.as_str(), &Rfc3339).map_err(|_e| "Cannot parse cluster_maintenance_end_time")?)
-                }
+                Some(t) => Some(
+                    Time::parse(t.as_str(), format_description!("[hour]:[minute]Z"))
+                        .map_err(|_e| "Cannot parse cluster_maintenance_end_time")?,
+                ),
             },
         ))
     }

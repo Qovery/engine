@@ -35,7 +35,6 @@ use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
-use crate::models::ToCloudProviderFormat;
 use crate::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -1590,7 +1589,13 @@ impl Kubernetes for Kapsule {
     }
 
     fn region(&self) -> &str {
-        self.zone.to_cloud_provider_format()
+        match self.zone {
+            ScwZone::Paris1 => "fr-par",
+            ScwZone::Paris2 => "fr-par",
+            ScwZone::Paris3 => "fr-par",
+            ScwZone::Amsterdam1 => "nl-ams",
+            ScwZone::Warsaw1 => "pl-waw",
+        }
     }
 
     fn zones(&self) -> Option<Vec<&str>> {
