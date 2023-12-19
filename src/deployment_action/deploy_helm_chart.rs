@@ -359,15 +359,15 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             chart_name,
             engine_helm_registry,
             chart_version,
-            url: repository,
             skip_tls_verify,
             ..
         } => {
             fs::create_dir(this.chart_workspace_directory())
                 .map_err(|e| to_error(format!("Cannot create destination directory for chart due to {}", e)))?;
 
+            let repository_url = engine_helm_registry.get_url();
             let url_without_password = {
-                let mut url = repository.clone();
+                let mut url = repository_url.clone();
                 let _ = url.set_password(None);
                 url
             };
@@ -379,7 +379,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             target
                 .helm
                 .download_chart(
-                    repository,
+                    &repository_url,
                     engine_helm_registry,
                     chart_name,
                     chart_version,
@@ -411,7 +411,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
                 .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {}", e)))?;
 
-            fs::rename(&tmpdir.path().join(root_path), this.chart_workspace_directory())
+            fs::rename(tmpdir.path().join(root_path), this.chart_workspace_directory())
                 .map_err(|e| to_error(format!("Cannot move helm chart directory due to {}", e)))?;
         }
     }
