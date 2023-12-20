@@ -6,7 +6,7 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmCredentials, HelmRawValues};
+use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmRawValues};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::models::types::CloudProvider;
 use crate::utilities::to_short_id;
@@ -339,8 +339,6 @@ where
 
 pub enum HelmChartSource {
     Repository {
-        url: Url,
-        credentials: Option<HelmCredentials>,
         engine_helm_registry: Box<Registry>,
         skip_tls_verify: bool,
         chart_name: String,
