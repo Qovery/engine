@@ -208,7 +208,6 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
                 format!("qovery.com/service-id: {}", service_id),
                 format!("qovery.com/environment-id: {}", environment_id),
                 format!("qovery.com/project-id: {}", project_id),
-                format!("qovery.com/service-version: {}", service_version),
             ],
         ),
         (
@@ -217,6 +216,10 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect_vec(),
+        ),
+        (
+            "qovery.annotations.service",
+            vec![format!("qovery.com/service-version: {}", service_version)],
         ),
         ("qovery.service.id", vec![service_id.to_string()]),
         ("qovery.service.version", vec![service_version.to_string()]),
@@ -751,6 +754,9 @@ controller:
     annotations:
       qovery.annotations.loadbalancer
 
+  annotations:
+    - qovery.annotations.service
+
   # Configures the ports the nginx-controller listens on
   containerPort:
     http: 80
@@ -799,11 +805,13 @@ controller:
     - qovery.com/service-id: 00000000-0000-0000-0000-000000000000
     - qovery.com/environment-id: 11111111-1111-1111-1111-111111111111
     - qovery.com/project-id: 22222222-2222-2222-2222-222222222222
-    - qovery.com/service-version: 42
 
   loadBalancer:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+  annotations:
+    - qovery.com/service-version: 42
 
   # Configures the ports the nginx-controller listens on
   containerPort:
