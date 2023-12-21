@@ -470,6 +470,10 @@ impl<T: CloudProvider> Service for Router<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         vec![]
     }
+
+    fn get_passwords(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 pub trait RouterService: Service + DeploymentAction + ToTeraContext + Send {

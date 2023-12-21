@@ -395,6 +395,20 @@ impl<T: CloudProvider> Service for Container<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
+
+    fn get_passwords(&self) -> Vec<String> {
+        if let Some(password) = self.source.registry.get_url_with_credentials().password() {
+            let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
+
+            if let Some(decoded) = decoded_password {
+                vec![password.to_string(), decoded]
+            } else {
+                vec![password.to_string()]
+            }
+        } else {
+            vec![]
+        }
+    }
 }
 
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
