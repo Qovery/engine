@@ -1,3 +1,7 @@
+global:
+  leaderElection:
+    namespace: set-by-engine-code
+
 installCRDs: true
 
 startupapicheck:

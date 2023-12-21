@@ -546,7 +546,7 @@ mod test {
 
         async fn update_cluster_credentials(
             &self,
-            request: Request<ClusterCredentialsUpdate>,
+            _request: Request<ClusterCredentialsUpdate>,
         ) -> Result<Response<()>, Status> {
             Err(Status::unimplemented("Not implemented"))
         }

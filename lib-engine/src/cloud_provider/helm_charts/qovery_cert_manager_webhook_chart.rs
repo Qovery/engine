@@ -17,6 +17,8 @@ pub struct QoveryCertManagerWebhookChart {
     qovery_dns_config: QoveryDnsConfig,
     chart_resources: HelmChartResources,
     update_strategy: UpdateStrategy,
+    namespace: HelmChartNamespaces,
+    cert_manager_namespace: HelmChartNamespaces,
 }
 
 impl QoveryCertManagerWebhookChart {
@@ -25,6 +27,8 @@ impl QoveryCertManagerWebhookChart {
         qovery_dns_config: QoveryDnsConfig,
         chart_resources: HelmChartResourcesConstraintType,
         update_strategy: UpdateStrategy,
+        namespace: HelmChartNamespaces,
+        cert_manager_namespace: HelmChartNamespaces,
     ) -> Self {
         QoveryCertManagerWebhookChart {
             chart_path: HelmChartPath::new(
@@ -48,6 +52,8 @@ impl QoveryCertManagerWebhookChart {
             },
             qovery_dns_config,
             update_strategy,
+            namespace,
+            cert_manager_namespace,
         }
     }
 
@@ -61,7 +67,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryCertManagerWebhookChart::chart_name(),
-                namespace: HelmChartNamespaces::CertManager,
+                namespace: self.namespace,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
@@ -79,7 +85,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                     },
                     ChartSetValue {
                         key: "certManager.namespace".to_string(),
-                        value: HelmChartNamespaces::CertManager.to_string(),
+                        value: self.cert_manager_namespace.to_string(),
                     },
                     // Resources
                     ChartSetValue {
@@ -135,7 +141,7 @@ impl ChartInstallationChecker for QoveryCertManagerWebhookChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::UpdateStrategy;
+    use crate::cloud_provider::helm::{HelmChartNamespaces, UpdateStrategy};
     use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -159,6 +165,8 @@ mod tests {
             },
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::CertManager,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -192,6 +200,8 @@ mod tests {
             },
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::CertManager,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -229,6 +239,8 @@ mod tests {
             },
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::CertManager,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

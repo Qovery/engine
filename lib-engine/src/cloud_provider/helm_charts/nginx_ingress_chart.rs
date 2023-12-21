@@ -26,6 +26,7 @@ pub struct NginxIngressChart {
     nginx_hpa_minimum_replicas: Option<u32>,
     nginx_hpa_maximum_replicas: Option<u32>,
     nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
+    namespace: HelmChartNamespaces,
 }
 
 impl NginxIngressChart {
@@ -38,6 +39,7 @@ impl NginxIngressChart {
         nginx_hpa_minimum_replicas: Option<u32>,
         nginx_hpa_maximum_replicas: Option<u32>,
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
+        namespace: HelmChartNamespaces,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -73,6 +75,7 @@ impl NginxIngressChart {
             nginx_hpa_minimum_replicas,
             nginx_hpa_maximum_replicas,
             nginx_hpa_target_cpu_utilization_percentage,
+            namespace,
         }
     }
 
@@ -146,7 +149,7 @@ defaultBackend:
             "default_backend_resources_requests_memory",
             &self.default_backend_resources.request_memory.to_string(),
         );
-        let rendered_nginx_overrride = ChartValuesGenerated::new(
+        let rendered_nginx_override = ChartValuesGenerated::new(
             "qovery_nginx_ingress".to_string(),
             tera.render("nginx_ingress_override", &context)
                 .map_err(|e| HelmChartError::RenderingError {
@@ -193,14 +196,14 @@ defaultBackend:
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
                 path: self.chart_path.to_string(),
-                namespace: HelmChartNamespaces::NginxIngress,
+                namespace: self.namespace,
                 // Because of NLB, svc can take some time to start
                 timeout_in_seconds: 300,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,
                 yaml_files_content: {
                     // order matters: last one overrides previous ones, so customer override should be last
-                    let mut x = vec![rendered_nginx_overrride];
+                    let mut x = vec![rendered_nginx_override];
                     if let Some(customer_helm_chart_override) = self.customer_helm_chart_override.clone() {
                         x.push(customer_helm_chart_override.to_chart_values_generated());
                     };
@@ -244,6 +247,7 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 mod tests {
     use strum::IntoEnumIterator;
 
+    use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
     use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
@@ -277,6 +281,7 @@ mod tests {
             Some(1),
             Some(10),
             Some(50),
+            HelmChartNamespaces::NginxIngress,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -310,6 +315,7 @@ mod tests {
             Some(1),
             Some(10),
             Some(50),
+            HelmChartNamespaces::NginxIngress,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -346,6 +352,7 @@ mod tests {
             Some(1),
             Some(10),
             Some(50),
+            HelmChartNamespaces::NginxIngress,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -389,6 +396,7 @@ mod tests {
             None,
             None,
             None,
+            HelmChartNamespaces::NginxIngress,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

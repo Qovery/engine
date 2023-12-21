@@ -172,6 +172,7 @@ pub fn ec2_aws_helm_charts(
             QoveryStorageType::Cold,
             QoveryStorageType::Nvme,
         ]),
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -183,6 +184,7 @@ pub fn ec2_aws_helm_charts(
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
+        HelmChartNamespaces::KubeSystem,
     );
 
     let registry_creds = CommonChart {
@@ -235,6 +237,7 @@ pub fn ec2_aws_helm_charts(
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::Recreate,
         false,
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -251,6 +254,8 @@ pub fn ec2_aws_helm_charts(
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
                 }),
                 UpdateStrategy::Recreate,
+                HelmChartNamespaces::CertManager,
+                HelmChartNamespaces::CertManager,
             )
             .to_common_helm_chart()?,
         );
@@ -295,6 +300,8 @@ pub fn ec2_aws_helm_charts(
         UpdateStrategy::Recreate,
         get_chart_overrride_fn.clone(),
         false,
+        HelmChartNamespaces::CertManager,
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -304,6 +311,7 @@ pub fn ec2_aws_helm_charts(
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        HelmChartNamespaces::CertManager,
     )
     .to_common_helm_chart()?;
 
@@ -322,6 +330,7 @@ pub fn ec2_aws_helm_charts(
         None,
         None,
         None,
+        HelmChartNamespaces::NginxIngress,
     )
     .to_common_helm_chart()?;
 

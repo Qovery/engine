@@ -39,6 +39,12 @@ variable "resource_expiration_in_seconds" {
 {% endif %}
 
 # GCP specific
+variable "service_account_email" {
+  description = "Service account email"
+  default     = "{{ gcp_json_credentials_client_email }}"
+  type        = string
+}
+
 variable "project_id" {
   description = "The project ID to host the cluster in (required)"
   default     = "{{ gcp_project_id }}"
@@ -276,7 +282,7 @@ variable "configure_ip_masq" {
 variable "grant_registry_access" {
   type        = bool
   description = "Grants created cluster-specific service account storage.objectViewer and artifactregistry.reader roles."
-  default     = false
+  default     = true
 }
 
 variable "registry_project_ids" {

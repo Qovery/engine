@@ -15,6 +15,7 @@ pub struct CertManagerConfigsChart<'a> {
     lets_encrypt_config: &'a LetsEncryptConfig,
     dns_provider_configuration: &'a DnsProviderConfiguration,
     managed_dns_helm_format: String,
+    namespace: HelmChartNamespaces,
 }
 
 impl<'a> CertManagerConfigsChart<'a> {
@@ -23,6 +24,7 @@ impl<'a> CertManagerConfigsChart<'a> {
         lets_encrypt_config: &'a LetsEncryptConfig,
         dns_provider_configuration: &'a DnsProviderConfiguration,
         managed_dns_helm_format: String,
+        namespace: HelmChartNamespaces,
     ) -> Self {
         CertManagerConfigsChart {
             chart_path: HelmChartPath::new(
@@ -38,6 +40,7 @@ impl<'a> CertManagerConfigsChart<'a> {
             lets_encrypt_config,
             dns_provider_configuration,
             managed_dns_helm_format,
+            namespace,
         }
     }
 
@@ -52,11 +55,15 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
             chart_info: ChartInfo {
                 name: CertManagerConfigsChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: HelmChartNamespaces::CertManager,
+                namespace: self.namespace,
                 // TODO: fix backup apply, it makes the chart deployment failed randomly
                 // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "namespace".to_string(),
+                        value: self.namespace.to_string(),
+                    },
                     ChartSetValue {
                         key: "externalDnsProvider".to_string(),
                         value: self.dns_provider_configuration.get_cert_manager_config_name(),
@@ -177,6 +184,7 @@ impl ChartInstallationChecker for CertManagerConfigsChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, LetsEncryptConfig};
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -198,8 +206,13 @@ mod tests {
             api_url_port: "whatever".to_string(),
             api_url_scheme_and_domain: "whatever".to_string(),
         });
-        let chart =
-            CertManagerConfigsChart::new(None, &lets_encrypt_config, &dns_provider_config, "whatever".to_string());
+        let chart = CertManagerConfigsChart::new(
+            None,
+            &lets_encrypt_config,
+            &dns_provider_config,
+            "whatever".to_string(),
+            HelmChartNamespaces::CertManager,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -229,8 +242,13 @@ mod tests {
             api_url_port: "whatever".to_string(),
             api_url_scheme_and_domain: "whatever".to_string(),
         });
-        let chart =
-            CertManagerConfigsChart::new(None, &lets_encrypt_config, &dns_provider_config, "whatever".to_string());
+        let chart = CertManagerConfigsChart::new(
+            None,
+            &lets_encrypt_config,
+            &dns_provider_config,
+            "whatever".to_string(),
+            HelmChartNamespaces::CertManager,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -264,8 +282,13 @@ mod tests {
             api_url_port: "whatever".to_string(),
             api_url_scheme_and_domain: "whatever".to_string(),
         });
-        let chart =
-            CertManagerConfigsChart::new(None, &lets_encrypt_config, &dns_provider_config, "whatever".to_string());
+        let chart = CertManagerConfigsChart::new(
+            None,
+            &lets_encrypt_config,
+            &dns_provider_config,
+            "whatever".to_string(),
+            HelmChartNamespaces::CertManager,
+        );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

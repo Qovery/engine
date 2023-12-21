@@ -1,3 +1,5 @@
+namespace: set-by-engine-code
+
 externalDnsProvider: set-by-engine-code
 managedDns: set-by-engine-code
 
