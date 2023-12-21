@@ -386,6 +386,7 @@ impl EnvironmentTask {
             .chain(environment.helm_charts.iter().map(|x| x.as_service()));
 
         let mut secrets: Vec<String> = vec![];
+        secrets.push(infra_ctx.cloud_provider().secret_access_key());
         for service in services.clone() {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
             secrets.append(
@@ -396,6 +397,7 @@ impl EnvironmentTask {
                     .map(|environment_variable| environment_variable.value.clone())
                     .collect::<Vec<String>>(),
             );
+            secrets.append(&mut service.get_passwords())
         }
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();

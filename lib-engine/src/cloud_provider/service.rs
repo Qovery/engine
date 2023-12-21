@@ -44,6 +44,7 @@ pub trait Service: Send {
     fn build(&self) -> Option<&Build>;
     fn build_mut(&mut self) -> Option<&mut Build>;
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable>;
+    fn get_passwords(&self) -> Vec<String>;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]

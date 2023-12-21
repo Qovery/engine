@@ -311,6 +311,10 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         vec![]
     }
+
+    fn get_passwords(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 // Method Only For all container database

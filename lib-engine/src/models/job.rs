@@ -370,6 +370,21 @@ impl<T: CloudProvider> Service for Job<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
+
+    fn get_passwords(&self) -> Vec<String> {
+        if let ImageSource::Registry { source } = &self.image_source {
+            if let Some(password) = source.registry.get_url_with_credentials().password() {
+                let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
+
+                return if let Some(decoded) = decoded_password {
+                    vec![password.to_string(), decoded]
+                } else {
+                    vec![password.to_string()]
+                };
+            }
+        }
+        vec![]
+    }
 }
 
 pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
