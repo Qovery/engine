@@ -1124,13 +1124,10 @@ impl Helm {
         if let Err(err) = helm_ret {
             error!("Helm error: {:?}", err);
 
-            // Try do define/specify a bit more the message
-            let stderr_msg = format!("{stderr_msgs}: {err}",);
-
             // If the helm command has been canceled by the user, propagate correctly the killed error
             match err {
                 CommandError::TimeoutError(_) => {
-                    return Err(HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg));
+                    return Err(HelmError::Timeout(chart.name.clone(), UPGRADE, err.to_string()));
                 }
                 CommandError::Killed(_) => {
                     return Err(HelmError::Killed(chart.name.clone(), UPGRADE));
@@ -1138,19 +1135,19 @@ impl Helm {
                 _ => {}
             }
 
-            let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
+            let error = if stderr_msgs.contains("another operation (install/upgrade/rollback) is in progress") {
                 HelmError::ReleaseLocked(chart.name.clone())
-            } else if stderr_msg.contains("has been rolled back") {
+            } else if stderr_msgs.contains("has been rolled back") {
                 HelmError::Rollbacked(chart.name.clone(), UPGRADE)
-            } else if stderr_msg.contains("timed out waiting") || stderr_msg.contains("deadline exceeded") {
-                HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
+            } else if stderr_msgs.contains("timed out waiting") || stderr_msgs.contains("deadline exceeded") {
+                HelmError::Timeout(chart.name.clone(), UPGRADE, err.to_string())
             } else {
                 CmdError(
                     chart.name.clone(),
                     UPGRADE,
                     errors::CommandError::new(
                         "Helm upgrade error".to_string(),
-                        Some(stderr_msg),
+                        Some(err.to_string()),
                         Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
                     ),
                 )

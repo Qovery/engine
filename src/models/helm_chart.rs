@@ -314,6 +314,27 @@ impl<T: CloudProvider> Service for HelmChart<T> {
             })
             .collect()
     }
+
+    fn get_passwords(&self) -> Vec<String> {
+        if let HelmChartSource::Repository {
+            engine_helm_registry,
+            skip_tls_verify: _,
+            chart_name: _,
+            chart_version: _,
+        } = &self.chart_source
+        {
+            if let Some(password) = engine_helm_registry.get_url_with_credentials().password() {
+                let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
+
+                return if let Some(decoded) = decoded_password {
+                    vec![password.to_string(), decoded]
+                } else {
+                    vec![password.to_string()]
+                };
+            }
+        }
+        vec![]
+    }
 }
 
 pub trait HelmChartService: Service + DeploymentAction + Send {
