@@ -1,7 +1,8 @@
+pub mod helm_charts;
 pub mod io;
 
 use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::cloud_provider::helm::ChartInfo;
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
@@ -27,6 +28,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::models::domain::ToHelmString;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::ToCloudProviderFormat;
@@ -42,6 +44,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use governor::{Quota, RateLimiter};
+use itertools::Itertools;
 use nonzero_ext::nonzero;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -453,37 +456,38 @@ impl Gke {
             EventMessage::new_from_safe("Preparing GKE cluster deployment.".to_string()),
         ));
 
-        // upgrade cluster instead if required
-        match self.get_kubeconfig_file() {
-            Ok(path) => match is_kubernetes_upgrade_required(
-                path,
-                self.version.clone(),
-                self.cloud_provider.credentials_environment_variables(),
-                event_details.clone(),
-                self.logger(),
-            ) {
-                Ok(kubernetes_upgrade_status) => {
-                    if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                        return self.upgrade_with_status(kubernetes_upgrade_status);
+        if !self.context().is_first_cluster_deployment() {
+            // upgrade cluster instead if required
+            match self.get_kubeconfig_file() {
+                Ok(path) => match is_kubernetes_upgrade_required(
+                    path,
+                    self.version.clone(),
+                    self.cloud_provider.credentials_environment_variables(),
+                    event_details.clone(),
+                    self.logger(),
+                ) {
+                    Ok(kubernetes_upgrade_status) => {
+                        if kubernetes_upgrade_status.required_upgrade_on.is_some() {
+                            return self.upgrade_with_status(kubernetes_upgrade_status);
+                        }
+
+                        self.logger().log(EngineEvent::Info(
+                            event_details.clone(),
+                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                        ))
                     }
-
-                    self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
-                }
-                Err(e) => {
-                    // Log a warning, this error is not blocking
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                        )),
-                    );
-                }
-            },
-            Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
-
-        };
+                    Err(e) => {
+                        // Log a warning, this error is not blocking
+                        self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                            )),
+                        );
+                    }
+                },
+                Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+            };
+        }
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
@@ -634,10 +638,75 @@ impl Gke {
             ))
         }
 
-        // Charts to go here
-        // TODO(benjaminch): add infra charts
+        // kubernetes helm deployments on the cluster
+        let credentials_environment_variables: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|x| (x.0.to_string(), x.1.to_string()))
+            .collect();
 
-        Ok(())
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
+        ));
+
+        let charts_prerequisites = helm_charts::ChartsConfigPrerequisites::new(
+            self.cloud_provider.organization_id().to_string(),
+            self.cloud_provider.organization_long_id(),
+            self.id().to_string(),
+            self.long_id,
+            self.region.clone(),
+            self.cluster_name(),
+            vec![CpuArchitecture::AMD64], // TODO(ENG-1643): GKE integration, introduce ARM
+            "gcp".to_string(),
+            self.context.is_test_cluster(),
+            self.options.gcp_json_credentials.clone(),
+            self.options.qovery_engine_location.clone(),
+            self.context.is_feature_enabled(&Features::LogsHistory),
+            self.context.is_feature_enabled(&Features::MetricsHistory),
+            self.context.is_feature_enabled(&Features::Grafana),
+            self.dns_provider.domain().root_domain().to_string(),
+            self.dns_provider.domain().to_helm_format_string(),
+            terraform_list_format(
+                self.dns_provider()
+                    .resolvers()
+                    .iter()
+                    .map(|x| x.clone().to_string())
+                    .collect(),
+            ),
+            self.dns_provider.domain().root_domain().to_helm_format_string(),
+            self.dns_provider.provider_name().to_string(),
+            LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
+            self.dns_provider().provider_configuration(),
+            self.context.disable_pleco(),
+            self.options.clone(),
+            self.advanced_settings().clone(),
+        );
+
+        let helm_charts_to_deploy = helm_charts::gcp_helm_charts(
+            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+            &charts_prerequisites,
+            Some(&temp_dir),
+            kubeconfig_path,
+            &credentials_environment_variables,
+            &*self.context.qovery_api,
+            self.customer_helm_charts_override(),
+        )
+        .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
+
+        deploy_charts_levels(
+            &self.kube_client()?,
+            kubeconfig_path,
+            credentials_environment_variables
+                .iter()
+                .map(|(l, r)| (l.as_str(), r.as_str()))
+                .collect_vec()
+                .as_slice(),
+            helm_charts_to_deploy,
+            self.context.is_dry_run_deploy(),
+        )
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
     fn configure_kubectl_for_cluster(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
@@ -804,7 +873,12 @@ impl Gke {
 
                     // Namespaces which are not deleteable because managed by GKE
                     // Example error: GKE Warden authz [denied by managed-namespaces-limitation]: the namespace "gke-gmp-system" is managed and the request's verb "delete" is denied
-                    let undeletable_namespaces = ["gke-gmp-system", "gke-managed-filestorecsi", "gmp-public"];
+                    let undeletable_namespaces = [
+                        "gke-gmp-system",
+                        "gke-managed-filestorecsi",
+                        "gmp-public",
+                        "gke-managed-cim",
+                    ];
                     for namespace_to_delete in namespaces_to_delete
                         .into_iter()
                         .filter(|ns| !undeletable_namespaces.contains(ns))
@@ -1172,8 +1246,8 @@ impl Kubernetes for Gke {
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
-        // TODO(benjaminch): GKE integration, to be checked
-        vec![CpuArchitecture::ARM64, CpuArchitecture::AMD64]
+        // TODO(ENG-1643): GKE integration, add ARM support
+        vec![CpuArchitecture::AMD64]
     }
 
     #[named]

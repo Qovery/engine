@@ -26,6 +26,8 @@ pub struct CertManagerChart {
     update_strategy: UpdateStrategy,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
+    namespace: HelmChartNamespaces,
+    leader_election_namespace: HelmChartNamespaces,
 }
 
 impl CertManagerChart {
@@ -38,6 +40,8 @@ impl CertManagerChart {
         update_strategy: UpdateStrategy,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
+        namespace: HelmChartNamespaces,
+        leader_election_namespace: HelmChartNamespaces,
     ) -> CertManagerChart {
         CertManagerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -82,6 +86,8 @@ impl CertManagerChart {
             update_strategy,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
+            namespace,
+            leader_election_namespace,
         }
     }
 
@@ -96,10 +102,14 @@ impl ToCommonHelmChart for CertManagerChart {
             chart_info: ChartInfo {
                 name: CertManagerChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: HelmChartNamespaces::CertManager,
+                namespace: self.namespace,
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(1, 4, 4)),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
+                    ChartSetValue {
+                        key: "global.leaderElection.namespace".to_string(),
+                        value: self.leader_election_namespace.to_string(),
+                    },
                     ChartSetValue {
                         key: "strategy.type".to_string(),
                         value: self.update_strategy.to_string(),
@@ -272,7 +282,7 @@ impl ChartInstallationChecker for CertManagerChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::UpdateStrategy;
+    use crate::cloud_provider::helm::{HelmChartNamespaces, UpdateStrategy};
     use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -304,6 +314,8 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
             false,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -336,6 +348,8 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
             false,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -372,6 +386,8 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             get_cert_manager_chart_override(),
             false,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::KubeSystem,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -33,8 +33,7 @@ pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
-// TODO(benjamin): GKE integration, move to 1.27
-pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_26 {
+pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
     prefix: None,
     patch: None,
     suffix: None,
