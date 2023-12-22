@@ -11,7 +11,7 @@ controller:
     server-tokens: "false"
   ingressClass: nginx-qovery
   extraArgs:
-    default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
+    default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
