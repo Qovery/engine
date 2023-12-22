@@ -5,9 +5,10 @@ use crate::io_models::Action;
 use crate::models;
 use crate::models::aws::AwsRouterExtraSettings;
 use crate::models::aws_ec2::AwsEc2RouterExtraSettings;
+use crate::models::gcp::GcpRouterExtraSettings;
 use crate::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::models::scaleway::ScwRouterExtraSettings;
-use crate::models::types::{AWSEc2, AWS, SCW};
+use crate::models::types::{AWSEc2, AWS, GCP, SCW};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -118,7 +119,19 @@ impl Router {
                 )?);
                 Ok(router)
             }
-            CPKind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            CPKind::Gcp => Ok(Box::new(models::router::Router::<GCP>::new(
+                context,
+                self.long_id,
+                self.name.as_str(),
+                self.kube_name.to_string(),
+                self.action.to_service_action(),
+                self.default_domain.as_str(),
+                custom_domains,
+                routes,
+                GcpRouterExtraSettings {},
+                advanced_settings,
+                |transmitter| context.get_event_details(transmitter),
+            )?)),
         }
     }
 }
