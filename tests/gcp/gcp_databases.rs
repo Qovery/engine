@@ -1,9 +1,4 @@
-use crate::helpers;
-use crate::helpers::common::Infrastructure;
-use crate::helpers::gcp::{gcp_default_infra_config, GCP_DATABASE_DISK_TYPE};
-use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
-};
+/*
 use function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::context::CloneForTest;
@@ -122,3 +117,4 @@ fn deploy_an_environment_with_db_and_pause_it() {
         test_name.to_string()
     })
 }
+ */

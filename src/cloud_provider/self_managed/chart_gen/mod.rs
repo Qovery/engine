@@ -208,7 +208,7 @@ mod tests {
             values_file_content = values_file_content.replace(
                 format!("override_chart: {}", chart.name).as_str(),
                 // use format to have a new line
-                &format!("{}", &string_to_replace),
+                &string_to_replace,
             );
             // update Qovery config to use YAML pointers
             let update_qovery_config = Regex::new(r"'\&(.+)'").unwrap();

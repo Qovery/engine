@@ -2365,7 +2365,7 @@ mod tests {
         }
 
         // K3S
-        for k3s_versions in vec![
+        for k3s_versions in [
             "v1.23.16+k3s1",
             "v1.24.14+k3s1",
             "v1.25.11+k3s1",
@@ -2401,7 +2401,7 @@ mod tests {
                     }),
                     _ => panic!("unsupported k3s version string"),
                 },
-                K8sVersion::from_str(&k3s_versions)
+                K8sVersion::from_str(k3s_versions)
             );
         }
 
@@ -2425,7 +2425,7 @@ mod tests {
         }
 
         // K3S
-        for k3s_version_str in vec![
+        for k3s_version_str in [
             "v1.23.16+k3s1",
             "v1.24.14+k3s1",
             "v1.25.11+k3s1",
@@ -2478,7 +2478,7 @@ mod tests {
         }
 
         // K3S
-        for k3s_version_str in vec![
+        for k3s_version_str in [
             "v1.23.16+k3s1",
             "v1.24.14+k3s1",
             "v1.25.11+k3s1",
