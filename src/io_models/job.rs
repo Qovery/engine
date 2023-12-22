@@ -16,10 +16,11 @@ use crate::io_models::{
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
+use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::job::{ImageSource, JobError, JobService};
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::types::{AWSEc2, AWS, SCW};
+use crate::models::types::{AWSEc2, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -381,7 +382,35 @@ impl Job {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
-            Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.schedule,
+                self.max_nb_restart,
+                Duration::from_secs(self.max_duration_in_sec),
+                self.default_port,
+                self.command_args,
+                self.entrypoint,
+                self.force_trigger,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.advanced_settings,
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                GcpAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?),
         };
 
         Ok(service)

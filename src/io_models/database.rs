@@ -8,8 +8,8 @@ use crate::models;
 use crate::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::models::types::CloudProvider as CloudProviderTrait;
 use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
+use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
@@ -608,7 +608,114 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
-            (Kind::Gcp, _, _) => todo!(), // TODO(benjaminch): GKE integration
+
+            (CPKind::Gcp, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<GCP, Container, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Gcp, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<GCP, Container, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Gcp, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<GCP, Container, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Gcp, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<GCP, Container, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Gcp, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MySQL,
+                GCP::full_name().to_string(),
+            )),
+            (CPKind::Gcp, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, GCP::full_name().to_string()),
+            ),
+            (CPKind::Gcp, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::Redis,
+                GCP::full_name().to_string(),
+            )),
+            (CPKind::Gcp, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MongoDB,
+                GCP::full_name().to_string(),
+            )),
         }
     }
 }

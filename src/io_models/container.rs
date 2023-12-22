@@ -11,9 +11,10 @@ use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::container::{ContainerError, ContainerService};
+use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::types::{AWSEc2, AWS, SCW};
+use crate::models::types::{AWSEc2, AWS, GCP, SCW};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -461,7 +462,35 @@ impl Container {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
-            CPKind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.command_args,
+                self.entrypoint,
+                self.cpu_request_in_mili,
+                self.cpu_limit_in_mili,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.public_domain,
+                self.ports,
+                self.storages.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                GcpAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?),
         };
 
         Ok(service)
