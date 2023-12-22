@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, VpaConfig,
-    VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -20,6 +20,7 @@ pub struct VpaChart {
     updater_resources: HelmChartResources,
     admission_controller_resources: HelmChartResources,
     enable_vpa: bool,
+    namespace: HelmChartNamespaces,
 }
 
 impl VpaChart {
@@ -29,6 +30,7 @@ impl VpaChart {
         updater_resources: HelmChartResourcesConstraintType,
         admission_controller_resources: HelmChartResourcesConstraintType,
         enable_vpa: bool,
+        namespace: HelmChartNamespaces,
     ) -> VpaChart {
         VpaChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -70,6 +72,7 @@ impl VpaChart {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             enable_vpa,
+            namespace,
         }
     }
 
@@ -83,6 +86,7 @@ impl ToCommonHelmChart for VpaChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "vertical-pod-autoscaler".to_string(),
+                namespace: self.namespace,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
@@ -224,6 +228,7 @@ impl ChartInstallationChecker for VpaChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -241,6 +246,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -270,6 +276,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -303,6 +310,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

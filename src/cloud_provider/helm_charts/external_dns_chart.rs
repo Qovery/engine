@@ -1,6 +1,7 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, UpdateStrategy,
-    VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, UpdateStrategy, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -19,6 +20,7 @@ pub struct ExternalDNSChart {
     cluster_id: String,
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
+    namespace: HelmChartNamespaces,
 }
 
 impl ExternalDNSChart {
@@ -29,6 +31,7 @@ impl ExternalDNSChart {
         cluster_id: String,
         update_strategy: UpdateStrategy,
         enable_vpa: bool,
+        namespace: HelmChartNamespaces,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -47,6 +50,7 @@ impl ExternalDNSChart {
             cluster_id,
             update_strategy,
             enable_vpa,
+            namespace,
         }
     }
 
@@ -60,6 +64,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "externaldns".to_string(),
+                namespace: self.namespace,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
@@ -195,7 +200,7 @@ impl ChartInstallationChecker for ExternalDNSChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::UpdateStrategy;
+    use crate::cloud_provider::helm::{HelmChartNamespaces, UpdateStrategy};
     use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -220,6 +225,7 @@ mod tests {
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -254,6 +260,7 @@ mod tests {
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -292,6 +299,7 @@ mod tests {
             "whatever".to_string(),
             UpdateStrategy::RollingUpdate,
             false,
+            HelmChartNamespaces::KubeSystem,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

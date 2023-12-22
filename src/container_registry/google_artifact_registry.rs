@@ -7,6 +7,8 @@ use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
@@ -54,11 +56,12 @@ impl GoogleArtifactRegistry {
             return Err(ContainerRegistryError::InvalidCredentials);
         }
 
+        let project_name = project_id.to_string();
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
-            get_image_name: Box::new(|img_name| img_name.to_string()),
+            get_image_name: Box::new(move |img_name| format!("{}/{img_name}/{img_name}", &project_name.clone())),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
 
@@ -74,6 +77,36 @@ impl GoogleArtifactRegistry {
         })
     }
 
+    fn create_repository_without_exist_check(
+        &self,
+        repository_name: &str,
+        _image_retention_time_in_seconds: u32,
+        resource_ttl: Option<Duration>,
+    ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
+        let creation_date: DateTime<Utc> = Utc::now();
+        self.service
+            .create_repository(
+                &self.project_id,
+                self.region.clone(),
+                repository_name,
+                HashMap::from([
+                    // Tags keys rule: Only hyphens (-), underscores (_), lowercase characters, and numbers are allowed.
+                    // Keys must start with a lowercase character. International characters are allowed.
+                    ("creation_date".to_string(), creation_date.timestamp().to_string()),
+                    (
+                        "ttl".to_string(),
+                        format!("{}", resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                    ),
+                ]),
+            )
+            .map(|r| (r, RepositoryInfo { created: true }))
+            .map_err(|e| ContainerRegistryError::CannotCreateRepository {
+                registry_name: self.name.to_string(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: e.to_string(),
+            })
+    }
+
     fn get_or_create_repository(
         &self,
         repository_name: &str,
@@ -86,8 +119,9 @@ impl GoogleArtifactRegistry {
         }
 
         // create it if it doesn't exist
-        match self.create_repository(repository_name, image_retention_time_in_seconds, resource_ttl) {
-            Ok((repository, _)) => Ok((repository, RepositoryInfo { created: true })),
+        match self.create_repository_without_exist_check(repository_name, image_retention_time_in_seconds, resource_ttl)
+        {
+            Ok((repository, info)) => Ok((repository, info)),
             Err(e) => Err(e),
         }
     }
@@ -158,12 +192,19 @@ impl ContainerRegistry for GoogleArtifactRegistry {
                 self.project_id.as_str(),
                 self.region.clone(),
                 image.repository_name.as_str(),
-                image.name.as_str(),
+                image
+                    .name
+                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .unwrap_or(&image.name),
             )
             .map_err(|e| ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
                 repository_name: image.repository_name.to_string(),
-                image_name: image.name.to_string(),
+                image_name: image
+                    .name
+                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .unwrap_or(&image.name)
+                    .to_string(),
                 raw_error_message: e.to_string(),
             })
     }
@@ -174,7 +215,10 @@ impl ContainerRegistry for GoogleArtifactRegistry {
                 self.project_id.as_str(),
                 self.region.clone(),
                 image.repository_name.as_str(),
-                image.name.as_str(),
+                image
+                    .name
+                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .unwrap_or(&image.name),
                 image.tag.as_str(),
             )
             .is_ok()

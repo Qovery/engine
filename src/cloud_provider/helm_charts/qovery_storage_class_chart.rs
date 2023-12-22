@@ -1,4 +1,6 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError};
+use crate::cloud_provider::helm::{
+    ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError, HelmChartNamespaces,
+};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -33,6 +35,7 @@ impl Display for QoveryStorageType {
 pub struct QoveryStorageClassChart {
     chart_path: HelmChartPath,
     _chart_values_path: HelmChartValuesFilePath, // TODO(benjamin): to be used iinstead of having chart duplicated per cloud providers
+    namespace: HelmChartNamespaces,
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
 }
 
@@ -40,6 +43,7 @@ impl QoveryStorageClassChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
         storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
+        namespace: HelmChartNamespaces,
     ) -> Self {
         QoveryStorageClassChart {
             chart_path: HelmChartPath::new(
@@ -52,6 +56,7 @@ impl QoveryStorageClassChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 QoveryStorageClassChart::chart_name(),
             ),
+            namespace,
             storage_types_to_be_checked_after_install,
         }
     }
@@ -66,6 +71,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryStorageClassChart::chart_name(),
+                namespace: self.namespace,
                 path: self.chart_path.to_string(),
                 ..Default::default()
             },
@@ -127,6 +133,7 @@ impl ChartInstallationChecker for QoveryStorageClassChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::qovery_storage_class_chart::QoveryStorageClassChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -140,7 +147,7 @@ mod tests {
     #[test]
     fn qovery_storage_class_chart_directory_exists_test() {
         // setup:
-        let chart = QoveryStorageClassChart::new(None, HashSet::new());
+        let chart = QoveryStorageClassChart::new(None, HashSet::new(), HelmChartNamespaces::KubeSystem);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -167,7 +174,7 @@ mod tests {
     #[ignore] // TODO(benjaminch): To be activated once moved to values file
     fn qovery_storage_class_chart_values_file_exists_test() {
         // setup:
-        let chart = QoveryStorageClassChart::new(None, HashSet::new());
+        let chart = QoveryStorageClassChart::new(None, HashSet::new(), HelmChartNamespaces::KubeSystem);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -195,7 +202,7 @@ mod tests {
     #[ignore] // TODO(benjaminch): To be activated once moved to values file
     fn qovery_storage_class_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = QoveryStorageClassChart::new(None, HashSet::new());
+        let chart = QoveryStorageClassChart::new(None, HashSet::new(), HelmChartNamespaces::KubeSystem);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

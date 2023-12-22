@@ -9,7 +9,9 @@ use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
-use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
+};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
@@ -152,6 +154,7 @@ pub fn eks_aws_helm_charts(
             QoveryStorageType::Cold,
             QoveryStorageType::Nvme,
         ]),
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -221,6 +224,7 @@ pub fn eks_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         true,
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -244,6 +248,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
+        HelmChartNamespaces::KubeSystem,
     );
 
     // External DNS
@@ -256,6 +261,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
         true,
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -263,8 +269,15 @@ pub fn eks_aws_helm_charts(
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
-            PromtailChart::new(chart_prefix_path, loki_kube_dns_name, get_chart_overrride_fn.clone(), true)
-                .to_common_helm_chart()?,
+            PromtailChart::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                loki_kube_dns_name,
+                get_chart_overrride_fn.clone(),
+                true,
+                HelmChartNamespaces::KubeSystem,
+            )
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -343,6 +356,8 @@ pub fn eks_aws_helm_charts(
                 qovery_dns_config.clone(),
                 HelmChartResourcesConstraintType::ChartDefault,
                 UpdateStrategy::RollingUpdate,
+                HelmChartNamespaces::CertManager,
+                HelmChartNamespaces::CertManager,
             )
             .to_common_helm_chart()?,
         );
@@ -404,6 +419,8 @@ pub fn eks_aws_helm_charts(
         UpdateStrategy::RollingUpdate,
         get_chart_overrride_fn.clone(),
         true,
+        HelmChartNamespaces::CertManager,
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -413,6 +430,7 @@ pub fn eks_aws_helm_charts(
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        HelmChartNamespaces::CertManager,
     )
     .to_common_helm_chart()?;
 
@@ -459,6 +477,7 @@ pub fn eks_aws_helm_charts(
                 .cluster_advanced_settings
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
+        HelmChartNamespaces::NginxIngress,
     )
     .to_common_helm_chart()?;
 

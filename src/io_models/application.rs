@@ -16,8 +16,9 @@ use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
+use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
-use crate::models::types::{AWSEc2, AWS, SCW};
+use crate::models::types::{AWSEc2, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -381,7 +382,34 @@ impl Application {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?)),
-            CPKind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+            CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
+                context,
+                self.long_id,
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.kube_name,
+                self.public_domain,
+                self.ports,
+                self.total_cpus,
+                self.cpu_burst,
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                build,
+                self.command_args,
+                self.entrypoint,
+                self.storage.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                GcpAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?)),
         }
     }
 
@@ -524,6 +552,23 @@ impl Storage {
             long_id: self.long_id,
             name: self.name.clone(),
             storage_type: ScwStorageType::BlockSsd,
+            size_in_gib: self.size_in_gib,
+            mount_point: self.mount_point.clone(),
+            snapshot_retention_in_days: self.snapshot_retention_in_days,
+        }
+    }
+
+    pub fn to_gcp_storage(&self) -> crate::cloud_provider::models::Storage<GcpStorageType> {
+        crate::cloud_provider::models::Storage {
+            id: self.id.clone(),
+            long_id: self.long_id,
+            name: self.name.clone(),
+            storage_type: match self.storage_type {
+                StorageType::SlowHdd => GcpStorageType::Standard,
+                StorageType::Hdd => GcpStorageType::Balanced,
+                StorageType::Ssd => GcpStorageType::SSD,
+                StorageType::FastSsd => GcpStorageType::Extreme,
+            },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,

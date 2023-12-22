@@ -12,6 +12,7 @@ use tera::Context as TeraContext;
 pub struct AWS {}
 pub struct AWSEc2 {}
 pub struct SCW {}
+pub struct GCP {}
 
 // CloudProvider trait allows to derive all the custom type we need per provider,
 // with our marker type defined above to be able to select the correct one

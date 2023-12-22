@@ -1,0 +1,34 @@
+controller:
+  useComponentLabel: true
+  admissionWebhooks:
+    enabled: set-by-engine-code
+  metrics:
+    enabled: set-by-engine-code
+    serviceMonitor:
+      enabled: set-by-engine-code
+  config:
+    proxy-body-size: 100m
+    server-tokens: "false"
+  ingressClass: nginx-qovery
+  extraArgs:
+    default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+
+  autoscaling:
+    enabled: true
+    minReplicas: set-by-engine-code
+    maxReplicas: set-by-engine-code
+    targetCPUUtilizationPercentage: set-by-engine-code
+
+  publishService:
+    enabled: true
+
+  service:
+    enabled: true
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
+    externalTrafficPolicy: "Local"
+    sessionAffinity: ""
+    healthCheckNodePort: 0

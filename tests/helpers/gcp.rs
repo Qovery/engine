@@ -7,6 +7,7 @@ use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::gcp::kubernetes::{Gke, GkeOptions, VpcMode};
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::gcp::Google;
@@ -14,27 +15,32 @@ use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernet
 use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::google_artifact_registry::GoogleArtifactRegistry;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use qovery_engine::models::gcp::JsonCredentials;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use time::Time;
+use uuid::Uuid;
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
-// TODO(benjamin): GKE integration, move to 1.27
-pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_26 {
+pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -273,4 +279,45 @@ pub fn try_parse_json_credentials_from_str(raw: &str) -> Result<JsonCredentials,
     let credentials_io: JsonCredentialsIo =
         serde_json::from_str(raw).map_err(|e| format!("cannot parse raw credentials file: {e}"))?;
     JsonCredentials::try_from(credentials_io)
+}
+
+pub fn clean_environments(
+    context: &Context,
+    environments: Vec<EnvironmentRequest>,
+    secrets: FuncTestsSecrets,
+    region: GcpRegion,
+) -> Result<(), ContainerRegistryError> {
+    let gcp_project_name = secrets
+        .GCP_PROJECT_NAME
+        .as_ref()
+        .expect("GCP_PROJECT_NAME should be defined in secrets");
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
+    let service = ArtifactRegistryService::new(
+        credentials.clone(),
+        Some(GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER.clone()),
+        Some(GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
+    )
+    .expect("Cannot initialize google artifact registry service");
+
+    let _container_registry = GoogleArtifactRegistry::new(
+        context.clone(),
+        "test",
+        Uuid::new_v4(),
+        "test",
+        gcp_project_name,
+        region,
+        credentials,
+        Arc::new(service),
+    );
+
+    // delete repository created in registry
+    // TODO(benjaminch): delete repository
+
+    Ok(())
 }

@@ -148,6 +148,8 @@ resource "google_container_cluster" "primary" {
     }
   }
 
+  # You must allow at least 48 hours of maintenance availability in a 32-day rolling window.
+  # Only contiguous availability windows of at least four hours are considered.
   maintenance_policy {
     dynamic "recurring_window" {
       for_each = local.cluster_maintenance_window_is_recurring
@@ -181,7 +183,6 @@ resource "google_container_cluster" "primary" {
       }
     }
   }
-
 
   timeouts {
     create = lookup(var.timeouts, "create", "45m")

@@ -21,14 +21,17 @@ pub struct PromtailChart {
     loki_kube_dns_name: String,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
+    namespace: HelmChartNamespaces,
 }
 
 impl PromtailChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
+        chart_values_location: HelmChartDirectoryLocation,
         loki_kube_dns_name: String,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
+        namespace: HelmChartNamespaces,
     ) -> Self {
         PromtailChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -39,12 +42,13 @@ impl PromtailChart {
             ),
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
+                chart_values_location,
                 PromtailChart::chart_name(),
             ),
             loki_kube_dns_name,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
+            namespace,
         }
     }
 
@@ -61,7 +65,7 @@ impl ToCommonHelmChart for PromtailChart {
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
                 path: self.chart_path.to_string(),
                 // because of priorityClassName, we need to add it to kube-system
-                namespace: HelmChartNamespaces::KubeSystem,
+                namespace: self.namespace,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
@@ -136,10 +140,11 @@ impl ChartInstallationChecker for PromtailChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartDirectoryLocation, HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
@@ -158,7 +163,14 @@ mod tests {
     #[test]
     fn promtail_chart_directory_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
+        let chart = PromtailChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            "whatever".to_string(),
+            get_promtail_chart_override(),
+            false,
+            HelmChartNamespaces::KubeSystem,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -181,7 +193,14 @@ mod tests {
     #[test]
     fn promtail_chart_values_file_exists_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
+        let chart = PromtailChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            "whatever".to_string(),
+            get_promtail_chart_override(),
+            false,
+            HelmChartNamespaces::KubeSystem,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -208,7 +227,14 @@ mod tests {
     #[test]
     fn promtail_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = PromtailChart::new(None, "whatever".to_string(), get_promtail_chart_override(), false);
+        let chart = PromtailChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            "whatever".to_string(),
+            get_promtail_chart_override(),
+            false,
+            HelmChartNamespaces::KubeSystem,
+        );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

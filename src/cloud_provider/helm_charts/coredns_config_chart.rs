@@ -34,6 +34,7 @@ impl CoreDNSConfigChart {
         declare_hosts: bool,
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
+        namespace: HelmChartNamespaces,
     ) -> CoreDNSConfigChart {
         let chart_path = HelmChartPath::new(
             chart_prefix_path,
@@ -52,7 +53,7 @@ impl CoreDNSConfigChart {
             chart_info: ChartInfo {
                 name: CoreDNSConfigChart::chart_name(),
                 path: chart_path.to_string(),
-                namespace: HelmChartNamespaces::KubeSystem,
+                namespace,
                 custom_namespace: None,
                 action: HelmAction::Deploy,
                 atomic: false,
@@ -353,7 +354,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::CommonChart;
+    use crate::cloud_provider::helm::{CommonChart, HelmChartNamespaces};
     use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -366,7 +367,13 @@ mod tests {
     #[test]
     fn coredns_config_chart_directory_exists_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(
+            None,
+            false,
+            "whatever".to_string(),
+            "whatever".to_string(),
+            HelmChartNamespaces::KubeSystem,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -392,7 +399,13 @@ mod tests {
     #[test]
     fn coredns_config_chart_values_file_exists_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(
+            None,
+            false,
+            "whatever".to_string(),
+            "whatever".to_string(),
+            HelmChartNamespaces::KubeSystem,
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -419,7 +432,13 @@ mod tests {
     #[test]
     fn coredns_config_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(
+            None,
+            false,
+            "whatever".to_string(),
+            "whatever".to_string(),
+            HelmChartNamespaces::KubeSystem,
+        );
         let chart_values_file_path = chart._chart_values_path.helm_path().clone();
 
         // execute:
