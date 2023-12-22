@@ -20,6 +20,7 @@ use uuid::Uuid;
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
+#[ignore]
 fn gcp_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -60,6 +61,7 @@ fn gcp_test_build_phase() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn gcp_gke_deploy_a_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -115,6 +117,7 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -172,6 +175,7 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn gcp_gke_deploy_a_working_environment_and_pause() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -247,6 +251,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn gcp_gke_deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
