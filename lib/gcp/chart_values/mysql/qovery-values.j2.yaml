@@ -1,0 +1,89 @@
+image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
+  tag: "{{ version }}"
+
+# -master is required to keep compatibility with previous installed versions
+nameOverride: "{{ sanitized_name }}-master"
+fullnameOverride: "{{ sanitized_name }}-master"
+
+commonLabels:
+  # app label required for legacy chart (installed before 15/06/23)
+  app: "{{ sanitized_name }}" 
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
+auth:
+  rootPassword: "{{ database_password }}"
+  username: "qovery"
+  password: "{{ database_password }}"
+  database: "{{ sanitized_name }}"
+
+primary:
+  podLabels:
+    # app label required for legacy chart (installed before 15/06/23)
+    app: "{{ sanitized_name }}" 
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  resources:
+    requests:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+    limits:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+  persistence:
+    storageClass: "{{ database_disk_type }}"
+    size: "{{ database_disk_size_in_gib }}Gi"
+    labels:
+      # app label required for legacy chart (installed before 15/06/23)
+      app: "{{ sanitized_name }}" 
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+    annotations:
+      ownerId: "{{ owner_id }}"
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseName: "{{ sanitized_name }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+  service:
+    name: {{ service_name }}
+    type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+    {% if publicly_accessible -%}
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+
+rbac:
+  create: true
+
+volumePermissions:
+  enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_bitnami_shell }}

@@ -1,6 +1,30 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
+  name: gcp-pd-extreme
+  labels:
+    qovery-type: "ssd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-extreme # https://cloud.google.com/compute/docs/disks#disk-types
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gcp-pd-ssd
+  labels:
+    qovery-type: "ssd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd # https://cloud.google.com/compute/docs/disks#disk-types
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
   name: gcp-pd-balanced
   labels:
     qovery-type: "ssd"

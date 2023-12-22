@@ -1,0 +1,90 @@
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  app: "{{ sanitized_name }}" 
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
+image:
+  registry: "{{ registry_name }}"
+  repository: "{{ repository_name }}"
+  tag: "{{ version }}"
+
+architecture: standalone
+
+auth:
+  enabled: true
+  password: "{{ database_password }}"
+
+master:
+  resources:
+    requests:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+    limits:
+      memory: "{{ database_ram_size_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+  podLabels:
+    app: "{{ sanitized_name }}" 
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  persistence:
+    storageClass: "{{ database_disk_type }}"
+    size: "{{ database_disk_size_in_gib }}Gi"
+    labels:
+      # app label required for legacy cahrt (installed before 01/06/23)
+      app: "{{ sanitized_name }}" 
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+    annotations:
+      ownerId: "{{ owner_id }}"
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseName: "{{ sanitized_name }}"
+  service:
+    ##  Redis Master Service type
+    type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+    name: {{ service_name }}
+    {% if publicly_accessible -%}
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+  serviceAccount:
+    create: true
+    name: "{{ sanitized_name }}"
+
+rbac:
+  create: true
+
+volumePermissions:
+  enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_bitnami_shell }}
+
+sysctlImage:
+  enabled: true
+  registry: {{ registry_name }}
+  repository: {{ repository_name_bitnami_shell }}

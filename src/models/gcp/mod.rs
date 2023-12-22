@@ -69,10 +69,10 @@ impl Display for GcpStorageType {
 impl GcpStorageType {
     pub fn to_k8s_storage_class(&self) -> String {
         match self {
-            GcpStorageType::Balanced => "pd-balanced",
-            GcpStorageType::SSD => "pd-ssd",
-            GcpStorageType::Standard => "pd-standard",
-            GcpStorageType::Extreme => "pd-extreme",
+            GcpStorageType::Balanced => "gcp-pd-balanced",
+            GcpStorageType::SSD => "gcp-pd-ssd",
+            GcpStorageType::Standard => "gcp-pd-standard",
+            GcpStorageType::Extreme => "gcp-pd-extreme",
         }
         .to_string()
     }
