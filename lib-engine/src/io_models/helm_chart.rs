@@ -330,38 +330,36 @@ mod tests {
 
     #[test]
     fn test_helm_deserialization_without_env_variables_with_infos() {
-        let data = format!(
-            r#"
-        {{
+        let data = r#"
+        {
             "long_id": "f84d837d-717e-4c39-bba4-573b22c5f848",
   "name": "name",
   "kube_name": "kube name",
   "action": "CREATE",
-  "chart_source": {{
-    "git": {{
+  "chart_source": {
+    "git": {
       "git_url": "https://default.com/",
       "git_credentials": null,
       "commit_id": "",
       "root_path": ""
-    }}
-  }},
-  "chart_values": {{
-    "raw": {{
+    }
+  },
+  "chart_values": {
+    "raw": {
       "values": []
-    }}
-  }},
+    }
+  },
   "set_values": [],
   "set_string_values": [],
   "set_json_values": [],
   "command_args": [],
   "timeout_sec": 0,
   "allow_cluster_wide_resources": false,
-  "environment_vars": {{ "key": "value" }},
-  "advanced_settings": {{}},
-  "ports": [{{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null}},
-  {{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}}]
-        }}"#
-        );
+  "environment_vars": { "key": "value" },
+  "advanced_settings": {},
+  "ports": [{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null},
+  {"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}]
+        }"#.to_string();
 
         let helm_chart: HelmChart = serde_json::from_str(data.as_str()).unwrap();
         assert_eq!(helm_chart.name, "name");
@@ -383,38 +381,36 @@ mod tests {
 
 #[test]
 fn test_helm_deserialization_with_env_variables_with_infos() {
-    let data = format!(
-        r#"
-        {{
+    let data = r#"
+        {
             "long_id": "f84d837d-717e-4c39-bba4-573b22c5f848",
   "name": "name",
   "kube_name": "kube name",
   "action": "CREATE",
-  "chart_source": {{
-    "git": {{
+  "chart_source": {
+    "git": {
       "git_url": "https://default.com/",
       "git_credentials": null,
       "commit_id": "",
       "root_path": ""
-    }}
-  }},
-  "chart_values": {{
-    "raw": {{
+    }
+  },
+  "chart_values": {
+    "raw": {
       "values": []
-    }}
-  }},
+    }
+  },
   "set_values": [],
   "set_string_values": [],
   "set_json_values": [],
   "command_args": [],
   "timeout_sec": 0,
   "allow_cluster_wide_resources": false,
-  "environment_vars": {{ "key": "value" }},
-  "environment_vars_with_infos":{{"variable":{{"value":"value","is_secret":false}},"secret":{{"value":"my password","is_secret":true}}}},
-  "advanced_settings": {{}},
+  "environment_vars": { "key": "value" },
+  "environment_vars_with_infos":{"variable":{"value":"value","is_secret":false},"secret":{"value":"my password","is_secret":true}},
+  "advanced_settings": {},
   "ports": []
-        }}"#
-    );
+        }"#.to_string();
 
     let helm_chart: HelmChart = serde_json::from_str(data.as_str()).unwrap();
     assert_eq!(helm_chart.name, "name");
@@ -437,52 +433,50 @@ fn test_helm_deserialization_with_env_variables_with_infos() {
 
 #[test]
 fn test_helm_deserialization_repository_source() {
-    let data = format!(
-        r#"
-        {{
+    let data = r#"
+        {
             "long_id": "f84d837d-717e-4c39-bba4-573b22c5f848",
   "name": "name",
   "kube_name": "kube name",
   "action": "CREATE",
-  "chart_source": {{
-    "repository": {{
+  "chart_source": {
+    "repository": {
         "url": "oci://default.com/",
-        "credentials": {{
+        "credentials": {
             "login": "mon_nom",
             "password": "toto"
-        }},
-        "engine_helm_registry": {{
-            "GenericCr": {{
+        },
+        "engine_helm_registry": {
+            "GenericCr": {
                 "long_id": "bda696e6-de3a-4607-bd47-e8854e1c2880",
                 "url": "oci://default.com/",
-                "credentials": {{
+                "credentials": {
                     "login": "mon_nom",
                     "password": "toto"
-                }}
-            }}
-        }},
+                }
+            }
+        },
         "chart_name": "name of chart",
         "chart_version": "version of chart",
          "skip_tls_verify": false
-        }}
-    }},
-  "chart_values": {{
-    "raw": {{
+        }
+    },
+  "chart_values": {
+    "raw": {
       "values": []
-    }}
-  }},
+    }
+  },
   "set_values": [],
   "set_string_values": [],
   "set_json_values": [],
   "command_args": [],
   "timeout_sec": 0,
   "allow_cluster_wide_resources": false,
-  "environment_vars": {{ "key": "value" }},
-  "advanced_settings": {{}},
-  "ports": [{{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null}},
-  {{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}}]
-        }}"#
-    );
+  "environment_vars": { "key": "value" },
+  "advanced_settings": {},
+  "ports": [{"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b1","port":9898,"name":"p9898","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":null,"service_name":null},
+  {"long_id":"5cfe6ff7-4907-40ff-9363-1c488fe5c8b2","port":8080,"name":"p8080","publicly_accessible":true,"is_default":false,"protocol":"HTTP","namespace":"namespace_1","service_name":"service_1"}]
+        }"#.to_string();
 
     let helm_chart: HelmChart = serde_json::from_str(data.as_str()).unwrap();
     assert_eq!(helm_chart.name, "name");

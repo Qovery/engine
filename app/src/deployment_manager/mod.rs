@@ -554,6 +554,7 @@ mod test {
 
     #[derive(Clone)]
     pub struct EngineTaskTest {
+        #[allow(clippy::type_complexity)]
         is_terminated: Arc<(RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>)>,
         should_shutdown: Arc<AtomicBool>,
         is_running: Arc<AtomicBool>,

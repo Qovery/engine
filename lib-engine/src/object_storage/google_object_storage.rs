@@ -218,8 +218,8 @@ mod tests {
         );
 
         // execute and verify:
-        assert_eq!(false, object_storage.bucket_exists(not_existing_bucket_name));
-        assert_eq!(true, object_storage.bucket_exists(existing_bucket_name));
+        assert!(!object_storage.bucket_exists(not_existing_bucket_name));
+        assert!(object_storage.bucket_exists(existing_bucket_name));
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         let bucket_name_test_cases = vec!["abc", "abcabc", "ABC_abc"];
         let bucket_ttl_test_cases = vec![
             None,
-            Some(Duration::from_secs(1 * 60 * 60 * 24)), // 1 day
+            Some(Duration::from_secs(60 * 60 * 24)),     // 1 day
             Some(Duration::from_secs(7 * 60 * 60 * 24)), // 7 day
         ];
         let bucket_versioning_test_cases = vec![true, false];
@@ -297,7 +297,7 @@ mod tests {
         let bucket_name_test_cases = vec!["abc", "abcabc", "ABC_abc"];
         let bucket_ttl_test_cases = vec![
             None,
-            Some(Duration::from_secs(1 * 60 * 60 * 24)), // 1 day
+            Some(Duration::from_secs(60 * 60 * 24)),     // 1 day
             Some(Duration::from_secs(7 * 60 * 60 * 24)), // 7 day
         ];
         let bucket_versioning_test_cases = vec![true, false];
@@ -398,7 +398,7 @@ mod tests {
         let bucket_ttl = Some(Duration::from_secs(7 * 24 * 60 * 60)); // 7 days
         let expected_bucket = Bucket {
             name: bucket_name.to_string(),
-            ttl: bucket_ttl.clone(),
+            ttl: bucket_ttl,
             versioning_activated: false,
             location: BucketRegion::GcpRegion(GcpStorageRegion::EuropeWest9),
             labels: Some(HashMap::from([
