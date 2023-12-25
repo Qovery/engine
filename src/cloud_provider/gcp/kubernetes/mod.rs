@@ -592,7 +592,7 @@ impl Gke {
         }
 
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_kubectl_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
         match self.check_workers_on_create() {
@@ -709,7 +709,7 @@ impl Gke {
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
-    fn configure_kubectl_for_cluster(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
+    fn configure_gcloud_for_cluster(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
@@ -845,7 +845,7 @@ impl Gke {
 
         if !skip_kubernetes_step {
             // Configure kubectl to be able to connect to cluster
-            let _ = self.configure_kubectl_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+            let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
 
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -1122,7 +1122,7 @@ impl Gke {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
 
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_kubectl_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
 
         // avoid clippy yelling about `get_engine_location` not used
         let _ = self.get_engine_location();

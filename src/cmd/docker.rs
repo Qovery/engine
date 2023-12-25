@@ -4,12 +4,14 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
+use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::process::ExitStatus;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
+use std::{env, fs};
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -352,6 +354,55 @@ impl Docker {
         all_envs.append(&mut envs.to_vec());
 
         all_envs
+    }
+
+    // TODO(benjaminch): should be removed, it's very dirty but allows builds to connect to Google Artifact Registry
+    pub fn login_artifact_registry(
+        &self,
+        registry: &Url,
+        google_client_email: &str,
+        google_creds: &str,
+    ) -> Result<(), DockerError> {
+        // Save creds to file as CLI cannot ingest it otherwise ...
+        let tmp_dir = env::temp_dir();
+        let gcp_credentials_file_path = format!("{}/google-credentials.json", tmp_dir.to_str().unwrap_or_default());
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&gcp_credentials_file_path)
+            .map_err(|_e| DockerError::InvalidConfig {
+                raw_error_message: "Cannot create google credentials file to connect".to_string(),
+            }) {
+            Ok(mut f) => f
+                .write(google_creds.as_bytes())
+                .map_err(|_e| DockerError::InvalidConfig {
+                    raw_error_message: "Cannot write into google credentials file to connect".to_string(),
+                }),
+            Err(e) => return Err(e),
+        }?;
+
+        QoveryCommand::new(
+            "gcloud",
+            &[
+                "auth",
+                "activate-service-account",
+                google_client_email,
+                format!("--key-file={}", gcp_credentials_file_path).as_str(),
+            ],
+            &[],
+        )
+        .exec()
+        .map_err(|_e| DockerError::InvalidConfig {
+            raw_error_message: "Cannot connected to gcloud".to_string(),
+        })?;
+
+        let login_res = self.login(registry);
+
+        // Delete credentials file
+        let _ = fs::remove_dir_all(tmp_dir.to_str().unwrap_or_default()); // TODO(benjaminch): handle it
+
+        login_res
     }
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {

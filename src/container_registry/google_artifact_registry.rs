@@ -38,7 +38,7 @@ impl GoogleArtifactRegistry {
     ) -> Result<Self, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "_json_key".to_string();
-        let secret_token = serde_json::to_string(&JsonCredentialsIo::from(credentials)).map_err(|e| {
+        let secret_token = serde_json::to_string(&JsonCredentialsIo::from(credentials.clone())).map_err(|e| {
             ContainerRegistryError::CannotInstantiateClient {
                 raw_error_message: e.to_string(),
             }
@@ -52,7 +52,11 @@ impl GoogleArtifactRegistry {
         let _ = registry.set_username(&login);
         let _ = registry.set_password(Some(&secret_token));
 
-        if context.docker.login(&registry).is_err() {
+        if context
+            .docker
+            .login_artifact_registry(&registry, credentials.client_email.as_str(), &secret_token)
+            .is_err()
+        {
             return Err(ContainerRegistryError::InvalidCredentials);
         }
 
