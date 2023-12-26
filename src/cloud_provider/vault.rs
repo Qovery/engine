@@ -15,6 +15,7 @@ pub enum ClusterSecrets {
     Ec2(ClusterSecretsAws),
     Scaleway(ClusterSecretsScaleway),
     Gke(ClusterSecretsGcp),
+    SelfManaged(ClusterSecretsSelfManaged),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -186,6 +187,38 @@ impl ClusterSecretsGcp {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ClusterSecretsSelfManaged {
+    pub kubeconfig_b64: Option<String>,
+    pub cloud_provider: Kind,
+    pub cluster_name: String,
+    pub cluster_id: String,
+    pub organization_id: String,
+    pub test_cluster: bool,
+    pub vault_mount_name: String,
+}
+
+impl ClusterSecretsSelfManaged {
+    pub fn new(
+        kubeconfig_b64: Option<String>,
+        cloud_provider: Kind,
+        cluster_name: String,
+        cluster_id: String,
+        organization_id: String,
+        test_cluster: bool,
+    ) -> ClusterSecretsSelfManaged {
+        ClusterSecretsSelfManaged {
+            kubeconfig_b64,
+            cloud_provider,
+            cluster_name,
+            cluster_id,
+            organization_id,
+            test_cluster,
+            vault_mount_name: get_vault_mount_name(test_cluster),
+        }
+    }
+}
+
 impl ClusterSecrets {
     pub fn new(cluster_secrets: ClusterSecrets) -> ClusterSecrets {
         cluster_secrets
@@ -208,6 +241,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(aws) | ClusterSecrets::Ec2(aws) => aws.test_cluster,
             ClusterSecrets::Scaleway(scaleway) => scaleway.test_cluster,
             ClusterSecrets::Gke(gke) => gke.test_cluster,
+            ClusterSecrets::SelfManaged(selfmanaged) => selfmanaged.test_cluster,
         };
         get_vault_mount_name(is_test_cluster)
     }
@@ -257,6 +291,7 @@ impl ClusterSecrets {
             ClusterSecrets::Ec2(_) => Kind::Ec2,
             ClusterSecrets::Scaleway(_) => Kind::ScwKapsule,
             ClusterSecrets::Gke(_) => Kind::Gke,
+            ClusterSecrets::SelfManaged(_) => todo!(),
         }
     }
 
@@ -265,6 +300,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.cluster_id.as_str(),
             ClusterSecrets::Scaleway(x) => x.cluster_id.as_str(),
             ClusterSecrets::Gke(x) => x.cluster_id.as_str(),
+            ClusterSecrets::SelfManaged(x) => x.cluster_id.as_str(),
         }
     }
 
@@ -273,6 +309,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.test_cluster,
             ClusterSecrets::Scaleway(x) => x.test_cluster,
             ClusterSecrets::Gke(x) => x.test_cluster,
+            ClusterSecrets::SelfManaged(x) => x.test_cluster,
         }
     }
 
@@ -281,6 +318,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
             ClusterSecrets::Scaleway(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
             ClusterSecrets::Gke(x) => x.k8s_cluster_endpoint = Some(k8s_cluster_endpoint),
+            ClusterSecrets::SelfManaged(_) => {}
         }
     }
 
@@ -289,6 +327,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
             ClusterSecrets::Scaleway(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
             ClusterSecrets::Gke(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
+            ClusterSecrets::SelfManaged(x) => x.kubeconfig_b64 = Some(kubeconfig_b64),
         }
     }
 
@@ -297,6 +336,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => x.organization_id = organization_id,
             ClusterSecrets::Scaleway(x) => x.organization_id = organization_id,
             ClusterSecrets::Gke(x) => x.organization_id = organization_id,
+            ClusterSecrets::SelfManaged(x) => x.organization_id = organization_id,
         }
     }
 
@@ -324,12 +364,14 @@ impl ClusterSecrets {
                     ClusterSecrets::Eks(ref mut x) | ClusterSecrets::Ec2(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Gke(ref mut x) => x.kubeconfig_b64 = None,
+                    ClusterSecrets::SelfManaged(ref mut x) => x.kubeconfig_b64 = None,
                 }
                 let mut current_secret = x.clone();
                 match current_secret {
                     ClusterSecrets::Eks(ref mut x) | ClusterSecrets::Ec2(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Scaleway(ref mut x) => x.kubeconfig_b64 = None,
                     ClusterSecrets::Gke(ref mut x) => x.kubeconfig_b64 = None,
+                    ClusterSecrets::SelfManaged(ref mut x) => x.kubeconfig_b64 = None,
                 }
                 if x == current_secret {
                     return Ok(None);
@@ -348,6 +390,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Gke(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
+            ClusterSecrets::SelfManaged(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
         };
 
         match qvault_client.crate_update_secret(vault_mount_name, secret_name, self) {
@@ -374,6 +417,7 @@ impl ClusterSecrets {
             ClusterSecrets::Eks(x) | ClusterSecrets::Ec2(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Scaleway(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
             ClusterSecrets::Gke(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
+            ClusterSecrets::SelfManaged(x) => (x.vault_mount_name.as_str(), x.cluster_id.as_str()),
         };
 
         match qvault_client.delete_secret(vault_mount_name, secret_name) {

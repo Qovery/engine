@@ -21,6 +21,7 @@ pub enum Kind {
     Do,
     Scw,
     Gcp,
+    SelfManaged,
 }
 
 impl From<KindModel> for Kind {
@@ -29,6 +30,7 @@ impl From<KindModel> for Kind {
             KindModel::Aws => Kind::Aws,
             KindModel::Scw => Kind::Scw,
             KindModel::Gcp => Kind::Gcp,
+            KindModel::SelfManaged => Kind::SelfManaged,
         }
     }
 }

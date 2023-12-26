@@ -680,6 +680,8 @@ pub enum Tag {
     CannotRetrieveClusterConfigFile,
     /// CannotCreateFile: represents an error while trying to create a file.
     CannotCreateFile,
+    /// CannotWriteToFile: represents an error while trying to write to a file.
+    CannotWriteToFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
     /// CannotRestartService: represents an error while trying to restart a service.
@@ -1601,6 +1603,23 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotCreateFile,
+            message.to_string(),
+            Some(error_message),
+            None,
+            None,
+        )
+    }
+    /// Creates new error for file we can't write.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error_message`: Raw error message.
+    pub fn new_cannot_write_file(event_details: EventDetails, error_message: CommandError) -> EngineError {
+        let message = "Cannot write to file";
+        EngineError::new(
+            event_details,
+            Tag::CannotWriteToFile,
             message.to_string(),
             Some(error_message),
             None,

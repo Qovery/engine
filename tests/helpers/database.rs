@@ -1066,7 +1066,8 @@ pub fn test_pause_managed_db(
                 .to_string(),
             SCW_KUBERNETES_VERSION,
         ),
-        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::Gcp => todo!(),
+        Kind::SelfManaged => todo!(),
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -1373,6 +1374,7 @@ pub fn test_db_on_upgrade(
             SCW_KUBERNETES_VERSION,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::SelfManaged => todo!(),
     };
 
     let infra_ctx = match provider_kind {
@@ -1409,6 +1411,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::SelfManaged => todo!(),
     };
 
     let ret = environment.deploy_environment(&ea, &infra_ctx);
@@ -1497,6 +1500,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::SelfManaged => todo!(),
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);

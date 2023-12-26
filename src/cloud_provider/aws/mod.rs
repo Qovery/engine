@@ -167,8 +167,8 @@ impl CloudProvider for AWS {
         ]
     }
 
-    fn terraform_state_credentials(&self) -> &TerraformStateCredentials {
-        &self.terraform_state_credentials
+    fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
+        Some(&self.terraform_state_credentials)
     }
 
     fn as_any(&self) -> &dyn Any {

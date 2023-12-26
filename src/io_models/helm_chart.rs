@@ -367,23 +367,17 @@ mod tests {
         assert_eq!(helm_chart.name, "name");
         assert_eq!(helm_chart.environment_vars_with_infos.len(), 0);
         assert_eq!(helm_chart.ports.len(), 2);
-        assert_eq!(
-            helm_chart
-                .ports
-                .iter()
-                .map(|port| (port.namespace.clone(), port.service_name.clone()))
-                .any(|(namespace, service_name)| namespace == None && service_name == None),
-            true
-        );
-        assert_eq!(
-            helm_chart
-                .ports
-                .iter()
-                .map(|port| (port.namespace.clone(), port.service_name.clone()))
-                .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
-                    && service_name == Some("service_1".to_string())),
-            true
-        );
+        assert!(helm_chart
+            .ports
+            .iter()
+            .map(|port| (port.namespace.clone(), port.service_name.clone()))
+            .any(|(namespace, service_name)| namespace.is_none() && service_name.is_none()));
+        assert!(helm_chart
+            .ports
+            .iter()
+            .map(|port| (port.namespace.clone(), port.service_name.clone()))
+            .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
+                && service_name == Some("service_1".to_string())));
     }
 }
 
