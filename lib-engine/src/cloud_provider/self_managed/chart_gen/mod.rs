@@ -244,7 +244,7 @@ mod tests {
         let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", &prefix);
         fs::create_dir_all(&qovery_chart_path).unwrap();
         let qovery_chart_templates_path = format!("{}/templates", &qovery_chart_path);
-        fs::create_dir_all(&qovery_chart_templates_path).unwrap();
+        fs::create_dir_all(qovery_chart_templates_path).unwrap();
 
         // define Chart.yaml content without dependencies (added later for each cloud providers)
         let minimal_qovery_chart = QoverySelfManagedChart::new(
@@ -348,13 +348,13 @@ mod tests {
         // generate values.yaml
         let values = ValuesFile::new_minimal();
         values
-            .save_to_file(minimal_qovery_chart.destination.clone(), "values.yaml".to_string())
+            .save_to_file(minimal_qovery_chart.destination, "values.yaml".to_string())
             .expect("failed to save values.yaml");
 
         // generate values-aws.yaml
         let values = ValuesFile::new_aws();
         values
-            .save_to_file(aws_qovery_chart.destination.clone(), "values-aws.yaml".to_string())
+            .save_to_file(aws_qovery_chart.destination, "values-aws.yaml".to_string())
             .expect("failed to save values-aws.yaml");
 
         // add overrided values to values-aws.yaml
@@ -372,7 +372,7 @@ mod tests {
             })
             .expect("failed to generate Chart.yaml");
         chart_dot_yaml
-            .save_to_file(aws_qovery_chart.destination.clone())
+            .save_to_file(aws_qovery_chart.destination)
             .expect("failed to save Chart.yaml");
 
         // copy charts
