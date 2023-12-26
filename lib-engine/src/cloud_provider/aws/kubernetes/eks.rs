@@ -762,6 +762,10 @@ impl Kubernetes for EKS {
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
     }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]

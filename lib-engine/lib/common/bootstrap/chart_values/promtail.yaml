@@ -13,7 +13,7 @@ config:
     extraRelabelConfigs:
       # We need this config in order for the cluster agent to retrieve the log of the service
       - action: labelmap
-        regex: __meta_kubernetes_pod_label_(appId|qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id)
+        regex: __meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id)
 
 resources:
   limits:

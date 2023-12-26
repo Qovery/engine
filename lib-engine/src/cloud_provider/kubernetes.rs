@@ -9,7 +9,7 @@ use serde_json::json;
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -360,6 +360,36 @@ pub trait Kubernetes: Send + Sync {
             ))
         })
     }
+    fn get_kubernetes_connection(&self) -> Option<String>;
+    fn create_kubeconfig_from_kubernetes_connection(&self) -> Result<(), Box<EngineError>> {
+        if let Some(kubeconfig_content) = self.get_kubernetes_connection() {
+            let kubeconfig_path = self.kubeconfig_local_file_path()?;
+            fs::create_dir_all(
+                kubeconfig_path
+                    .parent()
+                    .expect("Couldn't create kubeconfig folder parent path"),
+            )
+            .map_err(|err| {
+                EngineError::new_cannot_create_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+            let mut file = File::create(kubeconfig_path).map_err(|err| {
+                EngineError::new_cannot_create_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+            file.write_all(kubeconfig_content.as_bytes()).map_err(|err| {
+                EngineError::new_cannot_write_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+        }
+        Ok(())
+    }
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -421,7 +451,12 @@ pub trait Kubernetes: Send + Sync {
         let bucket_name = self.get_bucket_name();
         let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
-        // check if kubeconfig locally exists
+        // check if kubernetes_connection exists, meaning the local kubeconfig exists
+        if self.get_kubernetes_connection().is_some() {
+            return self.kubeconfig_local_file_path();
+        }
+
+        // else check if the file is present
         let local_kubeconfig = match self.kubeconfig_local_file_path() {
             Ok(kubeconfig_local_file_path) => {
                 if Path::new(&kubeconfig_local_file_path).exists() {

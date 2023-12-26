@@ -42,9 +42,12 @@ nonzero_ext = "0.3.0"
 json-patch = "1.1.0"
 enum_dispatch = "0.3.12"
 time = { version = "0.3.30", features = ["formatting", "parsing"] }
+derive_more = { version = "1.0.0-beta.6", features = ["display"] }
 
 kube = { version = "0.86.0", features = ["default", "runtime", "derive", "ws"] }
-k8s-openapi = { version = "0.20.0", default-features = false, features = ["v1_26"] }
+k8s-openapi = { version = "0.20.0", default-features = false, features = [
+    "v1_26",
+] }
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 
@@ -92,15 +95,15 @@ aws-sdk-elasticache = "0.24.0"
 aws-sdk-docdb = "0.24.0"
 aws-sdk-ec2 = "0.24.0"
 aws-types = "0.54.1"
-aws-smithy-client = { version="0.54.4", features=["rt-tokio"] }
-aws-smithy-async = { version="0.54.4", features=["rt-tokio"] }
+aws-smithy-client = { version = "0.54.4", features = ["rt-tokio"] }
+aws-smithy-async = { version = "0.54.4", features = ["rt-tokio"] }
 
 # Scaleway Deps
 scaleway_api_rs = "=0.1.2"
 
 # GCP deps
 google-cloud-auth = "0.13.0"
-google-cloud-storage= "0.14.0"
+google-cloud-storage = "0.14.0"
 google-cloud-artifact-registry = "0.1.0"
 google-cloud-googleapis = "0.11.0"
 
@@ -121,45 +124,84 @@ faux = "0.1.10"
 default = []
 # Check that env logger is in a correct state when emitting logs
 env-logger-check = []
-test-all = ["test-all-minimal", "test-all-self-hosted", "test-all-infra", "test-all-managed-services", "test-all-whole-enchilada"]
+test-all = [
+    "test-all-minimal",
+    "test-all-self-hosted",
+    "test-all-infra",
+    "test-all-managed-services",
+    "test-all-whole-enchilada",
+]
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
 test-aws-minimal = ["env-logger-check"]
 test-aws-ec2-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
 test-gcp-minimal = ["env-logger-check"]
-test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-scw-minimal", "test-gcp-minimal"]
+test-all-minimal = [
+    "test-aws-minimal",
+    "test-aws-ec2-minimal",
+    "test-scw-minimal",
+    "test-gcp-minimal",
+]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check"]
 test-aws-ec2-self-hosted = ["env-logger-check"]
 test-scw-self-hosted = ["env-logger-check"]
-test-gcp-self-hosted = ["env-logger-check"]
-test-all-self-hosted = ["test-aws-self-hosted", "test-aws-ec2-self-hosted", "test-scw-self-hosted", "test-gcp-self-hosted"]
+test-all-self-hosted = [
+    "test-aws-self-hosted",
+    "test-aws-ec2-self-hosted",
+    "test-scw-self-hosted",
+]
 
 test-aws-managed-services = ["env-logger-check"]
 test-aws-ec2-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
-test-gcp-managed-services = ["env-logger-check"]
-test-all-managed-services = ["test-aws-managed-services", "test-aws-ec2-managed-services", "test-scw-managed-services", "test-gcp-managed-services"]
+test-all-managed-services = [
+    "test-aws-managed-services",
+    "test-aws-ec2-managed-services",
+    "test-scw-managed-services",
+]
 
 test-aws-infra = []
 test-aws-ec2-infra = []
 test-scw-infra = []
 test-gcp-infra = []
-test-all-infra = ["test-aws-infra", "test-aws-ec2-infra", "test-scw-infra", "test-gcp-infra"]
+test-all-infra = [
+    "test-aws-infra",
+    "test-aws-ec2-infra",
+    "test-scw-infra",
+    "test-gcp-infra",
+]
 
 test-aws-whole-enchilada = []
 test-aws-ec2-whole-enchilada = []
 test-scw-whole-enchilada = []
-test-gcp-whole-enchilada = []
-test-all-whole-enchilada = ["test-aws-whole-enchilada", "test-aws-ec2-whole-enchilada", "test-scw-whole-enchilada" , "test-gcp-whole-enchilada"]
+test-all-whole-enchilada = [
+    "test-aws-whole-enchilada",
+    "test-aws-ec2-whole-enchilada",
+    "test-scw-whole-enchilada",
+]
 
 # functionnal tests by provider
-test-aws-all = ["test-aws-infra", "test-aws-managed-services", "test-aws-self-hosted", "test-aws-whole-enchilada"]
-test-aws-ec2-all = ["test-aws-ec2-infra", "test-aws-ec2-managed-services", "test-aws-ec2-self-hosted", "test-aws-ec2-whole-enchilada"]
-test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted", "test-scw-whole-enchilada"]
-test-gcp-all = ["test-gcp-infra", "test-gcp-managed-services", "test-gcp-self-hosted", "test-gcp-whole-enchilada"]
+test-aws-all = [
+    "test-aws-infra",
+    "test-aws-managed-services",
+    "test-aws-self-hosted",
+    "test-aws-whole-enchilada",
+]
+test-aws-ec2-all = [
+    "test-aws-ec2-infra",
+    "test-aws-ec2-managed-services",
+    "test-aws-ec2-self-hosted",
+    "test-aws-ec2-whole-enchilada",
+]
+test-scw-all = [
+    "test-scw-infra",
+    "test-scw-managed-services",
+    "test-scw-self-hosted",
+    "test-scw-whole-enchilada",
+]
 
 # functionnal test with only a k8s cluster as a dependency
 test-local-kube = []

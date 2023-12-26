@@ -88,6 +88,7 @@ impl Database {
                     Err(e) => return Err(e),
                 },
                 Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+                Kind::SelfManaged => None,
             },
         };
 
@@ -608,6 +609,30 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
+            (CPKind::SelfManaged, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
+            ),
+            (CPKind::SelfManaged, DatabaseKind::Redis, DatabaseMode::CONTAINER) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
+            ),
 
             (CPKind::Gcp, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<GCP, Container, PostgresSQL>::new(

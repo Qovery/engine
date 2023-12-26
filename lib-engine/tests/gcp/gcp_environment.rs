@@ -1,21 +1,13 @@
 use crate::helpers;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::gcp::{clean_environments, gcp_default_infra_config};
+use crate::helpers::gcp::gcp_default_infra_config;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    context_for_resource, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
 };
 use function_name::named;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Port, Protocol};
-use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::router::CustomDomain;
-use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
-use std::str::FromStr;
+use tracing::span;
 use tracing::Level;
-use tracing::{span, warn};
-use uuid::Uuid;
 
 #[cfg(feature = "test-gcp-minimal")]
 #[named]

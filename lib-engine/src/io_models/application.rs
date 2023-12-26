@@ -18,7 +18,8 @@ use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
 use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
-use crate::models::types::{AWSEc2, AWS, GCP, SCW};
+use crate::models::selfmanaged::SelfManagedAppExtraSettings;
+use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -408,6 +409,34 @@ impl Application {
                 self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
                 GcpAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?)),
+            CPKind::SelfManaged => Ok(Box::new(models::application::Application::<SelfManaged>::new(
+                context,
+                self.long_id,
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.kube_name,
+                self.public_domain,
+                self.ports,
+                self.total_cpus,
+                self.cpu_burst,
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                build,
+                self.command_args,
+                self.entrypoint,
+                vec![],
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                SelfManagedAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?)),
         }
