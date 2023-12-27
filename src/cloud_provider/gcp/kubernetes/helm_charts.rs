@@ -8,14 +8,11 @@ use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
-use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
-use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
-};
+use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
@@ -155,7 +152,7 @@ pub fn gcp_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let _prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let _loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
     // Qovery storage class
     let q_storage_class_chart = QoveryStorageClassChart::new(
@@ -181,21 +178,21 @@ pub fn gcp_helm_charts(
 
     // Metrics server is built-in GCP cluster, no need to manage it
 
-    // Promtail
-    let promtail: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
-        false => None,
-        true => Some(Box::new(
-            PromtailChart::new(
-                chart_prefix_path,
-                HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
-                loki_kube_dns_name,
-                get_chart_overrride_fn.clone(),
-                false,
-                HelmChartNamespaces::Qovery,
-            )
-            .to_common_helm_chart()?,
-        )),
-    };
+    // TODO(benjaminch): Promtail
+    // let promtail: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
+    //     false => None,
+    //     true => Some(Box::new(
+    //         PromtailChart::new(
+    //             chart_prefix_path,
+    //             HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
+    //             loki_kube_dns_name,
+    //             get_chart_overrride_fn.clone(),
+    //             false,
+    //             HelmChartNamespaces::Qovery,
+    //         )
+    //         .to_common_helm_chart()?,
+    //     )),
+    // };
 
     // TODO(benjaminch): VPA
     // TODO(benjaminch): Loki
@@ -433,7 +430,7 @@ pub fn gcp_helm_charts(
 
     // chart deployment order matters!!!
     // Helm chart deployment order
-    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(q_storage_class_chart)), promtail];
+    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(q_storage_class_chart))];
     let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
