@@ -2,6 +2,8 @@ use regex::Regex;
 
 pub trait ObfuscationService: Send + Sync {
     fn obfuscate_secrets(&self, text: String) -> String;
+
+    fn clone_dyn(&self) -> Box<dyn ObfuscationService>;
 }
 
 #[derive(Clone)]
@@ -40,6 +42,12 @@ impl ObfuscationService for StdObfuscationService {
         } else {
             text
         }
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ObfuscationService> {
+        Box::new(StdObfuscationService {
+            regex: self.regex.clone(),
+        })
     }
 }
 
