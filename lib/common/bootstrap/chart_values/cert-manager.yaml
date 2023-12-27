@@ -1,7 +1,11 @@
 global:
   leaderElection:
+    # ensure there is only one active controller manager per cluster. Set where the leader election lock is stored.
     namespace: set-by-engine-code
 
+# Qovery requires CRD
+# WARNING: do not enable this if you already have another Cert-manager installed on the cluster to avoid CRD conflicts version.
+# Qovery strongly discourage to use another Cert-manager to reduce configuration complexity and miss-configuration.
 installCRDs: true
 
 startupapicheck:
@@ -14,20 +18,24 @@ startupapicheck:
     annotations:
       helm.sh/hook: post-install,post-upgrade
 
+# enable if you want Prometheus scraping
 prometheus:
   servicemonitor:
     enabled: set-by-engine-code
     prometheusInstance: qovery
 
-
+# Qovery DNS are managed by Cloudflare, so to speed up DNS availability, we use Cloudflare DNS + Google DNS as fallback.
+# But you can use the one you want (it may slowdown application deployment because of DNS check).
 dns01RecursiveNameserversOnly: true
 dns01RecursiveNameservers: "1.1.1.1:53,8.8.8.8:53"
 
+# configure the number of instances
 replicaCount: 1
+# set rolling restart strategy
 strategy:
   type: set-by-engine-code
 
-# Chart resources limits
+# set resources for the controller-manager
 resources:
   limits:
     cpu: set-by-engine-code
@@ -36,6 +44,7 @@ resources:
     cpu: set-by-engine-code
     memory: set-by-engine-code
 
+# set resources for the webhook
 webhook:
   strategy:
     type: set-by-engine-code
@@ -47,6 +56,7 @@ webhook:
       cpu: set-by-engine-code
       memory: set-by-engine-code
 
+# set resources for the cainjector
 cainjector:
   strategy:
     type: set-by-engine-code

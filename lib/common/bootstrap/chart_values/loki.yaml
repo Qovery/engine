@@ -1,53 +1,61 @@
+# remove if you don't want to use a custom image
 kubectlImage:
   registry: set-by-engine-code
   repository: set-by-engine-code
 
 loki:
+  # remove if you don't want to use a custom image
   image:
     registry: set-by-engine-code
     repository: set-by-engine-code
+  # set if you want to use authentication
   auth_enabled: false
   commonConfig:
-    replication_factor: 1 # qovery setting - single binary version
+    # for simple usage, without high throughput, you can use the 1 replica only
+    # note: replication is assured by the storage backend
+    replication_factor: 1
   ingester:
-    chunk_idle_period: 3m # qovery setting
-    chunk_block_size: 262144 # qovery setting
-    chunk_retain_period: 1m # qovery setting
-    max_transfer_retries: 0 # qovery setting
+    chunk_idle_period: 3m
+    chunk_block_size: 262144
+    chunk_retain_period: 1m
+    max_transfer_retries: 0
     lifecycler:
       ring:
         kvstore:
-          store: memberlist # qovery setting
-        replication_factor: 1 # qovery setting
+          store: memberlist
+        replication_factor: 1
   memberlist:
-    abort_if_cluster_join_fails: false # qovery setting
-    bind_port: 7946 # qovery setting
+    abort_if_cluster_join_fails: false
+    bind_port: 7946
     join_members:
-      - loki-headless.logging.svc:7946 # qovery setting
-    max_join_backoff: 1m # qovery setting
-    max_join_retries: 10 # qovery setting
-    min_join_backoff: 1s # qovery setting
+      # set loki headless service
+      - loki-headless.logging.svc:7946
+    max_join_backoff: 1m
+    max_join_retries: 10
+    min_join_backoff: 1s
   limits_config:
-    ingestion_rate_mb: 20 # qovery setting
-    ingestion_burst_size_mb: 30 # qovery setting
-    enforce_metric_name: false # qovery setting
-    reject_old_samples: true # qovery setting
-    reject_old_samples_max_age: 168h # qovery setting
-    max_concurrent_tail_requests: 100 # qovery setting (default 10)
-    split_queries_by_interval: 15m # qovery setting (default 15m)
-    max_query_lookback: 12w # qovery setting (default 0)
+    ingestion_rate_mb: 20
+    ingestion_burst_size_mb: 30
+    enforce_metric_name: false
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    max_concurrent_tail_requests: 100
+    split_queries_by_interval: 15m
+    max_query_lookback: 12w
   compactor:
     working_directory: /data/retention
+    # configure storage provider for the compactor
     shared_store: aws
     compaction_interval: 10m
-    retention_enabled: set-by-engine-code # qovery setting
+    retention_enabled: set-by-engine-code
     retention_delete_delay: 2h
     retention_delete_worker_count: 150
   table_manager:
-    retention_deletes_enabled: set-by-engine-code # qovery setting
-    retention_period: set-by-engine-code # qovery setting
+    retention_deletes_enabled: set-by-engine-code
+    retention_period: set-by-engine-code
   schema_config:
     configs:
+      # set the schema for the index (2020 version can be deleted on a fresh install)
       - from: 2020-05-15
         store: boltdb-shipper
         object_store: s3
@@ -63,16 +71,17 @@ loki:
           prefix: index_
           period: 24h
   storage:
+    # configure the object storage backend
     bucketNames:
-      chunks: # qovery setting
-      ruler: # qovery setting
-      admin: # qovery setting
+      chunks:
+      ruler:
+      admin:
     type: s3
     s3:
-      s3: # qovery setting
-      region: # qovery setting
-      s3ForcePathStyle: # qovery setting
-      insecure: # qovery setting
+      s3:
+      region:
+      s3ForcePathStyle:
+      insecure:
   storage_config:
     boltdb_shipper:
       active_index_directory: /data/loki/index
@@ -82,31 +91,33 @@ loki:
 
 monitoring:
   dashboards:
-    enabled: false # qovery setting (we don't want a dedicated grafana to be deployed)
+    enabled: false
   rules:
     enabled: false
   serviceMonitor:
     enabled: false
     metricsInstance:
-      enabled: false # qovery setting (single binary version)
+      enabled: false
   selfMonitoring:
-    enabled: false # qovery setting (single binary version)
+    enabled: false
     grafanaAgent:
-      installOperator: false # qovery setting (single binary version)or: false
+      installOperator: false
 
   grafanaAgent:
-    enabled: false # qovery setting (single binary version)
+    enabled: false
   lokiCanary:
-    enabled: false # qovery setting (single binary version)
+    enabled: false
 
 test:
-  enabled: false # qovery setting (single binary version)
+  enabled: false
 
 gateway:
-  enabled: false # qovery setting (single binary version)
+  enabled: false
 
+# set the single binary version for basic usage
 singleBinary:
   replicas: 1
+  # set resources
   resources:
     limits:
       cpu: 1
@@ -126,8 +137,9 @@ singleBinary:
       mountPath: /data
     - name: storage
       mountPath: /var/loki
+  # set disk persistence to reduce data loss in case of pod crash
   # persistence:
-  #   storageClass: set-by-engine-code # qovery setting
+  #   storageClass: set-by-engine-code
 
 serviceAccount:
   annotations: {}

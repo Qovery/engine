@@ -1,33 +1,44 @@
+# set the provider to use
 provider: set-by-engine-code
+# keep the config you want to use and remove the others. Configure the provider you want to use.
 cloudflare:
   apiToken: set-by-engine-code
   email: set-by-engine-code
   proxied: set-by-engine-code
 pdns:
+  # Qovery DNS: apiUrl: *qoveryDnsUrl
   apiUrl: set-by-engine-code
+  # Qovery DNS: apiPort: "443"
   apiPort: set-by-engine-code
+  # Qovery DNS: apiKey: "443"
   apiKey: set-by-engine-code
 
-annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true) # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+# Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true)
+# set domainFilters to the domain you want to manage: [*domain]
 domainFilters: set-by-engine-code
 
 triggerLoopOnEvent: true
 policy: sync
 
+# avoid dns collision with other external-dns instances
 txtOwnerId: set-by-engine-code
 txtPrefix: set-by-engine-code
 
+# set the number of replicas you want to use
 replicas: 1
 
+# set the rolling update strategy you want to apply
 updateStrategy:
   type: set-by-engine-code
 
-# TODO: Remove after chart support a version we is built for ARM64
+# remove if you don't want to use a custom image
 image:
   registry: set-by-engine-code
   repository: set-by-engine-code
   tag: 0.13.2-debian-11-r17
 
+# set resources
 resources:
   limits:
     cpu: 50m

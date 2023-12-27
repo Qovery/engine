@@ -1,18 +1,29 @@
+# set the same namespace than cert-manager
 namespace: set-by-engine-code
 
+# configure the provider and the managed DNS (pdns for Qovery DNS)
 externalDnsProvider: set-by-engine-code
+# you can use [*domain] or the ones you want
 managedDns: set-by-engine-code
 
 acme:
   letsEncrypt:
+    # Let's encrypt email address for notifications
     emailReport: set-by-engine-code
+    # set the Let's Encrypt URL
+    # Test: https://acme-staging-v02.api.letsencrypt.org/directory
+    # Prod: https://acme-v02.api.letsencrypt.org/directory
     acmeUrl: set-by-engine-code
 
+# configure the provider, remove the one you don't use (generally same config as external DNS)
 provider:
   cloudflare:
     apiToken: set-by-engine-code
     email: set-by-engine-code
   pdns:
+    # Qovery DNS: apiPort: "443"
     apiPort: set-by-engine-code
+    # Qovery DNS: apiUrl: *qoveryDnsUrl
     apiUrl: set-by-engine-code
+    # Qovery DNS: apiKey: *jwtToken
     apiKey: set-by-engine-code
