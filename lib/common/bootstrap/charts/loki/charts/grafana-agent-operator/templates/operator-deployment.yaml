@@ -25,6 +25,9 @@ spec:
 {{ toYaml . | indent 8 }}
 {{- end }}
     spec:
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
       serviceAccountName: {{ template "ga-operator.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
@@ -34,6 +37,10 @@ spec:
       - name: {{ include "ga-operator.name" . }}
         image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.containerSecurityContext }}
+        securityContext:
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- with .Values.resources }}
         resources:
         {{- toYaml . | nindent 10 }}
