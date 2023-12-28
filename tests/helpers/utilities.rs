@@ -622,6 +622,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Gcp => vec![],
+        Kind::SelfManaged => vec![],
     }
 }
 
@@ -882,6 +883,7 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::SelfManaged => todo!(),
     }
     .to_string()
 }
@@ -903,6 +905,7 @@ pub fn db_instance_type(
             DatabaseMode::CONTAINER => None,
         },
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::SelfManaged => todo!(),
     }
 }
 

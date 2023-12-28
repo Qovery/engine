@@ -602,6 +602,10 @@ impl Kubernetes for EC2 {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
     }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        None
+    }
 }
 
 #[async_trait]

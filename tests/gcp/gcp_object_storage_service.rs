@@ -33,7 +33,7 @@ impl BucketParams {
             && self.bucket_labels == bucket.labels
             // TTL
             && match (self.bucket_ttl, bucket.ttl) {
-            (Some(self_bucket_ttl), Some(bucket_ttl)) => bucket_ttl == max(self_bucket_ttl, Duration::from_secs(1 * 24 * 60 * 60)),
+            (Some(self_bucket_ttl), Some(bucket_ttl)) => bucket_ttl == max(self_bucket_ttl, Duration::from_secs(24 * 60 * 60)),
             (None, None) => true,
             _ => false,
         }
@@ -187,7 +187,7 @@ fn test_create_bucket_success() {
                 project_id: google_project_id.to_string(),
                 bucket_name: format!("test-bucket-2-{}", Uuid::new_v4()),
                 bucket_location: GcpStorageRegion::EuropeWest9,
-                bucket_ttl: Some(Duration::from_secs(1 * 60 * 60)), // 1 hour
+                bucket_ttl: Some(Duration::from_secs(60 * 60)), // 1 hour
                 bucket_labels: Some(HashMap::from([
                     ("bucket_name".to_string(), "bucket_2".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),

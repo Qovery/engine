@@ -978,7 +978,7 @@ mod tests {
     fn test_gcp_region_from_str() {
         // test all supported regions
         for region in GcpRegion::iter() {
-            assert_eq!(region, GcpRegion::from_str(&region.to_cloud_provider_format()).unwrap());
+            assert_eq!(region, GcpRegion::from_str(region.to_cloud_provider_format()).unwrap());
         }
 
         // test unsupported region
@@ -1376,7 +1376,7 @@ mod tests {
     fn test_gcp_zone_from_str() {
         // test all supported zones
         for zone in GcpZone::iter() {
-            assert_eq!(zone, GcpZone::from_str(&zone.to_cloud_provider_format()).unwrap());
+            assert_eq!(zone, GcpZone::from_str(zone.to_cloud_provider_format()).unwrap());
         }
 
         // test unsupported zone

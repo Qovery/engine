@@ -14,7 +14,8 @@ use crate::models::container::{ContainerError, ContainerService};
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::types::{AWSEc2, AWS, GCP, SCW};
+use crate::models::selfmanaged::SelfManagedAppExtraSettings;
+use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -489,6 +490,35 @@ impl Container {
                 self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
                 GcpAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?),
+            CPKind::SelfManaged => Box::new(models::container::Container::<SelfManaged>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.command_args,
+                self.entrypoint,
+                self.cpu_request_in_mili,
+                self.cpu_limit_in_mili,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.public_domain,
+                self.ports,
+                vec![],
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                SelfManagedAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
         };

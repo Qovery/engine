@@ -35,6 +35,7 @@ pub mod metrics;
 pub mod models;
 pub mod qovery;
 pub mod scaleway;
+pub mod self_managed;
 pub mod service;
 pub mod utilities;
 pub mod vault;
@@ -61,7 +62,7 @@ pub trait CloudProvider: Send + Sync {
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
-    fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
+    fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials>;
     fn as_any(&self) -> &dyn Any;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
     fn to_transmitter(&self) -> Transmitter;
@@ -73,6 +74,7 @@ pub enum Kind {
     Aws,
     Scw,
     Gcp,
+    SelfManaged,
 }
 
 impl FromStr for Kind {
@@ -83,6 +85,7 @@ impl FromStr for Kind {
             "aws" | "amazon" => Ok(Kind::Aws),
             "scw" | "scaleway" => Ok(Kind::Scw),
             "gcp" | "google" => Ok(Kind::Gcp),
+            "self_managed" | "selfmanaged" => Ok(Kind::SelfManaged),
             _ => Err(()),
         }
     }
@@ -94,12 +97,14 @@ impl Display for Kind {
             Kind::Aws => "AWS",
             Kind::Scw => "Scaleway",
             Kind::Gcp => "Google",
+            Kind::SelfManaged => "SelfManaged",
         })
     }
 }
 
 pub trait CloudProviderZones {}
 
+#[derive(Default)]
 pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,

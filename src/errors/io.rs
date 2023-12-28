@@ -68,6 +68,7 @@ pub enum Tag {
     CannotRestartService,
     CannotRetrieveClusterConfigFile,
     CannotUninstallHelmChart,
+    CannotWriteToFile,
     ClientServiceFailedToDeployBeforeStart,
     ClientServiceFailedToStart,
     CloudProviderApiMissingInfo,
@@ -475,6 +476,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
             errors::Tag::CannotFetchScalewayPrivateNetworks => Tag::CannotFetchScalewayPrivateNetworks,
+            errors::Tag::CannotWriteToFile => Tag::CannotWriteToFile,
         }
     }
 }

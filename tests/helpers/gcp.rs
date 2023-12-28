@@ -7,7 +7,6 @@ use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
-use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::gcp::kubernetes::{Gke, GkeOptions, VpcMode};
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::gcp::Google;
@@ -17,18 +16,15 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::google_artifact_registry::GoogleArtifactRegistry;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use qovery_engine::models::gcp::JsonCredentials;
-use qovery_engine::models::scaleway::ScwZone;
+use qovery_engine::models::gcp::{GcpStorageType, JsonCredentials};
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,6 +33,8 @@ use time::Time;
 use uuid::Uuid;
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
+
+pub const GCP_DATABASE_DISK_TYPE: GcpStorageType = GcpStorageType::Balanced;
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
@@ -211,7 +209,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         .expect("Cannot parse GCP_CREDENTIALS");
         Box::new(Google::new(
             context.clone(),
-            context.cluster_long_id().clone(),
+            *context.cluster_long_id(),
             secrets
                 .GCP_TEST_ORGANIZATION_ID
                 .as_ref()
@@ -283,7 +281,7 @@ pub fn try_parse_json_credentials_from_str(raw: &str) -> Result<JsonCredentials,
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<EnvironmentRequest>,
+    _environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     region: GcpRegion,
 ) -> Result<(), ContainerRegistryError> {

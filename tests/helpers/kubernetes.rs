@@ -165,7 +165,7 @@ pub fn cluster_test(
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
     region: &str,
-    zones: Option<Vec<&str>>,
+    _zones: Option<Vec<&str>>,
     test_type: ClusterTestType,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -227,6 +227,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
+        Kind::SelfManaged => todo!(),
     };
     // Bootstrap
     let mut bootstrap_tx = Transaction::new(&engine).unwrap();
@@ -289,7 +290,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    region.clone(),
+                    region,
                     KubernetesKind::Eks,
                     upgrade_to_version,
                     cluster_domain,
@@ -303,7 +304,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    region.clone(),
+                    region,
                     KubernetesKind::ScwKapsule,
                     upgrade_to_version,
                     cluster_domain,
@@ -314,6 +315,7 @@ pub fn cluster_test(
                     EngineLocation::ClientSide,
                 ),
                 Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+                Kind::SelfManaged => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -340,7 +342,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    region.clone(),
+                    region,
                     KubernetesKind::Eks,
                     kubernetes_boot_version,
                     cluster_domain,
@@ -354,7 +356,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     metrics_registry.clone(),
-                    region.clone(),
+                    region,
                     KubernetesKind::ScwKapsule,
                     kubernetes_boot_version,
                     cluster_domain,
@@ -365,6 +367,7 @@ pub fn cluster_test(
                     EngineLocation::ClientSide,
                 ),
                 Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+                Kind::SelfManaged => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();

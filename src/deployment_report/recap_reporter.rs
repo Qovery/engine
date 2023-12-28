@@ -68,15 +68,21 @@ mod test {
     #[test]
     fn test_recap_rendering() {
         // given
-        let mut event_mock_1 = Event::default();
-        event_mock_1.message = Some("Readiness probe failure".to_string());
-        event_mock_1.type_ = Some("Warning".to_string());
-        let mut event_mock_2 = Event::default();
-        event_mock_2.message = Some("Liveness probe failure".to_string());
-        event_mock_2.type_ = Some("Warning".to_string());
-        let mut event_mock_3 = Event::default();
-        event_mock_3.message = Some("Readiness probe failure".to_string());
-        event_mock_3.type_ = Some("Warning".to_string());
+        let event_mock_1 = Event {
+            message: Some("Readiness probe failure".to_string()),
+            type_: Some("Warning".to_string()),
+            ..Default::default()
+        };
+        let event_mock_2 = Event {
+            message: Some("Liveness probe failure".to_string()),
+            type_: Some("Warning".to_string()),
+            ..Default::default()
+        };
+        let event_mock_3 = Event {
+            message: Some("Readiness probe failure".to_string()),
+            type_: Some("Warning".to_string()),
+            ..Default::default()
+        };
         let event_mocks = vec![event_mock_1, event_mock_2, event_mock_3];
 
         // when

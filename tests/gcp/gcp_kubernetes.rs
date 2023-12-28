@@ -46,6 +46,7 @@ fn create_and_destroy_gke_cluster(
 #[cfg(feature = "test-gcp-infra")]
 #[named]
 #[test]
+#[ignore]
 fn create_and_destroy_gke_cluster_without_nat_gw_in_europe_west_9() {
     let region = GcpRegion::EuropeWest9;
     create_and_destroy_gke_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());

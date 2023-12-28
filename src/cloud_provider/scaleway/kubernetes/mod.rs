@@ -529,21 +529,24 @@ impl Kapsule {
         // AWS S3 tfstates storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .access_key_id
-                .as_str(),
+            match self.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.access_key_id.as_str(),
+                None => "",
+            },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .secret_access_key
-                .as_str(),
+            match self.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.secret_access_key.as_str(),
+                None => "",
+            },
         );
         context.insert(
             "aws_region_tfstates_account",
-            self.cloud_provider().terraform_state_credentials().region.as_str(),
+            match self.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.region.as_str(),
+                None => "",
+            },
         );
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
@@ -1966,5 +1969,9 @@ impl Kubernetes for Kapsule {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        None
     }
 }

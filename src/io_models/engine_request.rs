@@ -14,6 +14,7 @@ use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
+use crate::cloud_provider::self_managed::SelfManaged;
 use crate::container_registry::ecr::ECR;
 use crate::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use crate::container_registry::scaleway_container_registry::ScalewayCR;
@@ -284,6 +285,12 @@ impl CloudProvider {
                     terraform_state_credentials,
                 )))
             }
+            cloud_provider::Kind::SelfManaged => Some(Box::new(SelfManaged::new(
+                context,
+                self.clone().long_id,
+                self.name.clone(),
+                region.to_string(),
+            ))),
         }
     }
 }
@@ -297,6 +304,11 @@ pub struct TerraformStateCredentials {
 
 pub type ChartValuesOverrideName = String;
 pub type ChartValuesOverrideValues = String;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct KubernetesConnection {
+    pub kubeconfig: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
@@ -463,9 +475,31 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
-            cloud_provider::kubernetes::Kind::EksSelfManaged => todo!(), // TODO: BYOK integration
-            cloud_provider::kubernetes::Kind::GkeSelfManaged => todo!(), // TODO: BYOK integration
-            cloud_provider::kubernetes::Kind::ScwSelfManaged => todo!(), // TODO: BYOK integration
+            cloud_provider::kubernetes::Kind::EksSelfManaged
+            | cloud_provider::kubernetes::Kind::GkeSelfManaged
+            | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
+                match cloud_provider::self_managed::kubernetes::SelfManaged::new(
+                    context.clone(),
+                    self.id.to_string(),
+                    self.long_id,
+                    self.name.to_string(),
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    cloud_provider,
+                    dns_provider,
+                    serde_json::from_value::<cloud_provider::self_managed::kubernetes::SelfManagedOptions>(
+                        self.options.clone(),
+                    )
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    logger,
+                    metrics_registry,
+                    ClusterAdvancedSettings::default(),
+                    self.kubeconfig.clone(),
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 }

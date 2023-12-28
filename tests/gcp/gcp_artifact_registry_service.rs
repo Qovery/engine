@@ -56,7 +56,7 @@ fn test_get_repository() {
             gcp_project_name,
             GCP_REGION.to_cloud_provider_format()
         );
-        let repository_name = format!("test-repository-{}", Uuid::new_v4().to_string());
+        let repository_name = format!("test-repository-{}", Uuid::new_v4());
         let _created_repository = service
             .create_repository(
                 gcp_project_name,
@@ -92,7 +92,7 @@ fn test_get_repository() {
                     "{}-docker.pkg.dev/{}/{}/",
                     GCP_REGION.to_cloud_provider_format(),
                     gcp_project_name,
-                    repository_name.to_string()
+                    repository_name
                 ))
             },
             retrieved_repository.expect("Cannot retrieve repository")
@@ -138,7 +138,7 @@ fn test_create_repository() {
             gcp_project_name,
             GCP_REGION.to_cloud_provider_format()
         );
-        let repository_name = format!("test-repository-{}", Uuid::new_v4().to_string());
+        let repository_name = format!("test-repository-{}", Uuid::new_v4());
 
         // execute:
         let created_repository = service.create_repository(
@@ -171,7 +171,7 @@ fn test_create_repository() {
                     "{}-docker.pkg.dev/{}/{}/",
                     GCP_REGION.to_cloud_provider_format(),
                     gcp_project_name,
-                    repository_name.to_string()
+                    repository_name
                 ))
             },),
             created_repository
@@ -213,7 +213,7 @@ fn test_delete_repository() {
         .expect("Cannot initialize google artifact registry service");
 
         // create a repository for the test
-        let repository_name = format!("test-repository-{}", Uuid::new_v4().to_string());
+        let repository_name = format!("test-repository-{}", Uuid::new_v4());
         let _created_repository = service
             .create_repository(
                 gcp_project_name,
@@ -266,7 +266,7 @@ fn test_get_docker_image() {
         .expect("Cannot initialize google artifact registry service");
 
         // create a repository for the test
-        let repository_name = format!("test-repository-{}", Uuid::new_v4().to_string());
+        let repository_name = format!("test-repository-{}", Uuid::new_v4());
         let _created_repository = service
             .create_repository(
                 gcp_project_name,
@@ -297,7 +297,7 @@ fn test_get_docker_image() {
             .set_username("_json_key")
             .expect("Cannot set repository URL username");
         repository_url
-            .set_password(secrets.GCP_CREDENTIALS.as_ref().map(|p| p.as_str()))
+            .set_password(secrets.GCP_CREDENTIALS.as_deref())
             .expect("Cannot set repository URL password");
 
         let source_container_image = ContainerImage::new(
@@ -400,7 +400,7 @@ fn test_delete_docker_image() {
         .expect("Cannot initialize google artifact registry service");
 
         // create a repository for the test
-        let repository_name = format!("test-repository-{}", Uuid::new_v4().to_string());
+        let repository_name = format!("test-repository-{}", Uuid::new_v4());
         let _created_repository = service
             .create_repository(
                 gcp_project_name,
@@ -431,7 +431,7 @@ fn test_delete_docker_image() {
             .set_username("_json_key")
             .expect("Cannot set repository URL username");
         repository_url
-            .set_password(secrets.GCP_CREDENTIALS.as_ref().map(|p| p.as_str()))
+            .set_password(secrets.GCP_CREDENTIALS.as_deref())
             .expect("Cannot set repository URL password");
 
         let source_container_image = ContainerImage::new(

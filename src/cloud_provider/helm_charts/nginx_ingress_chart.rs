@@ -50,7 +50,7 @@ impl NginxIngressChart {
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
-                NginxIngressChart::chart_old_name(),
+                NginxIngressChart::chart_name(),
             ),
             controller_resources: match controller_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
@@ -328,7 +328,7 @@ mod tests {
                 chart.chart_values_path.helm_path(),
                 HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
             ),
-            NginxIngressChart::chart_old_name(),
+            NginxIngressChart::chart_name(),
         );
 
         // execute
@@ -370,7 +370,7 @@ mod tests {
                     chart.chart_values_path.helm_path(),
                     HelmChartType::CloudProviderSpecific(cloud_provider)
                 ),
-                NginxIngressChart::chart_old_name(),
+                NginxIngressChart::chart_name(),
             );
 
             // execute:
@@ -406,7 +406,7 @@ mod tests {
                 chart.chart_values_path.helm_path(),
                 HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2)
             ),
-            NginxIngressChart::chart_old_name(),
+            NginxIngressChart::chart_name(),
         );
 
         // execute:
