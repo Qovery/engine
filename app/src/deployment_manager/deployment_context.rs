@@ -9,6 +9,7 @@ use qovery_engine::engine_task::Task;
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;

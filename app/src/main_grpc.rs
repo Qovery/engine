@@ -404,7 +404,7 @@ pub fn main() -> io::Result<()> {
         };
 
         let mngr =
-            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Box::new(payload_to_engine_task));
+            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Arc::new(payload_to_engine_task));
         mngr.run().await
     };
 
