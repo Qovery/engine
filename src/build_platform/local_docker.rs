@@ -18,7 +18,6 @@ use crate::cmd::docker::{Architecture, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::obfuscation_service::ObfuscationService;
 
 use crate::fs::workspace_directory;
 use crate::git;
@@ -120,7 +119,6 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
@@ -189,8 +187,8 @@ impl LocalDocker {
             &image_cache,
             true,
             &arch,
-            &mut |line| logger.send_progress(obfuscation_service.obfuscate_secrets(line)),
-            &mut |line| logger.send_progress(obfuscation_service.obfuscate_secrets(line)),
+            &mut |line| logger.send_progress(line),
+            &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
@@ -208,7 +206,6 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         use_build_cache: bool,
         logger: &EnvLogger,
-        obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         const LATEST_TAG: &str = "latest";
@@ -280,8 +277,8 @@ impl LocalDocker {
             cmd.set_kill_grace_period(Duration::from_secs(0));
             let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
             exit_status = cmd.exec_with_abort(
-                &mut |line| logger.send_progress(obfuscation_service.obfuscate_secrets(line)),
-                &mut |line| logger.send_progress(obfuscation_service.obfuscate_secrets(line)),
+                &mut |line| logger.send_progress(line),
+                &mut |line| logger.send_progress(line),
                 &cmd_killer,
             );
 
@@ -339,7 +336,6 @@ impl BuildPlatform for LocalDocker {
         build: &mut Build,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // check if we should already abort the task
@@ -526,7 +522,6 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 logger,
                 metrics_registry.clone(),
-                obfuscation_service,
                 is_task_canceled,
             )
         } else {
@@ -538,7 +533,6 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
                 logger,
-                obfuscation_service,
                 is_task_canceled,
             );
             build_record.stop(if build_result.is_ok() {

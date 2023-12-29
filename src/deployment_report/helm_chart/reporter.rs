@@ -1,7 +1,6 @@
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::obfuscation_service::ObfuscationService;
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
@@ -15,7 +14,6 @@ pub struct HelmChartDeploymentReporter {
     logger: EnvLogger,
     metrics_registry: Arc<dyn MetricsRegistry>,
     action: Action,
-    obfuscation_service: Box<dyn ObfuscationService>,
 }
 
 impl HelmChartDeploymentReporter {
@@ -25,7 +23,6 @@ impl HelmChartDeploymentReporter {
             logger: deployment_target.env_logger(chart, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
             action,
-            obfuscation_service: deployment_target.obfuscation_service.clone_dyn(),
         }
     }
 }
@@ -88,17 +85,7 @@ impl DeploymentReporter for HelmChartDeploymentReporter {
         }
         //self.logger.send_error(*error.clone());
         self.stop_record(StepStatus::Error);
-
-        let error_without_secret = EngineError::new_engine_error(
-            *error.clone(),
-            self.obfuscation_service
-                .obfuscate_secrets(error.user_log_message().to_string()),
-            error
-                .hint_message()
-                .as_ref()
-                .map(|msg| self.obfuscation_service.obfuscate_secrets(msg.to_string())),
-        );
-        self.logger.send_error(error_without_secret);
+        self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
             format!("

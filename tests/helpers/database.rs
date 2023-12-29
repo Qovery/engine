@@ -29,7 +29,6 @@ use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
-use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -86,7 +85,6 @@ impl Infrastructure for EnvironmentRequest {
             1,
             |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-            Box::new(StdObfuscationService::new(vec![])),
             &|| false,
         );
         ret.unwrap();
