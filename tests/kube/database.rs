@@ -7,7 +7,6 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::cloud_provider::service::{DatabaseType, ServiceType};
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
-use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseOptions;
 use qovery_engine::io_models::Action;
@@ -49,8 +48,7 @@ fn should_increase_db_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let obfuscation_service = Box::new(StdObfuscationService::new(vec![]));
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, obfuscation_service, &|| false).unwrap();
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
         let test_db = &test_env.databases[0];
 
         let db: Database<AWS, Container, PostgresSQL> = Database::new(

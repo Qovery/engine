@@ -9,7 +9,6 @@ use crate::errors::EngineError;
 use crate::events::EventDetails;
 
 use crate::cloud_provider::models::CpuArchitecture;
-use crate::deployment_report::obfuscation_service::ObfuscationService;
 use crate::metrics_registry::MetricsRegistry;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -89,7 +88,6 @@ pub trait BuildPlatform: Send + Sync {
         build: &mut Build,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        obfuscation_service: Arc<dyn ObfuscationService>,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError>;
 }

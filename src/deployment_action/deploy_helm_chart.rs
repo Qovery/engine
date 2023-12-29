@@ -66,8 +66,8 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
                     &[],
                     &CommandKiller::from(self.helm_timeout(), target.should_abort),
-                    &mut |line| logger.info(target.obfuscation_service.obfuscate_secrets(line)),
-                    &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
+                    &mut |line| logger.info(line),
+                    &mut |line| logger.warning(line),
                 )
                 .map_err(|err| (event_details.clone(), HelmChartError::HelmError(err)))?;
 
@@ -134,8 +134,8 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     &chart_info,
                     &[],
                     &CommandKiller::from(self.helm_timeout(), &target.should_abort),
-                    &mut |line| logger.info(target.obfuscation_service.obfuscate_secrets(line)),
-                    &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
+                    &mut |line| logger.info(line),
+                    &mut |line| logger.warning(line),
                 )
                 .map_err(|err| {
                     Box::new(EngineError::new_helm_chart_error(
@@ -521,7 +521,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
             &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
             &[],
             &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
-            &mut |line| logger.warning(target.obfuscation_service.obfuscate_secrets(line)),
+            &mut |line| logger.warning(line),
         )
         .map_err(|e| (event_details.clone(), e))?;
 
