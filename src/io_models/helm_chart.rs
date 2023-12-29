@@ -14,6 +14,7 @@ use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::{AWSEc2, AWS, GCP, SCW};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -209,8 +210,20 @@ impl HelmChart {
     ) -> Result<Box<dyn HelmChartService>, HelmChartError> {
         // Get passphrase and public key if provided by the user
         let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars_with_infos.clone());
-        let environment_variables_with_infos: HashMap<String, VariableInfo> =
-            self.environment_vars_with_infos.clone().into_iter().collect();
+        let environment_variables_with_info: HashMap<String, VariableInfo> = self
+            .environment_vars_with_infos
+            .clone()
+            .into_iter()
+            .map(|(k, mut v)| {
+                v.value = String::from_utf8_lossy(
+                    &base64::engine::general_purpose::STANDARD
+                        .decode(v.value)
+                        .unwrap_or_default(),
+                )
+                .to_string();
+                (k, v)
+            })
+            .collect();
         let service: Box<dyn HelmChartService> = match cloud_provider.kubernetes_kind() {
             kubernetes::Kind::Eks | kubernetes::Kind::EksSelfManaged => {
                 Box::new(models::helm_chart::HelmChart::<AWS>::new(
@@ -232,7 +245,7 @@ impl HelmChart {
                     self.command_args,
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
-                    environment_variables_with_infos,
+                    environment_variables_with_info,
                     self.advanced_settings,
                     AwsAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -258,7 +271,7 @@ impl HelmChart {
                 self.command_args,
                 std::time::Duration::from_secs(self.timeout_sec),
                 self.allow_cluster_wide_resources,
-                environment_variables_with_infos,
+                environment_variables_with_info,
                 self.advanced_settings,
                 AwsEc2AppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
@@ -284,7 +297,7 @@ impl HelmChart {
                     self.command_args,
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
-                    environment_variables_with_infos,
+                    environment_variables_with_info,
                     self.advanced_settings,
                     ScwAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -311,7 +324,7 @@ impl HelmChart {
                     self.command_args,
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
-                    environment_variables_with_infos,
+                    environment_variables_with_info,
                     self.advanced_settings,
                     GcpAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
