@@ -131,10 +131,6 @@ impl EventMessage {
         }
     }
 
-    pub fn transform(&mut self, transformer: impl Fn(String) -> String) {
-        self.full_details = self.full_details.take().map(transformer);
-    }
-
     /// Creates e new EventMessage from safe message.
     ///
     /// Arguments

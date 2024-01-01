@@ -20,6 +20,7 @@ use qovery_engine::cloud_provider::models::{
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
+use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
@@ -623,8 +624,9 @@ fn deployment_target<'a>(
     test_env: &'a Environment,
     infra_ctx: &'a InfrastructureContext,
 ) -> DeploymentTarget<'a> {
+    let obfuscation_service = Box::new(StdObfuscationService::new(vec![]));
     create_fake_kubeconfig(test_kube, test_env);
-    DeploymentTarget::new(infra_ctx, test_env, &|| false)
+    DeploymentTarget::new(infra_ctx, test_env, obfuscation_service, &|| false)
         .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 

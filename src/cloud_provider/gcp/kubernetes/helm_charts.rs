@@ -196,6 +196,7 @@ pub fn gcp_helm_charts(
 
     // TODO(benjaminch): VPA
     // TODO(benjaminch): Loki
+    let loki: Option<Box<dyn HelmChart>> = None;
     // TODO(benjaminch): Kube prometheus stack
     // TODO(benjaminch): Prometheus adapter
     // TODO(benjaminch): Kube state metrics
@@ -299,10 +300,14 @@ pub fn gcp_helm_charts(
         Url::parse(&chart_config_prerequisites.infra_options.qovery_grpc_url)
             .map_err(|e| CommandError::new("cannot parse GRPC url".to_string(), Some(e.to_string()), None))?,
         match chart_config_prerequisites.ff_log_history_enabled {
-            true => Some(
-                Url::parse("http://loki.logging.svc.cluster.local:3100")
-                    .map_err(|e| CommandError::new("cannot parse Loki url".to_string(), Some(e.to_string()), None))?,
-            ),
+            true => {
+                match loki {
+                    Some(_) => Some(Url::parse("http://loki.logging.svc.cluster.local:3100").map_err(|e| {
+                        CommandError::new("cannot parse Loki url".to_string(), Some(e.to_string()), None)
+                    })?),
+                    None => None,
+                }
+            }
             false => None,
         },
         &chart_config_prerequisites.infra_options.jwt_token,
