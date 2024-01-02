@@ -21,7 +21,6 @@ use futures_util::{stream, Stream, StreamExt};
 use prost_types::Timestamp;
 use qovery_engine::engine_task::qovery_api::EngineServiceType::Engine;
 use qovery_engine::engine_task::Task;
-use qovery_engine::errors::EngineError;
 use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
 use qovery_engine::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::logger::{Logger, StdIoLogger};
@@ -101,7 +100,7 @@ impl DeploymentManagerState {
 
 impl DeploymentContext {}
 
-type MkEngineTask = Arc<
+type MkEngineTask = Box<
     dyn Fn(
             String,
             &DeploymentInfo,
@@ -109,8 +108,7 @@ type MkEngineTask = Arc<
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
         ) -> Result<Arc<dyn Task>, EngineEvent>
-        + Send
-        + Sync,
+        + Send,
 >;
 
 pub struct DeploymentManager {
@@ -276,17 +274,10 @@ impl DeploymentManager {
                     match msg.request {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                             info!("Received new deployment task: {}", payload);
-                            let task = {
-                                let logger = logger.clone();
-                                let metrics_registry = metrics_registry.clone();
-                                let deployment_info = deployment.deployment_info.clone();
-                                let engine_client = self.engine_client.clone();
-                                let mk_engine_task = self.mk_engine_task.clone();
-                                tokio_utils::launch_blocking_task(move || (mk_engine_task)(payload, &deployment_info, &engine_client, logger, metrics_registry)).await
-                            };
+                            let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone());
                             let upstream = UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry);
                             match task {
-                                Ok(Ok(task)) => {
+                                Ok(task) => {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                                         deployment,
                                         task: TaskContext::spawn_new_task(task),
@@ -294,13 +285,8 @@ impl DeploymentManager {
                                     };
                                     (next_step, None)
                                 }
-                                Ok(Err(err)) => {
-                                    deployment.hard_abort_deployment(err).await;
-                                    upstream.await_termination().await;
-                                    (DeploymentManagerState::SeekingNewDeployment {}, None)
-                                }
                                 Err(err) => {
-                                     error!("Can't start the deployment task {:?} ", err);
+                                    deployment.hard_abort_deployment(err).await;
                                     upstream.await_termination().await;
                                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                                 }
@@ -665,7 +651,7 @@ mod test {
         };
 
         let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Arc::new(mk_engine_task));
+            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task));
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
         pin_mut!(fut);
@@ -725,7 +711,7 @@ mod test {
 
         let task = TaskSelector::Environment("");
         let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Arc::new(mk_engine_task));
+            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task));
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
         let fut = deployment_mngr.run();

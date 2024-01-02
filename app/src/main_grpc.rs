@@ -9,7 +9,6 @@ extern crate core;
 use std::net::TcpStream;
 use std::path::Path;
 
-use anyhow::anyhow;
 use chrono::Utc;
 use clap::Parser;
 use std::convert::TryFrom;
@@ -88,8 +87,8 @@ fn to_engine_task(
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-) -> Result<Arc<dyn Task>, anyhow::Error> {
-    let mk_task = || -> Result<Arc<dyn Task>, anyhow::Error> {
+) -> Result<Arc<dyn Task>, serde_json::Error> {
+    let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
             TaskSelector::Infrastructure(_) => {
                 let request = serde_json::from_slice::<InfrastructureEngineRequest>(msg.as_bytes())?;
@@ -113,7 +112,7 @@ fn to_engine_task(
                     request.deployment_jwt_token.clone(),
                     grpc_client.clone(),
                 ));
-                let env = EnvironmentTask::new(
+                Ok(Arc::new(EnvironmentTask::new(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
@@ -121,9 +120,7 @@ fn to_engine_task(
                     logger,
                     metrics_registry,
                     qovery_api,
-                )
-                .map_err(|err| anyhow!("Cannot create environment task {:?}", err))?;
-                Ok(Arc::new(env))
+                )))
             }
         }
     };
@@ -404,7 +401,7 @@ pub fn main() -> io::Result<()> {
         };
 
         let mngr =
-            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Arc::new(payload_to_engine_task));
+            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Box::new(payload_to_engine_task));
         mngr.run().await
     };
 
