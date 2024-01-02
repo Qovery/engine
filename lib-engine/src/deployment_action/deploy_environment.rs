@@ -4,7 +4,6 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
-use crate::deployment_report::obfuscation_service::ObfuscationService;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
@@ -37,9 +36,8 @@ impl<'a> EnvironmentDeployment<'a> {
         environment: &'a Environment,
         should_abort: &'a (dyn Fn() -> bool + Send + Sync),
         logger: Arc<Box<dyn Logger>>,
-        obfuscation_service: Box<dyn ObfuscationService>,
     ) -> Result<EnvironmentDeployment<'a>, Box<EngineError>> {
-        let deployment_target = DeploymentTarget::new(infra_ctx, environment, obfuscation_service, should_abort)?;
+        let deployment_target = DeploymentTarget::new(infra_ctx, environment, should_abort)?;
         Ok(EnvironmentDeployment {
             deployed_services: Arc::new(Mutex::new(HashSet::with_capacity(
                 Self::services_without_routers_iter(environment).count()

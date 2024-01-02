@@ -22,4 +22,14 @@ impl Logger for CompositeLogger {
     fn clone_dyn(&self) -> Box<dyn Logger> {
         Box::new(self.clone())
     }
+
+    fn with_secrets(&self, secrets: Vec<String>) -> Box<dyn Logger> {
+        let loggers = self
+            .loggers
+            .iter()
+            .map(|logger| logger.with_secrets(secrets.clone()))
+            .collect();
+
+        Box::new(CompositeLogger { loggers })
+    }
 }

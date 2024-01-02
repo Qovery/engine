@@ -1,3 +1,4 @@
+use crate::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::events::{EngineEvent, EventMessageVerbosity};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing;
@@ -5,6 +6,7 @@ use tracing;
 pub trait Logger: Send + Sync {
     fn log(&self, event: EngineEvent);
     fn clone_dyn(&self) -> Box<dyn Logger>;
+    fn with_secrets(&self, secrets: Vec<String>) -> Box<dyn Logger>;
 }
 
 impl Clone for Box<dyn Logger> {
@@ -62,11 +64,31 @@ impl Logger for StdIoLogger {
     fn clone_dyn(&self) -> Box<dyn Logger> {
         Box::new(self.clone())
     }
+
+    fn with_secrets(&self, _: Vec<String>) -> Box<dyn Logger> {
+        Box::new(self.clone())
+    }
 }
 
-impl Logger for UnboundedSender<EngineEvent> {
-    fn log(&self, event: EngineEvent) {
-        match self.send(event) {
+pub struct UnboundedSenderLogger {
+    unbounded_sender: UnboundedSender<EngineEvent>,
+    obfuscation_service: Box<dyn ObfuscationService>,
+}
+
+impl UnboundedSenderLogger {
+    pub fn new(unbounded_sender: UnboundedSender<EngineEvent>, secrets: Vec<String>) -> Self {
+        UnboundedSenderLogger {
+            unbounded_sender,
+            obfuscation_service: Box::new(StdObfuscationService::new(secrets)),
+        }
+    }
+}
+
+impl Logger for UnboundedSenderLogger {
+    fn log(&self, mut event: EngineEvent) {
+        event.obfuscate(|txt| self.obfuscation_service.obfuscate_secrets(txt));
+
+        match self.unbounded_sender.send(event) {
             Ok(_) => {}
             Err(_) => {
                 error!("Unable to send engine event to logger channel");
@@ -75,7 +97,17 @@ impl Logger for UnboundedSender<EngineEvent> {
     }
 
     fn clone_dyn(&self) -> Box<dyn Logger> {
-        Box::new(self.clone())
+        Box::new(UnboundedSenderLogger {
+            unbounded_sender: self.unbounded_sender.clone(),
+            obfuscation_service: self.obfuscation_service.clone_dyn(),
+        })
+    }
+
+    fn with_secrets(&self, secrets: Vec<String>) -> Box<dyn Logger> {
+        Box::new(UnboundedSenderLogger {
+            unbounded_sender: self.unbounded_sender.clone(),
+            obfuscation_service: self.obfuscation_service.with_secrets(secrets),
+        })
     }
 }
 

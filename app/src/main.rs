@@ -188,15 +188,22 @@ pub fn using_json_path_parameter(
                 })
                 .unwrap();
             req.test_cluster = test_cluster;
-            Box::new(EnvironmentTask::new(
-                req,
-                workspace_root_dir,
-                lib_root_dir,
-                docker,
-                logger,
-                metrics_registry,
-                Box::new(FakeQoveryApi {}),
-            ))
+            Box::new(
+                EnvironmentTask::new(
+                    req,
+                    workspace_root_dir,
+                    lib_root_dir,
+                    docker,
+                    logger,
+                    metrics_registry,
+                    Box::new(FakeQoveryApi {}),
+                )
+                .map_err(|err| {
+                    error!("Impossible to create an environment task: {}", err);
+                    process::exit(1);
+                })
+                .unwrap(),
+            )
         }
         TaskSelector::Infrastructure(_) => {
             let mut req: InfrastructureEngineRequest = serde_json::from_reader(file)

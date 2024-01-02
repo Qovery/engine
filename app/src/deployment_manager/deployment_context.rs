@@ -7,8 +7,9 @@ use crate::logger::composite_logger::CompositeLogger;
 use futures_util::{stream, StreamExt};
 use qovery_engine::engine_task::Task;
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
-use qovery_engine::logger::{Logger, StdIoLogger};
+use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -83,8 +84,10 @@ impl DeploymentContext {
     > {
         let (log_tx, msg_tx, msg_stream, abort_upstream_tx) = self.get_message_stream().await;
         let msg_publisher = Box::new(msg_tx);
-        let logger_for_task: Box<dyn Logger> =
-            Box::new(CompositeLogger::new(vec![Box::new(StdIoLogger::new()), Box::new(log_tx)]));
+        let logger_for_task: Box<dyn Logger> = Box::new(CompositeLogger::new(vec![
+            Box::new(StdIoLogger::new()),
+            Box::new(UnboundedSenderLogger::new(log_tx, vec![])),
+        ]));
         let metrics_registry: Box<dyn MetricsRegistry> = Box::new(StdMetricsRegistry::new(msg_publisher));
 
         let msg_stream = stream::iter(vec![EngineMessageTx {
