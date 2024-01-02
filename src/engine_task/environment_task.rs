@@ -1,9 +1,10 @@
 use super::Task;
+use crate::build_platform;
 use crate::build_platform::{to_build_error, BuildError, BuildPlatform};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
-use crate::cloud_provider::{service, CloudProvider};
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
 use crate::cmd::docker::{BuilderHandle, Docker};
@@ -13,7 +14,7 @@ use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
 use crate::engine_task::qovery_api::QoveryApi;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
@@ -21,7 +22,7 @@ use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::transaction::DeploymentOption;
-use crate::{build_platform, cloud_provider, dns_provider};
+use base64::Engine;
 use itertools::Itertools;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
@@ -35,13 +36,16 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 pub struct EnvironmentTask {
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
+    qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
-    info_context: Context,
 }
 
 impl EnvironmentTask {
@@ -53,7 +57,7 @@ impl EnvironmentTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
-    ) -> Result<Self, Box<EngineError>> {
+    ) -> Self {
         let span = info_span!(
             "environment_task",
             //organization_id = request.organization_long_id.to_string(),
@@ -61,146 +65,37 @@ impl EnvironmentTask {
             execution_id = request.id,
         );
 
-        let info_context =
-            Self::info_context(&request, workspace_root_dir, lib_root_dir, docker, Arc::from(qovery_api));
-
-        let cloud_provider = request
-            .cloud_provider
-            .to_engine_cloud_provider(
-                info_context.clone(),
-                &request.kubernetes.region,
-                request.kubernetes.kind.clone(),
-            )
-            .ok_or_else(|| {
-                Box::new(EngineError::new_error_on_cloud_provider_information(
-                    request.event_details(),
-                    CommandError::new(
-                        "Invalid cloud provider information".to_string(),
-                        Some(format!("Invalid cloud provider information: {:?}", request.cloud_provider)),
-                        None,
-                    ),
-                ))
-            })?;
-        let cloud_provider: Arc<dyn cloud_provider::CloudProvider> = Arc::from(cloud_provider);
-
-        let tags = request
-            .kubernetes
-            .advanced_settings
-            .cloud_provider_container_registry_tags
-            .clone();
-
-        let container_registry = request
-            .container_registry
-            .to_engine_container_registry(info_context.clone(), logger.clone(), tags)
-            .ok_or_else(|| {
-                crate::errors::EngineError::new_error_on_container_registry_information(
-                    request.event_details(),
-                    CommandError::new(
-                        "Invalid container registry information".to_string(),
-                        Some(format!(
-                            "Invalid container registry information: {:?}",
-                            request.container_registry
-                        )),
-                        None,
-                    ),
-                )
-            })?;
-
-        let cluster_jwt_token: String = request
-            .kubernetes
-            .options
-            .get("jwt_token")
-            .iter()
-            .flat_map(|v| v.as_str())
-            .collect();
-
-        let dns_provider = request
-            .dns_provider
-            .to_engine_dns_provider(info_context.clone(), cluster_jwt_token)
-            .ok_or_else(|| {
-                crate::errors::EngineError::new_error_on_dns_provider_information(
-                    request.event_details(),
-                    CommandError::new(
-                        "Invalid DNS provider information".to_string(),
-                        Some(format!("Invalid DNS provider information: {:?}", request.dns_provider)),
-                        None,
-                    ),
-                )
-            })?;
-        let dns_provider: Arc<dyn dns_provider::DnsProvider> = Arc::from(dns_provider);
-
-        let kubernetes = match request.kubernetes.to_engine_kubernetes(
-            &info_context,
-            cloud_provider.clone(),
-            dns_provider.clone(),
-            logger.clone(),
-            metrics_registry.clone(),
-        ) {
-            Ok(x) => x,
-            Err(e) => {
-                error!("{:?}", e);
-                return Err(e);
-            }
-        };
-
-        let environment = match request.target_environment.to_environment_domain(
-            &info_context,
-            cloud_provider.as_ref(),
-            container_registry.as_ref(),
-            kubernetes.as_ref(),
-        ) {
-            Ok(env) => env,
-            Err(err) => {
-                let error =
-                    EngineError::new_invalid_engine_payload(request.event_details(), err.to_string().as_str(), None);
-                logger.log(EngineEvent::Error(error.clone(), None));
-                return Err(Box::new(error));
-            }
-        };
-
-        let services = std::iter::empty()
-            .chain(environment.applications.iter().map(|x| x.as_service()))
-            .chain(environment.containers.iter().map(|x| x.as_service()))
-            .chain(environment.routers.iter().map(|x| x.as_service()))
-            .chain(environment.databases.iter().map(|x| x.as_service()))
-            .chain(environment.jobs.iter().map(|x| x.as_service()))
-            .chain(environment.helm_charts.iter().map(|x| x.as_service()))
-            .collect_vec();
-
-        let secrets = Self::get_secrets(cloud_provider.as_ref(), services);
-        Ok(EnvironmentTask {
+        let secrets = Self::get_secrets(&request);
+        EnvironmentTask {
+            workspace_root_dir,
+            lib_root_dir,
+            docker,
             request,
             logger: logger.with_secrets(secrets),
             metrics_registry,
             cancel_requested: Arc::new(AtomicBool::new(false)),
+            qovery_api: Arc::from(qovery_api),
             span,
             is_terminated: {
                 let (tx, rx) = broadcast::channel(1);
                 (RwLock::new(Some(tx)), rx)
             },
-            info_context,
-        })
+        }
     }
 
-    fn info_context(
-        request: &EnvironmentEngineRequest,
-        workspace_root_dir: String,
-        lib_root_dir: String,
-        docker: Arc<Docker>,
-        qovery_api: Arc<dyn QoveryApi>,
-    ) -> Context {
+    fn info_context(&self) -> Context {
         Context::new(
-            request.organization_long_id,
-            request.kubernetes.long_id,
-            request.id.to_string(),
-            workspace_root_dir,
-            lib_root_dir,
-            request.test_cluster,
-            request.features.clone(),
-            request.metadata.clone(),
-            docker.clone(),
-            qovery_api.clone(),
-            request.event_details(),
+            self.request.organization_long_id,
+            self.request.kubernetes.long_id,
+            self.request.id.to_string(),
+            self.workspace_root_dir.to_string(),
+            self.lib_root_dir.to_string(),
+            self.request.test_cluster,
+            self.request.features.clone(),
+            self.request.metadata.clone(),
+            self.docker.clone(),
+            self.qovery_api.clone(),
+            self.request.event_details(),
         )
     }
 
@@ -208,9 +103,9 @@ impl EnvironmentTask {
     // merge it with DeploymentTarget type
     fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
         self.request.engine(
-            &self.info_context,
+            &self.info_context(),
             self.request.event_details(),
-            self.logger.clone_dyn(),
+            self.logger.clone(),
             self.metrics_registry.clone(),
         )
     }
@@ -566,20 +461,60 @@ impl EnvironmentTask {
         Err(deployment_err)
     }
 
-    fn get_secrets(cloud_provider: &dyn CloudProvider, services: Vec<&dyn Service>) -> Vec<String> {
-        let mut secrets = vec![cloud_provider.secret_access_key()];
-
-        for service in services {
-            secrets.append(
-                &mut service
-                    .get_environment_variables()
+    fn get_secrets(request: &EnvironmentEngineRequest) -> Vec<String> {
+        let mut secrets = vec![];
+        let services_secrets = request
+            .target_environment
+            .applications
+            .iter()
+            .flat_map(|x| x.environment_vars_with_infos.values())
+            .chain(
+                request
+                    .target_environment
+                    .containers
                     .iter()
-                    .filter(|environment_variable| environment_variable.is_secret)
-                    .map(|environment_variable| environment_variable.value.clone())
-                    .collect::<Vec<String>>(),
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            )
+            .chain(
+                request
+                    .target_environment
+                    .jobs
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            )
+            .chain(
+                request
+                    .target_environment
+                    .helms
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
             );
-            secrets.append(&mut service.get_passwords())
-        }
+
+        let service_secrets = services_secrets.filter_map(|v| {
+            if !v.is_secret {
+                return None;
+            }
+            let decoded_secret = base64::engine::general_purpose::STANDARD
+                .decode(&v.value)
+                .unwrap_or_default();
+            Some(String::from_utf8(decoded_secret).unwrap_or_default())
+        });
+        secrets.extend(service_secrets);
+
+        let cloud_provider_secrets = request
+            .cloud_provider
+            .options
+            .gcp_credentials
+            .as_ref()
+            .map(|x| &x.private_key)
+            .into_iter()
+            .chain(request.cloud_provider.options.secret_access_key.iter())
+            .chain(request.cloud_provider.options.password.iter())
+            .chain(request.cloud_provider.options.scaleway_secret_key.iter())
+            .chain(request.cloud_provider.options.spaces_secret_key.iter())
+            .cloned();
+
+        secrets.extend(cloud_provider_secrets);
         secrets
     }
 }

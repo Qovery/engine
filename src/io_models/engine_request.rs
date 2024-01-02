@@ -652,24 +652,24 @@ pub struct Options {
     // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
     login: Option<String>,
     #[derivative(Debug = "ignore")]
-    password: Option<String>,
+    pub password: Option<String>,
     access_key_id: Option<String>,
     #[derivative(Debug = "ignore")]
-    secret_access_key: Option<String>,
+    pub secret_access_key: Option<String>,
     spaces_access_id: Option<String>,
     #[derivative(Debug = "ignore")]
-    spaces_secret_key: Option<String>,
+    pub spaces_secret_key: Option<String>,
     scaleway_project_id: Option<String>,
     scaleway_access_key: Option<String>,
     #[derivative(Debug = "ignore")]
-    scaleway_secret_key: Option<String>,
+    pub scaleway_secret_key: Option<String>,
     #[derivative(Debug = "ignore")]
     #[serde(alias = "json_credentials")]
     #[serde(deserialize_with = "gcp_credentials_from_str")] // Allow to deserialize string field to its struct counterpart
     #[serde(default)]
-    gcp_credentials: Option<JsonCredentialsIo>,
+    pub gcp_credentials: Option<JsonCredentialsIo>,
     #[derivative(Debug = "ignore")]
-    token: Option<String>,
+    pub token: Option<String>,
     region: Option<String>,
 }
 
