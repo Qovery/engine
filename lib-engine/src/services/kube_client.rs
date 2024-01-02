@@ -429,7 +429,7 @@ mod tests {
         assert!(coredns.is_ok());
         let coredns_list = coredns.unwrap();
         assert!(!coredns_list.is_empty());
-        let coredns = coredns_list.get(0).unwrap();
+        let coredns = coredns_list.first().unwrap();
         // scale replicas to 2
         let set_replicas = block_on(qube_client.set_deployment_replicas_number(
             event_details,
