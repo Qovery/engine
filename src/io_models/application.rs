@@ -494,12 +494,12 @@ impl Application {
                 .iter()
                 .filter_map(|(k, variable_infos)| {
                     // Remove special vars
-                    let v = String::from_utf8_lossy(
-                        &general_purpose::STANDARD
+                    let v = String::from_utf8(
+                        general_purpose::STANDARD
                             .decode(variable_infos.value.as_bytes())
                             .unwrap_or_default(),
                     )
-                    .into_owned();
+                    .unwrap_or_default();
                     if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
                         disable_build_cache = true;
                         return None;
