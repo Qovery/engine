@@ -259,6 +259,13 @@ impl Stage {
             Stage::Environment(step) => step.to_string(),
         }
     }
+
+    pub fn is_core_output(&self) -> bool {
+        match self {
+            Stage::Infrastructure(_) => false,
+            Stage::Environment(step) => step.is_core_output(),
+        }
+    }
 }
 
 impl Display for Stage {
@@ -439,6 +446,10 @@ impl EnvironmentStep {
                 | EnvironmentStep::DeletedError
                 | EnvironmentStep::RestartedError
         )
+    }
+
+    pub fn is_core_output(&self) -> bool {
+        matches!(self, EnvironmentStep::JobOutput | EnvironmentStep::DatabaseOutput)
     }
 }
 
