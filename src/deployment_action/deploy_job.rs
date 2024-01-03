@@ -608,7 +608,7 @@ fn get_active_job_pod_by_selector(
 
         // There should never be more than 1 pod in 'Running' status
         let active_selected_pod_name = match active_job_pods.len() {
-            1 => active_job_pods.get(0).unwrap().to_string(),
+            1 => active_job_pods.first().unwrap().to_string(),
             _ => {
                 return OperationResult::Retry(EngineError::new_job_error(
                     event_details.clone(),

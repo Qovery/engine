@@ -573,7 +573,7 @@ fn tera_context(
     context.insert("qovery_api_url", options.qovery_api_url.as_str());
     context.insert("qovery_ssh_key", options.qovery_ssh_key.as_str());
     // AWS support only 1 ssh key
-    let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
+    let user_ssh_key: Option<&str> = options.user_ssh_keys.first().map(|x| x.as_str());
     context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
 
     // Advanced settings

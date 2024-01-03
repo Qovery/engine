@@ -85,6 +85,10 @@ impl From<command::CommandError> for CommandError {
 }
 
 impl CommandError {
+    pub fn obfuscate(&mut self, transformer: impl Fn(String) -> String) {
+        self.full_details = self.full_details.take().map(transformer);
+    }
+
     /// Returns CommandError message_raw. May contains unsafe text such as passwords and tokens.
     pub fn message_raw(&self) -> Option<String> {
         self.full_details.clone()
@@ -1104,6 +1108,14 @@ pub struct EngineError {
 }
 
 impl EngineError {
+    pub fn obfuscate(&mut self, transformer: impl Fn(String) -> String) {
+        self.hint_message = self.hint_message.take().map(&transformer);
+        self.user_log_message = transformer(std::mem::take(&mut self.user_log_message));
+        if let Some(underlying_error) = &mut self.underlying_error {
+            underlying_error.obfuscate(transformer);
+        }
+    }
+
     /// Returns error's unique identifier.
     pub fn tag(&self) -> &Tag {
         &self.tag
@@ -5126,5 +5138,41 @@ mod tests {
             engine_error_with_terminated_stage.event_details.stage(),
             &Stage::Infrastructure(InfrastructureStep::CreateError)
         );
+    }
+
+    #[test]
+    fn should_transform_engine_error() {
+        let obfuscate_msg = "obfuscate".to_string();
+        let cluster_id = QoveryIdentifier::new_random();
+        let mut engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                "".to_string(),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
+            ),
+            "message with a secret: AAAAAAA".to_string(),
+            Some(CommandError::new(
+                "safe message".to_string(),
+                Some("message with a secret: AAAAAAA".to_string()),
+                None,
+            )),
+            None,
+            Some("hint message with a secret: AAAAAAA".to_string()),
+        );
+
+        let transformer = |txt: String| {
+            if txt.contains("AAAAAAA") {
+                return obfuscate_msg.clone();
+            }
+            txt
+        };
+
+        engine_err.obfuscate(transformer);
+        assert_eq!(engine_err.user_log_message, obfuscate_msg.clone());
+        assert_eq!(engine_err.hint_message, Some(obfuscate_msg.clone()));
+        assert_eq!(engine_err.underlying_error.unwrap().full_details, Some(obfuscate_msg));
     }
 }

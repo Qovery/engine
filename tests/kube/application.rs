@@ -10,7 +10,6 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
-use qovery_engine::deployment_report::obfuscation_service::StdObfuscationService;
 use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
@@ -54,8 +53,7 @@ fn should_increase_app_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let obfuscation_service = Box::new(StdObfuscationService::new(vec![]));
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, obfuscation_service, &|| false).unwrap();
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
         let test_app = &test_env.applications[0];
 
         let storages = resized_app

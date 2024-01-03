@@ -12,7 +12,6 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::engine::InfrastructureContext;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
@@ -23,6 +22,7 @@ use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::transaction::DeploymentOption;
+use base64::Engine;
 use itertools::Itertools;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
@@ -65,12 +65,13 @@ impl EnvironmentTask {
             execution_id = request.id,
         );
 
+        let secrets = Self::get_secrets(&request);
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
             docker,
             request,
-            logger,
+            logger: logger.with_secrets(secrets),
             metrics_registry,
             cancel_requested: Arc::new(AtomicBool::new(false)),
             qovery_api: Arc::from(qovery_api),
@@ -125,7 +126,6 @@ impl EnvironmentTask {
         max_build_in_parallel: usize,
         env_logger: impl Fn(String),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
-        obfuscation_service: Box<dyn ObfuscationService>,
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
@@ -198,7 +198,6 @@ impl EnvironmentTask {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::BuildQueueing)
         });
 
-        let obfuscation_service: Arc<dyn ObfuscationService> = Arc::from(obfuscation_service);
         let build_tasks = services
             .into_iter()
             .map(|service| {
@@ -214,7 +213,6 @@ impl EnvironmentTask {
                         cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
-                        obfuscation_service.clone(),
                         &should_abort,
                     )
                 }
@@ -293,7 +291,6 @@ impl EnvironmentTask {
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        obfuscation_service: Arc<dyn ObfuscationService>,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
@@ -330,8 +327,7 @@ impl EnvironmentTask {
         }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result =
-            build_platform.build(build, &logger, metrics_registry.clone(), obfuscation_service, should_abort);
+        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), should_abort);
         match build_result {
             Ok(_) => {
                 let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -385,24 +381,12 @@ impl EnvironmentTask {
             .chain(environment.jobs.iter().map(|x| x.as_service()))
             .chain(environment.helm_charts.iter().map(|x| x.as_service()));
 
-        let mut secrets: Vec<String> = vec![];
-        secrets.push(infra_ctx.cloud_provider().secret_access_key());
         for service in services.clone() {
             metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
-            secrets.append(
-                &mut service
-                    .get_environment_variables()
-                    .iter()
-                    .filter(|environment_variable| environment_variable.is_secret)
-                    .map(|environment_variable| environment_variable.value.clone())
-                    .collect::<Vec<String>>(),
-            );
-            secrets.append(&mut service.get_passwords())
         }
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
-        let obfuscation_service = Box::new(StdObfuscationService::new(secrets));
         let run_deploy = || -> Result<(), Box<EngineError>> {
             // Build apps
             if should_abort() {
@@ -427,7 +411,6 @@ impl EnvironmentTask {
                 environment.max_parallel_build as usize,
                 env_logger,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-                obfuscation_service.clone(),
                 should_abort,
             )?;
 
@@ -435,13 +418,7 @@ impl EnvironmentTask {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
-            let mut env_deployment = EnvironmentDeployment::new(
-                infra_ctx,
-                &environment,
-                should_abort,
-                logger.clone(),
-                obfuscation_service.clone(),
-            )?;
+            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort, logger.clone())?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
@@ -482,6 +459,63 @@ impl EnvironmentTask {
 
         record.stop(StepStatus::Error);
         Err(deployment_err)
+    }
+
+    fn get_secrets(request: &EnvironmentEngineRequest) -> Vec<String> {
+        let mut secrets = vec![];
+        let services_secrets = request
+            .target_environment
+            .applications
+            .iter()
+            .flat_map(|x| x.environment_vars_with_infos.values())
+            .chain(
+                request
+                    .target_environment
+                    .containers
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            )
+            .chain(
+                request
+                    .target_environment
+                    .jobs
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            )
+            .chain(
+                request
+                    .target_environment
+                    .helms
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            );
+
+        let service_secrets = services_secrets.filter_map(|v| {
+            if !v.is_secret {
+                return None;
+            }
+            let decoded_secret = base64::engine::general_purpose::STANDARD
+                .decode(&v.value)
+                .unwrap_or_default();
+            Some(String::from_utf8(decoded_secret).unwrap_or_default())
+        });
+        secrets.extend(service_secrets);
+
+        let cloud_provider_secrets = request
+            .cloud_provider
+            .options
+            .gcp_credentials
+            .as_ref()
+            .map(|x| &x.private_key)
+            .into_iter()
+            .chain(request.cloud_provider.options.secret_access_key.iter())
+            .chain(request.cloud_provider.options.password.iter())
+            .chain(request.cloud_provider.options.scaleway_secret_key.iter())
+            .chain(request.cloud_provider.options.spaces_secret_key.iter())
+            .cloned();
+
+        secrets.extend(cloud_provider_secrets);
+        secrets
     }
 }
 
