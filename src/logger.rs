@@ -86,7 +86,12 @@ impl UnboundedSenderLogger {
 
 impl Logger for UnboundedSenderLogger {
     fn log(&self, mut event: EngineEvent) {
-        event.obfuscate(|txt| self.obfuscation_service.obfuscate_secrets(txt));
+        // Core output message are special as they may contain secrets.
+        // But we don't want to obfuscate them as they are displayed to the user.
+        // Only internal for the CORE
+        if !event.get_details().stage().is_core_output() {
+            event.obfuscate(|txt| self.obfuscation_service.obfuscate_secrets(txt));
+        }
 
         match self.unbounded_sender.send(event) {
             Ok(_) => {}
