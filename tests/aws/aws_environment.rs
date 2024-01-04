@@ -2286,6 +2286,7 @@ fn deploy_cronjob_on_aws_eks() {
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "* * * * *".to_string(),
+                timezone: "Etc/UTC".to_string(),
             },
             source: JobSource::Image {
                 registry: Registry::PublicEcr {
@@ -2381,6 +2382,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             action: Action::Create,
             schedule: JobSchedule::Cron {
                 schedule: "*/10 * * * *".to_string(),
+                timezone: "Etc/UTC".to_string(),
             },
             source: JobSource::Image {
                 registry: Registry::PublicEcr {

@@ -68,7 +68,10 @@ impl<T> JobDeploymentReporter<T> {
             JobSchedule::OnStart { .. } => JobType::Job(Action::Create),
             JobSchedule::OnPause { .. } => JobType::Job(Action::Pause),
             JobSchedule::OnDelete { .. } => JobType::Job(Action::Delete),
-            JobSchedule::Cron { schedule } => JobType::CronJob(schedule.to_string()),
+            JobSchedule::Cron {
+                schedule,
+                timezone: _timezone,
+            } => JobType::CronJob(schedule.to_string()),
         };
 
         JobDeploymentReporter {
