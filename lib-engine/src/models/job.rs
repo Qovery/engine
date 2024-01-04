@@ -223,7 +223,11 @@ impl<T: CloudProvider> Job<T> {
                 max_duration_in_sec: self.max_duration.as_secs(),
                 cronjob_schedule: match &self.schedule {
                     JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
-                    JobSchedule::Cron { schedule } => Some(schedule.to_string()),
+                    JobSchedule::Cron { schedule, .. } => Some(schedule.clone()),
+                },
+                cronjob_timezone: match &self.schedule {
+                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::Cron { timezone, .. } => Some(timezone.clone()),
                 },
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
@@ -491,6 +495,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: u64,
     pub(super) cronjob_schedule: Option<String>,
+    pub(super) cronjob_timezone: Option<String>,
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: JobAdvancedSettings,

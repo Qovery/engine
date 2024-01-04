@@ -293,6 +293,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 action: Action::Create,
                 schedule: JobSchedule::Cron {
                     schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
+                    timezone: "Etc/UTC".to_string(),
                 },
                 source: JobSource::Image {
                 registry: Registry::PublicEcr {
