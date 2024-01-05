@@ -546,6 +546,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         },
         JobSchedule::Cron {
             schedule: "my_schedule".to_string(),
+            timezone: "Etc/UTC".to_string(),
         },
         1,
         Duration::from_secs(2),

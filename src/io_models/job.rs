@@ -90,7 +90,7 @@ pub enum JobSchedule {
     OnStart {},
     OnPause {},
     OnDelete {},
-    Cron { schedule: String },
+    Cron { schedule: String, timezone: String },
 }
 impl JobSchedule {
     pub fn is_cronjob(&self) -> bool {

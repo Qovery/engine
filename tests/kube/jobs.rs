@@ -58,6 +58,7 @@ fn should_have_mounted_files_as_volume() {
         cron_job.force_trigger = true;
         cron_job.schedule = JobSchedule::Cron {
             schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
+            timezone: "Etc/UTC".to_string(),
         };
         cron_job.source = JobSource::Image {
             registry: Registry::PublicEcr {
