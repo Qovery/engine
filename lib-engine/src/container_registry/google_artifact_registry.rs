@@ -65,8 +65,8 @@ impl GoogleArtifactRegistry {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
-            get_image_name: Box::new(move |img_name| format!("{}/{img_name}/{img_name}", &project_name.clone())),
-            get_repository_name: Box::new(|repository_name| repository_name.to_string()),
+            get_image_name: Box::new(move |img_name| format!("{}/qovery-{img_name}/{img_name}", &project_name.clone())),
+            get_repository_name: Box::new(|repository_name| format!("qovery-{repository_name}")),
         };
 
         Ok(Self {
