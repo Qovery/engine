@@ -65,8 +65,20 @@ impl GoogleArtifactRegistry {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
-            get_image_name: Box::new(move |img_name| format!("{}/{img_name}/{img_name}", &project_name.clone())),
-            get_repository_name: Box::new(|repository_name| repository_name.to_string()),
+            get_image_name: Box::new(move |img_name| {
+                format!(
+                    "{}/{}/{img_name}",
+                    &project_name.clone(),
+                    match img_name.starts_with("qovery-") {
+                        true => img_name.to_string(),
+                        false => format!("qovery-{img_name}"), // repository name must start with a letter, then forcing `qovery-` prefix
+                    }
+                )
+            }),
+            get_repository_name: Box::new(|repository_name| match repository_name.starts_with("qovery-") {
+                true => repository_name.to_string(),
+                false => format!("qovery-{repository_name}"), // repository name must start with a letter, then forcing `qovery-` prefix
+            }),
         };
 
         Ok(Self {
