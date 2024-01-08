@@ -580,7 +580,7 @@ impl Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: ScwStorageType::BlockSsd,
+            storage_type: ScwStorageType::BlockSsd, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
@@ -592,12 +592,13 @@ impl Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: match self.storage_type {
-                StorageType::SlowHdd => GcpStorageType::Standard,
-                StorageType::Hdd => GcpStorageType::Balanced,
-                StorageType::Ssd => GcpStorageType::SSD,
-                StorageType::FastSsd => GcpStorageType::Extreme,
-            },
+            storage_type: GcpStorageType::SSD, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
+            // storage_type: match self.storage_type {
+            //     StorageType::SlowHdd => GcpStorageType::Standard,
+            //     StorageType::Hdd => GcpStorageType::Balanced,
+            //     StorageType::Ssd => GcpStorageType::SSD,
+            //     StorageType::FastSsd => GcpStorageType::Extreme,
+            // },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
