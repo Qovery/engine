@@ -4,9 +4,46 @@ nameOverride: null
 # -- Overrides the chart's computed fullname
 fullnameOverride: null
 
+global:
+  # -- Allow parent charts to override registry hostname
+  imageRegistry: ""
+  # -- Allow parent charts to override registry credentials
+  imagePullSecrets: []
+
 daemonset:
   # -- Deploys Promtail as a DaemonSet
   enabled: true
+  autoscaling:
+    # -- Creates a VerticalPodAutoscaler for the daemonset
+    enabled: false
+
+    # Recommender responsible for generating recommendation for the object.
+    # List should be empty (then the default recommender will generate the recommendation)
+    # or contain exactly one recommender.
+    # recommenders:
+    # - name: custom-recommender-performance
+
+    # -- List of resources that the vertical pod autoscaler can control. Defaults to cpu and memory
+    controlledResources: []
+
+    # Specifies which resource values should be controlled: RequestsOnly or RequestsAndLimits.
+    # controlledValues: RequestsAndLimits
+
+    # -- Defines the max allowed resources for the pod
+    maxAllowed: {}
+    # cpu: 200m
+    # memory: 100Mi
+    # -- Defines the min allowed resources for the pod
+    minAllowed: {}
+    # cpu: 200m
+    # memory: 100Mi
+
+    # updatePolicy:
+      # Specifies minimal number of replicas which need to be alive for VPA Updater to attempt pod eviction
+      # minReplicas: 1
+      # Specifies whether recommended updates are applied when a Pod is started and whether recommended updates
+      # are applied during the life of a Pod. Possible values are "Off", "Initial", "Recreate", and "Auto".
+      # updateMode: Auto
 
 deployment:
   # -- Deploys Promtail as a Deployment
@@ -19,6 +56,11 @@ deployment:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage:
+    # behavior: {}
+
+    # -- Set deployment object update strategy
+    strategy:
+      type: RollingUpdate
 
 secret:
   # -- Labels for the Secret
@@ -58,8 +100,20 @@ image:
 # -- Image pull secrets for Docker images
 imagePullSecrets: []
 
+# -- hostAliases to add
+hostAliases: []
+#  - ip: 1.2.3.4
+#    hostnames:
+#      - domain.tld
+
+# -- Controls whether the pod has the `hostNetwork` flag set.
+hostNetwork: null
+
 # -- Annotations for the DaemonSet
 annotations: {}
+
+# -- Number of old history to retain to allow rollback (If not set, default Kubernetes value is set to 10)
+# revisionHistoryLimit: 1
 
 # -- The update strategy for the DaemonSet
 updateStrategy: {}
@@ -186,7 +240,10 @@ extraArgs: []
 # -- extraArgs:
 # --   - -client.external-labels=hostname=$(HOSTNAME)
 
-# -- Extra environment variables
+# -- Extra environment variables. Set up tracing enviroment variables here if .Values.config.enableTracing is true.
+# Tracing currently only support configure via environment variables. See:
+# https://grafana.com/docs/loki/latest/clients/promtail/configuration/#tracing_config
+# https://www.jaegertracing.io/docs/1.16/client-features/
 extraEnv: []
 
 # -- Extra environment variables from secrets or configmaps
@@ -220,7 +277,7 @@ serviceMonitor:
   # https://github.com/prometheus-operator/prometheus-operator/blob/master/Documentation/api.md#relabelconfig
   # (defines `metric_relabel_configs`)
   metricRelabelings: []
-  # --ServiceMonitor will add labels from the service to the Prometheus metric
+  # -- ServiceMonitor will add labels from the service to the Prometheus metric
   # https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitorspec
   targetLabels: []
   # -- ServiceMonitor will use http by default, but you can pick https as well
@@ -274,6 +331,8 @@ extraContainers: {}
 extraPorts: {}
 #  syslog:
 #    name: tcp-syslog
+#    annotations: {}
+#    labels: {}
 #    containerPort: 1514
 #    protocol: TCP
 #    service:
@@ -282,8 +341,6 @@ extraPorts: {}
 #      port: 1514
 #      externalIPs: []
 #      nodePort: null
-#      annotations: {}
-#      labels: {}
 #      loadBalancerIP: null
 #      loadBalancerSourceRanges: []
 #      externalTrafficPolicy: null
@@ -333,10 +390,19 @@ podSecurityPolicy:
 # which is a templated string that references the other values and snippets below this key.
 # @default -- See `values.yaml`
 config:
+  # -- Enable Promtail config from Helm chart
+  # Set `configmap.enabled: true` and this to `false` to manage your own Promtail config
+  # See default config in `values.yaml`
+  enabled: true
   # -- The log level of the Promtail server
   # Must be reference in `config.file` to configure `server.log_level`
   # See default config in `values.yaml`
   logLevel: info
+  # -- The log format of the Promtail server
+  # Must be reference in `config.file` to configure `server.log_format`
+  # Valid formats: `logfmt, json`
+  # See default config in `values.yaml`
+  logFormat: logfmt
   # -- The port of the Promtail server
   # Must be reference in `config.file` to configure `server.http_listen_port`
   # See default config in `values.yaml`
@@ -346,6 +412,12 @@ config:
   # @default -- See `values.yaml`
   clients:
     - url: http://loki-gateway/loki/api/v1/push
+  # -- Configures where Promtail will save it's positions file, to resume reading after restarts.
+  # Must be referenced in `config.file` to configure `positions`
+  positions:
+    filename: /run/promtail/positions.yaml
+  # -- The config to enable tracing
+  enableTracing: false
   # -- A section of reusable snippets that can be reference in `config.file`.
   # Custom snippets may be added in order to reduce redundancy.
   # This is especially helpful when multiple `kubernetes_sd_configs` are use which usually have large parts in common.
@@ -436,7 +508,7 @@ config:
             target_label: app
           - source_labels:
               - __meta_kubernetes_pod_label_app_kubernetes_io_instance
-              - __meta_kubernetes_pod_label_release
+              - __meta_kubernetes_pod_label_instance
             regex: ^;*([^;]+)(;.*)?$
             action: replace
             target_label: instance
@@ -462,6 +534,7 @@ config:
   file: |
     server:
       log_level: {{ .Values.config.logLevel }}
+      log_format: {{ .Values.config.logFormat }}
       http_listen_port: {{ .Values.config.serverPort }}
       {{- with .Values.httpPathPrefix }}
       http_path_prefix: {{ . }}
@@ -472,7 +545,7 @@ config:
       {{- tpl (toYaml .Values.config.clients) . | nindent 2 }}
 
     positions:
-      filename: /run/promtail/positions.yaml
+      {{- tpl (toYaml .Values.config.positions) . | nindent 2 }}
 
     scrape_configs:
       {{- tpl .Values.config.snippets.scrapeConfigs . | nindent 2 }}
@@ -480,6 +553,9 @@ config:
 
     limits_config:
       {{- tpl .Values.config.snippets.extraLimitsConfig . | nindent 2 }}
+
+    tracing:
+      enabled: {{ .Values.config.enableTracing }}
 
 networkPolicy:
   # -- Specifies whether Network Policies should be created

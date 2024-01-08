@@ -36,4 +36,8 @@ spec:
           averageUtilization: {{ . }}
     {{- end }}
   {{- end }}
+  {{- with .Values.deployment.autoscaling.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

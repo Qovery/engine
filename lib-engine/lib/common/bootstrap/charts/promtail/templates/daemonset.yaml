@@ -11,6 +11,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if .Values.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "promtail.selectorLabels" . | nindent 6 }}
