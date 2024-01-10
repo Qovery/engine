@@ -229,7 +229,7 @@ mod tests {
     ) {
         values
             .save_to_file(qovery_managed_chart.destination, filename.clone())
-            .expect(format!("failed to save {}", filename.clone()).as_str());
+            .unwrap_or_else(|_| panic!("failed to save {}", filename.clone()));
         // add overrided values to values-aws.yaml
         let values_file_path = format!("{}/{}", qovery_managed_chart.destination.to_string_lossy(), filename);
         let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
