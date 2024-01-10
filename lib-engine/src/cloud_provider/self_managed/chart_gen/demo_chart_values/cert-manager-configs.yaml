@@ -1,0 +1,16 @@
+fullnameOverride: cert-manager-configs
+externalDnsProvider: pdns # Qovery DNS
+namespace: "qovery"
+managedDns: [*domain]
+acme:
+  letsEncrypt:
+    emailReport: *acmeEmailAddr
+    # set the Let's Encrypt URL
+    # Test: https://acme-staging-v02.api.letsencrypt.org/directory
+    # Prod: 
+    acmeUrl: https://acme-v02.api.letsencrypt.org/directory
+provider:
+  pdns:
+    apiPort: "443"
+    apiUrl: *qoveryDnsUrl
+    apiKey: *jwtToken

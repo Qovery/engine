@@ -21,3 +21,4 @@ bin_versions
 .internal/
 .vscode/
 .env
+firedbg/
