@@ -1,0 +1,20 @@
+fullnameOverride: qovery-engine
+image:
+  tag: 9192363
+environmentVariables:
+  CLOUD_PROVIDER: aws
+  CLUSTER_ID: *clusterId
+  CLUSTER_JWT_TOKEN: *jwtToken
+  DOCKER_HOST: tcp://0.0.0.0:2375
+  GRPC_SERVER: *engineGrpcServer
+  LIB_ROOT_DIR: /home/qovery/lib
+  ORGANIZATION: *shortClusterId
+  ORGANIZATION_ID: *organizationId
+  RUST_LOG: "info"
+buildContainer:
+  enabled: true
+  image: public.ecr.aws/r3m4q3r9/pub-mirror-docker
+  tag: 24.0.6-dind
+  environmentVariables:
+    BUILDER_KUBE_ENABLED: "true"
+    BUILDER_CPU_ARCHITECTURES: *architectures

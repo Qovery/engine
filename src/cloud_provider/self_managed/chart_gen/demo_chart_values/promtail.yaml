@@ -1,0 +1,10 @@
+fullnameOverride: promtail
+namespace: kube-system
+priorityClassName: system-node-critical
+config:
+  clients:
+    - url: *promtailLokiUrl
+  snippets:
+    extraRelabelConfigs:
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id)

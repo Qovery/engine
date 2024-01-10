@@ -1,0 +1,10 @@
+fullnameOverride: ingress-nginx
+controller:
+  useComponentLabel: true
+  admissionWebhooks:
+    enabled: false
+  ingressClass: nginx-qovery
+  extraArgs:
+    default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
+  publishService:
+    enabled: true

@@ -1,0 +1,12 @@
+fullnameOverride: cert-manager
+installCRDs: true
+replicaCount: 1
+startupapicheck:
+  jobAnnotations:
+    helm.sh/hook: post-install,post-upgrade
+  rbac:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+  serviceAccount:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
