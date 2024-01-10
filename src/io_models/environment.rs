@@ -213,6 +213,60 @@ impl EnvironmentRequest {
                 }
             }
 
+            for helm in &self.helms {
+                for route in &router.routes {
+                    if route.service_long_id == helm.long_id {
+                        // disable custom domain check for this router
+
+                        // TODO PG
+                        // if !helm.advanced_settings.deployment_custom_domain_check_enabled {
+                        //     router_advanced_settings.custom_domain_check_enabled = false;
+                        // }
+                        // whitelist source range
+                        if helm.advanced_settings.network_ingress_whitelist_source_range
+                            != RouterAdvancedSettings::whitelist_source_range_default_value()
+                        {
+                            router_advanced_settings.whitelist_source_range =
+                                Some(helm.advanced_settings.network_ingress_whitelist_source_range.clone());
+                        }
+                        // denylist source range
+                        if helm.advanced_settings.network_ingress_denylist_source_range != *"" {
+                            router_advanced_settings.denylist_source_range =
+                                Some(helm.advanced_settings.network_ingress_denylist_source_range.clone());
+                        }
+                        // basic auth
+                        if helm.advanced_settings.network_ingress_basic_auth_env_var != *"" {
+                            match helm
+                                .environment_vars_with_infos
+                                .get(&helm.advanced_settings.network_ingress_basic_auth_env_var)
+                            {
+                                Some(variable_infos) => {
+                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
+                                        .map_err(|_| {
+                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                                                env_var_name: helm
+                                                    .advanced_settings
+                                                    .network_ingress_basic_auth_env_var
+                                                    .to_string(),
+                                                env_var_value: variable_infos.value.clone(),
+                                            })
+                                        })?;
+                                    router_advanced_settings.basic_auth = Some(secret);
+                                }
+                                None => {
+                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
+                                        env_var_name: helm
+                                            .advanced_settings
+                                            .network_ingress_basic_auth_env_var
+                                            .to_string(),
+                                    }))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             match router.to_router_domain(context, router_advanced_settings, cloud_provider) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
