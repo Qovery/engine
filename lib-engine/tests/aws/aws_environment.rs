@@ -3350,183 +3350,195 @@ fn deploy_helm_chart() {
 #[named]
 #[test]
 fn deploy_helm_chart_and_pause_it() {
-    engine_run_test(|| {
-        init();
-        let span = span!(Level::INFO, "test", name = function_name!());
-        let _enter = span.enter();
+    test_deploy_helm_chart_and_pause_it(true);
+    test_deploy_helm_chart_and_pause_it(false);
 
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context_for_resource(
-            secrets
-                .AWS_TEST_ORGANIZATION_LONG_ID
-                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
-            secrets
-                .AWS_TEST_CLUSTER_LONG_ID
-                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
-        );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
-        let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+    fn test_deploy_helm_chart_and_pause_it(allow_cluster_wide_resources: bool) {
+        engine_run_test(|| {
+            init();
+            let span = span!(Level::INFO, "test", name = function_name!());
+            let _enter = span.enter();
 
-        let mut environment = helpers::environment::working_minimal_environment(&context);
+            let logger = logger();
+            let secrets = FuncTestsSecrets::new();
+            let context = context_for_resource(
+                secrets
+                    .AWS_TEST_ORGANIZATION_LONG_ID
+                    .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+                secrets
+                    .AWS_TEST_CLUSTER_LONG_ID
+                    .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+            );
+            let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+            let context_for_delete = context.clone_not_same_execution_id();
+            let infra_ctx_for_delete =
+                aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
-        environment.applications = vec![];
-        let service_id = Uuid::new_v4();
-        println!("service id {}", service_id);
-        environment.helms = vec![HelmChart {
-            long_id: service_id,
-            name: "my little chart ****".to_string(),
-            kube_name: "my-little-chart".to_string(),
-            action: Action::Create,
-            chart_source: HelmChartSource::Git {
-                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
-                git_credentials: None,
-                commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
-                root_path: PathBuf::from("/simple_app"),
-            },
-            chart_values: HelmValueSource::Raw {
-                values: vec![HelmRawValues {
-                    name: "toto.yaml".to_string(),
-                    content: "nameOverride: tata".to_string(),
-                }],
-            },
-            //chart_values: HelmValueSource::Git {
-            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
-            //    git_credentials: None,
-            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
-            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
-            //},
-            set_values: vec![("toto".to_string(), "tata".to_string())],
-            set_string_values: vec![
-                ("my-string".to_string(), "1".to_string()),
-                ("serviceId".to_string(), service_id.to_string()),
-            ],
-            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
-            command_args: vec!["--install".to_string()],
-            timeout_sec: 60,
-            allow_cluster_wide_resources: false,
-            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
-            advanced_settings: Default::default(),
-            ports: vec![],
-        }];
+            let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let mut environment_for_delete = environment.clone();
-        environment_for_delete.action = Action::Delete;
+            environment.applications = vec![];
+            let service_id = Uuid::new_v4();
+            println!("service id {}", service_id);
+            environment.helms = vec![HelmChart {
+                long_id: service_id,
+                name: "my little chart ****".to_string(),
+                kube_name: "my-little-chart".to_string(),
+                action: Action::Create,
+                chart_source: HelmChartSource::Git {
+                    git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                    git_credentials: None,
+                    commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
+                    root_path: PathBuf::from("/simple_app"),
+                },
+                chart_values: HelmValueSource::Raw {
+                    values: vec![HelmRawValues {
+                        name: "toto.yaml".to_string(),
+                        content: "nameOverride: tata".to_string(),
+                    }],
+                },
+                //chart_values: HelmValueSource::Git {
+                //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+                //    git_credentials: None,
+                //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+                //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+                //},
+                set_values: vec![("toto".to_string(), "tata".to_string())],
+                set_string_values: vec![
+                    ("my-string".to_string(), "1".to_string()),
+                    ("serviceId".to_string(), service_id.to_string()),
+                ],
+                set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+                command_args: vec!["--install".to_string()],
+                timeout_sec: 60,
+                allow_cluster_wide_resources,
+                environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+                advanced_settings: Default::default(),
+                ports: vec![],
+            }];
 
-        let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+            let mut environment_for_delete = environment.clone();
+            environment_for_delete.action = Action::Delete;
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
-        assert!(ret.is_ok());
-        assert!(!ret.unwrap().items.is_empty());
+            let ret = environment.deploy_environment(&environment, &infra_ctx);
+            assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment.pause_environment(&environment, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
 
-        // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
-        assert!(ret.is_ok());
-        assert!(ret.unwrap().items.is_empty());
+            let ret = environment.pause_environment(&environment, &infra_ctx_for_delete);
+            assert!(matches!(ret, TransactionResult::Ok));
 
-        // Check we can resume the env
-        let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
-        let ret = environment.deploy_environment(&environment, &infra_ctx_resume);
-        assert!(matches!(ret, TransactionResult::Ok));
+            // Check that we have actually 0 pods running for this app
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            assert!(ret.is_ok());
+            assert!(ret.unwrap().items.is_empty());
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets);
-        assert!(ret.is_ok());
-        assert!(!ret.unwrap().items.is_empty());
+            // Check we can resume the env
+            let ctx_resume = context.clone_not_same_execution_id();
+            let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
+            let ret = environment.deploy_environment(&environment, &infra_ctx_resume);
+            assert!(matches!(ret, TransactionResult::Ok));
 
-        // Cleanup
-        let ret = environment.delete_environment(&environment, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets);
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
 
-        "".to_string()
-    })
+            // Cleanup
+            let ret = environment.delete_environment(&environment, &infra_ctx_for_delete);
+            assert!(matches!(ret, TransactionResult::Ok));
+
+            "".to_string()
+        })
+    }
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn deploy_helm_chart_and_restart_it() {
-    engine_run_test(|| {
-        init();
-        let span = span!(Level::INFO, "test", name = function_name!());
-        let _enter = span.enter();
+    test_deploy_helm_chart_and_restart_it(true);
+    test_deploy_helm_chart_and_restart_it(false);
 
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context_for_resource(
-            secrets
-                .AWS_TEST_ORGANIZATION_LONG_ID
-                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
-            secrets
-                .AWS_TEST_CLUSTER_LONG_ID
-                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
-        );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
-        let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+    fn test_deploy_helm_chart_and_restart_it(allow_cluster_wide_resources: bool) {
+        engine_run_test(|| {
+            init();
+            let span = span!(Level::INFO, "test", name = function_name!());
+            let _enter = span.enter();
 
-        let mut environment = helpers::environment::working_minimal_environment(&context);
+            let logger = logger();
+            let secrets = FuncTestsSecrets::new();
+            let context = context_for_resource(
+                secrets
+                    .AWS_TEST_ORGANIZATION_LONG_ID
+                    .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+                secrets
+                    .AWS_TEST_CLUSTER_LONG_ID
+                    .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+            );
+            let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+            let context_for_delete = context.clone_not_same_execution_id();
+            let infra_ctx_for_delete =
+                aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
-        environment.applications = vec![];
-        let service_id = Uuid::new_v4();
-        println!("service id {}", service_id);
-        environment.helms = vec![HelmChart {
-            long_id: service_id,
-            name: "my little chart ****".to_string(),
-            kube_name: "my-little-chart".to_string(),
-            action: Action::Create,
-            chart_source: HelmChartSource::Git {
-                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
-                git_credentials: None,
-                commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
-                root_path: PathBuf::from("/simple_app"),
-            },
-            chart_values: HelmValueSource::Raw {
-                values: vec![HelmRawValues {
-                    name: "toto.yaml".to_string(),
-                    content: "nameOverride: tata".to_string(),
-                }],
-            },
-            //chart_values: HelmValueSource::Git {
-            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
-            //    git_credentials: None,
-            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
-            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
-            //},
-            set_values: vec![("toto".to_string(), "tata".to_string())],
-            set_string_values: vec![
-                ("my-string".to_string(), "1".to_string()),
-                ("serviceId".to_string(), service_id.to_string()),
-            ],
-            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
-            command_args: vec!["--install".to_string()],
-            timeout_sec: 60,
-            allow_cluster_wide_resources: false,
-            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
-            advanced_settings: Default::default(),
-            ports: vec![],
-        }];
+            let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let mut environment_for_delete = environment.clone();
-        environment_for_delete.action = Action::Delete;
+            environment.applications = vec![];
+            let service_id = Uuid::new_v4();
+            println!("service id {}", service_id);
+            environment.helms = vec![HelmChart {
+                long_id: service_id,
+                name: "my little chart ****".to_string(),
+                kube_name: "my-little-chart".to_string(),
+                action: Action::Create,
+                chart_source: HelmChartSource::Git {
+                    git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                    git_credentials: None,
+                    commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
+                    root_path: PathBuf::from("/simple_app"),
+                },
+                chart_values: HelmValueSource::Raw {
+                    values: vec![HelmRawValues {
+                        name: "toto.yaml".to_string(),
+                        content: "nameOverride: tata".to_string(),
+                    }],
+                },
+                //chart_values: HelmValueSource::Git {
+                //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+                //    git_credentials: None,
+                //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+                //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+                //},
+                set_values: vec![("toto".to_string(), "tata".to_string())],
+                set_string_values: vec![
+                    ("my-string".to_string(), "1".to_string()),
+                    ("serviceId".to_string(), service_id.to_string()),
+                ],
+                set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+                command_args: vec!["--install".to_string()],
+                timeout_sec: 60,
+                allow_cluster_wide_resources,
+                environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+                advanced_settings: Default::default(),
+                ports: vec![],
+            }];
 
-        let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+            let mut environment_for_delete = environment.clone();
+            environment_for_delete.action = Action::Delete;
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
-        assert!(ret.is_ok());
-        assert!(!ret.unwrap().items.is_empty());
+            let ret = environment.deploy_environment(&environment, &infra_ctx);
+            assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment.restart_environment(&environment, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
 
-        "".to_string()
-    })
+            let ret = environment.restart_environment(&environment, &infra_ctx_for_delete);
+            assert!(matches!(ret, TransactionResult::Ok));
+
+            "".to_string()
+        })
+    }
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
