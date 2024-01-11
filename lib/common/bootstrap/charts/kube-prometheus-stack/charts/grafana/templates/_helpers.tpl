@@ -201,3 +201,27 @@ Formats imagePullSecrets. Input is (dict "root" . "imagePullSecrets" .{specific 
 {{- end }}
 {{- end }}
 {{- end }}
+
+
+{{/*
+ Checks whether or not the configSecret secret has to be created
+ */}}
+{{- define "grafana.shouldCreateConfigSecret" -}}
+{{- $secretFound := false -}}
+{{- range $key, $value := .Values.datasources }}
+  {{- if hasKey $value "secret" }}
+    {{- $secretFound = true}}
+  {{- end }}
+{{- end }}
+{{- range $key, $value := .Values.notifiers }}
+  {{- if hasKey $value "secret" }}
+    {{- $secretFound = true}}
+  {{- end }}
+{{- end }}
+{{- range $key, $value := .Values.alerting }}
+  {{- if (or (hasKey $value "secret") (hasKey $value "secretFile")) }}
+    {{- $secretFound = true}}
+  {{- end }}
+{{- end }}
+{{- $secretFound}}
+{{- end -}}

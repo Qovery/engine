@@ -14,4 +14,4 @@ name: prometheus-windows-exporter
 sources:
 - https://github.com/prometheus-community/windows_exporter/
 type: application
-version: 0.1.1
+version: 0.1.2

@@ -2,33 +2,44 @@ controller:
   useComponentLabel: true
   admissionWebhooks:
     enabled: set-by-engine-code
+  # enable if you want metrics scrapped by prometheus
   metrics:
     enabled: set-by-engine-code
     serviceMonitor:
       enabled: set-by-engine-code
   config:
+    # set global default file size limit to 100m
     proxy-body-size: 100m
+    # hide Nginx version
     server-tokens: "false"
+  # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:
+    # Kubernetes path of the default Cert-manager TLS certificate (if used)
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
   updateStrategy:
     rollingUpdate:
+      # set the minimum acceptable number of unavailable pods during a rolling update
       maxUnavailable: 1
 
+  # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
     enabled: true
     minReplicas: set-by-engine-code
     maxReplicas: set-by-engine-code
     targetCPUUtilizationPercentage: set-by-engine-code
 
+  # required if you rely on a load balancer
+  # the controller mirrors the address of this service's endpoints to the load-balancer status of all Ingress objects it satisfies.
   publishService:
     enabled: true
 
+  # set a load balancer if you want your Nginx to be publicly accessible
   service:
     enabled: true
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
       external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
     externalTrafficPolicy: "Local"
     sessionAffinity: ""

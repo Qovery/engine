@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -7,8 +7,9 @@ use thiserror::Error;
 use super::{
     chart_dot_yaml,
     values_dot_yaml::{
-        AwsServices, CertificateServices, ChartConfig, DnsServices, IngressServices, LoggingServices,
-        ObservabilityServices, QoveryGlobalConfig, QoveryServices, ServiceEnabled, ServicesEnabler, ValuesFile,
+        CertificateServices, ChartConfig, DnsServices, ImageTag, IngressServices, LoggingServices,
+        ObservabilityServices, QoveryAgents, QoveryGlobalConfig, QoveryServices, ServiceEnabled, ServicesEnabler,
+        ValuesFile,
     },
     QoverySelfManagedChart, SupportedCharts,
 };
@@ -170,11 +171,11 @@ impl ValuesFile {
                     cert_manager_qovery_webhook: ServiceEnabled { enabled: false },
                 },
                 observability: ObservabilityServices {
-                    metrics_server: ServiceEnabled { enabled: false },
+                    metrics_server: Some(ServiceEnabled { enabled: false }),
                 },
-                aws: AwsServices {
-                    qovery_storage_class: ServiceEnabled { enabled: false },
-                },
+                aws: None,
+                gcp: None,
+                scaleway: None,
             },
             qovery: QoveryGlobalConfig {
                 cluster_id: "&clusterId set-by-customer".to_string(),
@@ -191,6 +192,31 @@ impl ValuesFile {
                 external_dns_prefix: "&externalDnsPrefix set-by-customer".to_string(),
                 architectures: "&architectures set-by-customer".to_string(),
             },
+            qovery_cluster_agent: QoveryAgents {
+                full_name_override: "qovery-shell-agent".to_string(),
+                image: ImageTag {
+                    tag: "latest".to_string(),
+                },
+                environment_variables: BTreeMap::from([
+                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
+                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                    ("LOKI_URL".to_string(), "*lokiUrl".to_string()),
+                ]),
+            },
+            qovery_shell_agent: QoveryAgents {
+                full_name_override: "qovery-shell-agent".to_string(),
+                image: ImageTag {
+                    tag: "latest".to_string(),
+                },
+                environment_variables: BTreeMap::from([
+                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
+                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                ]),
+            },
             ingress_nginx: ChartConfig { override_chart: None },
             external_dns: ChartConfig { override_chart: None },
             promtail: ChartConfig { override_chart: None },
@@ -199,7 +225,7 @@ impl ValuesFile {
             cert_manager_qovery_webhook: ChartConfig { override_chart: None },
             cert_manager_configs: ChartConfig { override_chart: None },
             qovery_storage_class: None,
-            metrics_server: ChartConfig { override_chart: None },
+            metrics_server: Some(ChartConfig { override_chart: None }),
         }
     }
 
@@ -226,10 +252,73 @@ impl ValuesFile {
         value.services.certificates.cert_manager_configs.enabled = true;
         value.cert_manager_configs.override_chart = Some(SupportedCharts::CertManagerConfigs.to_string());
 
-        value.services.observability.metrics_server.enabled = true;
-        value.metrics_server.override_chart = Some(SupportedCharts::MetricsServer.to_string());
+        value.services.observability.metrics_server = Some(ServiceEnabled { enabled: true });
+        value.metrics_server = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::MetricsServer.to_string()),
+        });
 
-        value.services.aws.qovery_storage_class.enabled = true;
+        value.services.aws = None;
+
+        value
+    }
+
+    pub fn new_gcp() -> ValuesFile {
+        let mut value = Self::new_minimal();
+
+        value.services.ingress.ingress_nginx.enabled = true;
+        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+
+        value.services.dns.external_dns.enabled = true;
+        value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
+
+        value.services.logging.promtail.enabled = true;
+        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.loki.enabled = true;
+        value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
+
+        value.services.certificates.cert_manager.enabled = true;
+        value.cert_manager.override_chart = Some(SupportedCharts::CertManager.to_string());
+
+        value.services.certificates.cert_manager_qovery_webhook.enabled = true;
+        value.cert_manager_qovery_webhook.override_chart = Some(SupportedCharts::CertManagerQoveryWebhook.to_string());
+
+        value.services.certificates.cert_manager_configs.enabled = true;
+        value.cert_manager_configs.override_chart = Some(SupportedCharts::CertManagerConfigs.to_string());
+
+        value.services.observability.metrics_server = None;
+        value.metrics_server = None;
+
+        value.qovery_storage_class = None;
+
+        value
+    }
+
+    pub fn new_scaleway() -> ValuesFile {
+        let mut value = Self::new_minimal();
+
+        value.services.ingress.ingress_nginx.enabled = true;
+        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+
+        value.services.dns.external_dns.enabled = true;
+        value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
+
+        value.services.logging.promtail.enabled = true;
+        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.loki.enabled = true;
+        value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
+
+        value.services.certificates.cert_manager.enabled = true;
+        value.cert_manager.override_chart = Some(SupportedCharts::CertManager.to_string());
+
+        value.services.certificates.cert_manager_qovery_webhook.enabled = true;
+        value.cert_manager_qovery_webhook.override_chart = Some(SupportedCharts::CertManagerQoveryWebhook.to_string());
+
+        value.services.certificates.cert_manager_configs.enabled = true;
+        value.cert_manager_configs.override_chart = Some(SupportedCharts::CertManagerConfigs.to_string());
+
+        value.services.observability.metrics_server = None;
+        value.metrics_server = None;
+
         value.qovery_storage_class = None;
 
         value

@@ -1,14 +1,19 @@
 certManager:
+  # set the same namespace than cert-manager
   namespace: set-by-engine-code
   serviceAccountName: cert-manager
 
+# set the rolling restart strategy
 updateStrategy:
   type: set-by-engine-code
 
 secret:
+  # set *qoveryDnsUrl (Qovery DNS)
   apiUrl: set-by-engine-code
+  # set *jwtToken (Qovery DNS)
   apiKey: set-by-engine-code
 
+# set resources
 resources:
   limits:
     cpu: set-by-engine-code

@@ -1,3 +1,4 @@
+# remove if you don't want to use a custom image
 image:
   registry: set-by-engine-code
   repository: set-by-engine-code
@@ -7,14 +8,16 @@ priorityClassName: system-node-critical
 
 config:
   clients:
+    # set loki URL: *promtailLokiUrl or set a custom URL
     - url: set-by-engine-code
 
   snippets:
     extraRelabelConfigs:
-      # We need this config in order for the cluster agent to retrieve the log of the service
+      # required this config in order for the cluster agent to retrieve the log of the service
       - action: labelmap
         regex: __meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id)
 
+# set resources
 resources:
   limits:
     cpu: 100m

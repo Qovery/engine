@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use derive_more::Display;
 use serde_derive::{Deserialize, Serialize};
 
@@ -19,12 +21,20 @@ pub enum ChartCategory {
     Observability,
     #[display("aws")]
     Aws,
+    #[display("gcp")]
+    Gcp,
+    #[display("scaleway")]
+    Scaleway,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ValuesFile {
     pub services: ServicesEnabler,
     pub qovery: QoveryGlobalConfig,
+    #[serde(rename = "qovery-cluster-agent")]
+    pub qovery_cluster_agent: QoveryAgents,
+    #[serde(rename = "qovery-shell-agent")]
+    pub qovery_shell_agent: QoveryAgents,
     #[serde(rename = "ingress-nginx")]
     pub ingress_nginx: ChartConfig,
     #[serde(rename = "external-dns")]
@@ -39,8 +49,8 @@ pub struct ValuesFile {
     pub cert_manager_configs: ChartConfig,
     #[serde(rename = "q-storageclass", default, skip_serializing_if = "Option::is_none")]
     pub qovery_storage_class: Option<ChartConfig>,
-    #[serde(rename = "metrics-server")]
-    pub metrics_server: ChartConfig,
+    #[serde(rename = "metrics-server", skip_serializing_if = "Option::is_none")]
+    pub metrics_server: Option<ChartConfig>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -79,6 +89,19 @@ pub struct QoveryGlobalConfig {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QoveryAgents {
+    pub full_name_override: String,
+    pub image: ImageTag,
+    pub environment_variables: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ImageTag {
+    pub tag: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct ServicesEnabler {
     pub qovery: QoveryServices,
     pub ingress: IngressServices,
@@ -86,7 +109,12 @@ pub struct ServicesEnabler {
     pub logging: LoggingServices,
     pub certificates: CertificateServices,
     pub observability: ObservabilityServices,
-    pub aws: AwsServices,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aws: Option<AwsServices>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gcp: Option<AwsServices>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scaleway: Option<AwsServices>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -129,12 +157,24 @@ pub struct CertificateServices {
 
 #[derive(Serialize, Deserialize)]
 pub struct ObservabilityServices {
-    #[serde(rename = "metrics-server")]
-    pub metrics_server: ServiceEnabled,
+    #[serde(rename = "metrics-server", skip_serializing_if = "Option::is_none")]
+    pub metrics_server: Option<ServiceEnabled>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AwsServices {
+    #[serde(rename = "q-storageclass")]
+    pub qovery_storage_class: ServiceEnabled,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GcpServices {
+    #[serde(rename = "q-storageclass")]
+    pub qovery_storage_class: ServiceEnabled,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ScalewayServices {
     #[serde(rename = "q-storageclass")]
     pub qovery_storage_class: ServiceEnabled,
 }

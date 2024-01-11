@@ -1,9 +1,12 @@
+# create api service to be able to use hpa/vpa
 apiService:
   create: true
 
+# set rolling restart strategy
 updateStrategy:
   type: set-by-engine-code
 
+# set resources
 resources:
   limits:
     cpu: set-by-engine-code
