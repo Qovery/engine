@@ -86,7 +86,7 @@ impl ChartDotYaml {
             r#type: model.r#type.map(ChartDotYamlType::from_model),
             version: model.version.to_string(),
             app_version: model.app_version.to_string(),
-            kube_version: model.kube_version,
+            kube_version: Some(format!("~{}.0-0", model.kube_version.unwrap_or_default())),
             home: model.home,
             icon: model.icon,
         }
@@ -373,7 +373,7 @@ impl ChartDotYamlDependencies {
         Ok(chart_dot_yaml::ChartDotYamlDependencies {
             name: self.name.clone(),
             alias: self.alias.clone(),
-            condition: self.condition.clone(),
+            condition: format!("services.{}", self.condition),
             version: Version::parse(self.version.as_str()).map_err(ChartDotYamlError::SemVerParseError)?,
             repository: self.repository.clone(),
         })
