@@ -18,6 +18,7 @@ use crate::cloud_provider::models::{
     VpcQoveryNetworkMode,
 };
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
@@ -148,6 +149,7 @@ pub fn eks_aws_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
+        Kind::Aws,
         HashSet::from_iter(vec![
             QoveryStorageType::Ssd,
             QoveryStorageType::Hdd,

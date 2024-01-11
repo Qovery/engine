@@ -16,6 +16,7 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
+use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
@@ -192,6 +193,7 @@ pub fn scw_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
+        Kind::Scw,
         HashSet::from_iter(vec![QoveryStorageType::Ssd]),
         HelmChartNamespaces::KubeSystem,
     )

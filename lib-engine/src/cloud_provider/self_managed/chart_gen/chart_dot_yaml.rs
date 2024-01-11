@@ -1,7 +1,7 @@
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChartDotYamlApiVersion {
     V1,
@@ -17,7 +17,7 @@ pub struct ChartDotYamlDependencies {
     pub repository: String,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ChartDotYamlType {
     Application,
 }
