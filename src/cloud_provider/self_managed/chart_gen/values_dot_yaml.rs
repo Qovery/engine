@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use derive_more::Display;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, Display, Debug)]
+#[derive(Clone, Serialize, Deserialize, Display, Ord, PartialOrd, PartialEq, Eq, Debug)]
 pub enum ChartCategory {
     #[display("services")]
     Services,
@@ -47,8 +47,16 @@ pub struct ValuesFile {
     pub cert_manager_qovery_webhook: ChartConfig,
     #[serde(rename = "cert-manager-configs")]
     pub cert_manager_configs: ChartConfig,
-    #[serde(rename = "q-storageclass", default, skip_serializing_if = "Option::is_none")]
-    pub qovery_storage_class: Option<ChartConfig>,
+    #[serde(rename = "q-storageclass-aws", default, skip_serializing_if = "Option::is_none")]
+    pub qovery_storage_class_aws: Option<ChartConfig>,
+    #[serde(rename = "q-storageclass-gcp", default, skip_serializing_if = "Option::is_none")]
+    pub qovery_storage_class_gcp: Option<ChartConfig>,
+    #[serde(
+        rename = "q-storageclass-scaleway",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub qovery_storage_class_scaleway: Option<ChartConfig>,
     #[serde(rename = "metrics-server", skip_serializing_if = "Option::is_none")]
     pub metrics_server: Option<ChartConfig>,
 }
@@ -112,9 +120,9 @@ pub struct ServicesEnabler {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aws: Option<AwsServices>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gcp: Option<AwsServices>,
+    pub gcp: Option<GcpServices>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scaleway: Option<AwsServices>,
+    pub scaleway: Option<ScalewayServices>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -163,19 +171,19 @@ pub struct ObservabilityServices {
 
 #[derive(Serialize, Deserialize)]
 pub struct AwsServices {
-    #[serde(rename = "q-storageclass")]
+    #[serde(rename = "q-storageclass-aws")]
     pub qovery_storage_class: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GcpServices {
-    #[serde(rename = "q-storageclass")]
+    #[serde(rename = "q-storageclass-gcp")]
     pub qovery_storage_class: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ScalewayServices {
-    #[serde(rename = "q-storageclass")]
+    #[serde(rename = "q-storageclass-scaleway")]
     pub qovery_storage_class: ServiceEnabled,
 }
 
