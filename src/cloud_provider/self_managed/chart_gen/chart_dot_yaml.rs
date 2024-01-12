@@ -88,7 +88,7 @@ description: desc
 type: application
 version: 1.0.0
 appVersion: 2.0.0
-kubeVersion: '1.26'
+kubeVersion: ~1.26.0-0
 home: https://www.qovery.com
 icon: https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_square_new_logo.svg
 "#
@@ -126,18 +126,18 @@ name: the_name
 description: desc
 dependencies:
 - name: minio
-  condition: minio.enabled
+  condition: services.minio.enabled
   version: 4.0.12
   repository: https://charts.min.io/
 - name: grafana-agent-operator
   alias: grafana-agent-operator
-  condition: monitoring.selfMonitoring.grafanaAgent.installOperator
+  condition: services.monitoring.selfMonitoring.grafanaAgent.installOperator
   version: 0.2.3
   repository: https://grafana.github.io/helm-charts
 type: application
 version: 1.0.0
 appVersion: 2.0.0
-kubeVersion: '1.26'
+kubeVersion: ~1.26.0-0
 home: https://www.qovery.com
 icon: https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_square_new_logo.svg
 "#
@@ -151,14 +151,14 @@ icon: https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_sq
                 ChartDotYamlDependencies {
                     name: "minio".to_string(),
                     alias: None,
-                    condition: "minio.enabled".to_string(),
+                    condition: "services.minio.enabled".to_string(),
                     repository: "https://charts.min.io/".to_string(),
                     version: Version::new(4, 0, 12),
                 },
                 ChartDotYamlDependencies {
                     name: "grafana-agent-operator".to_string(),
                     alias: Some("grafana-agent-operator".to_string()),
-                    condition: "monitoring.selfMonitoring.grafanaAgent.installOperator".to_string(),
+                    condition: "services.monitoring.selfMonitoring.grafanaAgent.installOperator".to_string(),
                     repository: "https://grafana.github.io/helm-charts".to_string(),
                     version: Version::new(0, 2, 3),
                 },

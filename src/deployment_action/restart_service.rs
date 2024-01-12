@@ -223,6 +223,8 @@ async fn restart_deployment(
     };
 
     let deployment_name = deployment.metadata.clone().name.unwrap_or_default();
+    let deployment_namespace = deployment.metadata.clone().namespace.unwrap_or_default();
+    let deployments_api: Api<Deployment> = Api::namespaced(kube.clone(), &deployment_namespace);
     deployments_api.restart(&deployment_name).await?;
 
     Ok(number_of_replicas)
@@ -265,6 +267,8 @@ async fn restart_statefulset(
         Some(replicas) => replicas,
     };
     let statefulset_name = statefulset.metadata.clone().name.unwrap_or_default();
+    let deployment_namespace = statefulset.metadata.clone().namespace.unwrap_or_default();
+    let statefulset_api: Api<StatefulSet> = Api::namespaced(kube.clone(), &deployment_namespace);
     statefulset_api.restart(&statefulset_name).await?;
 
     Ok(number_of_replicas)
@@ -297,6 +301,8 @@ async fn restart_daemon_set(
 
     let daemon_set = daemon_sets.items.first().unwrap();
     let daemon_set_name = daemon_set.metadata.clone().name.unwrap_or_default();
+    let deployment_namespace = daemon_set.metadata.clone().namespace.unwrap_or_default();
+    let daemon_set_api: Api<DaemonSet> = Api::namespaced(kube.clone(), &deployment_namespace);
     daemon_set_api.restart(&daemon_set_name).await?;
 
     Ok(())

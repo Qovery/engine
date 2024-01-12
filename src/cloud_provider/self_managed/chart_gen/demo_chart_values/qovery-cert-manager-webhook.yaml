@@ -1,0 +1,7 @@
+fullnameOverride: qovery-cert-manager-webhook
+certManager:
+  namespace: qovery
+  serviceAccountName: cert-manager
+secret:
+  apiUrl: *qoveryDnsUrl
+  apiKey: *jwtToken

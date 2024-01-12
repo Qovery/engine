@@ -62,7 +62,8 @@ async fn pause_service(
                 Api::namespaced(kube.clone(), namespace)
             };
             for statefulset in statefulsets.list(&list_params).await? {
-                if let Some(name) = statefulset.metadata.name {
+                if let (Some(namespace), Some(name)) = (statefulset.metadata.namespace, statefulset.metadata.name) {
+                    let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), &namespace); // patch_scale need to have statefulsets with namespace
                     statefulsets.patch_scale(&name, &patch_params, &patch).await?;
                     let _ = await_condition(statefulsets.clone(), &name, has_statefulset_ready_replicas(0)).await;
                 }
@@ -84,7 +85,8 @@ async fn pause_service(
                 Api::namespaced(kube.clone(), namespace)
             };
             for deployment in deployments.list(&list_params).await? {
-                if let Some(name) = deployment.metadata.name {
+                if let (Some(namespace), Some(name)) = (deployment.metadata.namespace, deployment.metadata.name) {
+                    let deployments: Api<Deployment> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have deployments with namespace
                     deployments.patch_scale(&name, &patch_params, &patch).await?;
                     let _ = await_condition(deployments.clone(), &name, has_deployment_ready_replicas(0)).await;
                 }
@@ -106,7 +108,8 @@ async fn pause_service(
                 Api::namespaced(kube.clone(), namespace)
             };
             for cron_job in cron_jobs.list(&list_params).await? {
-                if let Some(name) = cron_job.metadata.name {
+                if let (Some(namespace), Some(name)) = (cron_job.metadata.namespace, cron_job.metadata.name) {
+                    let cron_jobs: Api<CronJob> = Api::namespaced(kube.clone(), &namespace); // patch needs to have cron_jobs with namespace
                     cron_jobs.patch(&name, &patch_params, &patch).await?;
                     let _ = await_condition(cron_jobs.clone(), &name, has_cron_job_suspended_value(desired_size == 0))
                         .await;
@@ -137,7 +140,8 @@ async fn unpause_service_if_needed(
             };
             for statefulset in statefulsets.list(&list_params).await? {
                 if statefulset.status.map(|s| s.replicas).unwrap_or(0) == 0 {
-                    if let Some(name) = statefulset.metadata.name {
+                    if let (Some(namespace), Some(name)) = (statefulset.metadata.namespace, statefulset.metadata.name) {
+                        let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have statefulsets with namespace
                         statefulsets.patch_scale(&name, &patch_params, &patch).await?;
                     }
                 }
@@ -152,7 +156,8 @@ async fn unpause_service_if_needed(
             };
             for deployment in deployments.list(&list_params).await? {
                 if deployment.status.and_then(|s| s.replicas).unwrap_or(0) == 0 {
-                    if let Some(name) = deployment.metadata.name {
+                    if let (Some(namespace), Some(name)) = (deployment.metadata.namespace, deployment.metadata.name) {
+                        let deployments: Api<Deployment> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have deployments with namespace
                         deployments.patch_scale(&name, &patch_params, &patch).await?;
                     }
                 }
@@ -166,10 +171,9 @@ async fn unpause_service_if_needed(
                 Api::namespaced(kube.clone(), namespace)
             };
             for cron_job in cron_jobs.list(&list_params).await? {
-                if cron_job.spec.and_then(|s| s.suspend) != Some(false) {
-                    if let Some(name) = cron_job.metadata.name {
-                        cron_jobs.patch(&name, &patch_params, &patch).await?;
-                    }
+                if let (Some(namespace), Some(name)) = (cron_job.metadata.namespace, cron_job.metadata.name) {
+                    let cron_jobs: Api<CronJob> = Api::namespaced(kube.clone(), &namespace); // patch needs to have cron_jobs with namespace
+                    cron_jobs.patch(&name, &patch_params, &patch).await?;
                 }
             }
         }

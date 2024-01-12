@@ -75,15 +75,11 @@ impl SelfManaged {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelfManagedOptions {
     // Qovery
-    pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     #[serde(default)]
     pub qovery_engine_url: String,
     pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
-
-    // Other
-    pub tls_email_report: String,
 }
 
 impl Kubernetes for SelfManaged {

@@ -1,0 +1,9 @@
+fullnameOverride: external-dns
+provider: pdns
+domainFilters: [*domain]
+txtOwnerId: *shortClusterId
+txtPrefix: *externalDnsPrefix
+pdns:
+  apiUrl: *qoveryDnsUrl
+  apiKey: *jwtToken
+  apiPort: 443

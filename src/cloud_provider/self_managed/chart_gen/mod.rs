@@ -96,6 +96,8 @@ pub enum ValuesSourcePath {
     GcpBootstrapChartValues,
     #[display("lib/scaleway/bootstrap/chart_values")]
     ScalewayBootstrapChartValues,
+    #[display("src/cloud_provider/self_managed/chart_gen/demo_chart_values")]
+    DemoChartValues,
 }
 
 #[derive(Clone, Display, Debug)]
@@ -134,7 +136,7 @@ mod tests {
 
     use regex::Regex;
 
-    use super::ChartMeta;
+    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart};
 
     pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(&destination)?;
@@ -217,6 +219,26 @@ mod tests {
                 .to_string();
         }
         values_file_content
+    }
+
+    pub fn generate_config_file(
+        values: ValuesFile,
+        filename: String,
+        qovery_managed_chart: QoverySelfManagedChart,
+        prefix: String,
+    ) {
+        values
+            .save_to_file(qovery_managed_chart.destination, filename.clone())
+            .unwrap_or_else(|_| panic!("failed to save {}", filename.clone()));
+        // add overrided values to values-aws.yaml
+        let values_file_path = format!("{}/{}", qovery_managed_chart.destination.to_string_lossy(), filename);
+        let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
+        values_file_content = override_values(
+            values_file_content,
+            qovery_managed_chart.charts_source_path.clone(),
+            prefix.clone(),
+        );
+        fs::write(values_file_path, values_file_content).unwrap();
     }
 
     #[test]
@@ -344,7 +366,98 @@ mod tests {
                 values_source_path: None,
             },
         ];
+        // generate values-aws.yaml
+        generate_config_file(
+            ValuesFile::new_aws(),
+            "values-aws.yaml".to_string(),
+            aws_qovery_chart.clone(),
+            prefix.clone(),
+        );
 
+        // aws demo
+        let mut aws_qovery_chart_demo = minimal_qovery_chart.clone();
+        aws_qovery_chart_demo.charts_source_path = vec![
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryAwsStorageClass,
+            //     category: ChartCategory::Aws,
+            //     source_path: ChartSourcePath::AwsBootstrapCharts,
+            //     values_source_path: None,
+            // },
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::DNS,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Promtail,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Loki,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::MetricsServer,
+                category: ChartCategory::Observability,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            // },
+        ];
+        generate_config_file(
+            ValuesFile::new_aws(),
+            "values-demo-aws.yaml".to_string(),
+            aws_qovery_chart_demo.clone(),
+            prefix.clone(),
+        );
+
+        // GCP
         let mut gcp_qovery_chart = minimal_qovery_chart.clone();
         gcp_qovery_chart.charts_source_path = vec![
             // ChartMeta {
@@ -407,14 +520,98 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: None,
+            // },
+        ];
+        generate_config_file(
+            ValuesFile::new_gcp(),
+            "values-gcp.yaml".to_string(),
+            gcp_qovery_chart.clone(),
+            prefix.clone(),
+        );
+
+        // GCP demo
+        let mut gcp_qovery_chart_demo = minimal_qovery_chart.clone();
+        gcp_qovery_chart_demo.charts_source_path = vec![
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryAwsStorageClass,
+            //     category: ChartCategory::Gcp,
+            //     source_path: ChartSourcePath::GcpBootstrapCharts,
+            //     values_source_path: None,
+            // },
             ChartMeta {
-                name: SupportedCharts::QoveryEngine,
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::DNS,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Promtail,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Loki,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: None,
+            // },
         ];
+        generate_config_file(
+            ValuesFile::new_gcp(),
+            "values-demo-gcp.yaml".to_string(),
+            gcp_qovery_chart_demo.clone(),
+            prefix.clone(),
+        );
 
+        // Scaleway
         let mut scaleway_qovery_chart = minimal_qovery_chart.clone();
         scaleway_qovery_chart.charts_source_path = vec![
             // ChartMeta {
@@ -484,6 +681,89 @@ mod tests {
                 values_source_path: None,
             },
         ];
+        generate_config_file(
+            ValuesFile::new_scaleway(),
+            "values-scaleway.yaml".to_string(),
+            scaleway_qovery_chart.clone(),
+            prefix.clone(),
+        );
+
+        // Scaleway demo
+        let mut scaleway_qovery_chart_demo = minimal_qovery_chart.clone();
+        scaleway_qovery_chart_demo.charts_source_path = vec![
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryAwsStorageClass,
+            //     category: ChartCategory::Gcp,
+            //     source_path: ChartSourcePath::GcpBootstrapCharts,
+            //     values_source_path: None,
+            // },
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::DNS,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Promtail,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Loki,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: None,
+            // },
+        ];
+        generate_config_file(
+            ValuesFile::new_scaleway(),
+            "values-demo-scaleway.yaml".to_string(),
+            scaleway_qovery_chart_demo.clone(),
+            prefix.clone(),
+        );
 
         // generate values.yaml
         let values = ValuesFile::new_minimal();
@@ -491,48 +771,7 @@ mod tests {
             .save_to_file(minimal_qovery_chart.destination, "values.yaml".to_string())
             .expect("failed to save values.yaml");
 
-        // generate values-aws.yaml
-        let values = ValuesFile::new_aws();
-        values
-            .save_to_file(aws_qovery_chart.destination, "values-aws.yaml".to_string())
-            .expect("failed to save values-aws.yaml");
-
-        // add overrided values to values-aws.yaml
-        let values_file_path = format!("{}/values-aws.yaml", aws_qovery_chart.destination.to_string_lossy());
-        let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
-        values_file_content =
-            override_values(values_file_content, aws_qovery_chart.charts_source_path.clone(), prefix.clone());
-        fs::write(values_file_path, values_file_content).unwrap();
-
-        // generate values-gcp.yaml
-        let values = ValuesFile::new_gcp();
-        values
-            .save_to_file(aws_qovery_chart.destination, "values-gcp.yaml".to_string())
-            .expect("failed to save values-gcp.yaml");
-        // add overrided values to values-gcp.yaml
-        let values_file_path = format!("{}/values-gcp.yaml", gcp_qovery_chart.destination.to_string_lossy());
-        let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
-        values_file_content =
-            override_values(values_file_content, gcp_qovery_chart.charts_source_path.clone(), prefix.clone());
-        fs::write(values_file_path, values_file_content).unwrap();
-
-        // generate values-scaleway.yaml
-        let values = ValuesFile::new_scaleway();
-        values
-            .save_to_file(aws_qovery_chart.destination, "values-scaleway.yaml".to_string())
-            .expect("failed to save values-scaleway.yaml");
-        // add overrided values to values-gcp.yaml
-        let values_file_path = format!("{}/values-scaleway.yaml", scaleway_qovery_chart.destination.to_string_lossy());
-        let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
-        values_file_content = override_values(
-            values_file_content,
-            scaleway_qovery_chart.charts_source_path.clone(),
-            prefix.clone(),
-        );
-        fs::write(values_file_path, values_file_content).unwrap();
-
         // generate Chart.yaml
-        // TODO(pmavro): support not only AWS but also GCP, Scaleway, etc. in the dependencies
         let chart_dot_yaml = ChartDotYaml::from_qovery_self_managed_chart(prefix.clone(), aws_qovery_chart.clone())
             .map_err(|e| {
                 println!("{e}");
