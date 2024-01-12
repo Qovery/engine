@@ -218,10 +218,9 @@ impl EnvironmentRequest {
                     if route.service_long_id == helm.long_id {
                         // disable custom domain check for this router
 
-                        // TODO PG
-                        // if !helm.advanced_settings.deployment_custom_domain_check_enabled {
-                        //     router_advanced_settings.custom_domain_check_enabled = false;
-                        // }
+                        if !helm.advanced_settings.deployment_custom_domain_check_enabled {
+                            router_advanced_settings.custom_domain_check_enabled = false;
+                        }
                         // whitelist source range
                         if helm.advanced_settings.network_ingress_whitelist_source_range
                             != RouterAdvancedSettings::whitelist_source_range_default_value()
