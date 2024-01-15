@@ -11,6 +11,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
@@ -21,6 +22,7 @@ use crate::cloud_provider::Kind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::models::domain::Domain;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
@@ -150,9 +152,11 @@ pub fn scw_helm_charts(
     envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     info!("preparing chart configuration to be deployed");
-    let get_chart_overrride_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
+    let kind_provider = Kind::Scw;
+    let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
         Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
             match customer_helm_charts_override.clone() {
                 Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
@@ -195,7 +199,7 @@ pub fn scw_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
-        Kind::Scw,
+        kind_provider,
         HashSet::from_iter(vec![QoveryStorageType::Ssd]),
         HelmChartNamespaces::KubeSystem,
     )
@@ -245,7 +249,7 @@ pub fn scw_helm_charts(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
                 loki_kube_dns_name,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
@@ -273,7 +277,7 @@ pub fn scw_helm_charts(
                     insecure: false,
                     use_path_style: true,
                 }),
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
                 HelmChartResourcesConstraintType::ChartDefault,
             )
@@ -301,7 +305,7 @@ pub fn scw_helm_charts(
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 true,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
             )
             .to_common_helm_chart()?,
@@ -316,7 +320,7 @@ pub fn scw_helm_charts(
                 chart_prefix_path,
                 prometheus_internal_url.clone(),
                 prometheus_namespace,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
             )
             .to_common_helm_chart()?,
@@ -329,7 +333,7 @@ pub fn scw_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_overrride_fn.clone())
+            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_override_fn.clone())
                 .to_common_helm_chart()?,
         ),
     };
@@ -367,7 +371,7 @@ pub fn scw_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
@@ -426,7 +430,10 @@ pub fn scw_helm_charts(
         }),
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.ff_metrics_history_enabled,
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
+        domain.clone(),
+        Kind::Scw,
+        KubernetesKind::ScwKapsule,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings
@@ -443,6 +450,12 @@ pub fn scw_helm_charts(
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
         HelmChartNamespaces::NginxIngress,
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .load_balancer_size
+                .clone(),
+        ),
     )
     .to_common_helm_chart()?;
 

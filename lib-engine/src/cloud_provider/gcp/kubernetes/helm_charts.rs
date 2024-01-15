@@ -21,16 +21,19 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::Kind;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::errors::CommandError;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
+use crate::models::domain::Domain;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::ToCloudProviderFormat;
@@ -138,6 +141,7 @@ pub fn gcp_helm_charts(
     envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
         Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
@@ -322,6 +326,9 @@ pub fn gcp_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_override_fn.clone(),
+        domain.clone(),
+        Kind::Gcp,
+        KubernetesKind::Gke,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings
@@ -338,6 +345,7 @@ pub fn gcp_helm_charts(
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
         HelmChartNamespaces::Qovery,
+        None,
     )
     .to_common_helm_chart()?;
 

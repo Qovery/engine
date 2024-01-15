@@ -410,11 +410,6 @@ fn tera_context(
         &managed_dns_resolvers_terraform_format,
     );
 
-    context.insert(
-        "wildcard_managed_dns",
-        &kubernetes.dns_provider().domain().wildcarded().to_string(),
-    );
-
     // add specific DNS fields
     kubernetes.dns_provider().insert_into_teracontext(&mut context);
 
@@ -1281,6 +1276,7 @@ fn create(
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
                 ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
+                managed_domain: kubernetes.dns_provider().domain().clone(),
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: terraform_list_format(
@@ -1312,6 +1308,7 @@ fn create(
                 &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
                 kubernetes.customer_helm_charts_override(),
+                kubernetes.dns_provider().domain(),
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
@@ -1333,6 +1330,7 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
+                managed_domain: kubernetes.dns_provider().domain().clone(),
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
                 managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),

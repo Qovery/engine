@@ -399,7 +399,6 @@ impl Gke {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
-        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
 
         // add specific DNS fields
         self.dns_provider().insert_into_teracontext(&mut context);
@@ -697,6 +696,7 @@ impl Gke {
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
+            self.dns_provider.domain(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
