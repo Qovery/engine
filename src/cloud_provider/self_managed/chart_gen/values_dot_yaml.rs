@@ -79,6 +79,8 @@ pub struct QoveryGlobalConfig {
     #[serde(rename = "jwtToken")]
     pub jwt_token: String,
     pub domain: String,
+    #[serde(rename = "domainWildcard")]
+    pub domain_wildcard: String,
     #[serde(rename = "grpcServer")]
     pub grpc_server: String,
     #[serde(rename = "engineGrpcServer")]

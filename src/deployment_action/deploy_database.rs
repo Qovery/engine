@@ -286,7 +286,7 @@ where
     );
     terraform_deploy.on_create(target)?;
 
-    // Our terrraform give us back a file with all the info we need to deploy the remaining stuff
+    // Our terraform give us back a file with all the info we need to deploy the remaining stuff
     let database_config =
         get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
             .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;

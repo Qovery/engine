@@ -13,6 +13,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
     VpcQoveryNetworkMode,
@@ -49,6 +50,7 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::models::aws::AwsStorageType;
+use crate::models::domain::Domain;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::ToCloudProviderFormat;
 use chrono::Duration;
@@ -88,6 +90,7 @@ pub struct EksChartsConfigPrerequisites {
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub ff_grafana_enabled: bool,
+    pub managed_domain: Domain,
     pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
@@ -108,8 +111,9 @@ pub fn eks_aws_helm_charts(
     envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let get_chart_overrride_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
+    let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
         Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
             match customer_helm_charts_override.clone() {
                 Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
@@ -277,7 +281,7 @@ pub fn eks_aws_helm_charts(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
                 loki_kube_dns_name,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
@@ -305,7 +309,7 @@ pub fn eks_aws_helm_charts(
                     insecure: false,
                     use_path_style: false,
                 }),
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
                 HelmChartResourcesConstraintType::ChartDefault,
             )
@@ -333,7 +337,7 @@ pub fn eks_aws_helm_charts(
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 true,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
             )
             .to_common_helm_chart()?,
@@ -348,7 +352,7 @@ pub fn eks_aws_helm_charts(
                 chart_prefix_path,
                 prometheus_internal_url.clone(),
                 prometheus_namespace,
-                get_chart_overrride_fn.clone(),
+                get_chart_override_fn.clone(),
                 true,
             )
             .to_common_helm_chart()?,
@@ -383,7 +387,7 @@ pub fn eks_aws_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_overrride_fn.clone())
+            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_override_fn.clone())
                 .to_common_helm_chart()?,
         ),
     };
@@ -424,7 +428,7 @@ pub fn eks_aws_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
@@ -468,7 +472,10 @@ pub fn eks_aws_helm_charts(
         }),
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.ff_metrics_history_enabled,
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
+        domain.clone(),
+        Kind::Aws,
+        KubernetesKind::Eks,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings
@@ -485,6 +492,7 @@ pub fn eks_aws_helm_charts(
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
         HelmChartNamespaces::NginxIngress,
+        None,
     )
     .to_common_helm_chart()?;
 

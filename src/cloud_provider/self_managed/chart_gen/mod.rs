@@ -225,6 +225,16 @@ mod tests {
             values_file_content = update_qovery_config
                 .replace_all(values_file_content.as_str(), "$1$2")
                 .to_string();
+            // update yaml variables that serde will fail because of missing references
+            // ex: Nginx ingress has a variable where no reference is available in the override file (only available when the self-managed chart is generated). So serde will fail on validating the content
+            let update_qovery_config = Regex::new(r"(external-dns.alpha.kubernetes.io/hostname:).+").unwrap();
+            values_file_content = update_qovery_config
+                .replace_all(values_file_content.as_str(), "$1 *domainWildcard")
+                .to_string();
+            // values_file_content = values_file_content.replace(
+            //     "external-dns.alpha.kubernetes.io/hostname",
+            //     "external-dns.alpha.kubernetes.io/hostnameeeeee: *domainWildcard",
+            // );
         }
         values_file_content
     }

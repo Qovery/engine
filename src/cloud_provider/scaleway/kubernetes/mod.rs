@@ -1048,6 +1048,7 @@ impl Kapsule {
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
+            self.dns_provider.domain(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 

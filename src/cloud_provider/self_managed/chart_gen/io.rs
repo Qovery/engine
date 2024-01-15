@@ -183,6 +183,7 @@ impl ValuesFile {
                 organization_id: "&organizationId set-by-customer".to_string(),
                 jwt_token: "&jwtToken set-by-customer".to_string(),
                 domain: "&domain set-by-customer".to_string(),
+                domain_wildcard: "&domainWildcard set-by-customer".to_string(),
                 grpc_server: "&grpcServer set-by-customer".to_string(),
                 engine_grpc_server: "&engineGrpcServer set-by-customer".to_string(),
                 qovery_dns_url: "&qoveryDnsUrl set-by-customer".to_string(),

@@ -8,6 +8,7 @@ use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::Kind;
 use crate::cmd::terraform::TerraformError;
@@ -27,6 +28,7 @@ use crate::cloud_provider::models::{
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
+use crate::models::domain::Domain;
 use crate::models::third_parties::LetsEncryptConfig;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -73,6 +75,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
+    pub managed_domain: Domain,
     pub managed_dns_name: String,
     pub managed_dns_name_wildcarded: String,
     pub managed_dns_helm_format: String,
@@ -117,7 +120,8 @@ pub fn ec2_aws_helm_charts(
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let get_chart_overrride_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
+    let kind_provider = Kind::Aws;
+    let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
         Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
             match customer_helm_charts_override.clone() {
                 Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
@@ -167,7 +171,7 @@ pub fn ec2_aws_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
-        Kind::Aws,
+        kind_provider.clone(),
         HashSet::from_iter(vec![
             QoveryStorageType::Ssd,
             QoveryStorageType::Hdd,
@@ -300,7 +304,7 @@ pub fn ec2_aws_helm_charts(
             limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
         }),
         UpdateStrategy::Recreate,
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
         false,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
@@ -328,11 +332,15 @@ pub fn ec2_aws_helm_charts(
         }),
         HelmChartResourcesConstraintType::ChartDefault,
         false, // no metrics history on EC2 ATM
-        get_chart_overrride_fn.clone(),
+        get_chart_override_fn.clone(),
+        chart_config_prerequisites.managed_domain.clone(),
+        kind_provider,
+        KubernetesKind::Ec2,
         None,
         None,
         None,
         HelmChartNamespaces::NginxIngress,
+        None,
     )
     .to_common_helm_chart()?;
 
