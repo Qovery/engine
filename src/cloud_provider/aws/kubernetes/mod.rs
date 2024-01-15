@@ -500,6 +500,18 @@ fn tera_context(
         context.insert("ec2_port", &port.to_string());
     }
 
+    // Encrypt cluster secrets with a KMS key
+    if !kubernetes
+        .advanced_settings()
+        .aws_eks_encrypt_secrets_kms_key_arn
+        .is_empty()
+    {
+        context.insert(
+            "aws_eks_encrypt_secrets_kms_key_arn",
+            &kubernetes.advanced_settings().aws_eks_encrypt_secrets_kms_key_arn,
+        );
+    }
+
     context.insert("cloudwatch_eks_log_group", &cloudwatch_eks_log_group);
     context.insert(
         "aws_cloudwatch_eks_logs_retention_days",

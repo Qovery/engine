@@ -78,6 +78,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
+    #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
+    pub aws_eks_encrypt_secrets_kms_key_arn: String,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
     #[serde(alias = "database.postgresql.deny_public_access")]
@@ -150,6 +152,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
             scaleway_enable_private_network_migration: false,
+            aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
         }
     }
 }
