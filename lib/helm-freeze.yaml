@@ -58,14 +58,11 @@ charts:
     comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: loki
     repo_name: grafana
-    version: 5.0.0
-    no_sync: true
-    comment: |
-      Chart is frozen due to custom modification see: https://github.com/grafana/loki/issues/9207
-      https://github.com/grafana/loki/blob/main/production/helm/loki/Chart.yaml#L6
+    version: 5.41.4
+    comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana
-    version: 6.10.0
+    version: 6.15.3
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
   - name: mongodb
     repo_name: bitnami

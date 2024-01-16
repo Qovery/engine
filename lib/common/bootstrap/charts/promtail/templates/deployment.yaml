@@ -14,6 +14,13 @@ spec:
   {{- if not .Values.deployment.autoscaling.enabled }}
   replicas: {{ .Values.deployment.replicaCount }}
   {{- end }}
+  {{- if .Values.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
+  {{- with .Values.deployment.strategy }}
+  strategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "promtail.selectorLabels" . | nindent 6 }}

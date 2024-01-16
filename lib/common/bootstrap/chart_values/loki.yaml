@@ -3,6 +3,9 @@ kubectlImage:
   registry: set-by-engine-code
   repository: set-by-engine-code
 
+tableManager:
+  retention_deletes_enabled: set-by-engine-code # qovery setting
+  retention_period: set-by-engine-code # qovery setting
 loki:
   # remove if you don't want to use a custom image
   image:
@@ -24,7 +27,7 @@ loki:
         kvstore:
           store: memberlist
         replication_factor: 1
-  memberlist:
+  memberlistConfig:
     abort_if_cluster_join_fails: false
     bind_port: 7946
     join_members:
@@ -50,9 +53,6 @@ loki:
     retention_enabled: set-by-engine-code
     retention_delete_delay: 2h
     retention_delete_worker_count: 150
-  table_manager:
-    retention_deletes_enabled: set-by-engine-code
-    retention_period: set-by-engine-code
   schema_config:
     configs:
       # set the schema for the index (2020 version can be deleted on a fresh install)
@@ -102,9 +102,6 @@ monitoring:
     enabled: false
     grafanaAgent:
       installOperator: false
-
-  grafanaAgent:
-    enabled: false
   lokiCanary:
     enabled: false
 

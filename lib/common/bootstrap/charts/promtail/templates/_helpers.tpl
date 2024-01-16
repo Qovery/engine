@@ -69,24 +69,6 @@ Create the name of the service account
 {{- end }}
 
 {{/*
-The service name to connect to Loki. Defaults to the same logic as "loki.fullname"
-*/}}
-{{- define "loki.serviceName" -}}
-{{- if .Values.loki.serviceName }}
-{{- .Values.loki.serviceName }}
-{{- else if .Values.loki.fullnameOverride }}
-{{- .Values.loki.fullnameOverride | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- $name := default "loki" .Values.loki.nameOverride }}
-{{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
-{{- end }}
-{{- end }}
-{{- end }}
-
-{{/*
 Configure enableServiceLinks in pod
 */}}
 {{- define "promtail.enableServiceLinks" -}}

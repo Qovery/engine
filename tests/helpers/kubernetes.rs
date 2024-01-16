@@ -403,7 +403,7 @@ pub fn cluster_test(
         }
     }
 
-    // Delete
+    // // Delete
     let mut delete_tx = Transaction::new(&engine).unwrap();
     if let Err(err) = delete_tx.delete_kubernetes() {
         panic!("{err:?}")

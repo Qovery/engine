@@ -9,6 +9,7 @@ use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAge
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::Kind;
 use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
@@ -166,6 +167,7 @@ pub fn ec2_aws_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
+        Kind::Aws,
         HashSet::from_iter(vec![
             QoveryStorageType::Ssd,
             QoveryStorageType::Hdd,

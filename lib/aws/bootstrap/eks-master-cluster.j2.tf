@@ -40,6 +40,15 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   enabled_cluster_log_types = ["api","audit","authenticator","controllerManager","scheduler"]
 
+{% if aws_eks_encrypt_secrets_kms_key_arn -%}
+  encryption_config {
+      provider {
+        key_arn = "{{ aws_eks_encrypt_secrets_kms_key_arn }}"
+      }
+      resources = ["secrets"]
+  }
+{%- endif %}
+
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
     subnet_ids = flatten([

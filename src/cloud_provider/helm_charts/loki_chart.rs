@@ -188,11 +188,11 @@ impl ToCommonHelmChart for LokiChart {
                     // todo(pmavro): ensure there is no better options to handle retention:
                     // https://github.com/grafana/loki/issues/9207, chart is manually overriden
                     ChartSetValue {
-                        key: "loki.table_manager.retention_deletes_enabled".to_string(),
+                        key: "tableManager.retention_deletes_enabled".to_string(),
                         value: "true".to_string(),
                     },
                     ChartSetValue {
-                        key: "loki.table_manager.retention_period".to_string(),
+                        key: "tableManager.retention_period".to_string(),
                         value: format!("{}w", self.loki_log_retention_in_weeks), // Qovery setting (default 12 week)
                     },
                 ],

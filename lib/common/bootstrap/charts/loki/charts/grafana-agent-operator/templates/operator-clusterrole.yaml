@@ -52,4 +52,11 @@ rules:
   - daemonsets
   - deployments
   verbs: [get, list, watch, create, update, patch, delete]
+{{- with .Values.rbac.podSecurityPolicyName }}
+- apiGroups: [policy]
+  resources:
+  - podsecuritypolicies
+  verbs:         [use]
+  resourceNames: [ {{ . }} ]
+{{- end -}}
 {{- end -}}

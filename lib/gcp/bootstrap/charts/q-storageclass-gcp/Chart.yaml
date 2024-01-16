@@ -1,5 +1,5 @@
 apiVersion: v2
-name: q-storageclass
+name: q-storageclass-gcp
 description: A Helm chart for Kubernetes
 
 # A chart can be either an 'application' or a 'library' chart.

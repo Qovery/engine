@@ -12,7 +12,7 @@ pub mod chart_dot_yaml;
 pub mod io;
 pub mod values_dot_yaml;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QoverySelfManagedChart<'a> {
     #[allow(dead_code)]
     destination: &'a Path,
@@ -58,7 +58,7 @@ impl<'a> QoverySelfManagedChart<'a> {
     }
 }
 
-#[derive(Clone, Display, Debug)]
+#[derive(Clone, Display, Eq, Ord, PartialOrd, Debug)]
 #[display("{} {} {} {}", "name", "category", "source_path", "values_source_path")]
 pub struct ChartMeta {
     name: SupportedCharts,
@@ -68,7 +68,13 @@ pub struct ChartMeta {
     values_source_path: Option<ValuesSourcePath>,
 }
 
-#[derive(Clone, Display, Debug)]
+impl PartialEq for ChartMeta {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.category == other.category && self.source_path == other.source_path
+    }
+}
+
+#[derive(Clone, Display, PartialEq, Ord, PartialOrd, Eq, Debug)]
 pub enum ChartSourcePath {
     #[display("lib/aws/bootstrap/charts")]
     AwsBootstrapCharts,
@@ -84,7 +90,7 @@ pub enum ChartSourcePath {
     ScalewayBootstrapCharts,
 }
 
-#[derive(Clone, Display, Debug)]
+#[derive(Clone, Display, PartialEq, Eq, Ord, PartialOrd, Debug)]
 pub enum ValuesSourcePath {
     #[display("lib/aws/bootstrap/chart_values")]
     AwsBootstrapChartValues,
@@ -100,10 +106,14 @@ pub enum ValuesSourcePath {
     DemoChartValues,
 }
 
-#[derive(Clone, Display, Debug)]
+#[derive(Clone, Display, PartialEq, Eq, Ord, PartialOrd, Debug)]
 pub enum SupportedCharts {
-    #[display("q-storageclass")]
+    #[display("q-storageclass-aws")]
     QoveryAwsStorageClass,
+    #[display("q-storageclass-gcp")]
+    QoveryGcpStorageClass,
+    #[display("q-storageclass-scaleway")]
+    QoveryScalewayStorageClass,
     #[display("ingress-nginx")]
     IngressNginx,
     #[display("external-dns")]
@@ -126,8 +136,6 @@ pub enum SupportedCharts {
     QoveryShellAgent,
     #[display("qovery-engine")]
     QoveryEngine,
-    #[display("q-storageclass")]
-    QoveryStorageClass,
 }
 
 #[cfg(test)]
@@ -229,7 +237,7 @@ mod tests {
     ) {
         values
             .save_to_file(qovery_managed_chart.destination, filename.clone())
-            .unwrap_or_else(|_| panic!("failed to save {}", filename.clone()));
+            .unwrap_or_else(|e| panic!("failed to save {} to {:?}", filename.clone(), e));
         // add overrided values to values-aws.yaml
         let values_file_path = format!("{}/{}", qovery_managed_chart.destination.to_string_lossy(), filename);
         let mut values_file_content = fs::read_to_string(Path::new(&values_file_path)).unwrap();
@@ -293,12 +301,12 @@ mod tests {
         // cert-manager and cert-manager-configs. Cert-manager-configs should be set before cert-manager
         let mut aws_qovery_chart = minimal_qovery_chart.clone();
         aws_qovery_chart.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Aws,
-            //     source_path: ChartSourcePath::AwsBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryAwsStorageClass,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -377,12 +385,12 @@ mod tests {
         // aws demo
         let mut aws_qovery_chart_demo = minimal_qovery_chart.clone();
         aws_qovery_chart_demo.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Aws,
-            //     source_path: ChartSourcePath::AwsBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryAwsStorageClass,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -460,12 +468,12 @@ mod tests {
         // GCP
         let mut gcp_qovery_chart = minimal_qovery_chart.clone();
         gcp_qovery_chart.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Gcp,
-            //     source_path: ChartSourcePath::GcpBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryGcpStorageClass,
+                category: ChartCategory::Gcp,
+                source_path: ChartSourcePath::GcpBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -537,12 +545,12 @@ mod tests {
         // GCP demo
         let mut gcp_qovery_chart_demo = minimal_qovery_chart.clone();
         gcp_qovery_chart_demo.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Gcp,
-            //     source_path: ChartSourcePath::GcpBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryGcpStorageClass,
+                category: ChartCategory::Gcp,
+                source_path: ChartSourcePath::GcpBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -614,12 +622,12 @@ mod tests {
         // Scaleway
         let mut scaleway_qovery_chart = minimal_qovery_chart.clone();
         scaleway_qovery_chart.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Gcp,
-            //     source_path: ChartSourcePath::GcpBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryScalewayStorageClass,
+                category: ChartCategory::Gcp,
+                source_path: ChartSourcePath::ScalewayBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -691,12 +699,12 @@ mod tests {
         // Scaleway demo
         let mut scaleway_qovery_chart_demo = minimal_qovery_chart.clone();
         scaleway_qovery_chart_demo.charts_source_path = vec![
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryAwsStorageClass,
-            //     category: ChartCategory::Gcp,
-            //     source_path: ChartSourcePath::GcpBootstrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryScalewayStorageClass,
+                category: ChartCategory::Gcp,
+                source_path: ChartSourcePath::ScalewayBootstrapCharts,
+                values_source_path: None,
+            },
             ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
@@ -772,7 +780,22 @@ mod tests {
             .expect("failed to save values.yaml");
 
         // generate Chart.yaml
-        let chart_dot_yaml = ChartDotYaml::from_qovery_self_managed_chart(prefix.clone(), aws_qovery_chart.clone())
+        let mut all_charts = aws_qovery_chart.clone();
+        let mut x = Vec::new();
+        aws_qovery_chart.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        gcp_qovery_chart.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        scaleway_qovery_chart.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        x.sort();
+        x.dedup();
+        all_charts.charts_source_path = x;
+
+        let chart_dot_yaml = ChartDotYaml::from_qovery_self_managed_chart(prefix.clone(), all_charts)
             .map_err(|e| {
                 println!("{e}");
             })
@@ -782,6 +805,10 @@ mod tests {
             .expect("failed to save Chart.yaml");
 
         // copy charts
+        // let chart_copy = [(
+        //     aws_qovery_chart.charts_source_path,
+        //     aws_qovery_chart.destination.to_string_lossy(),
+        // )];
         for chart in aws_qovery_chart.charts_source_path {
             let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
             let destination_path = format!("{}/charts", aws_qovery_chart.destination.to_string_lossy());
@@ -789,7 +816,24 @@ mod tests {
             let src = format!("{}/{}", source_path, chart.name);
             let dst = format!("{destination_path}/{}", chart.name);
             println!("copying {src} to {dst}");
-            // fs::copy(src, dst).unwrap();
+            copy_recursively(src, dst).unwrap();
+        }
+        for chart in gcp_qovery_chart.charts_source_path {
+            let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
+            let destination_path = format!("{}/charts", gcp_qovery_chart.destination.to_string_lossy());
+            fs::create_dir_all(&destination_path).unwrap();
+            let src = format!("{}/{}", source_path, chart.name);
+            let dst = format!("{destination_path}/{}", chart.name);
+            println!("copying {src} to {dst}");
+            copy_recursively(src, dst).unwrap();
+        }
+        for chart in scaleway_qovery_chart.charts_source_path {
+            let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
+            let destination_path = format!("{}/charts", scaleway_qovery_chart.destination.to_string_lossy());
+            fs::create_dir_all(&destination_path).unwrap();
+            let src = format!("{}/{}", source_path, chart.name);
+            let dst = format!("{destination_path}/{}", chart.name);
+            println!("copying {src} to {dst}");
             copy_recursively(src, dst).unwrap();
         }
 

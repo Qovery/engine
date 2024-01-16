@@ -18,6 +18,7 @@ use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::errors::CommandError;
@@ -157,6 +158,7 @@ pub fn gcp_helm_charts(
     // Qovery storage class
     let q_storage_class_chart = QoveryStorageClassChart::new(
         chart_prefix_path,
+        CloudProviderKind::Gcp,
         HashSet::from_iter(vec![QoveryStorageType::Ssd, QoveryStorageType::Hdd]), // TODO(benjaminch): Should add Cold and Nvme?
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
     )

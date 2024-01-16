@@ -93,7 +93,7 @@ impl Display for KubernetesAddon {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, EnumIter)]
+#[derive(Clone, Debug, PartialEq, Eq, EnumIter)]
 pub enum KubernetesVersion {
     V1_23 {
         prefix: Option<Arc<str>>,

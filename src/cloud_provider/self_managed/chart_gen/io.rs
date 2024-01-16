@@ -7,9 +7,9 @@ use thiserror::Error;
 use super::{
     chart_dot_yaml,
     values_dot_yaml::{
-        CertificateServices, ChartConfig, DnsServices, ImageTag, IngressServices, LoggingServices,
-        ObservabilityServices, QoveryAgents, QoveryGlobalConfig, QoveryServices, ServiceEnabled, ServicesEnabler,
-        ValuesFile,
+        AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
+        LoggingServices, ObservabilityServices, QoveryAgents, QoveryGlobalConfig, QoveryServices, ScalewayServices,
+        ServiceEnabled, ServicesEnabler, ValuesFile,
     },
     QoverySelfManagedChart, SupportedCharts,
 };
@@ -224,7 +224,9 @@ impl ValuesFile {
             cert_manager: ChartConfig { override_chart: None },
             cert_manager_qovery_webhook: ChartConfig { override_chart: None },
             cert_manager_configs: ChartConfig { override_chart: None },
-            qovery_storage_class: None,
+            qovery_storage_class_aws: None,
+            qovery_storage_class_gcp: None,
+            qovery_storage_class_scaleway: None,
             metrics_server: Some(ChartConfig { override_chart: None }),
         }
     }
@@ -257,7 +259,9 @@ impl ValuesFile {
             override_chart: Some(SupportedCharts::MetricsServer.to_string()),
         });
 
-        value.services.aws = None;
+        value.services.aws = Some(AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: true },
+        });
 
         value
     }
@@ -288,7 +292,9 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.qovery_storage_class = None;
+        value.services.gcp = Some(GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: true },
+        });
 
         value
     }
@@ -319,7 +325,9 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.qovery_storage_class = None;
+        value.services.scaleway = Some(ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: true },
+        });
 
         value
     }
@@ -357,7 +365,7 @@ impl ChartDotYamlApiVersion {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChartDotYamlDependencies {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
