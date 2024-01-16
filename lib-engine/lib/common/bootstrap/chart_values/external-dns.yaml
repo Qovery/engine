@@ -32,13 +32,6 @@ replicas: 1
 updateStrategy:
   type: set-by-engine-code
 
-# remove if you don't want to use a custom image
-image:
-  registry: set-by-engine-code
-  repository: set-by-engine-code
-  tag: 0.13.2-debian-11-r17
-
-# set resources
 resources:
   limits:
     cpu: 50m
