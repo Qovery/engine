@@ -3304,7 +3304,7 @@ fn deploy_helm_chart() {
             chart_source: HelmChartSource::Git {
                 git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
                 git_credentials: None,
-                commit_id: "c4c33c5f7f6e88e2a24c81883c8868c79bbfffb5".to_string(),
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
                 root_path: PathBuf::from("/simple_app"),
             },
             chart_values: HelmValueSource::Raw {
