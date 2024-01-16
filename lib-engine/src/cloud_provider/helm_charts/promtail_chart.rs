@@ -85,6 +85,9 @@ impl ToCommonHelmChart for PromtailChart {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
                 },
+                // As promtail is on every node, it can take some time and failing the chart deployment
+                // e.g papershift production cluster has 33 nodes !
+                timeout_in_seconds: 1800,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
