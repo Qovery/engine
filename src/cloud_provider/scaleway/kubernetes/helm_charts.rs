@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    UpdateStrategy,
+    PriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
@@ -30,7 +30,9 @@ use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
-use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::loki_chart::{
+    LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
+};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
@@ -246,6 +248,7 @@ pub fn scw_helm_charts(
                 get_chart_overrride_fn.clone(),
                 true,
                 HelmChartNamespaces::KubeSystem,
+                PriorityClass::Default,
             )
             .to_common_helm_chart()?,
         ),
@@ -262,14 +265,17 @@ pub fn scw_helm_charts(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
-                LokiS3BucketConfiguration {
+                LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
                     s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
-                    use_path_style: true,
                     region: Some(chart_config_prerequisites.zone.region().to_string()),
-                    ..Default::default()
-                },
+                    aws_iam_loki_role_arn: None,
+                    bucketname: None,
+                    insecure: false,
+                    use_path_style: true,
+                }),
                 get_chart_overrride_fn.clone(),
                 true,
+                HelmChartResourcesConstraintType::ChartDefault,
             )
             .to_common_helm_chart()?,
         ),

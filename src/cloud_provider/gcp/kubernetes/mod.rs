@@ -683,6 +683,8 @@ impl Gke {
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
             self.context.disable_pleco(),
+            qovery_terraform_config.loki_logging_service_account_email,
+            self.logs_bucket_name(),
             self.options.clone(),
             self.advanced_settings().clone(),
         );
@@ -1373,4 +1375,6 @@ impl Kubernetes for Gke {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GkeQoveryTerraformConfig {
     pub gke_cluster_public_hostname: String,
+    #[serde(default)]
+    pub loki_logging_service_account_email: String,
 }
