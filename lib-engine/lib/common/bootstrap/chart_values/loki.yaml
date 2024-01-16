@@ -48,7 +48,7 @@ loki:
   compactor:
     working_directory: /data/retention
     # configure storage provider for the compactor
-    shared_store: aws
+    shared_store: set-by-engine-code
     compaction_interval: 10m
     retention_enabled: set-by-engine-code
     retention_delete_delay: 2h
@@ -73,19 +73,25 @@ loki:
   storage:
     # configure the object storage backend
     bucketNames:
-      chunks:
-      ruler:
-      admin:
-    type: s3
+      chunks: set-by-engine-code
+      ruler: set-by-engine-code
+      admin: set-by-engine-code
+    type: set-by-engine-code
     s3:
-      s3:
-      region:
-      s3ForcePathStyle:
-      insecure:
+      s3: set-by-engine-code
+      region: set-by-engine-code
+      s3ForcePathStyle: set-by-engine-code
+      insecure: set-by-engine-code
+    gcs:
+      chunkBufferSize: 0
+      requestTimeout: "0s"
+      enableHttp2: true
   storage_config:
+    gcs:
+      bucket_name: set-by-engine-code
     boltdb_shipper:
       active_index_directory: /data/loki/index
-      shared_store: s3
+      shared_store: set-by-engine-code
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
 
@@ -117,11 +123,11 @@ singleBinary:
   # set resources
   resources:
     limits:
-      cpu: 1
-      memory: 2Gi
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: 300m
-      memory: 1Gi
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
   persistence:
     enabled: false
   extraVolumes:

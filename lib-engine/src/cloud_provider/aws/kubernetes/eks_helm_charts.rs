@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    UpdateStrategy,
+    PriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
@@ -38,7 +38,9 @@ use crate::cloud_provider::helm_charts::grafana_chart::{
 };
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
-use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::loki_chart::{
+    LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
+};
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
@@ -278,6 +280,7 @@ pub fn eks_aws_helm_charts(
                 get_chart_overrride_fn.clone(),
                 true,
                 HelmChartNamespaces::KubeSystem,
+                PriorityClass::Default,
             )
             .to_common_helm_chart()?,
         ),
@@ -294,15 +297,17 @@ pub fn eks_aws_helm_charts(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
-                LokiS3BucketConfiguration {
+                LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
                     region: Some(chart_config_prerequisites.region.to_cloud_provider_format().to_string()), // TODO(benjaminch): region to be struct instead of String
                     bucketname: Some(qovery_terraform_config.aws_s3_loki_bucket_name),
                     s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
                     aws_iam_loki_role_arn: Some(qovery_terraform_config.aws_iam_loki_role_arn),
-                    ..Default::default()
-                },
+                    insecure: false,
+                    use_path_style: false,
+                }),
                 get_chart_overrride_fn.clone(),
                 true,
+                HelmChartResourcesConstraintType::ChartDefault,
             )
             .to_common_helm_chart()?,
         ),
