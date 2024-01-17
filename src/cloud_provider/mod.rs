@@ -95,7 +95,7 @@ impl Display for Kind {
         f.write_str(match self {
             Kind::Aws => "AWS",
             Kind::Scw => "Scaleway",
-            Kind::Gcp => "Google",
+            Kind::Gcp => "GCP",
             Kind::SelfManaged => "SelfManaged",
         })
     }

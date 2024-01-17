@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::helm::HelmCommand::{FETCH, LIST, LOGIN, PULL, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist,
 };
@@ -86,6 +86,7 @@ pub enum HelmCommand {
     FETCH,
     PULL,
     LOGIN,
+    DEPENDENCY,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1005,6 +1006,57 @@ impl Helm {
         }
 
         Ok(())
+    }
+
+    pub fn dependency_build<STDOUT, STDERR>(
+        &self,
+        release_name: &str,
+        chart_path: &Path,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+    ) -> Result<(), HelmError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
+        let chart_path = chart_path.to_string_lossy();
+        let args: Vec<&str> = ["dependency", "build", chart_path.as_ref()]
+            .into_iter()
+            .chain(args.iter().copied())
+            .collect();
+
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| {
+                stdout_output(line);
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart_path, line);
+                stderr_output(line);
+            },
+            cmd_killer,
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                CommandError::TimeoutError(_) => {
+                    Err(HelmError::Timeout(release_name.to_string(), DEPENDENCY, stderr_msg))
+                }
+                CommandError::Killed(_) => Err(HelmError::Killed(release_name.to_string(), DEPENDENCY)),
+                _ => {
+                    error!("Helm error: {:?}", err);
+                    Err(CmdError(release_name.to_string(), HelmCommand::DEPENDENCY, err.into()))
+                }
+            },
+        }
     }
 
     // Used by helmchart service to validate deployed resources

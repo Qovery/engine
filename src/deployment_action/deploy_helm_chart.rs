@@ -375,7 +375,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 url
             };
             logger.info(format!(
-                "Downloading Helm chart {} at version {} from {}",
+                "📥 Downloading Helm chart {} at version {} from {}",
                 chart_name, chart_version, url_without_password
             ));
 
@@ -401,7 +401,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             ssh_keys,
         } => {
             logger.info(format!(
-                "Cloning Helm chart from git repository {} at commit {}",
+                "📥 Cloning Helm chart from git repository {} at commit {}",
                 git_url, commit_id
             ));
 
@@ -418,6 +418,21 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 .map_err(|e| to_error(format!("Cannot move helm chart directory due to {}", e)))?;
         }
     }
+
+    // fetch the dependencies attached to this chart
+    logger.info("🪤 Retrieving Helm chart dependencies".to_string());
+    target
+        .helm
+        .dependency_build(
+            this.helm_release_name(),
+            this.chart_workspace_directory(),
+            &[],
+            &[],
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+            &mut |line| logger.info(line),
+            &mut |line| logger.warning(line),
+        )
+        .map_err(|e| to_error(format!("Cannot fetch chart dependencies: {e:?}")))?;
 
     // Now we retrieve and prepare the chart values
     match this.chart_values() {
@@ -451,7 +466,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             ssh_keys,
         } => {
             logger.info(format!(
-                "Fetching Helm values from git repository {} at commit {}",
+                "🧲 Grabbing Helm values from git repository {} at commit {}",
                 git_url, commit_id
             ));
 
@@ -510,7 +525,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
         return Ok(());
     }
 
-    logger.info("Checking deployed resources do not cross namespace boundary".to_string());
+    logger.info("🔬 Checking deployed resources do not cross namespace boundary".to_string());
     let template_args: Vec<_> = this.helm_template_arguments().collect();
     let template = target
         .helm
