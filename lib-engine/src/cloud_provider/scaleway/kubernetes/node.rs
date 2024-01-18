@@ -17,6 +17,11 @@ pub enum ScwInstancesType {
     AMP2_C48,
     AMP2_C60,
     AMP2_C8,
+    COPARM1_16C_64G,
+    COPARM1_2C_8G,
+    COPARM1_32C_128G,
+    COPARM1_4C_16G,
+    COPARM1_8C_32G,
     DEV1_L,
     DEV1_M,
     DEV1_S,
@@ -35,6 +40,21 @@ pub enum ScwInstancesType {
     PLAY2_MICRO,
     PLAY2_NANO,
     PLAY2_PICO,
+    POP2_16C_64G,
+    POP2_2C_8G,
+    POP2_32C_128G,
+    POP2_4C_16G,
+    POP2_8C_32G,
+    POP2_HC_16C_32G,
+    POP2_HC_2C_4G,
+    POP2_HC_32C_64G,
+    POP2_HC_4C_8G,
+    POP2_HC_64C_128G,
+    POP2_HC_8C_16G,
+    POP2_HM_16C_128G,
+    POP2_HM_2C_16G,
+    POP2_HM_4C_32G,
+    POP2_HM_8C_64G,
     PRO2_L,
     PRO2_M,
     PRO2_S,
@@ -42,15 +62,6 @@ pub enum ScwInstancesType {
     PRO2_XXS,
     RENDER_S,
     START1_L,
-    START1_M,
-    START1_S,
-    VC1L,
-    VC1M,
-    VC1S,
-    X64_120GB,
-    X64_15GB,
-    X64_30GB,
-    X64_60GB,
 }
 
 impl InstanceType for ScwInstancesType {
@@ -63,6 +74,11 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::AMP2_C48 => "amp2-c48",
             ScwInstancesType::AMP2_C60 => "amp2-c60",
             ScwInstancesType::AMP2_C8 => "amp2-c8",
+            ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
+            ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
+            ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
+            ScwInstancesType::COPARM1_4C_16G => "coparm1-4c-16g",
+            ScwInstancesType::COPARM1_8C_32G => "coparm1-8c-32g",
             ScwInstancesType::DEV1_L => "dev1-l",
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
@@ -81,6 +97,21 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
+            ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+            ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+            ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+            ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+            ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
+            ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
+            ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
+            ScwInstancesType::POP2_HC_4C_8G => "pop2-hc-4c-8g",
+            ScwInstancesType::POP2_HC_64C_128G => "pop2-hc-64c-128g",
+            ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
+            ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
+            ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+            ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
+            ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
             ScwInstancesType::PRO2_L => "pro2-l",
             ScwInstancesType::PRO2_M => "pro2-m",
             ScwInstancesType::PRO2_S => "pro2-s",
@@ -88,15 +119,6 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
             ScwInstancesType::START1_L => "start1-l",
-            ScwInstancesType::START1_M => "start1-m",
-            ScwInstancesType::START1_S => "start1-s",
-            ScwInstancesType::VC1L => "vc1l",
-            ScwInstancesType::VC1M => "vc1m",
-            ScwInstancesType::VC1S => "vc1s",
-            ScwInstancesType::X64_120GB => "x64-120gb",
-            ScwInstancesType::X64_15GB => "x64-15gb",
-            ScwInstancesType::X64_30GB => "x64-30gb",
-            ScwInstancesType::X64_60GB => "x64-60gb",
         }
         .to_string()
     }
@@ -111,6 +133,11 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::AMP2_C48
                 | ScwInstancesType::AMP2_C60
                 | ScwInstancesType::AMP2_C8
+                | ScwInstancesType::COPARM1_16C_64G
+                | ScwInstancesType::COPARM1_2C_8G
+                | ScwInstancesType::COPARM1_32C_128G
+                | ScwInstancesType::COPARM1_4C_16G
+                | ScwInstancesType::COPARM1_8C_32G
                 | ScwInstancesType::DEV1_L
                 | ScwInstancesType::DEV1_M
                 | ScwInstancesType::DEV1_S
@@ -129,6 +156,21 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::PLAY2_PICO
+                | ScwInstancesType::POP2_16C_64G
+                | ScwInstancesType::POP2_2C_8G
+                | ScwInstancesType::POP2_32C_128G
+                | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_8C_32G
+                | ScwInstancesType::POP2_HC_16C_32G
+                | ScwInstancesType::POP2_HC_2C_4G
+                | ScwInstancesType::POP2_HC_32C_64G
+                | ScwInstancesType::POP2_HC_4C_8G
+                | ScwInstancesType::POP2_HC_64C_128G
+                | ScwInstancesType::POP2_HC_8C_16G
+                | ScwInstancesType::POP2_HM_16C_128G
+                | ScwInstancesType::POP2_HM_2C_16G
+                | ScwInstancesType::POP2_HM_4C_32G
+                | ScwInstancesType::POP2_HM_8C_64G
                 | ScwInstancesType::PRO2_L
                 | ScwInstancesType::PRO2_M
                 | ScwInstancesType::PRO2_S
@@ -136,15 +178,6 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
                 | ScwInstancesType::START1_L
-                | ScwInstancesType::START1_M
-                | ScwInstancesType::START1_S
-                | ScwInstancesType::VC1L
-                | ScwInstancesType::VC1M
-                | ScwInstancesType::VC1S
-                | ScwInstancesType::X64_120GB
-                | ScwInstancesType::X64_15GB
-                | ScwInstancesType::X64_30GB
-                | ScwInstancesType::X64_60GB
         )
     }
     fn is_arm_instance(&self) -> bool {
@@ -160,6 +193,11 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::AMP2_C48
                 | ScwInstancesType::AMP2_C60
                 | ScwInstancesType::AMP2_C8
+                | ScwInstancesType::COPARM1_16C_64G
+                | ScwInstancesType::COPARM1_2C_8G
+                | ScwInstancesType::COPARM1_32C_128G
+                | ScwInstancesType::COPARM1_4C_16G
+                | ScwInstancesType::COPARM1_8C_32G
                 | ScwInstancesType::DEV1_L
                 | ScwInstancesType::DEV1_M
                 | ScwInstancesType::DEV1_XL
@@ -176,6 +214,21 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::GPU_3070_S
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
+                | ScwInstancesType::POP2_16C_64G
+                | ScwInstancesType::POP2_2C_8G
+                | ScwInstancesType::POP2_32C_128G
+                | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_8C_32G
+                | ScwInstancesType::POP2_HC_16C_32G
+                | ScwInstancesType::POP2_HC_2C_4G
+                | ScwInstancesType::POP2_HC_32C_64G
+                | ScwInstancesType::POP2_HC_4C_8G
+                | ScwInstancesType::POP2_HC_64C_128G
+                | ScwInstancesType::POP2_HC_8C_16G
+                | ScwInstancesType::POP2_HM_16C_128G
+                | ScwInstancesType::POP2_HM_2C_16G
+                | ScwInstancesType::POP2_HM_4C_32G
+                | ScwInstancesType::POP2_HM_8C_64G
                 | ScwInstancesType::PRO2_L
                 | ScwInstancesType::PRO2_M
                 | ScwInstancesType::PRO2_S
@@ -183,13 +236,6 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
                 | ScwInstancesType::START1_L
-                | ScwInstancesType::START1_M
-                | ScwInstancesType::VC1L
-                | ScwInstancesType::VC1M
-                | ScwInstancesType::X64_120GB
-                | ScwInstancesType::X64_15GB
-                | ScwInstancesType::X64_30GB
-                | ScwInstancesType::X64_60GB
         )
     }
 }
@@ -204,6 +250,11 @@ impl ScwInstancesType {
             ScwInstancesType::AMP2_C48 => "amp2-c48",
             ScwInstancesType::AMP2_C60 => "amp2-c60",
             ScwInstancesType::AMP2_C8 => "amp2-c8",
+            ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
+            ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
+            ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
+            ScwInstancesType::COPARM1_4C_16G => "coparm1-4c-16g",
+            ScwInstancesType::COPARM1_8C_32G => "coparm1-8c-32g",
             ScwInstancesType::DEV1_L => "dev1-l",
             ScwInstancesType::DEV1_M => "dev1-m",
             ScwInstancesType::DEV1_S => "dev1-s",
@@ -222,6 +273,21 @@ impl ScwInstancesType {
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
+            ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+            ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+            ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+            ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+            ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
+            ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
+            ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
+            ScwInstancesType::POP2_HC_4C_8G => "pop2-hc-4c-8g",
+            ScwInstancesType::POP2_HC_64C_128G => "pop2-hc-64c-128g",
+            ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
+            ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
+            ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+            ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
+            ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
             ScwInstancesType::PRO2_L => "pro2-l",
             ScwInstancesType::PRO2_M => "pro2-m",
             ScwInstancesType::PRO2_S => "pro2-s",
@@ -229,15 +295,6 @@ impl ScwInstancesType {
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
             ScwInstancesType::START1_L => "start1-l",
-            ScwInstancesType::START1_M => "start1-m",
-            ScwInstancesType::START1_S => "start1-s",
-            ScwInstancesType::VC1L => "vc1l",
-            ScwInstancesType::VC1M => "vc1m",
-            ScwInstancesType::VC1S => "vc1s",
-            ScwInstancesType::X64_120GB => "x64-120gb",
-            ScwInstancesType::X64_15GB => "x64-15gb",
-            ScwInstancesType::X64_30GB => "x64-30gb",
-            ScwInstancesType::X64_60GB => "x64-60gb",
         }
     }
 }
@@ -252,6 +309,11 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::AMP2_C48 => write!(f, "amp2-c48"),
             ScwInstancesType::AMP2_C60 => write!(f, "amp2-c60"),
             ScwInstancesType::AMP2_C8 => write!(f, "amp2-c8"),
+            ScwInstancesType::COPARM1_16C_64G => write!(f, "coparm1-16c-64g"),
+            ScwInstancesType::COPARM1_2C_8G => write!(f, "coparm1-2c-8g"),
+            ScwInstancesType::COPARM1_32C_128G => write!(f, "coparm1-32c-128g"),
+            ScwInstancesType::COPARM1_4C_16G => write!(f, "coparm1-4c-16g"),
+            ScwInstancesType::COPARM1_8C_32G => write!(f, "coparm1-8c-32g"),
             ScwInstancesType::DEV1_L => write!(f, "dev1-l"),
             ScwInstancesType::DEV1_M => write!(f, "dev1-m"),
             ScwInstancesType::DEV1_S => write!(f, "dev1-s"),
@@ -270,6 +332,21 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::PLAY2_MICRO => write!(f, "play2-micro"),
             ScwInstancesType::PLAY2_NANO => write!(f, "play2-nano"),
             ScwInstancesType::PLAY2_PICO => write!(f, "play2-pico"),
+            ScwInstancesType::POP2_16C_64G => write!(f, "pop2-16c-64g"),
+            ScwInstancesType::POP2_2C_8G => write!(f, "pop2-2c-8g"),
+            ScwInstancesType::POP2_32C_128G => write!(f, "pop2-32c-128g"),
+            ScwInstancesType::POP2_4C_16G => write!(f, "pop2-4c-16g"),
+            ScwInstancesType::POP2_8C_32G => write!(f, "pop2-8c-32g"),
+            ScwInstancesType::POP2_HC_16C_32G => write!(f, "pop2-hc-16c-32g"),
+            ScwInstancesType::POP2_HC_2C_4G => write!(f, "pop2-hc-2c-4g"),
+            ScwInstancesType::POP2_HC_32C_64G => write!(f, "pop2-hc-32c-64g"),
+            ScwInstancesType::POP2_HC_4C_8G => write!(f, "pop2-hc-4c-8g"),
+            ScwInstancesType::POP2_HC_64C_128G => write!(f, "pop2-hc-64c-128g"),
+            ScwInstancesType::POP2_HC_8C_16G => write!(f, "pop2-hc-8c-16g"),
+            ScwInstancesType::POP2_HM_16C_128G => write!(f, "pop2-hm-16c-128g"),
+            ScwInstancesType::POP2_HM_2C_16G => write!(f, "pop2-hm-2c-16g"),
+            ScwInstancesType::POP2_HM_4C_32G => write!(f, "pop2-hm-4c-32g"),
+            ScwInstancesType::POP2_HM_8C_64G => write!(f, "pop2-hm-8c-64g"),
             ScwInstancesType::PRO2_L => write!(f, "pro2-l"),
             ScwInstancesType::PRO2_M => write!(f, "pro2-m"),
             ScwInstancesType::PRO2_S => write!(f, "pro2-s"),
@@ -277,15 +354,6 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::PRO2_XXS => write!(f, "pro2-xxs"),
             ScwInstancesType::RENDER_S => write!(f, "render-s"),
             ScwInstancesType::START1_L => write!(f, "start1-l"),
-            ScwInstancesType::START1_M => write!(f, "start1-m"),
-            ScwInstancesType::START1_S => write!(f, "start1-s"),
-            ScwInstancesType::VC1L => write!(f, "vc1l"),
-            ScwInstancesType::VC1M => write!(f, "vc1m"),
-            ScwInstancesType::VC1S => write!(f, "vc1s"),
-            ScwInstancesType::X64_120GB => write!(f, "x64-120gb"),
-            ScwInstancesType::X64_15GB => write!(f, "x64-15gb"),
-            ScwInstancesType::X64_30GB => write!(f, "x64-30gb"),
-            ScwInstancesType::X64_60GB => write!(f, "x64-60gb"),
         }
     }
 }
@@ -302,6 +370,11 @@ impl FromStr for ScwInstancesType {
             "amp2-c48" => Ok(ScwInstancesType::AMP2_C48),
             "amp2-c60" => Ok(ScwInstancesType::AMP2_C60),
             "amp2-c8" => Ok(ScwInstancesType::AMP2_C8),
+            "coparm1-16c-64g" => Ok(ScwInstancesType::COPARM1_16C_64G),
+            "coparm1-2c-8g" => Ok(ScwInstancesType::COPARM1_2C_8G),
+            "coparm1-32c-128g" => Ok(ScwInstancesType::COPARM1_32C_128G),
+            "coparm1-4c-16g" => Ok(ScwInstancesType::COPARM1_4C_16G),
+            "coparm1-8c-32g" => Ok(ScwInstancesType::COPARM1_8C_32G),
             "dev1-l" => Ok(ScwInstancesType::DEV1_L),
             "dev1-m" => Ok(ScwInstancesType::DEV1_M),
             "dev1-s" => Ok(ScwInstancesType::DEV1_S),
@@ -320,6 +393,21 @@ impl FromStr for ScwInstancesType {
             "play2-micro" => Ok(ScwInstancesType::PLAY2_MICRO),
             "play2-nano" => Ok(ScwInstancesType::PLAY2_NANO),
             "play2-pico" => Ok(ScwInstancesType::PLAY2_PICO),
+            "pop2-16c-64g" => Ok(ScwInstancesType::POP2_16C_64G),
+            "pop2-2c-8g" => Ok(ScwInstancesType::POP2_2C_8G),
+            "pop2-32c-128g" => Ok(ScwInstancesType::POP2_32C_128G),
+            "pop2-4c-16g" => Ok(ScwInstancesType::POP2_4C_16G),
+            "pop2-8c-32g" => Ok(ScwInstancesType::POP2_8C_32G),
+            "pop2-hc-16c-32g" => Ok(ScwInstancesType::POP2_HC_16C_32G),
+            "pop2-hc-2c-4g" => Ok(ScwInstancesType::POP2_HC_2C_4G),
+            "pop2-hc-32c-64g" => Ok(ScwInstancesType::POP2_HC_32C_64G),
+            "pop2-hc-4c-8g" => Ok(ScwInstancesType::POP2_HC_4C_8G),
+            "pop2-hc-64c-128g" => Ok(ScwInstancesType::POP2_HC_64C_128G),
+            "pop2-hc-8c-16g" => Ok(ScwInstancesType::POP2_HC_8C_16G),
+            "pop2-hm-16c-128g" => Ok(ScwInstancesType::POP2_HM_16C_128G),
+            "pop2-hm-2c-16g" => Ok(ScwInstancesType::POP2_HM_2C_16G),
+            "pop2-hm-4c-32g" => Ok(ScwInstancesType::POP2_HM_4C_32G),
+            "pop2-hm-8c-64g" => Ok(ScwInstancesType::POP2_HM_8C_64G),
             "pro2-l" => Ok(ScwInstancesType::PRO2_L),
             "pro2-m" => Ok(ScwInstancesType::PRO2_M),
             "pro2-s" => Ok(ScwInstancesType::PRO2_S),
@@ -327,15 +415,6 @@ impl FromStr for ScwInstancesType {
             "pro2-xxs" => Ok(ScwInstancesType::PRO2_XXS),
             "render-s" => Ok(ScwInstancesType::RENDER_S),
             "start1-l" => Ok(ScwInstancesType::START1_L),
-            "start1-m" => Ok(ScwInstancesType::START1_M),
-            "start1-s" => Ok(ScwInstancesType::START1_S),
-            "vc1l" => Ok(ScwInstancesType::VC1L),
-            "vc1m" => Ok(ScwInstancesType::VC1M),
-            "vc1s" => Ok(ScwInstancesType::VC1S),
-            "x64-120gb" => Ok(ScwInstancesType::X64_120GB),
-            "x64-15gb" => Ok(ScwInstancesType::X64_15GB),
-            "x64-30gb" => Ok(ScwInstancesType::X64_30GB),
-            "x64-60gb" => Ok(ScwInstancesType::X64_60GB),
             _ => Err(CommandError::new_from_safe_message(format!(
                 "`{s}` instance type is not supported"
             ))),
@@ -407,6 +486,11 @@ mod tests {
                     ScwInstancesType::AMP2_C48 => "amp2-c48",
                     ScwInstancesType::AMP2_C60 => "amp2-c60",
                     ScwInstancesType::AMP2_C8 => "amp2-c8",
+                    ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
+                    ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
+                    ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
+                    ScwInstancesType::COPARM1_4C_16G => "coparm1-4c-16g",
+                    ScwInstancesType::COPARM1_8C_32G => "coparm1-8c-32g",
                     ScwInstancesType::DEV1_L => "dev1-l",
                     ScwInstancesType::DEV1_M => "dev1-m",
                     ScwInstancesType::DEV1_S => "dev1-s",
@@ -425,6 +509,21 @@ mod tests {
                     ScwInstancesType::PLAY2_MICRO => "play2-micro",
                     ScwInstancesType::PLAY2_NANO => "play2-nano",
                     ScwInstancesType::PLAY2_PICO => "play2-pico",
+                    ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+                    ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+                    ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+                    ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+                    ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+                    ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
+                    ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
+                    ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
+                    ScwInstancesType::POP2_HC_4C_8G => "pop2-hc-4c-8g",
+                    ScwInstancesType::POP2_HC_64C_128G => "pop2-hc-64c-128g",
+                    ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
+                    ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
+                    ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+                    ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
+                    ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
                     ScwInstancesType::PRO2_L => "pro2-l",
                     ScwInstancesType::PRO2_M => "pro2-m",
                     ScwInstancesType::PRO2_S => "pro2-s",
@@ -432,15 +531,6 @@ mod tests {
                     ScwInstancesType::PRO2_XXS => "pro2-xxs",
                     ScwInstancesType::RENDER_S => "render-s",
                     ScwInstancesType::START1_L => "start1-l",
-                    ScwInstancesType::START1_M => "start1-m",
-                    ScwInstancesType::START1_S => "start1-s",
-                    ScwInstancesType::VC1L => "vc1l",
-                    ScwInstancesType::VC1M => "vc1m",
-                    ScwInstancesType::VC1S => "vc1s",
-                    ScwInstancesType::X64_120GB => "x64-120gb",
-                    ScwInstancesType::X64_15GB => "x64-15gb",
-                    ScwInstancesType::X64_30GB => "x64-30gb",
-                    ScwInstancesType::X64_60GB => "x64-60gb",
                 }
                 .to_string(),
                 result_to_string
