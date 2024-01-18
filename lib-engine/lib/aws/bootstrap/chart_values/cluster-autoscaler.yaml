@@ -9,8 +9,10 @@ autoDiscovery:
 priorityClassName: system-cluster-critical
 
 # cluster autoscaler options
+# https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node
 extraArgs:
   balance-similar-node-groups: true
+  skip-nodes-with-local-storage: false
 
 # observability:
 serviceMonitor:
