@@ -45,6 +45,13 @@ pub enum AwsDatabaseInstanceType {
     DB_M6G_8XLARGE,
     DB_M6G_LARGE,
     DB_M6G_XLARGE,
+    DB_M6GD_12XLARGE,
+    DB_M6GD_16XLARGE,
+    DB_M6GD_2XLARGE,
+    DB_M6GD_4XLARGE,
+    DB_M6GD_8XLARGE,
+    DB_M6GD_LARGE,
+    DB_M6GD_XLARGE,
     DB_M6I_12XLARGE,
     DB_M6I_16XLARGE,
     DB_M6I_24XLARGE,
@@ -54,6 +61,40 @@ pub enum AwsDatabaseInstanceType {
     DB_M6I_8XLARGE,
     DB_M6I_LARGE,
     DB_M6I_XLARGE,
+    DB_M6ID_12XLARGE,
+    DB_M6ID_16XLARGE,
+    DB_M6ID_24XLARGE,
+    DB_M6ID_2XLARGE,
+    DB_M6ID_32XLARGE,
+    DB_M6ID_4XLARGE,
+    DB_M6ID_8XLARGE,
+    DB_M6ID_LARGE,
+    DB_M6ID_XLARGE,
+    DB_M6IDN_12XLARGE,
+    DB_M6IDN_16XLARGE,
+    DB_M6IDN_24XLARGE,
+    DB_M6IDN_2XLARGE,
+    DB_M6IDN_32XLARGE,
+    DB_M6IDN_4XLARGE,
+    DB_M6IDN_8XLARGE,
+    DB_M6IDN_LARGE,
+    DB_M6IDN_XLARGE,
+    DB_M6IN_12XLARGE,
+    DB_M6IN_16XLARGE,
+    DB_M6IN_24XLARGE,
+    DB_M6IN_2XLARGE,
+    DB_M6IN_32XLARGE,
+    DB_M6IN_4XLARGE,
+    DB_M6IN_8XLARGE,
+    DB_M6IN_LARGE,
+    DB_M6IN_XLARGE,
+    DB_M7G_12XLARGE,
+    DB_M7G_16XLARGE,
+    DB_M7G_2XLARGE,
+    DB_M7G_4XLARGE,
+    DB_M7G_8XLARGE,
+    DB_M7G_LARGE,
+    DB_M7G_XLARGE,
     DB_R4_16XLARGE,
     DB_R4_2XLARGE,
     DB_R4_4XLARGE,
@@ -68,6 +109,14 @@ pub enum AwsDatabaseInstanceType {
     DB_R5_8XLARGE,
     DB_R5_LARGE,
     DB_R5_XLARGE,
+    DB_R5B_12XLARGE,
+    DB_R5B_16XLARGE,
+    DB_R5B_24XLARGE,
+    DB_R5B_2XLARGE,
+    DB_R5B_4XLARGE,
+    DB_R5B_8XLARGE,
+    DB_R5B_LARGE,
+    DB_R5B_XLARGE,
     DB_R5D_12XLARGE,
     DB_R5D_16XLARGE,
     DB_R5D_24XLARGE,
@@ -99,6 +148,40 @@ pub enum AwsDatabaseInstanceType {
     DB_R6I_8XLARGE,
     DB_R6I_LARGE,
     DB_R6I_XLARGE,
+    DB_R6ID_12XLARGE,
+    DB_R6ID_16XLARGE,
+    DB_R6ID_24XLARGE,
+    DB_R6ID_2XLARGE,
+    DB_R6ID_32XLARGE,
+    DB_R6ID_4XLARGE,
+    DB_R6ID_8XLARGE,
+    DB_R6ID_LARGE,
+    DB_R6ID_XLARGE,
+    DB_R6IDN_12XLARGE,
+    DB_R6IDN_16XLARGE,
+    DB_R6IDN_24XLARGE,
+    DB_R6IDN_2XLARGE,
+    DB_R6IDN_32XLARGE,
+    DB_R6IDN_4XLARGE,
+    DB_R6IDN_8XLARGE,
+    DB_R6IDN_LARGE,
+    DB_R6IDN_XLARGE,
+    DB_R6IN_12XLARGE,
+    DB_R6IN_16XLARGE,
+    DB_R6IN_24XLARGE,
+    DB_R6IN_2XLARGE,
+    DB_R6IN_32XLARGE,
+    DB_R6IN_4XLARGE,
+    DB_R6IN_8XLARGE,
+    DB_R6IN_LARGE,
+    DB_R6IN_XLARGE,
+    DB_R7G_12XLARGE,
+    DB_R7G_16XLARGE,
+    DB_R7G_2XLARGE,
+    DB_R7G_4XLARGE,
+    DB_R7G_8XLARGE,
+    DB_R7G_LARGE,
+    DB_R7G_XLARGE,
     DB_T2_2XLARGE,
     DB_T2_LARGE,
     DB_T2_MEDIUM,
@@ -117,6 +200,23 @@ pub enum AwsDatabaseInstanceType {
     DB_T4G_MICRO,
     DB_T4G_SMALL,
     DB_T4G_XLARGE,
+    DB_X2G_12XLARGE,
+    DB_X2G_16XLARGE,
+    DB_X2G_2XLARGE,
+    DB_X2G_4XLARGE,
+    DB_X2G_8XLARGE,
+    DB_X2G_LARGE,
+    DB_X2G_XLARGE,
+    DB_X2IDN_16XLARGE,
+    DB_X2IDN_24XLARGE,
+    DB_X2IDN_32XLARGE,
+    DB_X2IEDN_16XLARGE,
+    DB_X2IEDN_24XLARGE,
+    DB_X2IEDN_2XLARGE,
+    DB_X2IEDN_32XLARGE,
+    DB_X2IEDN_4XLARGE,
+    DB_X2IEDN_8XLARGE,
+    DB_X2IEDN_XLARGE,
 }
 
 impl DatabaseInstanceType for AwsDatabaseInstanceType {
@@ -161,6 +261,13 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6G_8XLARGE => "db.m6g.8xlarge",
             AwsDatabaseInstanceType::DB_M6G_LARGE => "db.m6g.large",
             AwsDatabaseInstanceType::DB_M6G_XLARGE => "db.m6g.xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_12XLARGE => "db.m6gd.12xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_16XLARGE => "db.m6gd.16xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_2XLARGE => "db.m6gd.2xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_4XLARGE => "db.m6gd.4xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_8XLARGE => "db.m6gd.8xlarge",
+            AwsDatabaseInstanceType::DB_M6GD_LARGE => "db.m6gd.large",
+            AwsDatabaseInstanceType::DB_M6GD_XLARGE => "db.m6gd.xlarge",
             AwsDatabaseInstanceType::DB_M6I_12XLARGE => "db.m6i.12xlarge",
             AwsDatabaseInstanceType::DB_M6I_16XLARGE => "db.m6i.16xlarge",
             AwsDatabaseInstanceType::DB_M6I_24XLARGE => "db.m6i.24xlarge",
@@ -170,6 +277,40 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6I_8XLARGE => "db.m6i.8xlarge",
             AwsDatabaseInstanceType::DB_M6I_LARGE => "db.m6i.large",
             AwsDatabaseInstanceType::DB_M6I_XLARGE => "db.m6i.xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_12XLARGE => "db.m6id.12xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_16XLARGE => "db.m6id.16xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_24XLARGE => "db.m6id.24xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_2XLARGE => "db.m6id.2xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_32XLARGE => "db.m6id.32xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_4XLARGE => "db.m6id.4xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_8XLARGE => "db.m6id.8xlarge",
+            AwsDatabaseInstanceType::DB_M6ID_LARGE => "db.m6id.large",
+            AwsDatabaseInstanceType::DB_M6ID_XLARGE => "db.m6id.xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_12XLARGE => "db.m6idn.12xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_16XLARGE => "db.m6idn.16xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_24XLARGE => "db.m6idn.24xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_2XLARGE => "db.m6idn.2xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_32XLARGE => "db.m6idn.32xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_4XLARGE => "db.m6idn.4xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_8XLARGE => "db.m6idn.8xlarge",
+            AwsDatabaseInstanceType::DB_M6IDN_LARGE => "db.m6idn.large",
+            AwsDatabaseInstanceType::DB_M6IDN_XLARGE => "db.m6idn.xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_12XLARGE => "db.m6in.12xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_16XLARGE => "db.m6in.16xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_24XLARGE => "db.m6in.24xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_2XLARGE => "db.m6in.2xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_32XLARGE => "db.m6in.32xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_4XLARGE => "db.m6in.4xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_8XLARGE => "db.m6in.8xlarge",
+            AwsDatabaseInstanceType::DB_M6IN_LARGE => "db.m6in.large",
+            AwsDatabaseInstanceType::DB_M6IN_XLARGE => "db.m6in.xlarge",
+            AwsDatabaseInstanceType::DB_M7G_12XLARGE => "db.m7g.12xlarge",
+            AwsDatabaseInstanceType::DB_M7G_16XLARGE => "db.m7g.16xlarge",
+            AwsDatabaseInstanceType::DB_M7G_2XLARGE => "db.m7g.2xlarge",
+            AwsDatabaseInstanceType::DB_M7G_4XLARGE => "db.m7g.4xlarge",
+            AwsDatabaseInstanceType::DB_M7G_8XLARGE => "db.m7g.8xlarge",
+            AwsDatabaseInstanceType::DB_M7G_LARGE => "db.m7g.large",
+            AwsDatabaseInstanceType::DB_M7G_XLARGE => "db.m7g.xlarge",
             AwsDatabaseInstanceType::DB_R4_16XLARGE => "db.r4.16xlarge",
             AwsDatabaseInstanceType::DB_R4_2XLARGE => "db.r4.2xlarge",
             AwsDatabaseInstanceType::DB_R4_4XLARGE => "db.r4.4xlarge",
@@ -184,6 +325,14 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R5_8XLARGE => "db.r5.8xlarge",
             AwsDatabaseInstanceType::DB_R5_LARGE => "db.r5.large",
             AwsDatabaseInstanceType::DB_R5_XLARGE => "db.r5.xlarge",
+            AwsDatabaseInstanceType::DB_R5B_12XLARGE => "db.r5b.12xlarge",
+            AwsDatabaseInstanceType::DB_R5B_16XLARGE => "db.r5b.16xlarge",
+            AwsDatabaseInstanceType::DB_R5B_24XLARGE => "db.r5b.24xlarge",
+            AwsDatabaseInstanceType::DB_R5B_2XLARGE => "db.r5b.2xlarge",
+            AwsDatabaseInstanceType::DB_R5B_4XLARGE => "db.r5b.4xlarge",
+            AwsDatabaseInstanceType::DB_R5B_8XLARGE => "db.r5b.8xlarge",
+            AwsDatabaseInstanceType::DB_R5B_LARGE => "db.r5b.large",
+            AwsDatabaseInstanceType::DB_R5B_XLARGE => "db.r5b.xlarge",
             AwsDatabaseInstanceType::DB_R5D_12XLARGE => "db.r5d.12xlarge",
             AwsDatabaseInstanceType::DB_R5D_16XLARGE => "db.r5d.16xlarge",
             AwsDatabaseInstanceType::DB_R5D_24XLARGE => "db.r5d.24xlarge",
@@ -215,6 +364,40 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R6I_8XLARGE => "db.r6i.8xlarge",
             AwsDatabaseInstanceType::DB_R6I_LARGE => "db.r6i.large",
             AwsDatabaseInstanceType::DB_R6I_XLARGE => "db.r6i.xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_12XLARGE => "db.r6id.12xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_16XLARGE => "db.r6id.16xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_24XLARGE => "db.r6id.24xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_2XLARGE => "db.r6id.2xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_32XLARGE => "db.r6id.32xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_4XLARGE => "db.r6id.4xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_8XLARGE => "db.r6id.8xlarge",
+            AwsDatabaseInstanceType::DB_R6ID_LARGE => "db.r6id.large",
+            AwsDatabaseInstanceType::DB_R6ID_XLARGE => "db.r6id.xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_12XLARGE => "db.r6idn.12xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_16XLARGE => "db.r6idn.16xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_24XLARGE => "db.r6idn.24xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_2XLARGE => "db.r6idn.2xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_32XLARGE => "db.r6idn.32xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_4XLARGE => "db.r6idn.4xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_8XLARGE => "db.r6idn.8xlarge",
+            AwsDatabaseInstanceType::DB_R6IDN_LARGE => "db.r6idn.large",
+            AwsDatabaseInstanceType::DB_R6IDN_XLARGE => "db.r6idn.xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_12XLARGE => "db.r6in.12xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_16XLARGE => "db.r6in.16xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_24XLARGE => "db.r6in.24xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_2XLARGE => "db.r6in.2xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_32XLARGE => "db.r6in.32xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_4XLARGE => "db.r6in.4xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_8XLARGE => "db.r6in.8xlarge",
+            AwsDatabaseInstanceType::DB_R6IN_LARGE => "db.r6in.large",
+            AwsDatabaseInstanceType::DB_R6IN_XLARGE => "db.r6in.xlarge",
+            AwsDatabaseInstanceType::DB_R7G_12XLARGE => "db.r7g.12xlarge",
+            AwsDatabaseInstanceType::DB_R7G_16XLARGE => "db.r7g.16xlarge",
+            AwsDatabaseInstanceType::DB_R7G_2XLARGE => "db.r7g.2xlarge",
+            AwsDatabaseInstanceType::DB_R7G_4XLARGE => "db.r7g.4xlarge",
+            AwsDatabaseInstanceType::DB_R7G_8XLARGE => "db.r7g.8xlarge",
+            AwsDatabaseInstanceType::DB_R7G_LARGE => "db.r7g.large",
+            AwsDatabaseInstanceType::DB_R7G_XLARGE => "db.r7g.xlarge",
             AwsDatabaseInstanceType::DB_T2_2XLARGE => "db.t2.2xlarge",
             AwsDatabaseInstanceType::DB_T2_LARGE => "db.t2.large",
             AwsDatabaseInstanceType::DB_T2_MEDIUM => "db.t2.medium",
@@ -233,6 +416,23 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_T4G_MICRO => "db.t4g.micro",
             AwsDatabaseInstanceType::DB_T4G_SMALL => "db.t4g.small",
             AwsDatabaseInstanceType::DB_T4G_XLARGE => "db.t4g.xlarge",
+            AwsDatabaseInstanceType::DB_X2G_12XLARGE => "db.x2g.12xlarge",
+            AwsDatabaseInstanceType::DB_X2G_16XLARGE => "db.x2g.16xlarge",
+            AwsDatabaseInstanceType::DB_X2G_2XLARGE => "db.x2g.2xlarge",
+            AwsDatabaseInstanceType::DB_X2G_4XLARGE => "db.x2g.4xlarge",
+            AwsDatabaseInstanceType::DB_X2G_8XLARGE => "db.x2g.8xlarge",
+            AwsDatabaseInstanceType::DB_X2G_LARGE => "db.x2g.large",
+            AwsDatabaseInstanceType::DB_X2G_XLARGE => "db.x2g.xlarge",
+            AwsDatabaseInstanceType::DB_X2IDN_16XLARGE => "db.x2idn.16xlarge",
+            AwsDatabaseInstanceType::DB_X2IDN_24XLARGE => "db.x2idn.24xlarge",
+            AwsDatabaseInstanceType::DB_X2IDN_32XLARGE => "db.x2idn.32xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE => "db.x2iedn.16xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE => "db.x2iedn.24xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE => "db.x2iedn.2xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE => "db.x2iedn.32xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE => "db.x2iedn.4xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE => "db.x2iedn.8xlarge",
+            AwsDatabaseInstanceType::DB_X2IEDN_XLARGE => "db.x2iedn.xlarge",
         }
         .to_string()
     }
@@ -274,6 +474,13 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6G_8XLARGE => true,
             AwsDatabaseInstanceType::DB_M6G_LARGE => true,
             AwsDatabaseInstanceType::DB_M6G_XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_LARGE => true,
+            AwsDatabaseInstanceType::DB_M6GD_XLARGE => true,
             AwsDatabaseInstanceType::DB_M6I_12XLARGE => true,
             AwsDatabaseInstanceType::DB_M6I_16XLARGE => true,
             AwsDatabaseInstanceType::DB_M6I_24XLARGE => true,
@@ -283,6 +490,40 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6I_8XLARGE => true,
             AwsDatabaseInstanceType::DB_M6I_LARGE => true,
             AwsDatabaseInstanceType::DB_M6I_XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_LARGE => true,
+            AwsDatabaseInstanceType::DB_M6ID_XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_LARGE => true,
+            AwsDatabaseInstanceType::DB_M6IDN_XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_LARGE => true,
+            AwsDatabaseInstanceType::DB_M6IN_XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_LARGE => true,
+            AwsDatabaseInstanceType::DB_M7G_XLARGE => true,
             AwsDatabaseInstanceType::DB_R4_16XLARGE => true,
             AwsDatabaseInstanceType::DB_R4_2XLARGE => true,
             AwsDatabaseInstanceType::DB_R4_4XLARGE => true,
@@ -297,6 +538,14 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R5_8XLARGE => true,
             AwsDatabaseInstanceType::DB_R5_LARGE => true,
             AwsDatabaseInstanceType::DB_R5_XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_LARGE => true,
+            AwsDatabaseInstanceType::DB_R5B_XLARGE => true,
             AwsDatabaseInstanceType::DB_R5D_12XLARGE => true,
             AwsDatabaseInstanceType::DB_R5D_16XLARGE => true,
             AwsDatabaseInstanceType::DB_R5D_24XLARGE => true,
@@ -328,6 +577,40 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R6I_8XLARGE => true,
             AwsDatabaseInstanceType::DB_R6I_LARGE => true,
             AwsDatabaseInstanceType::DB_R6I_XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_LARGE => true,
+            AwsDatabaseInstanceType::DB_R6ID_XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_LARGE => true,
+            AwsDatabaseInstanceType::DB_R6IDN_XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_LARGE => true,
+            AwsDatabaseInstanceType::DB_R6IN_XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_LARGE => true,
+            AwsDatabaseInstanceType::DB_R7G_XLARGE => true,
             AwsDatabaseInstanceType::DB_T2_2XLARGE => true,
             AwsDatabaseInstanceType::DB_T2_LARGE => true,
             AwsDatabaseInstanceType::DB_T2_MEDIUM => true,
@@ -346,6 +629,23 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_T4G_MICRO => true,
             AwsDatabaseInstanceType::DB_T4G_SMALL => true,
             AwsDatabaseInstanceType::DB_T4G_XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_12XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_LARGE => true,
+            AwsDatabaseInstanceType::DB_X2G_XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IDN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IDN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IDN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE => true,
+            AwsDatabaseInstanceType::DB_X2IEDN_XLARGE => true,
         }
     }
 
@@ -372,21 +672,39 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M4_10XLARGE,
             DatabaseType::MySQL
         ) | (
+            AwsDatabaseInstanceType::DB_M4_10XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_M4_16XLARGE,
             DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M4_16XLARGE,
+            DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_M4_2XLARGE,
             DatabaseType::MySQL
         ) | (
+            AwsDatabaseInstanceType::DB_M4_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_M4_4XLARGE,
             DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M4_4XLARGE,
+            DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_M4_LARGE,
             DatabaseType::MySQL
         ) | (
+            AwsDatabaseInstanceType::DB_M4_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_M4_XLARGE,
             DatabaseType::MySQL
         ) | (
+            AwsDatabaseInstanceType::DB_M4_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_M5_12XLARGE,
             DatabaseType::MySQL
         ) | (
@@ -525,6 +843,48 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6G_XLARGE,
             DatabaseType::PostgreSQL
         ) | (
+            AwsDatabaseInstanceType::DB_M6GD_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6GD_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_M6I_12XLARGE,
             DatabaseType::MySQL
         ) | (
@@ -579,11 +939,221 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_M6I_XLARGE,
             DatabaseType::PostgreSQL
         ) | (
+            AwsDatabaseInstanceType::DB_M6ID_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6ID_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IDN_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M6IN_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_M7G_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_16XLARGE,
+            DatabaseType::MongoDB
+        ) | (
             AwsDatabaseInstanceType::DB_R4_16XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_16XLARGE,
             DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_2XLARGE,
+            DatabaseType::MongoDB
         ) | (
             AwsDatabaseInstanceType::DB_R4_2XLARGE,
             DatabaseType::MySQL
@@ -592,22 +1162,34 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_4XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_4XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_4XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_8XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_8XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_8XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_LARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_LARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R4_LARGE,
             DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R4_XLARGE,
+            DatabaseType::MongoDB
         ) | (
             AwsDatabaseInstanceType::DB_R4_XLARGE,
             DatabaseType::MySQL
@@ -685,6 +1267,54 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R5_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R5B_XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R5D_12XLARGE,
@@ -894,6 +1524,210 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R6I_XLARGE,
             DatabaseType::PostgreSQL
         ) | (
+            AwsDatabaseInstanceType::DB_R6ID_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6ID_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IDN_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6IN_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R7G_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
             AwsDatabaseInstanceType::DB_T2_2XLARGE,
             DatabaseType::MySQL
         ) | (
@@ -1006,6 +1840,108 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_T4G_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_12XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_12XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_LARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_LARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2G_XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IDN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE,
+            DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_XLARGE,
+            DatabaseType::MySQL
+        ) | (
+            AwsDatabaseInstanceType::DB_X2IEDN_XLARGE,
             DatabaseType::PostgreSQL
         ))
     }
@@ -1057,6 +1993,13 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.m6g.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6G_8XLARGE),
             "db.m6g.large" => Ok(AwsDatabaseInstanceType::DB_M6G_LARGE),
             "db.m6g.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6G_XLARGE),
+            "db.m6gd.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_12XLARGE),
+            "db.m6gd.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_16XLARGE),
+            "db.m6gd.2xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_2XLARGE),
+            "db.m6gd.4xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_4XLARGE),
+            "db.m6gd.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_8XLARGE),
+            "db.m6gd.large" => Ok(AwsDatabaseInstanceType::DB_M6GD_LARGE),
+            "db.m6gd.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6GD_XLARGE),
             "db.m6i.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M6I_12XLARGE),
             "db.m6i.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M6I_16XLARGE),
             "db.m6i.24xlarge" => Ok(AwsDatabaseInstanceType::DB_M6I_24XLARGE),
@@ -1066,6 +2009,40 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.m6i.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6I_8XLARGE),
             "db.m6i.large" => Ok(AwsDatabaseInstanceType::DB_M6I_LARGE),
             "db.m6i.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6I_XLARGE),
+            "db.m6id.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_12XLARGE),
+            "db.m6id.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_16XLARGE),
+            "db.m6id.24xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_24XLARGE),
+            "db.m6id.2xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_2XLARGE),
+            "db.m6id.32xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_32XLARGE),
+            "db.m6id.4xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_4XLARGE),
+            "db.m6id.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_8XLARGE),
+            "db.m6id.large" => Ok(AwsDatabaseInstanceType::DB_M6ID_LARGE),
+            "db.m6id.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6ID_XLARGE),
+            "db.m6idn.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_12XLARGE),
+            "db.m6idn.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_16XLARGE),
+            "db.m6idn.24xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_24XLARGE),
+            "db.m6idn.2xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_2XLARGE),
+            "db.m6idn.32xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_32XLARGE),
+            "db.m6idn.4xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_4XLARGE),
+            "db.m6idn.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_8XLARGE),
+            "db.m6idn.large" => Ok(AwsDatabaseInstanceType::DB_M6IDN_LARGE),
+            "db.m6idn.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IDN_XLARGE),
+            "db.m6in.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_12XLARGE),
+            "db.m6in.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_16XLARGE),
+            "db.m6in.24xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_24XLARGE),
+            "db.m6in.2xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_2XLARGE),
+            "db.m6in.32xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_32XLARGE),
+            "db.m6in.4xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_4XLARGE),
+            "db.m6in.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_8XLARGE),
+            "db.m6in.large" => Ok(AwsDatabaseInstanceType::DB_M6IN_LARGE),
+            "db.m6in.xlarge" => Ok(AwsDatabaseInstanceType::DB_M6IN_XLARGE),
+            "db.m7g.12xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_12XLARGE),
+            "db.m7g.16xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_16XLARGE),
+            "db.m7g.2xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_2XLARGE),
+            "db.m7g.4xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_4XLARGE),
+            "db.m7g.8xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_8XLARGE),
+            "db.m7g.large" => Ok(AwsDatabaseInstanceType::DB_M7G_LARGE),
+            "db.m7g.xlarge" => Ok(AwsDatabaseInstanceType::DB_M7G_XLARGE),
             "db.r4.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R4_16XLARGE),
             "db.r4.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R4_2XLARGE),
             "db.r4.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R4_4XLARGE),
@@ -1080,6 +2057,14 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.r5.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R5_8XLARGE),
             "db.r5.large" => Ok(AwsDatabaseInstanceType::DB_R5_LARGE),
             "db.r5.xlarge" => Ok(AwsDatabaseInstanceType::DB_R5_XLARGE),
+            "db.r5b.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_12XLARGE),
+            "db.r5b.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_16XLARGE),
+            "db.r5b.24xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_24XLARGE),
+            "db.r5b.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_2XLARGE),
+            "db.r5b.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_4XLARGE),
+            "db.r5b.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_8XLARGE),
+            "db.r5b.large" => Ok(AwsDatabaseInstanceType::DB_R5B_LARGE),
+            "db.r5b.xlarge" => Ok(AwsDatabaseInstanceType::DB_R5B_XLARGE),
             "db.r5d.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R5D_12XLARGE),
             "db.r5d.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R5D_16XLARGE),
             "db.r5d.24xlarge" => Ok(AwsDatabaseInstanceType::DB_R5D_24XLARGE),
@@ -1111,6 +2096,40 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.r6i.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R6I_8XLARGE),
             "db.r6i.large" => Ok(AwsDatabaseInstanceType::DB_R6I_LARGE),
             "db.r6i.xlarge" => Ok(AwsDatabaseInstanceType::DB_R6I_XLARGE),
+            "db.r6id.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_12XLARGE),
+            "db.r6id.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_16XLARGE),
+            "db.r6id.24xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_24XLARGE),
+            "db.r6id.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_2XLARGE),
+            "db.r6id.32xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_32XLARGE),
+            "db.r6id.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_4XLARGE),
+            "db.r6id.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_8XLARGE),
+            "db.r6id.large" => Ok(AwsDatabaseInstanceType::DB_R6ID_LARGE),
+            "db.r6id.xlarge" => Ok(AwsDatabaseInstanceType::DB_R6ID_XLARGE),
+            "db.r6idn.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_12XLARGE),
+            "db.r6idn.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_16XLARGE),
+            "db.r6idn.24xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_24XLARGE),
+            "db.r6idn.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_2XLARGE),
+            "db.r6idn.32xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_32XLARGE),
+            "db.r6idn.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_4XLARGE),
+            "db.r6idn.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_8XLARGE),
+            "db.r6idn.large" => Ok(AwsDatabaseInstanceType::DB_R6IDN_LARGE),
+            "db.r6idn.xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IDN_XLARGE),
+            "db.r6in.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_12XLARGE),
+            "db.r6in.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_16XLARGE),
+            "db.r6in.24xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_24XLARGE),
+            "db.r6in.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_2XLARGE),
+            "db.r6in.32xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_32XLARGE),
+            "db.r6in.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_4XLARGE),
+            "db.r6in.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_8XLARGE),
+            "db.r6in.large" => Ok(AwsDatabaseInstanceType::DB_R6IN_LARGE),
+            "db.r6in.xlarge" => Ok(AwsDatabaseInstanceType::DB_R6IN_XLARGE),
+            "db.r7g.12xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_12XLARGE),
+            "db.r7g.16xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_16XLARGE),
+            "db.r7g.2xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_2XLARGE),
+            "db.r7g.4xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_4XLARGE),
+            "db.r7g.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_8XLARGE),
+            "db.r7g.large" => Ok(AwsDatabaseInstanceType::DB_R7G_LARGE),
+            "db.r7g.xlarge" => Ok(AwsDatabaseInstanceType::DB_R7G_XLARGE),
             "db.t2.2xlarge" => Ok(AwsDatabaseInstanceType::DB_T2_2XLARGE),
             "db.t2.large" => Ok(AwsDatabaseInstanceType::DB_T2_LARGE),
             "db.t2.medium" => Ok(AwsDatabaseInstanceType::DB_T2_MEDIUM),
@@ -1129,6 +2148,23 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.t4g.micro" => Ok(AwsDatabaseInstanceType::DB_T4G_MICRO),
             "db.t4g.small" => Ok(AwsDatabaseInstanceType::DB_T4G_SMALL),
             "db.t4g.xlarge" => Ok(AwsDatabaseInstanceType::DB_T4G_XLARGE),
+            "db.x2g.12xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_12XLARGE),
+            "db.x2g.16xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_16XLARGE),
+            "db.x2g.2xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_2XLARGE),
+            "db.x2g.4xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_4XLARGE),
+            "db.x2g.8xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_8XLARGE),
+            "db.x2g.large" => Ok(AwsDatabaseInstanceType::DB_X2G_LARGE),
+            "db.x2g.xlarge" => Ok(AwsDatabaseInstanceType::DB_X2G_XLARGE),
+            "db.x2idn.16xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IDN_16XLARGE),
+            "db.x2idn.24xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IDN_24XLARGE),
+            "db.x2idn.32xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IDN_32XLARGE),
+            "db.x2iedn.16xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE),
+            "db.x2iedn.24xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE),
+            "db.x2iedn.2xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE),
+            "db.x2iedn.32xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE),
+            "db.x2iedn.4xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE),
+            "db.x2iedn.8xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE),
+            "db.x2iedn.xlarge" => Ok(AwsDatabaseInstanceType::DB_X2IEDN_XLARGE),
             _ => Err(DatabaseError::InvalidDatabaseInstance {
                 database_cloud_provider: Kind::Aws,
                 requested_database_instance_type: s.to_string(),
@@ -1196,6 +2232,13 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6G_8XLARGE => "db.m6g.8xlarge",
                     AwsDatabaseInstanceType::DB_M6G_LARGE => "db.m6g.large",
                     AwsDatabaseInstanceType::DB_M6G_XLARGE => "db.m6g.xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_12XLARGE => "db.m6gd.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_16XLARGE => "db.m6gd.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_2XLARGE => "db.m6gd.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_4XLARGE => "db.m6gd.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_8XLARGE => "db.m6gd.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_LARGE => "db.m6gd.large",
+                    AwsDatabaseInstanceType::DB_M6GD_XLARGE => "db.m6gd.xlarge",
                     AwsDatabaseInstanceType::DB_M6I_12XLARGE => "db.m6i.12xlarge",
                     AwsDatabaseInstanceType::DB_M6I_16XLARGE => "db.m6i.16xlarge",
                     AwsDatabaseInstanceType::DB_M6I_24XLARGE => "db.m6i.24xlarge",
@@ -1205,6 +2248,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6I_8XLARGE => "db.m6i.8xlarge",
                     AwsDatabaseInstanceType::DB_M6I_LARGE => "db.m6i.large",
                     AwsDatabaseInstanceType::DB_M6I_XLARGE => "db.m6i.xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_12XLARGE => "db.m6id.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_16XLARGE => "db.m6id.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_24XLARGE => "db.m6id.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_2XLARGE => "db.m6id.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_32XLARGE => "db.m6id.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_4XLARGE => "db.m6id.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_8XLARGE => "db.m6id.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_LARGE => "db.m6id.large",
+                    AwsDatabaseInstanceType::DB_M6ID_XLARGE => "db.m6id.xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_12XLARGE => "db.m6idn.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_16XLARGE => "db.m6idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_24XLARGE => "db.m6idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_2XLARGE => "db.m6idn.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_32XLARGE => "db.m6idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_4XLARGE => "db.m6idn.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_8XLARGE => "db.m6idn.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_LARGE => "db.m6idn.large",
+                    AwsDatabaseInstanceType::DB_M6IDN_XLARGE => "db.m6idn.xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_12XLARGE => "db.m6in.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_16XLARGE => "db.m6in.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_24XLARGE => "db.m6in.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_2XLARGE => "db.m6in.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_32XLARGE => "db.m6in.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_4XLARGE => "db.m6in.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_8XLARGE => "db.m6in.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_LARGE => "db.m6in.large",
+                    AwsDatabaseInstanceType::DB_M6IN_XLARGE => "db.m6in.xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_12XLARGE => "db.m7g.12xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_16XLARGE => "db.m7g.16xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_2XLARGE => "db.m7g.2xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_4XLARGE => "db.m7g.4xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_8XLARGE => "db.m7g.8xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_LARGE => "db.m7g.large",
+                    AwsDatabaseInstanceType::DB_M7G_XLARGE => "db.m7g.xlarge",
                     AwsDatabaseInstanceType::DB_R4_16XLARGE => "db.r4.16xlarge",
                     AwsDatabaseInstanceType::DB_R4_2XLARGE => "db.r4.2xlarge",
                     AwsDatabaseInstanceType::DB_R4_4XLARGE => "db.r4.4xlarge",
@@ -1219,6 +2296,14 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R5_8XLARGE => "db.r5.8xlarge",
                     AwsDatabaseInstanceType::DB_R5_LARGE => "db.r5.large",
                     AwsDatabaseInstanceType::DB_R5_XLARGE => "db.r5.xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_12XLARGE => "db.r5b.12xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_16XLARGE => "db.r5b.16xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_24XLARGE => "db.r5b.24xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_2XLARGE => "db.r5b.2xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_4XLARGE => "db.r5b.4xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_8XLARGE => "db.r5b.8xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_LARGE => "db.r5b.large",
+                    AwsDatabaseInstanceType::DB_R5B_XLARGE => "db.r5b.xlarge",
                     AwsDatabaseInstanceType::DB_R5D_12XLARGE => "db.r5d.12xlarge",
                     AwsDatabaseInstanceType::DB_R5D_16XLARGE => "db.r5d.16xlarge",
                     AwsDatabaseInstanceType::DB_R5D_24XLARGE => "db.r5d.24xlarge",
@@ -1250,6 +2335,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R6I_8XLARGE => "db.r6i.8xlarge",
                     AwsDatabaseInstanceType::DB_R6I_LARGE => "db.r6i.large",
                     AwsDatabaseInstanceType::DB_R6I_XLARGE => "db.r6i.xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_12XLARGE => "db.r6id.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_16XLARGE => "db.r6id.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_24XLARGE => "db.r6id.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_2XLARGE => "db.r6id.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_32XLARGE => "db.r6id.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_4XLARGE => "db.r6id.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_8XLARGE => "db.r6id.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_LARGE => "db.r6id.large",
+                    AwsDatabaseInstanceType::DB_R6ID_XLARGE => "db.r6id.xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_12XLARGE => "db.r6idn.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_16XLARGE => "db.r6idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_24XLARGE => "db.r6idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_2XLARGE => "db.r6idn.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_32XLARGE => "db.r6idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_4XLARGE => "db.r6idn.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_8XLARGE => "db.r6idn.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_LARGE => "db.r6idn.large",
+                    AwsDatabaseInstanceType::DB_R6IDN_XLARGE => "db.r6idn.xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_12XLARGE => "db.r6in.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_16XLARGE => "db.r6in.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_24XLARGE => "db.r6in.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_2XLARGE => "db.r6in.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_32XLARGE => "db.r6in.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_4XLARGE => "db.r6in.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_8XLARGE => "db.r6in.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_LARGE => "db.r6in.large",
+                    AwsDatabaseInstanceType::DB_R6IN_XLARGE => "db.r6in.xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_12XLARGE => "db.r7g.12xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_16XLARGE => "db.r7g.16xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_2XLARGE => "db.r7g.2xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_4XLARGE => "db.r7g.4xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_8XLARGE => "db.r7g.8xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_LARGE => "db.r7g.large",
+                    AwsDatabaseInstanceType::DB_R7G_XLARGE => "db.r7g.xlarge",
                     AwsDatabaseInstanceType::DB_T2_2XLARGE => "db.t2.2xlarge",
                     AwsDatabaseInstanceType::DB_T2_LARGE => "db.t2.large",
                     AwsDatabaseInstanceType::DB_T2_MEDIUM => "db.t2.medium",
@@ -1268,6 +2387,23 @@ mod tests {
                     AwsDatabaseInstanceType::DB_T4G_MICRO => "db.t4g.micro",
                     AwsDatabaseInstanceType::DB_T4G_SMALL => "db.t4g.small",
                     AwsDatabaseInstanceType::DB_T4G_XLARGE => "db.t4g.xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_12XLARGE => "db.x2g.12xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_16XLARGE => "db.x2g.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_2XLARGE => "db.x2g.2xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_4XLARGE => "db.x2g.4xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_8XLARGE => "db.x2g.8xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_LARGE => "db.x2g.large",
+                    AwsDatabaseInstanceType::DB_X2G_XLARGE => "db.x2g.xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_16XLARGE => "db.x2idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_24XLARGE => "db.x2idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_32XLARGE => "db.x2idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE => "db.x2iedn.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE => "db.x2iedn.24xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE => "db.x2iedn.2xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE => "db.x2iedn.32xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE => "db.x2iedn.4xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE => "db.x2iedn.8xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_XLARGE => "db.x2iedn.xlarge",
                 }
                     .to_string(),
                 instance_type.to_cloud_provider_format()
@@ -1316,6 +2452,13 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6G_8XLARGE => "db.m6g.8xlarge",
                     AwsDatabaseInstanceType::DB_M6G_LARGE => "db.m6g.large",
                     AwsDatabaseInstanceType::DB_M6G_XLARGE => "db.m6g.xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_12XLARGE => "db.m6gd.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_16XLARGE => "db.m6gd.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_2XLARGE => "db.m6gd.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_4XLARGE => "db.m6gd.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_8XLARGE => "db.m6gd.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6GD_LARGE => "db.m6gd.large",
+                    AwsDatabaseInstanceType::DB_M6GD_XLARGE => "db.m6gd.xlarge",
                     AwsDatabaseInstanceType::DB_M6I_12XLARGE => "db.m6i.12xlarge",
                     AwsDatabaseInstanceType::DB_M6I_16XLARGE => "db.m6i.16xlarge",
                     AwsDatabaseInstanceType::DB_M6I_24XLARGE => "db.m6i.24xlarge",
@@ -1325,6 +2468,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6I_8XLARGE => "db.m6i.8xlarge",
                     AwsDatabaseInstanceType::DB_M6I_LARGE => "db.m6i.large",
                     AwsDatabaseInstanceType::DB_M6I_XLARGE => "db.m6i.xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_12XLARGE => "db.m6id.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_16XLARGE => "db.m6id.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_24XLARGE => "db.m6id.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_2XLARGE => "db.m6id.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_32XLARGE => "db.m6id.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_4XLARGE => "db.m6id.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_8XLARGE => "db.m6id.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6ID_LARGE => "db.m6id.large",
+                    AwsDatabaseInstanceType::DB_M6ID_XLARGE => "db.m6id.xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_12XLARGE => "db.m6idn.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_16XLARGE => "db.m6idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_24XLARGE => "db.m6idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_2XLARGE => "db.m6idn.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_32XLARGE => "db.m6idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_4XLARGE => "db.m6idn.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_8XLARGE => "db.m6idn.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6IDN_LARGE => "db.m6idn.large",
+                    AwsDatabaseInstanceType::DB_M6IDN_XLARGE => "db.m6idn.xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_12XLARGE => "db.m6in.12xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_16XLARGE => "db.m6in.16xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_24XLARGE => "db.m6in.24xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_2XLARGE => "db.m6in.2xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_32XLARGE => "db.m6in.32xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_4XLARGE => "db.m6in.4xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_8XLARGE => "db.m6in.8xlarge",
+                    AwsDatabaseInstanceType::DB_M6IN_LARGE => "db.m6in.large",
+                    AwsDatabaseInstanceType::DB_M6IN_XLARGE => "db.m6in.xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_12XLARGE => "db.m7g.12xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_16XLARGE => "db.m7g.16xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_2XLARGE => "db.m7g.2xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_4XLARGE => "db.m7g.4xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_8XLARGE => "db.m7g.8xlarge",
+                    AwsDatabaseInstanceType::DB_M7G_LARGE => "db.m7g.large",
+                    AwsDatabaseInstanceType::DB_M7G_XLARGE => "db.m7g.xlarge",
                     AwsDatabaseInstanceType::DB_R4_16XLARGE => "db.r4.16xlarge",
                     AwsDatabaseInstanceType::DB_R4_2XLARGE => "db.r4.2xlarge",
                     AwsDatabaseInstanceType::DB_R4_4XLARGE => "db.r4.4xlarge",
@@ -1339,6 +2516,14 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R5_8XLARGE => "db.r5.8xlarge",
                     AwsDatabaseInstanceType::DB_R5_LARGE => "db.r5.large",
                     AwsDatabaseInstanceType::DB_R5_XLARGE => "db.r5.xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_12XLARGE => "db.r5b.12xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_16XLARGE => "db.r5b.16xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_24XLARGE => "db.r5b.24xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_2XLARGE => "db.r5b.2xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_4XLARGE => "db.r5b.4xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_8XLARGE => "db.r5b.8xlarge",
+                    AwsDatabaseInstanceType::DB_R5B_LARGE => "db.r5b.large",
+                    AwsDatabaseInstanceType::DB_R5B_XLARGE => "db.r5b.xlarge",
                     AwsDatabaseInstanceType::DB_R5D_12XLARGE => "db.r5d.12xlarge",
                     AwsDatabaseInstanceType::DB_R5D_16XLARGE => "db.r5d.16xlarge",
                     AwsDatabaseInstanceType::DB_R5D_24XLARGE => "db.r5d.24xlarge",
@@ -1370,6 +2555,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R6I_8XLARGE => "db.r6i.8xlarge",
                     AwsDatabaseInstanceType::DB_R6I_LARGE => "db.r6i.large",
                     AwsDatabaseInstanceType::DB_R6I_XLARGE => "db.r6i.xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_12XLARGE => "db.r6id.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_16XLARGE => "db.r6id.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_24XLARGE => "db.r6id.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_2XLARGE => "db.r6id.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_32XLARGE => "db.r6id.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_4XLARGE => "db.r6id.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_8XLARGE => "db.r6id.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6ID_LARGE => "db.r6id.large",
+                    AwsDatabaseInstanceType::DB_R6ID_XLARGE => "db.r6id.xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_12XLARGE => "db.r6idn.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_16XLARGE => "db.r6idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_24XLARGE => "db.r6idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_2XLARGE => "db.r6idn.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_32XLARGE => "db.r6idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_4XLARGE => "db.r6idn.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_8XLARGE => "db.r6idn.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6IDN_LARGE => "db.r6idn.large",
+                    AwsDatabaseInstanceType::DB_R6IDN_XLARGE => "db.r6idn.xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_12XLARGE => "db.r6in.12xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_16XLARGE => "db.r6in.16xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_24XLARGE => "db.r6in.24xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_2XLARGE => "db.r6in.2xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_32XLARGE => "db.r6in.32xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_4XLARGE => "db.r6in.4xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_8XLARGE => "db.r6in.8xlarge",
+                    AwsDatabaseInstanceType::DB_R6IN_LARGE => "db.r6in.large",
+                    AwsDatabaseInstanceType::DB_R6IN_XLARGE => "db.r6in.xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_12XLARGE => "db.r7g.12xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_16XLARGE => "db.r7g.16xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_2XLARGE => "db.r7g.2xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_4XLARGE => "db.r7g.4xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_8XLARGE => "db.r7g.8xlarge",
+                    AwsDatabaseInstanceType::DB_R7G_LARGE => "db.r7g.large",
+                    AwsDatabaseInstanceType::DB_R7G_XLARGE => "db.r7g.xlarge",
                     AwsDatabaseInstanceType::DB_T2_2XLARGE => "db.t2.2xlarge",
                     AwsDatabaseInstanceType::DB_T2_LARGE => "db.t2.large",
                     AwsDatabaseInstanceType::DB_T2_MEDIUM => "db.t2.medium",
@@ -1388,6 +2607,23 @@ mod tests {
                     AwsDatabaseInstanceType::DB_T4G_MICRO => "db.t4g.micro",
                     AwsDatabaseInstanceType::DB_T4G_SMALL => "db.t4g.small",
                     AwsDatabaseInstanceType::DB_T4G_XLARGE => "db.t4g.xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_12XLARGE => "db.x2g.12xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_16XLARGE => "db.x2g.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_2XLARGE => "db.x2g.2xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_4XLARGE => "db.x2g.4xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_8XLARGE => "db.x2g.8xlarge",
+                    AwsDatabaseInstanceType::DB_X2G_LARGE => "db.x2g.large",
+                    AwsDatabaseInstanceType::DB_X2G_XLARGE => "db.x2g.xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_16XLARGE => "db.x2idn.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_24XLARGE => "db.x2idn.24xlarge",
+                    AwsDatabaseInstanceType::DB_X2IDN_32XLARGE => "db.x2idn.32xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE => "db.x2iedn.16xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE => "db.x2iedn.24xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE => "db.x2iedn.2xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE => "db.x2iedn.32xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE => "db.x2iedn.4xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE => "db.x2iedn.8xlarge",
+                    AwsDatabaseInstanceType::DB_X2IEDN_XLARGE => "db.x2iedn.xlarge",
                 }
                     .to_string(),
                 instance_type.to_string()
@@ -1460,6 +2696,13 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6G_8XLARGE => true,
                     AwsDatabaseInstanceType::DB_M6G_LARGE => true,
                     AwsDatabaseInstanceType::DB_M6G_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_LARGE => true,
+                    AwsDatabaseInstanceType::DB_M6GD_XLARGE => true,
                     AwsDatabaseInstanceType::DB_M6I_12XLARGE => true,
                     AwsDatabaseInstanceType::DB_M6I_16XLARGE => true,
                     AwsDatabaseInstanceType::DB_M6I_24XLARGE => true,
@@ -1469,6 +2712,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_M6I_8XLARGE => true,
                     AwsDatabaseInstanceType::DB_M6I_LARGE => true,
                     AwsDatabaseInstanceType::DB_M6I_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_LARGE => true,
+                    AwsDatabaseInstanceType::DB_M6ID_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_LARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IDN_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_LARGE => true,
+                    AwsDatabaseInstanceType::DB_M6IN_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_LARGE => true,
+                    AwsDatabaseInstanceType::DB_M7G_XLARGE => true,
                     AwsDatabaseInstanceType::DB_R4_16XLARGE => true,
                     AwsDatabaseInstanceType::DB_R4_2XLARGE => true,
                     AwsDatabaseInstanceType::DB_R4_4XLARGE => true,
@@ -1483,6 +2760,14 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R5_8XLARGE => true,
                     AwsDatabaseInstanceType::DB_R5_LARGE => true,
                     AwsDatabaseInstanceType::DB_R5_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_LARGE => true,
+                    AwsDatabaseInstanceType::DB_R5B_XLARGE => true,
                     AwsDatabaseInstanceType::DB_R5D_12XLARGE => true,
                     AwsDatabaseInstanceType::DB_R5D_16XLARGE => true,
                     AwsDatabaseInstanceType::DB_R5D_24XLARGE => true,
@@ -1514,6 +2799,40 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R6I_8XLARGE => true,
                     AwsDatabaseInstanceType::DB_R6I_LARGE => true,
                     AwsDatabaseInstanceType::DB_R6I_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_LARGE => true,
+                    AwsDatabaseInstanceType::DB_R6ID_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_LARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IDN_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_LARGE => true,
+                    AwsDatabaseInstanceType::DB_R6IN_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_LARGE => true,
+                    AwsDatabaseInstanceType::DB_R7G_XLARGE => true,
                     AwsDatabaseInstanceType::DB_T2_2XLARGE => true,
                     AwsDatabaseInstanceType::DB_T2_LARGE => true,
                     AwsDatabaseInstanceType::DB_T2_MEDIUM => true,
@@ -1532,6 +2851,23 @@ mod tests {
                     AwsDatabaseInstanceType::DB_T4G_MICRO => true,
                     AwsDatabaseInstanceType::DB_T4G_SMALL => true,
                     AwsDatabaseInstanceType::DB_T4G_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_12XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_LARGE => true,
+                    AwsDatabaseInstanceType::DB_X2G_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IDN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IDN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IDN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE => true,
+                    AwsDatabaseInstanceType::DB_X2IEDN_XLARGE => true,
                 },
                 instance_type.is_instance_allowed(),
             )
@@ -1553,11 +2889,17 @@ mod tests {
                         | (AwsDatabaseInstanceType::CACHE_T3_SMALL, DatabaseType::Redis)
                         | (AwsDatabaseInstanceType::CACHE_T4G_MICRO, DatabaseType::Redis)
                         | (AwsDatabaseInstanceType::DB_M4_10XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_10XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M4_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_16XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M4_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_2XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M4_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_4XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M4_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_LARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M4_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M4_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M5_12XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_M5_12XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M5_16XLARGE, DatabaseType::MySQL)
@@ -1604,6 +2946,20 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_M6G_LARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M6G_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_M6G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6GD_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M6I_12XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_M6I_12XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M6I_16XLARGE, DatabaseType::MySQL)
@@ -1622,16 +2978,90 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_M6I_LARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_M6I_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_M6I_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6ID_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IDN_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M6IN_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_M7G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_16XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_16XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_2XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_2XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_4XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_4XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_8XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_8XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_LARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_LARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R4_XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R4_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R4_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R5_12XLARGE, DatabaseType::MongoDB)
@@ -1658,6 +3088,22 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_R5_XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R5_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R5_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R5B_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R5D_12XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R5D_12XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R5D_16XLARGE, DatabaseType::MySQL)
@@ -1727,6 +3173,74 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_R6I_LARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R6I_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6I_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6ID_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IDN_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R6IN_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_R7G_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_T2_2XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_T2_2XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_T2_LARGE, DatabaseType::MySQL)
@@ -1765,6 +3279,40 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_T4G_SMALL, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_T4G_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_T4G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_12XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_LARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IDN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_24XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_32XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_8XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_XLARGE, DatabaseType::MySQL)
+                        | (AwsDatabaseInstanceType::DB_X2IEDN_XLARGE, DatabaseType::PostgreSQL)
                     ),
                     instance_type.is_instance_compatible_with(db_type),
                 )

@@ -108,6 +108,14 @@ pub enum AwsInstancesType {
     C6IN_8XLARGE,
     C6IN_LARGE,
     C6IN_XLARGE,
+    C7A_12XLARGE,
+    C7A_16XLARGE,
+    C7A_2XLARGE,
+    C7A_4XLARGE,
+    C7A_8XLARGE,
+    C7A_LARGE,
+    C7A_MEDIUM,
+    C7A_XLARGE,
     C7G_12XLARGE,
     C7G_16XLARGE,
     C7G_2XLARGE,
@@ -116,6 +124,29 @@ pub enum AwsInstancesType {
     C7G_LARGE,
     C7G_MEDIUM,
     C7G_XLARGE,
+    C7GD_12XLARGE,
+    C7GD_16XLARGE,
+    C7GD_2XLARGE,
+    C7GD_4XLARGE,
+    C7GD_8XLARGE,
+    C7GD_LARGE,
+    C7GD_MEDIUM,
+    C7GD_XLARGE,
+    C7GN_12XLARGE,
+    C7GN_16XLARGE,
+    C7GN_2XLARGE,
+    C7GN_4XLARGE,
+    C7GN_8XLARGE,
+    C7GN_LARGE,
+    C7GN_MEDIUM,
+    C7GN_XLARGE,
+    C7I_12XLARGE,
+    C7I_16XLARGE,
+    C7I_2XLARGE,
+    C7I_4XLARGE,
+    C7I_8XLARGE,
+    C7I_LARGE,
+    C7I_XLARGE,
     D2_2XLARGE,
     D2_4XLARGE,
     D2_XLARGE,
@@ -150,6 +181,9 @@ pub enum AwsInstancesType {
     H1_2XLARGE,
     H1_4XLARGE,
     H1_8XLARGE,
+    HPC7G_16XLARGE,
+    HPC7G_4XLARGE,
+    HPC7G_8XLARGE,
     I2_2XLARGE,
     I2_4XLARGE,
     I2_XLARGE,
@@ -161,6 +195,10 @@ pub enum AwsInstancesType {
     I3EN_3XLARGE,
     I3EN_LARGE,
     I3EN_XLARGE,
+    I4G_2XLARGE,
+    I4G_4XLARGE,
+    I4G_LARGE,
+    I4G_XLARGE,
     I4I_2XLARGE,
     I4I_4XLARGE,
     I4I_LARGE,
@@ -170,6 +208,8 @@ pub enum AwsInstancesType {
     IM4GN_8XLARGE,
     IM4GN_LARGE,
     IM4GN_XLARGE,
+    INF2_8XLARGE,
+    INF2_XLARGE,
     IS4GEN_2XLARGE,
     IS4GEN_4XLARGE,
     IS4GEN_LARGE,
@@ -251,12 +291,34 @@ pub enum AwsInstancesType {
     M6IN_8XLARGE,
     M6IN_LARGE,
     M6IN_XLARGE,
+    M7A_2XLARGE,
+    M7A_4XLARGE,
+    M7A_8XLARGE,
+    M7A_LARGE,
+    M7A_MEDIUM,
+    M7A_XLARGE,
     M7G_2XLARGE,
     M7G_4XLARGE,
     M7G_8XLARGE,
     M7G_LARGE,
     M7G_MEDIUM,
     M7G_XLARGE,
+    M7GD_2XLARGE,
+    M7GD_4XLARGE,
+    M7GD_8XLARGE,
+    M7GD_LARGE,
+    M7GD_MEDIUM,
+    M7GD_XLARGE,
+    M7I_FLEX_2XLARGE,
+    M7I_FLEX_4XLARGE,
+    M7I_FLEX_8XLARGE,
+    M7I_FLEX_LARGE,
+    M7I_FLEX_XLARGE,
+    M7I_2XLARGE,
+    M7I_4XLARGE,
+    M7I_8XLARGE,
+    M7I_LARGE,
+    M7I_XLARGE,
     P2_XLARGE,
     P3_2XLARGE,
     R3_2XLARGE,
@@ -325,11 +387,29 @@ pub enum AwsInstancesType {
     R6IN_4XLARGE,
     R6IN_LARGE,
     R6IN_XLARGE,
+    R7A_2XLARGE,
+    R7A_4XLARGE,
+    R7A_LARGE,
+    R7A_MEDIUM,
+    R7A_XLARGE,
     R7G_2XLARGE,
     R7G_4XLARGE,
     R7G_LARGE,
     R7G_MEDIUM,
     R7G_XLARGE,
+    R7GD_2XLARGE,
+    R7GD_4XLARGE,
+    R7GD_LARGE,
+    R7GD_MEDIUM,
+    R7GD_XLARGE,
+    R7I_2XLARGE,
+    R7I_4XLARGE,
+    R7I_LARGE,
+    R7I_XLARGE,
+    R7IZ_2XLARGE,
+    R7IZ_4XLARGE,
+    R7IZ_LARGE,
+    R7IZ_XLARGE,
     T2_2XLARGE,
     T2_LARGE,
     T2_MEDIUM,
@@ -466,6 +546,14 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::C6IN_8XLARGE => "c6in.8xlarge",
             AwsInstancesType::C6IN_LARGE => "c6in.large",
             AwsInstancesType::C6IN_XLARGE => "c6in.xlarge",
+            AwsInstancesType::C7A_12XLARGE => "c7a.12xlarge",
+            AwsInstancesType::C7A_16XLARGE => "c7a.16xlarge",
+            AwsInstancesType::C7A_2XLARGE => "c7a.2xlarge",
+            AwsInstancesType::C7A_4XLARGE => "c7a.4xlarge",
+            AwsInstancesType::C7A_8XLARGE => "c7a.8xlarge",
+            AwsInstancesType::C7A_LARGE => "c7a.large",
+            AwsInstancesType::C7A_MEDIUM => "c7a.medium",
+            AwsInstancesType::C7A_XLARGE => "c7a.xlarge",
             AwsInstancesType::C7G_12XLARGE => "c7g.12xlarge",
             AwsInstancesType::C7G_16XLARGE => "c7g.16xlarge",
             AwsInstancesType::C7G_2XLARGE => "c7g.2xlarge",
@@ -474,6 +562,29 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::C7G_LARGE => "c7g.large",
             AwsInstancesType::C7G_MEDIUM => "c7g.medium",
             AwsInstancesType::C7G_XLARGE => "c7g.xlarge",
+            AwsInstancesType::C7GD_12XLARGE => "c7gd.12xlarge",
+            AwsInstancesType::C7GD_16XLARGE => "c7gd.16xlarge",
+            AwsInstancesType::C7GD_2XLARGE => "c7gd.2xlarge",
+            AwsInstancesType::C7GD_4XLARGE => "c7gd.4xlarge",
+            AwsInstancesType::C7GD_8XLARGE => "c7gd.8xlarge",
+            AwsInstancesType::C7GD_LARGE => "c7gd.large",
+            AwsInstancesType::C7GD_MEDIUM => "c7gd.medium",
+            AwsInstancesType::C7GD_XLARGE => "c7gd.xlarge",
+            AwsInstancesType::C7GN_12XLARGE => "c7gn.12xlarge",
+            AwsInstancesType::C7GN_16XLARGE => "c7gn.16xlarge",
+            AwsInstancesType::C7GN_2XLARGE => "c7gn.2xlarge",
+            AwsInstancesType::C7GN_4XLARGE => "c7gn.4xlarge",
+            AwsInstancesType::C7GN_8XLARGE => "c7gn.8xlarge",
+            AwsInstancesType::C7GN_LARGE => "c7gn.large",
+            AwsInstancesType::C7GN_MEDIUM => "c7gn.medium",
+            AwsInstancesType::C7GN_XLARGE => "c7gn.xlarge",
+            AwsInstancesType::C7I_12XLARGE => "c7i.12xlarge",
+            AwsInstancesType::C7I_16XLARGE => "c7i.16xlarge",
+            AwsInstancesType::C7I_2XLARGE => "c7i.2xlarge",
+            AwsInstancesType::C7I_4XLARGE => "c7i.4xlarge",
+            AwsInstancesType::C7I_8XLARGE => "c7i.8xlarge",
+            AwsInstancesType::C7I_LARGE => "c7i.large",
+            AwsInstancesType::C7I_XLARGE => "c7i.xlarge",
             AwsInstancesType::D2_2XLARGE => "d2.2xlarge",
             AwsInstancesType::D2_4XLARGE => "d2.4xlarge",
             AwsInstancesType::D2_XLARGE => "d2.xlarge",
@@ -508,6 +619,9 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
             AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
             AwsInstancesType::H1_8XLARGE => "h1.8xlarge",
+            AwsInstancesType::HPC7G_16XLARGE => "hpc7g.16xlarge",
+            AwsInstancesType::HPC7G_4XLARGE => "hpc7g.4xlarge",
+            AwsInstancesType::HPC7G_8XLARGE => "hpc7g.8xlarge",
             AwsInstancesType::I2_2XLARGE => "i2.2xlarge",
             AwsInstancesType::I2_4XLARGE => "i2.4xlarge",
             AwsInstancesType::I2_XLARGE => "i2.xlarge",
@@ -519,6 +633,10 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::I3EN_3XLARGE => "i3en.3xlarge",
             AwsInstancesType::I3EN_LARGE => "i3en.large",
             AwsInstancesType::I3EN_XLARGE => "i3en.xlarge",
+            AwsInstancesType::I4G_2XLARGE => "i4g.2xlarge",
+            AwsInstancesType::I4G_4XLARGE => "i4g.4xlarge",
+            AwsInstancesType::I4G_LARGE => "i4g.large",
+            AwsInstancesType::I4G_XLARGE => "i4g.xlarge",
             AwsInstancesType::I4I_2XLARGE => "i4i.2xlarge",
             AwsInstancesType::I4I_4XLARGE => "i4i.4xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
@@ -528,6 +646,8 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::IM4GN_8XLARGE => "im4gn.8xlarge",
             AwsInstancesType::IM4GN_LARGE => "im4gn.large",
             AwsInstancesType::IM4GN_XLARGE => "im4gn.xlarge",
+            AwsInstancesType::INF2_8XLARGE => "inf2.8xlarge",
+            AwsInstancesType::INF2_XLARGE => "inf2.xlarge",
             AwsInstancesType::IS4GEN_2XLARGE => "is4gen.2xlarge",
             AwsInstancesType::IS4GEN_4XLARGE => "is4gen.4xlarge",
             AwsInstancesType::IS4GEN_LARGE => "is4gen.large",
@@ -609,12 +729,34 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::M6IN_8XLARGE => "m6in.8xlarge",
             AwsInstancesType::M6IN_LARGE => "m6in.large",
             AwsInstancesType::M6IN_XLARGE => "m6in.xlarge",
+            AwsInstancesType::M7A_2XLARGE => "m7a.2xlarge",
+            AwsInstancesType::M7A_4XLARGE => "m7a.4xlarge",
+            AwsInstancesType::M7A_8XLARGE => "m7a.8xlarge",
+            AwsInstancesType::M7A_LARGE => "m7a.large",
+            AwsInstancesType::M7A_MEDIUM => "m7a.medium",
+            AwsInstancesType::M7A_XLARGE => "m7a.xlarge",
             AwsInstancesType::M7G_2XLARGE => "m7g.2xlarge",
             AwsInstancesType::M7G_4XLARGE => "m7g.4xlarge",
             AwsInstancesType::M7G_8XLARGE => "m7g.8xlarge",
             AwsInstancesType::M7G_LARGE => "m7g.large",
             AwsInstancesType::M7G_MEDIUM => "m7g.medium",
             AwsInstancesType::M7G_XLARGE => "m7g.xlarge",
+            AwsInstancesType::M7GD_2XLARGE => "m7gd.2xlarge",
+            AwsInstancesType::M7GD_4XLARGE => "m7gd.4xlarge",
+            AwsInstancesType::M7GD_8XLARGE => "m7gd.8xlarge",
+            AwsInstancesType::M7GD_LARGE => "m7gd.large",
+            AwsInstancesType::M7GD_MEDIUM => "m7gd.medium",
+            AwsInstancesType::M7GD_XLARGE => "m7gd.xlarge",
+            AwsInstancesType::M7I_FLEX_2XLARGE => "m7i-flex.2xlarge",
+            AwsInstancesType::M7I_FLEX_4XLARGE => "m7i-flex.4xlarge",
+            AwsInstancesType::M7I_FLEX_8XLARGE => "m7i-flex.8xlarge",
+            AwsInstancesType::M7I_FLEX_LARGE => "m7i-flex.large",
+            AwsInstancesType::M7I_FLEX_XLARGE => "m7i-flex.xlarge",
+            AwsInstancesType::M7I_2XLARGE => "m7i.2xlarge",
+            AwsInstancesType::M7I_4XLARGE => "m7i.4xlarge",
+            AwsInstancesType::M7I_8XLARGE => "m7i.8xlarge",
+            AwsInstancesType::M7I_LARGE => "m7i.large",
+            AwsInstancesType::M7I_XLARGE => "m7i.xlarge",
             AwsInstancesType::P2_XLARGE => "p2.xlarge",
             AwsInstancesType::P3_2XLARGE => "p3.2xlarge",
             AwsInstancesType::R3_2XLARGE => "r3.2xlarge",
@@ -683,11 +825,29 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::R6IN_4XLARGE => "r6in.4xlarge",
             AwsInstancesType::R6IN_LARGE => "r6in.large",
             AwsInstancesType::R6IN_XLARGE => "r6in.xlarge",
+            AwsInstancesType::R7A_2XLARGE => "r7a.2xlarge",
+            AwsInstancesType::R7A_4XLARGE => "r7a.4xlarge",
+            AwsInstancesType::R7A_LARGE => "r7a.large",
+            AwsInstancesType::R7A_MEDIUM => "r7a.medium",
+            AwsInstancesType::R7A_XLARGE => "r7a.xlarge",
             AwsInstancesType::R7G_2XLARGE => "r7g.2xlarge",
             AwsInstancesType::R7G_4XLARGE => "r7g.4xlarge",
             AwsInstancesType::R7G_LARGE => "r7g.large",
             AwsInstancesType::R7G_MEDIUM => "r7g.medium",
             AwsInstancesType::R7G_XLARGE => "r7g.xlarge",
+            AwsInstancesType::R7GD_2XLARGE => "r7gd.2xlarge",
+            AwsInstancesType::R7GD_4XLARGE => "r7gd.4xlarge",
+            AwsInstancesType::R7GD_LARGE => "r7gd.large",
+            AwsInstancesType::R7GD_MEDIUM => "r7gd.medium",
+            AwsInstancesType::R7GD_XLARGE => "r7gd.xlarge",
+            AwsInstancesType::R7I_2XLARGE => "r7i.2xlarge",
+            AwsInstancesType::R7I_4XLARGE => "r7i.4xlarge",
+            AwsInstancesType::R7I_LARGE => "r7i.large",
+            AwsInstancesType::R7I_XLARGE => "r7i.xlarge",
+            AwsInstancesType::R7IZ_2XLARGE => "r7iz.2xlarge",
+            AwsInstancesType::R7IZ_4XLARGE => "r7iz.4xlarge",
+            AwsInstancesType::R7IZ_LARGE => "r7iz.large",
+            AwsInstancesType::R7IZ_XLARGE => "r7iz.xlarge",
             AwsInstancesType::T2_2XLARGE => "t2.2xlarge",
             AwsInstancesType::T2_LARGE => "t2.large",
             AwsInstancesType::T2_MEDIUM => "t2.medium",
@@ -826,6 +986,30 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::C6I_8XLARGE
                 | AwsInstancesType::C6I_LARGE
                 | AwsInstancesType::C6I_XLARGE
+                | AwsInstancesType::C7A_12XLARGE
+                | AwsInstancesType::C7A_16XLARGE
+                | AwsInstancesType::C7A_2XLARGE
+                | AwsInstancesType::C7A_4XLARGE
+                | AwsInstancesType::C7A_8XLARGE
+                | AwsInstancesType::C7A_LARGE
+                | AwsInstancesType::C7A_MEDIUM
+                | AwsInstancesType::C7A_XLARGE
+                | AwsInstancesType::C7GD_12XLARGE
+                | AwsInstancesType::C7GD_16XLARGE
+                | AwsInstancesType::C7GD_2XLARGE
+                | AwsInstancesType::C7GD_4XLARGE
+                | AwsInstancesType::C7GD_8XLARGE
+                | AwsInstancesType::C7GD_LARGE
+                | AwsInstancesType::C7GD_MEDIUM
+                | AwsInstancesType::C7GD_XLARGE
+                | AwsInstancesType::C7GN_12XLARGE
+                | AwsInstancesType::C7GN_16XLARGE
+                | AwsInstancesType::C7GN_2XLARGE
+                | AwsInstancesType::C7GN_4XLARGE
+                | AwsInstancesType::C7GN_8XLARGE
+                | AwsInstancesType::C7GN_LARGE
+                | AwsInstancesType::C7GN_MEDIUM
+                | AwsInstancesType::C7GN_XLARGE
                 | AwsInstancesType::C7G_12XLARGE
                 | AwsInstancesType::C7G_16XLARGE
                 | AwsInstancesType::C7G_2XLARGE
@@ -834,6 +1018,13 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::C7G_LARGE
                 | AwsInstancesType::C7G_MEDIUM
                 | AwsInstancesType::C7G_XLARGE
+                | AwsInstancesType::C7I_12XLARGE
+                | AwsInstancesType::C7I_16XLARGE
+                | AwsInstancesType::C7I_2XLARGE
+                | AwsInstancesType::C7I_4XLARGE
+                | AwsInstancesType::C7I_8XLARGE
+                | AwsInstancesType::C7I_LARGE
+                | AwsInstancesType::C7I_XLARGE
                 | AwsInstancesType::D2_2XLARGE
                 | AwsInstancesType::D2_4XLARGE
                 | AwsInstancesType::D2_XLARGE
@@ -868,6 +1059,9 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::H1_2XLARGE
                 | AwsInstancesType::H1_4XLARGE
                 | AwsInstancesType::H1_8XLARGE
+                | AwsInstancesType::HPC7G_16XLARGE
+                | AwsInstancesType::HPC7G_4XLARGE
+                | AwsInstancesType::HPC7G_8XLARGE
                 | AwsInstancesType::I2_2XLARGE
                 | AwsInstancesType::I2_4XLARGE
                 | AwsInstancesType::I2_XLARGE
@@ -879,6 +1073,10 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I3_4XLARGE
                 | AwsInstancesType::I3_LARGE
                 | AwsInstancesType::I3_XLARGE
+                | AwsInstancesType::I4G_2XLARGE
+                | AwsInstancesType::I4G_4XLARGE
+                | AwsInstancesType::I4G_LARGE
+                | AwsInstancesType::I4G_XLARGE
                 | AwsInstancesType::I4I_2XLARGE
                 | AwsInstancesType::I4I_4XLARGE
                 | AwsInstancesType::I4I_LARGE
@@ -888,6 +1086,8 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::IM4GN_8XLARGE
                 | AwsInstancesType::IM4GN_LARGE
                 | AwsInstancesType::IM4GN_XLARGE
+                | AwsInstancesType::INF2_8XLARGE
+                | AwsInstancesType::INF2_XLARGE
                 | AwsInstancesType::IS4GEN_2XLARGE
                 | AwsInstancesType::IS4GEN_4XLARGE
                 | AwsInstancesType::IS4GEN_LARGE
@@ -969,12 +1169,34 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::M6I_8XLARGE
                 | AwsInstancesType::M6I_LARGE
                 | AwsInstancesType::M6I_XLARGE
+                | AwsInstancesType::M7A_2XLARGE
+                | AwsInstancesType::M7A_4XLARGE
+                | AwsInstancesType::M7A_8XLARGE
+                | AwsInstancesType::M7A_LARGE
+                | AwsInstancesType::M7A_MEDIUM
+                | AwsInstancesType::M7A_XLARGE
+                | AwsInstancesType::M7GD_2XLARGE
+                | AwsInstancesType::M7GD_4XLARGE
+                | AwsInstancesType::M7GD_8XLARGE
+                | AwsInstancesType::M7GD_LARGE
+                | AwsInstancesType::M7GD_MEDIUM
+                | AwsInstancesType::M7GD_XLARGE
                 | AwsInstancesType::M7G_2XLARGE
                 | AwsInstancesType::M7G_4XLARGE
                 | AwsInstancesType::M7G_8XLARGE
                 | AwsInstancesType::M7G_LARGE
                 | AwsInstancesType::M7G_MEDIUM
                 | AwsInstancesType::M7G_XLARGE
+                | AwsInstancesType::M7I_2XLARGE
+                | AwsInstancesType::M7I_4XLARGE
+                | AwsInstancesType::M7I_8XLARGE
+                | AwsInstancesType::M7I_FLEX_2XLARGE
+                | AwsInstancesType::M7I_FLEX_4XLARGE
+                | AwsInstancesType::M7I_FLEX_8XLARGE
+                | AwsInstancesType::M7I_FLEX_LARGE
+                | AwsInstancesType::M7I_FLEX_XLARGE
+                | AwsInstancesType::M7I_LARGE
+                | AwsInstancesType::M7I_XLARGE
                 | AwsInstancesType::P2_XLARGE
                 | AwsInstancesType::P3_2XLARGE
                 | AwsInstancesType::R3_2XLARGE
@@ -1043,11 +1265,29 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::R6I_4XLARGE
                 | AwsInstancesType::R6I_LARGE
                 | AwsInstancesType::R6I_XLARGE
+                | AwsInstancesType::R7A_2XLARGE
+                | AwsInstancesType::R7A_4XLARGE
+                | AwsInstancesType::R7A_LARGE
+                | AwsInstancesType::R7A_MEDIUM
+                | AwsInstancesType::R7A_XLARGE
+                | AwsInstancesType::R7GD_2XLARGE
+                | AwsInstancesType::R7GD_4XLARGE
+                | AwsInstancesType::R7GD_LARGE
+                | AwsInstancesType::R7GD_MEDIUM
+                | AwsInstancesType::R7GD_XLARGE
                 | AwsInstancesType::R7G_2XLARGE
                 | AwsInstancesType::R7G_4XLARGE
                 | AwsInstancesType::R7G_LARGE
                 | AwsInstancesType::R7G_MEDIUM
                 | AwsInstancesType::R7G_XLARGE
+                | AwsInstancesType::R7IZ_2XLARGE
+                | AwsInstancesType::R7IZ_4XLARGE
+                | AwsInstancesType::R7IZ_LARGE
+                | AwsInstancesType::R7IZ_XLARGE
+                | AwsInstancesType::R7I_2XLARGE
+                | AwsInstancesType::R7I_4XLARGE
+                | AwsInstancesType::R7I_LARGE
+                | AwsInstancesType::R7I_XLARGE
                 | AwsInstancesType::T2_2XLARGE
                 | AwsInstancesType::T2_LARGE
                 | AwsInstancesType::T2_MEDIUM
@@ -1115,6 +1355,22 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::C6G_LARGE
                 | AwsInstancesType::C6G_MEDIUM
                 | AwsInstancesType::C6G_XLARGE
+                | AwsInstancesType::C7GD_12XLARGE
+                | AwsInstancesType::C7GD_16XLARGE
+                | AwsInstancesType::C7GD_2XLARGE
+                | AwsInstancesType::C7GD_4XLARGE
+                | AwsInstancesType::C7GD_8XLARGE
+                | AwsInstancesType::C7GD_LARGE
+                | AwsInstancesType::C7GD_MEDIUM
+                | AwsInstancesType::C7GD_XLARGE
+                | AwsInstancesType::C7GN_12XLARGE
+                | AwsInstancesType::C7GN_16XLARGE
+                | AwsInstancesType::C7GN_2XLARGE
+                | AwsInstancesType::C7GN_4XLARGE
+                | AwsInstancesType::C7GN_8XLARGE
+                | AwsInstancesType::C7GN_LARGE
+                | AwsInstancesType::C7GN_MEDIUM
+                | AwsInstancesType::C7GN_XLARGE
                 | AwsInstancesType::C7G_12XLARGE
                 | AwsInstancesType::C7G_16XLARGE
                 | AwsInstancesType::C7G_2XLARGE
@@ -1128,6 +1384,13 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::G5G_4XLARGE
                 | AwsInstancesType::G5G_8XLARGE
                 | AwsInstancesType::G5G_XLARGE
+                | AwsInstancesType::HPC7G_16XLARGE
+                | AwsInstancesType::HPC7G_4XLARGE
+                | AwsInstancesType::HPC7G_8XLARGE
+                | AwsInstancesType::I4G_2XLARGE
+                | AwsInstancesType::I4G_4XLARGE
+                | AwsInstancesType::I4G_LARGE
+                | AwsInstancesType::I4G_XLARGE
                 | AwsInstancesType::IM4GN_2XLARGE
                 | AwsInstancesType::IM4GN_4XLARGE
                 | AwsInstancesType::IM4GN_8XLARGE
@@ -1150,6 +1413,12 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::M6G_LARGE
                 | AwsInstancesType::M6G_MEDIUM
                 | AwsInstancesType::M6G_XLARGE
+                | AwsInstancesType::M7GD_2XLARGE
+                | AwsInstancesType::M7GD_4XLARGE
+                | AwsInstancesType::M7GD_8XLARGE
+                | AwsInstancesType::M7GD_LARGE
+                | AwsInstancesType::M7GD_MEDIUM
+                | AwsInstancesType::M7GD_XLARGE
                 | AwsInstancesType::M7G_2XLARGE
                 | AwsInstancesType::M7G_4XLARGE
                 | AwsInstancesType::M7G_8XLARGE
@@ -1166,6 +1435,11 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::R6G_LARGE
                 | AwsInstancesType::R6G_MEDIUM
                 | AwsInstancesType::R6G_XLARGE
+                | AwsInstancesType::R7GD_2XLARGE
+                | AwsInstancesType::R7GD_4XLARGE
+                | AwsInstancesType::R7GD_LARGE
+                | AwsInstancesType::R7GD_MEDIUM
+                | AwsInstancesType::R7GD_XLARGE
                 | AwsInstancesType::R7G_2XLARGE
                 | AwsInstancesType::R7G_4XLARGE
                 | AwsInstancesType::R7G_LARGE
@@ -1278,6 +1552,27 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::C6I_8XLARGE
                 | AwsInstancesType::C6I_LARGE
                 | AwsInstancesType::C6I_XLARGE
+                | AwsInstancesType::C7A_12XLARGE
+                | AwsInstancesType::C7A_16XLARGE
+                | AwsInstancesType::C7A_2XLARGE
+                | AwsInstancesType::C7A_4XLARGE
+                | AwsInstancesType::C7A_8XLARGE
+                | AwsInstancesType::C7A_LARGE
+                | AwsInstancesType::C7A_XLARGE
+                | AwsInstancesType::C7GD_12XLARGE
+                | AwsInstancesType::C7GD_16XLARGE
+                | AwsInstancesType::C7GD_2XLARGE
+                | AwsInstancesType::C7GD_4XLARGE
+                | AwsInstancesType::C7GD_8XLARGE
+                | AwsInstancesType::C7GD_LARGE
+                | AwsInstancesType::C7GD_XLARGE
+                | AwsInstancesType::C7GN_12XLARGE
+                | AwsInstancesType::C7GN_16XLARGE
+                | AwsInstancesType::C7GN_2XLARGE
+                | AwsInstancesType::C7GN_4XLARGE
+                | AwsInstancesType::C7GN_8XLARGE
+                | AwsInstancesType::C7GN_LARGE
+                | AwsInstancesType::C7GN_XLARGE
                 | AwsInstancesType::C7G_12XLARGE
                 | AwsInstancesType::C7G_16XLARGE
                 | AwsInstancesType::C7G_2XLARGE
@@ -1285,6 +1580,13 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::C7G_8XLARGE
                 | AwsInstancesType::C7G_LARGE
                 | AwsInstancesType::C7G_XLARGE
+                | AwsInstancesType::C7I_12XLARGE
+                | AwsInstancesType::C7I_16XLARGE
+                | AwsInstancesType::C7I_2XLARGE
+                | AwsInstancesType::C7I_4XLARGE
+                | AwsInstancesType::C7I_8XLARGE
+                | AwsInstancesType::C7I_LARGE
+                | AwsInstancesType::C7I_XLARGE
                 | AwsInstancesType::D2_2XLARGE
                 | AwsInstancesType::D2_4XLARGE
                 | AwsInstancesType::D2_XLARGE
@@ -1319,6 +1621,9 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::H1_2XLARGE
                 | AwsInstancesType::H1_4XLARGE
                 | AwsInstancesType::H1_8XLARGE
+                | AwsInstancesType::HPC7G_16XLARGE
+                | AwsInstancesType::HPC7G_4XLARGE
+                | AwsInstancesType::HPC7G_8XLARGE
                 | AwsInstancesType::I2_2XLARGE
                 | AwsInstancesType::I2_4XLARGE
                 | AwsInstancesType::I2_XLARGE
@@ -1330,6 +1635,10 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I3_4XLARGE
                 | AwsInstancesType::I3_LARGE
                 | AwsInstancesType::I3_XLARGE
+                | AwsInstancesType::I4G_2XLARGE
+                | AwsInstancesType::I4G_4XLARGE
+                | AwsInstancesType::I4G_LARGE
+                | AwsInstancesType::I4G_XLARGE
                 | AwsInstancesType::I4I_2XLARGE
                 | AwsInstancesType::I4I_4XLARGE
                 | AwsInstancesType::I4I_LARGE
@@ -1339,6 +1648,8 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::IM4GN_8XLARGE
                 | AwsInstancesType::IM4GN_LARGE
                 | AwsInstancesType::IM4GN_XLARGE
+                | AwsInstancesType::INF2_8XLARGE
+                | AwsInstancesType::INF2_XLARGE
                 | AwsInstancesType::IS4GEN_2XLARGE
                 | AwsInstancesType::IS4GEN_4XLARGE
                 | AwsInstancesType::IS4GEN_LARGE
@@ -1420,12 +1731,34 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::M6I_8XLARGE
                 | AwsInstancesType::M6I_LARGE
                 | AwsInstancesType::M6I_XLARGE
+                | AwsInstancesType::M7A_2XLARGE
+                | AwsInstancesType::M7A_4XLARGE
+                | AwsInstancesType::M7A_8XLARGE
+                | AwsInstancesType::M7A_LARGE
+                | AwsInstancesType::M7A_MEDIUM
+                | AwsInstancesType::M7A_XLARGE
+                | AwsInstancesType::M7GD_2XLARGE
+                | AwsInstancesType::M7GD_4XLARGE
+                | AwsInstancesType::M7GD_8XLARGE
+                | AwsInstancesType::M7GD_LARGE
+                | AwsInstancesType::M7GD_MEDIUM
+                | AwsInstancesType::M7GD_XLARGE
                 | AwsInstancesType::M7G_2XLARGE
                 | AwsInstancesType::M7G_4XLARGE
                 | AwsInstancesType::M7G_8XLARGE
                 | AwsInstancesType::M7G_LARGE
                 | AwsInstancesType::M7G_MEDIUM
                 | AwsInstancesType::M7G_XLARGE
+                | AwsInstancesType::M7I_2XLARGE
+                | AwsInstancesType::M7I_4XLARGE
+                | AwsInstancesType::M7I_8XLARGE
+                | AwsInstancesType::M7I_FLEX_2XLARGE
+                | AwsInstancesType::M7I_FLEX_4XLARGE
+                | AwsInstancesType::M7I_FLEX_8XLARGE
+                | AwsInstancesType::M7I_FLEX_LARGE
+                | AwsInstancesType::M7I_FLEX_XLARGE
+                | AwsInstancesType::M7I_LARGE
+                | AwsInstancesType::M7I_XLARGE
                 | AwsInstancesType::P2_XLARGE
                 | AwsInstancesType::P3_2XLARGE
                 | AwsInstancesType::R3_2XLARGE
@@ -1494,11 +1827,29 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::R6I_4XLARGE
                 | AwsInstancesType::R6I_LARGE
                 | AwsInstancesType::R6I_XLARGE
+                | AwsInstancesType::R7A_2XLARGE
+                | AwsInstancesType::R7A_4XLARGE
+                | AwsInstancesType::R7A_LARGE
+                | AwsInstancesType::R7A_MEDIUM
+                | AwsInstancesType::R7A_XLARGE
+                | AwsInstancesType::R7GD_2XLARGE
+                | AwsInstancesType::R7GD_4XLARGE
+                | AwsInstancesType::R7GD_LARGE
+                | AwsInstancesType::R7GD_MEDIUM
+                | AwsInstancesType::R7GD_XLARGE
                 | AwsInstancesType::R7G_2XLARGE
                 | AwsInstancesType::R7G_4XLARGE
                 | AwsInstancesType::R7G_LARGE
                 | AwsInstancesType::R7G_MEDIUM
                 | AwsInstancesType::R7G_XLARGE
+                | AwsInstancesType::R7IZ_2XLARGE
+                | AwsInstancesType::R7IZ_4XLARGE
+                | AwsInstancesType::R7IZ_LARGE
+                | AwsInstancesType::R7IZ_XLARGE
+                | AwsInstancesType::R7I_2XLARGE
+                | AwsInstancesType::R7I_4XLARGE
+                | AwsInstancesType::R7I_LARGE
+                | AwsInstancesType::R7I_XLARGE
                 | AwsInstancesType::T2_2XLARGE
                 | AwsInstancesType::T2_LARGE
                 | AwsInstancesType::T2_MEDIUM
@@ -1633,6 +1984,14 @@ impl AwsInstancesType {
             AwsInstancesType::C6IN_8XLARGE => "c6in.8xlarge",
             AwsInstancesType::C6IN_LARGE => "c6in.large",
             AwsInstancesType::C6IN_XLARGE => "c6in.xlarge",
+            AwsInstancesType::C7A_12XLARGE => "c7a.12xlarge",
+            AwsInstancesType::C7A_16XLARGE => "c7a.16xlarge",
+            AwsInstancesType::C7A_2XLARGE => "c7a.2xlarge",
+            AwsInstancesType::C7A_4XLARGE => "c7a.4xlarge",
+            AwsInstancesType::C7A_8XLARGE => "c7a.8xlarge",
+            AwsInstancesType::C7A_LARGE => "c7a.large",
+            AwsInstancesType::C7A_MEDIUM => "c7a.medium",
+            AwsInstancesType::C7A_XLARGE => "c7a.xlarge",
             AwsInstancesType::C7G_12XLARGE => "c7g.12xlarge",
             AwsInstancesType::C7G_16XLARGE => "c7g.16xlarge",
             AwsInstancesType::C7G_2XLARGE => "c7g.2xlarge",
@@ -1641,6 +2000,29 @@ impl AwsInstancesType {
             AwsInstancesType::C7G_LARGE => "c7g.large",
             AwsInstancesType::C7G_MEDIUM => "c7g.medium",
             AwsInstancesType::C7G_XLARGE => "c7g.xlarge",
+            AwsInstancesType::C7GD_12XLARGE => "c7gd.12xlarge",
+            AwsInstancesType::C7GD_16XLARGE => "c7gd.16xlarge",
+            AwsInstancesType::C7GD_2XLARGE => "c7gd.2xlarge",
+            AwsInstancesType::C7GD_4XLARGE => "c7gd.4xlarge",
+            AwsInstancesType::C7GD_8XLARGE => "c7gd.8xlarge",
+            AwsInstancesType::C7GD_LARGE => "c7gd.large",
+            AwsInstancesType::C7GD_MEDIUM => "c7gd.medium",
+            AwsInstancesType::C7GD_XLARGE => "c7gd.xlarge",
+            AwsInstancesType::C7GN_12XLARGE => "c7gn.12xlarge",
+            AwsInstancesType::C7GN_16XLARGE => "c7gn.16xlarge",
+            AwsInstancesType::C7GN_2XLARGE => "c7gn.2xlarge",
+            AwsInstancesType::C7GN_4XLARGE => "c7gn.4xlarge",
+            AwsInstancesType::C7GN_8XLARGE => "c7gn.8xlarge",
+            AwsInstancesType::C7GN_LARGE => "c7gn.large",
+            AwsInstancesType::C7GN_MEDIUM => "c7gn.medium",
+            AwsInstancesType::C7GN_XLARGE => "c7gn.xlarge",
+            AwsInstancesType::C7I_12XLARGE => "c7i.12xlarge",
+            AwsInstancesType::C7I_16XLARGE => "c7i.16xlarge",
+            AwsInstancesType::C7I_2XLARGE => "c7i.2xlarge",
+            AwsInstancesType::C7I_4XLARGE => "c7i.4xlarge",
+            AwsInstancesType::C7I_8XLARGE => "c7i.8xlarge",
+            AwsInstancesType::C7I_LARGE => "c7i.large",
+            AwsInstancesType::C7I_XLARGE => "c7i.xlarge",
             AwsInstancesType::D2_2XLARGE => "d2.2xlarge",
             AwsInstancesType::D2_4XLARGE => "d2.4xlarge",
             AwsInstancesType::D2_XLARGE => "d2.xlarge",
@@ -1675,6 +2057,9 @@ impl AwsInstancesType {
             AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
             AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
             AwsInstancesType::H1_8XLARGE => "h1.8xlarge",
+            AwsInstancesType::HPC7G_16XLARGE => "hpc7g.16xlarge",
+            AwsInstancesType::HPC7G_4XLARGE => "hpc7g.4xlarge",
+            AwsInstancesType::HPC7G_8XLARGE => "hpc7g.8xlarge",
             AwsInstancesType::I2_2XLARGE => "i2.2xlarge",
             AwsInstancesType::I2_4XLARGE => "i2.4xlarge",
             AwsInstancesType::I2_XLARGE => "i2.xlarge",
@@ -1686,6 +2071,10 @@ impl AwsInstancesType {
             AwsInstancesType::I3EN_3XLARGE => "i3en.3xlarge",
             AwsInstancesType::I3EN_LARGE => "i3en.large",
             AwsInstancesType::I3EN_XLARGE => "i3en.xlarge",
+            AwsInstancesType::I4G_2XLARGE => "i4g.2xlarge",
+            AwsInstancesType::I4G_4XLARGE => "i4g.4xlarge",
+            AwsInstancesType::I4G_LARGE => "i4g.large",
+            AwsInstancesType::I4G_XLARGE => "i4g.xlarge",
             AwsInstancesType::I4I_2XLARGE => "i4i.2xlarge",
             AwsInstancesType::I4I_4XLARGE => "i4i.4xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
@@ -1695,6 +2084,8 @@ impl AwsInstancesType {
             AwsInstancesType::IM4GN_8XLARGE => "im4gn.8xlarge",
             AwsInstancesType::IM4GN_LARGE => "im4gn.large",
             AwsInstancesType::IM4GN_XLARGE => "im4gn.xlarge",
+            AwsInstancesType::INF2_8XLARGE => "inf2.8xlarge",
+            AwsInstancesType::INF2_XLARGE => "inf2.xlarge",
             AwsInstancesType::IS4GEN_2XLARGE => "is4gen.2xlarge",
             AwsInstancesType::IS4GEN_4XLARGE => "is4gen.4xlarge",
             AwsInstancesType::IS4GEN_LARGE => "is4gen.large",
@@ -1776,12 +2167,34 @@ impl AwsInstancesType {
             AwsInstancesType::M6IN_8XLARGE => "m6in.8xlarge",
             AwsInstancesType::M6IN_LARGE => "m6in.large",
             AwsInstancesType::M6IN_XLARGE => "m6in.xlarge",
+            AwsInstancesType::M7A_2XLARGE => "m7a.2xlarge",
+            AwsInstancesType::M7A_4XLARGE => "m7a.4xlarge",
+            AwsInstancesType::M7A_8XLARGE => "m7a.8xlarge",
+            AwsInstancesType::M7A_LARGE => "m7a.large",
+            AwsInstancesType::M7A_MEDIUM => "m7a.medium",
+            AwsInstancesType::M7A_XLARGE => "m7a.xlarge",
             AwsInstancesType::M7G_2XLARGE => "m7g.2xlarge",
             AwsInstancesType::M7G_4XLARGE => "m7g.4xlarge",
             AwsInstancesType::M7G_8XLARGE => "m7g.8xlarge",
             AwsInstancesType::M7G_LARGE => "m7g.large",
             AwsInstancesType::M7G_MEDIUM => "m7g.medium",
             AwsInstancesType::M7G_XLARGE => "m7g.xlarge",
+            AwsInstancesType::M7GD_2XLARGE => "m7gd.2xlarge",
+            AwsInstancesType::M7GD_4XLARGE => "m7gd.4xlarge",
+            AwsInstancesType::M7GD_8XLARGE => "m7gd.8xlarge",
+            AwsInstancesType::M7GD_LARGE => "m7gd.large",
+            AwsInstancesType::M7GD_MEDIUM => "m7gd.medium",
+            AwsInstancesType::M7GD_XLARGE => "m7gd.xlarge",
+            AwsInstancesType::M7I_FLEX_2XLARGE => "m7i-flex.2xlarge",
+            AwsInstancesType::M7I_FLEX_4XLARGE => "m7i-flex.4xlarge",
+            AwsInstancesType::M7I_FLEX_8XLARGE => "m7i-flex.8xlarge",
+            AwsInstancesType::M7I_FLEX_LARGE => "m7i-flex.large",
+            AwsInstancesType::M7I_FLEX_XLARGE => "m7i-flex.xlarge",
+            AwsInstancesType::M7I_2XLARGE => "m7i.2xlarge",
+            AwsInstancesType::M7I_4XLARGE => "m7i.4xlarge",
+            AwsInstancesType::M7I_8XLARGE => "m7i.8xlarge",
+            AwsInstancesType::M7I_LARGE => "m7i.large",
+            AwsInstancesType::M7I_XLARGE => "m7i.xlarge",
             AwsInstancesType::P2_XLARGE => "p2.xlarge",
             AwsInstancesType::P3_2XLARGE => "p3.2xlarge",
             AwsInstancesType::R3_2XLARGE => "r3.2xlarge",
@@ -1850,11 +2263,29 @@ impl AwsInstancesType {
             AwsInstancesType::R6IN_4XLARGE => "r6in.4xlarge",
             AwsInstancesType::R6IN_LARGE => "r6in.large",
             AwsInstancesType::R6IN_XLARGE => "r6in.xlarge",
+            AwsInstancesType::R7A_2XLARGE => "r7a.2xlarge",
+            AwsInstancesType::R7A_4XLARGE => "r7a.4xlarge",
+            AwsInstancesType::R7A_LARGE => "r7a.large",
+            AwsInstancesType::R7A_MEDIUM => "r7a.medium",
+            AwsInstancesType::R7A_XLARGE => "r7a.xlarge",
             AwsInstancesType::R7G_2XLARGE => "r7g.2xlarge",
             AwsInstancesType::R7G_4XLARGE => "r7g.4xlarge",
             AwsInstancesType::R7G_LARGE => "r7g.large",
             AwsInstancesType::R7G_MEDIUM => "r7g.medium",
             AwsInstancesType::R7G_XLARGE => "r7g.xlarge",
+            AwsInstancesType::R7GD_2XLARGE => "r7gd.2xlarge",
+            AwsInstancesType::R7GD_4XLARGE => "r7gd.4xlarge",
+            AwsInstancesType::R7GD_LARGE => "r7gd.large",
+            AwsInstancesType::R7GD_MEDIUM => "r7gd.medium",
+            AwsInstancesType::R7GD_XLARGE => "r7gd.xlarge",
+            AwsInstancesType::R7I_2XLARGE => "r7i.2xlarge",
+            AwsInstancesType::R7I_4XLARGE => "r7i.4xlarge",
+            AwsInstancesType::R7I_LARGE => "r7i.large",
+            AwsInstancesType::R7I_XLARGE => "r7i.xlarge",
+            AwsInstancesType::R7IZ_2XLARGE => "r7iz.2xlarge",
+            AwsInstancesType::R7IZ_4XLARGE => "r7iz.4xlarge",
+            AwsInstancesType::R7IZ_LARGE => "r7iz.large",
+            AwsInstancesType::R7IZ_XLARGE => "r7iz.xlarge",
             AwsInstancesType::T2_2XLARGE => "t2.2xlarge",
             AwsInstancesType::T2_LARGE => "t2.large",
             AwsInstancesType::T2_MEDIUM => "t2.medium",
@@ -1993,6 +2424,14 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::C6IN_8XLARGE => write!(f, "c6in.8xlarge"),
             AwsInstancesType::C6IN_LARGE => write!(f, "c6in.large"),
             AwsInstancesType::C6IN_XLARGE => write!(f, "c6in.xlarge"),
+            AwsInstancesType::C7A_12XLARGE => write!(f, "c7a.12xlarge"),
+            AwsInstancesType::C7A_16XLARGE => write!(f, "c7a.16xlarge"),
+            AwsInstancesType::C7A_2XLARGE => write!(f, "c7a.2xlarge"),
+            AwsInstancesType::C7A_4XLARGE => write!(f, "c7a.4xlarge"),
+            AwsInstancesType::C7A_8XLARGE => write!(f, "c7a.8xlarge"),
+            AwsInstancesType::C7A_LARGE => write!(f, "c7a.large"),
+            AwsInstancesType::C7A_MEDIUM => write!(f, "c7a.medium"),
+            AwsInstancesType::C7A_XLARGE => write!(f, "c7a.xlarge"),
             AwsInstancesType::C7G_12XLARGE => write!(f, "c7g.12xlarge"),
             AwsInstancesType::C7G_16XLARGE => write!(f, "c7g.16xlarge"),
             AwsInstancesType::C7G_2XLARGE => write!(f, "c7g.2xlarge"),
@@ -2001,6 +2440,29 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::C7G_LARGE => write!(f, "c7g.large"),
             AwsInstancesType::C7G_MEDIUM => write!(f, "c7g.medium"),
             AwsInstancesType::C7G_XLARGE => write!(f, "c7g.xlarge"),
+            AwsInstancesType::C7GD_12XLARGE => write!(f, "c7gd.12xlarge"),
+            AwsInstancesType::C7GD_16XLARGE => write!(f, "c7gd.16xlarge"),
+            AwsInstancesType::C7GD_2XLARGE => write!(f, "c7gd.2xlarge"),
+            AwsInstancesType::C7GD_4XLARGE => write!(f, "c7gd.4xlarge"),
+            AwsInstancesType::C7GD_8XLARGE => write!(f, "c7gd.8xlarge"),
+            AwsInstancesType::C7GD_LARGE => write!(f, "c7gd.large"),
+            AwsInstancesType::C7GD_MEDIUM => write!(f, "c7gd.medium"),
+            AwsInstancesType::C7GD_XLARGE => write!(f, "c7gd.xlarge"),
+            AwsInstancesType::C7GN_12XLARGE => write!(f, "c7gn.12xlarge"),
+            AwsInstancesType::C7GN_16XLARGE => write!(f, "c7gn.16xlarge"),
+            AwsInstancesType::C7GN_2XLARGE => write!(f, "c7gn.2xlarge"),
+            AwsInstancesType::C7GN_4XLARGE => write!(f, "c7gn.4xlarge"),
+            AwsInstancesType::C7GN_8XLARGE => write!(f, "c7gn.8xlarge"),
+            AwsInstancesType::C7GN_LARGE => write!(f, "c7gn.large"),
+            AwsInstancesType::C7GN_MEDIUM => write!(f, "c7gn.medium"),
+            AwsInstancesType::C7GN_XLARGE => write!(f, "c7gn.xlarge"),
+            AwsInstancesType::C7I_12XLARGE => write!(f, "c7i.12xlarge"),
+            AwsInstancesType::C7I_16XLARGE => write!(f, "c7i.16xlarge"),
+            AwsInstancesType::C7I_2XLARGE => write!(f, "c7i.2xlarge"),
+            AwsInstancesType::C7I_4XLARGE => write!(f, "c7i.4xlarge"),
+            AwsInstancesType::C7I_8XLARGE => write!(f, "c7i.8xlarge"),
+            AwsInstancesType::C7I_LARGE => write!(f, "c7i.large"),
+            AwsInstancesType::C7I_XLARGE => write!(f, "c7i.xlarge"),
             AwsInstancesType::D2_2XLARGE => write!(f, "d2.2xlarge"),
             AwsInstancesType::D2_4XLARGE => write!(f, "d2.4xlarge"),
             AwsInstancesType::D2_XLARGE => write!(f, "d2.xlarge"),
@@ -2035,6 +2497,9 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::H1_2XLARGE => write!(f, "h1.2xlarge"),
             AwsInstancesType::H1_4XLARGE => write!(f, "h1.4xlarge"),
             AwsInstancesType::H1_8XLARGE => write!(f, "h1.8xlarge"),
+            AwsInstancesType::HPC7G_16XLARGE => write!(f, "hpc7g.16xlarge"),
+            AwsInstancesType::HPC7G_4XLARGE => write!(f, "hpc7g.4xlarge"),
+            AwsInstancesType::HPC7G_8XLARGE => write!(f, "hpc7g.8xlarge"),
             AwsInstancesType::I2_2XLARGE => write!(f, "i2.2xlarge"),
             AwsInstancesType::I2_4XLARGE => write!(f, "i2.4xlarge"),
             AwsInstancesType::I2_XLARGE => write!(f, "i2.xlarge"),
@@ -2046,6 +2511,10 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::I3EN_3XLARGE => write!(f, "i3en.3xlarge"),
             AwsInstancesType::I3EN_LARGE => write!(f, "i3en.large"),
             AwsInstancesType::I3EN_XLARGE => write!(f, "i3en.xlarge"),
+            AwsInstancesType::I4G_2XLARGE => write!(f, "i4g.2xlarge"),
+            AwsInstancesType::I4G_4XLARGE => write!(f, "i4g.4xlarge"),
+            AwsInstancesType::I4G_LARGE => write!(f, "i4g.large"),
+            AwsInstancesType::I4G_XLARGE => write!(f, "i4g.xlarge"),
             AwsInstancesType::I4I_2XLARGE => write!(f, "i4i.2xlarge"),
             AwsInstancesType::I4I_4XLARGE => write!(f, "i4i.4xlarge"),
             AwsInstancesType::I4I_LARGE => write!(f, "i4i.large"),
@@ -2055,6 +2524,8 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::IM4GN_8XLARGE => write!(f, "im4gn.8xlarge"),
             AwsInstancesType::IM4GN_LARGE => write!(f, "im4gn.large"),
             AwsInstancesType::IM4GN_XLARGE => write!(f, "im4gn.xlarge"),
+            AwsInstancesType::INF2_8XLARGE => write!(f, "inf2.8xlarge"),
+            AwsInstancesType::INF2_XLARGE => write!(f, "inf2.xlarge"),
             AwsInstancesType::IS4GEN_2XLARGE => write!(f, "is4gen.2xlarge"),
             AwsInstancesType::IS4GEN_4XLARGE => write!(f, "is4gen.4xlarge"),
             AwsInstancesType::IS4GEN_LARGE => write!(f, "is4gen.large"),
@@ -2136,12 +2607,34 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::M6IN_8XLARGE => write!(f, "m6in.8xlarge"),
             AwsInstancesType::M6IN_LARGE => write!(f, "m6in.large"),
             AwsInstancesType::M6IN_XLARGE => write!(f, "m6in.xlarge"),
+            AwsInstancesType::M7A_2XLARGE => write!(f, "m7a.2xlarge"),
+            AwsInstancesType::M7A_4XLARGE => write!(f, "m7a.4xlarge"),
+            AwsInstancesType::M7A_8XLARGE => write!(f, "m7a.8xlarge"),
+            AwsInstancesType::M7A_LARGE => write!(f, "m7a.large"),
+            AwsInstancesType::M7A_MEDIUM => write!(f, "m7a.medium"),
+            AwsInstancesType::M7A_XLARGE => write!(f, "m7a.xlarge"),
             AwsInstancesType::M7G_2XLARGE => write!(f, "m7g.2xlarge"),
             AwsInstancesType::M7G_4XLARGE => write!(f, "m7g.4xlarge"),
             AwsInstancesType::M7G_8XLARGE => write!(f, "m7g.8xlarge"),
             AwsInstancesType::M7G_LARGE => write!(f, "m7g.large"),
             AwsInstancesType::M7G_MEDIUM => write!(f, "m7g.medium"),
             AwsInstancesType::M7G_XLARGE => write!(f, "m7g.xlarge"),
+            AwsInstancesType::M7GD_2XLARGE => write!(f, "m7gd.2xlarge"),
+            AwsInstancesType::M7GD_4XLARGE => write!(f, "m7gd.4xlarge"),
+            AwsInstancesType::M7GD_8XLARGE => write!(f, "m7gd.8xlarge"),
+            AwsInstancesType::M7GD_LARGE => write!(f, "m7gd.large"),
+            AwsInstancesType::M7GD_MEDIUM => write!(f, "m7gd.medium"),
+            AwsInstancesType::M7GD_XLARGE => write!(f, "m7gd.xlarge"),
+            AwsInstancesType::M7I_FLEX_2XLARGE => write!(f, "m7i-flex.2xlarge"),
+            AwsInstancesType::M7I_FLEX_4XLARGE => write!(f, "m7i-flex.4xlarge"),
+            AwsInstancesType::M7I_FLEX_8XLARGE => write!(f, "m7i-flex.8xlarge"),
+            AwsInstancesType::M7I_FLEX_LARGE => write!(f, "m7i-flex.large"),
+            AwsInstancesType::M7I_FLEX_XLARGE => write!(f, "m7i-flex.xlarge"),
+            AwsInstancesType::M7I_2XLARGE => write!(f, "m7i.2xlarge"),
+            AwsInstancesType::M7I_4XLARGE => write!(f, "m7i.4xlarge"),
+            AwsInstancesType::M7I_8XLARGE => write!(f, "m7i.8xlarge"),
+            AwsInstancesType::M7I_LARGE => write!(f, "m7i.large"),
+            AwsInstancesType::M7I_XLARGE => write!(f, "m7i.xlarge"),
             AwsInstancesType::P2_XLARGE => write!(f, "p2.xlarge"),
             AwsInstancesType::P3_2XLARGE => write!(f, "p3.2xlarge"),
             AwsInstancesType::R3_2XLARGE => write!(f, "r3.2xlarge"),
@@ -2210,11 +2703,29 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::R6IN_4XLARGE => write!(f, "r6in.4xlarge"),
             AwsInstancesType::R6IN_LARGE => write!(f, "r6in.large"),
             AwsInstancesType::R6IN_XLARGE => write!(f, "r6in.xlarge"),
+            AwsInstancesType::R7A_2XLARGE => write!(f, "r7a.2xlarge"),
+            AwsInstancesType::R7A_4XLARGE => write!(f, "r7a.4xlarge"),
+            AwsInstancesType::R7A_LARGE => write!(f, "r7a.large"),
+            AwsInstancesType::R7A_MEDIUM => write!(f, "r7a.medium"),
+            AwsInstancesType::R7A_XLARGE => write!(f, "r7a.xlarge"),
             AwsInstancesType::R7G_2XLARGE => write!(f, "r7g.2xlarge"),
             AwsInstancesType::R7G_4XLARGE => write!(f, "r7g.4xlarge"),
             AwsInstancesType::R7G_LARGE => write!(f, "r7g.large"),
             AwsInstancesType::R7G_MEDIUM => write!(f, "r7g.medium"),
             AwsInstancesType::R7G_XLARGE => write!(f, "r7g.xlarge"),
+            AwsInstancesType::R7GD_2XLARGE => write!(f, "r7gd.2xlarge"),
+            AwsInstancesType::R7GD_4XLARGE => write!(f, "r7gd.4xlarge"),
+            AwsInstancesType::R7GD_LARGE => write!(f, "r7gd.large"),
+            AwsInstancesType::R7GD_MEDIUM => write!(f, "r7gd.medium"),
+            AwsInstancesType::R7GD_XLARGE => write!(f, "r7gd.xlarge"),
+            AwsInstancesType::R7I_2XLARGE => write!(f, "r7i.2xlarge"),
+            AwsInstancesType::R7I_4XLARGE => write!(f, "r7i.4xlarge"),
+            AwsInstancesType::R7I_LARGE => write!(f, "r7i.large"),
+            AwsInstancesType::R7I_XLARGE => write!(f, "r7i.xlarge"),
+            AwsInstancesType::R7IZ_2XLARGE => write!(f, "r7iz.2xlarge"),
+            AwsInstancesType::R7IZ_4XLARGE => write!(f, "r7iz.4xlarge"),
+            AwsInstancesType::R7IZ_LARGE => write!(f, "r7iz.large"),
+            AwsInstancesType::R7IZ_XLARGE => write!(f, "r7iz.xlarge"),
             AwsInstancesType::T2_2XLARGE => write!(f, "t2.2xlarge"),
             AwsInstancesType::T2_LARGE => write!(f, "t2.large"),
             AwsInstancesType::T2_MEDIUM => write!(f, "t2.medium"),
@@ -2355,6 +2866,14 @@ impl FromStr for AwsInstancesType {
             "c6in.8xlarge" => Ok(AwsInstancesType::C6IN_8XLARGE),
             "c6in.large" => Ok(AwsInstancesType::C6IN_LARGE),
             "c6in.xlarge" => Ok(AwsInstancesType::C6IN_XLARGE),
+            "c7a.12xlarge" => Ok(AwsInstancesType::C7A_12XLARGE),
+            "c7a.16xlarge" => Ok(AwsInstancesType::C7A_16XLARGE),
+            "c7a.2xlarge" => Ok(AwsInstancesType::C7A_2XLARGE),
+            "c7a.4xlarge" => Ok(AwsInstancesType::C7A_4XLARGE),
+            "c7a.8xlarge" => Ok(AwsInstancesType::C7A_8XLARGE),
+            "c7a.large" => Ok(AwsInstancesType::C7A_LARGE),
+            "c7a.medium" => Ok(AwsInstancesType::C7A_MEDIUM),
+            "c7a.xlarge" => Ok(AwsInstancesType::C7A_XLARGE),
             "c7g.12xlarge" => Ok(AwsInstancesType::C7G_12XLARGE),
             "c7g.16xlarge" => Ok(AwsInstancesType::C7G_16XLARGE),
             "c7g.2xlarge" => Ok(AwsInstancesType::C7G_2XLARGE),
@@ -2363,6 +2882,29 @@ impl FromStr for AwsInstancesType {
             "c7g.large" => Ok(AwsInstancesType::C7G_LARGE),
             "c7g.medium" => Ok(AwsInstancesType::C7G_MEDIUM),
             "c7g.xlarge" => Ok(AwsInstancesType::C7G_XLARGE),
+            "c7gd.12xlarge" => Ok(AwsInstancesType::C7GD_12XLARGE),
+            "c7gd.16xlarge" => Ok(AwsInstancesType::C7GD_16XLARGE),
+            "c7gd.2xlarge" => Ok(AwsInstancesType::C7GD_2XLARGE),
+            "c7gd.4xlarge" => Ok(AwsInstancesType::C7GD_4XLARGE),
+            "c7gd.8xlarge" => Ok(AwsInstancesType::C7GD_8XLARGE),
+            "c7gd.large" => Ok(AwsInstancesType::C7GD_LARGE),
+            "c7gd.medium" => Ok(AwsInstancesType::C7GD_MEDIUM),
+            "c7gd.xlarge" => Ok(AwsInstancesType::C7GD_XLARGE),
+            "c7gn.12xlarge" => Ok(AwsInstancesType::C7GN_12XLARGE),
+            "c7gn.16xlarge" => Ok(AwsInstancesType::C7GN_16XLARGE),
+            "c7gn.2xlarge" => Ok(AwsInstancesType::C7GN_2XLARGE),
+            "c7gn.4xlarge" => Ok(AwsInstancesType::C7GN_4XLARGE),
+            "c7gn.8xlarge" => Ok(AwsInstancesType::C7GN_8XLARGE),
+            "c7gn.large" => Ok(AwsInstancesType::C7GN_LARGE),
+            "c7gn.medium" => Ok(AwsInstancesType::C7GN_MEDIUM),
+            "c7gn.xlarge" => Ok(AwsInstancesType::C7GN_XLARGE),
+            "c7i.12xlarge" => Ok(AwsInstancesType::C7I_12XLARGE),
+            "c7i.16xlarge" => Ok(AwsInstancesType::C7I_16XLARGE),
+            "c7i.2xlarge" => Ok(AwsInstancesType::C7I_2XLARGE),
+            "c7i.4xlarge" => Ok(AwsInstancesType::C7I_4XLARGE),
+            "c7i.8xlarge" => Ok(AwsInstancesType::C7I_8XLARGE),
+            "c7i.large" => Ok(AwsInstancesType::C7I_LARGE),
+            "c7i.xlarge" => Ok(AwsInstancesType::C7I_XLARGE),
             "d2.2xlarge" => Ok(AwsInstancesType::D2_2XLARGE),
             "d2.4xlarge" => Ok(AwsInstancesType::D2_4XLARGE),
             "d2.xlarge" => Ok(AwsInstancesType::D2_XLARGE),
@@ -2397,6 +2939,9 @@ impl FromStr for AwsInstancesType {
             "h1.2xlarge" => Ok(AwsInstancesType::H1_2XLARGE),
             "h1.4xlarge" => Ok(AwsInstancesType::H1_4XLARGE),
             "h1.8xlarge" => Ok(AwsInstancesType::H1_8XLARGE),
+            "hpc7g.16xlarge" => Ok(AwsInstancesType::HPC7G_16XLARGE),
+            "hpc7g.4xlarge" => Ok(AwsInstancesType::HPC7G_4XLARGE),
+            "hpc7g.8xlarge" => Ok(AwsInstancesType::HPC7G_8XLARGE),
             "i2.2xlarge" => Ok(AwsInstancesType::I2_2XLARGE),
             "i2.4xlarge" => Ok(AwsInstancesType::I2_4XLARGE),
             "i2.xlarge" => Ok(AwsInstancesType::I2_XLARGE),
@@ -2408,6 +2953,10 @@ impl FromStr for AwsInstancesType {
             "i3en.3xlarge" => Ok(AwsInstancesType::I3EN_3XLARGE),
             "i3en.large" => Ok(AwsInstancesType::I3EN_LARGE),
             "i3en.xlarge" => Ok(AwsInstancesType::I3EN_XLARGE),
+            "i4g.2xlarge" => Ok(AwsInstancesType::I4G_2XLARGE),
+            "i4g.4xlarge" => Ok(AwsInstancesType::I4G_4XLARGE),
+            "i4g.large" => Ok(AwsInstancesType::I4G_LARGE),
+            "i4g.xlarge" => Ok(AwsInstancesType::I4G_XLARGE),
             "i4i.2xlarge" => Ok(AwsInstancesType::I4I_2XLARGE),
             "i4i.4xlarge" => Ok(AwsInstancesType::I4I_4XLARGE),
             "i4i.large" => Ok(AwsInstancesType::I4I_LARGE),
@@ -2417,6 +2966,8 @@ impl FromStr for AwsInstancesType {
             "im4gn.8xlarge" => Ok(AwsInstancesType::IM4GN_8XLARGE),
             "im4gn.large" => Ok(AwsInstancesType::IM4GN_LARGE),
             "im4gn.xlarge" => Ok(AwsInstancesType::IM4GN_XLARGE),
+            "inf2.8xlarge" => Ok(AwsInstancesType::INF2_8XLARGE),
+            "inf2.xlarge" => Ok(AwsInstancesType::INF2_XLARGE),
             "is4gen.2xlarge" => Ok(AwsInstancesType::IS4GEN_2XLARGE),
             "is4gen.4xlarge" => Ok(AwsInstancesType::IS4GEN_4XLARGE),
             "is4gen.large" => Ok(AwsInstancesType::IS4GEN_LARGE),
@@ -2498,12 +3049,34 @@ impl FromStr for AwsInstancesType {
             "m6in.8xlarge" => Ok(AwsInstancesType::M6IN_8XLARGE),
             "m6in.large" => Ok(AwsInstancesType::M6IN_LARGE),
             "m6in.xlarge" => Ok(AwsInstancesType::M6IN_XLARGE),
+            "m7a.2xlarge" => Ok(AwsInstancesType::M7A_2XLARGE),
+            "m7a.4xlarge" => Ok(AwsInstancesType::M7A_4XLARGE),
+            "m7a.8xlarge" => Ok(AwsInstancesType::M7A_8XLARGE),
+            "m7a.large" => Ok(AwsInstancesType::M7A_LARGE),
+            "m7a.medium" => Ok(AwsInstancesType::M7A_MEDIUM),
+            "m7a.xlarge" => Ok(AwsInstancesType::M7A_XLARGE),
             "m7g.2xlarge" => Ok(AwsInstancesType::M7G_2XLARGE),
             "m7g.4xlarge" => Ok(AwsInstancesType::M7G_4XLARGE),
             "m7g.8xlarge" => Ok(AwsInstancesType::M7G_8XLARGE),
             "m7g.large" => Ok(AwsInstancesType::M7G_LARGE),
             "m7g.medium" => Ok(AwsInstancesType::M7G_MEDIUM),
             "m7g.xlarge" => Ok(AwsInstancesType::M7G_XLARGE),
+            "m7gd.2xlarge" => Ok(AwsInstancesType::M7GD_2XLARGE),
+            "m7gd.4xlarge" => Ok(AwsInstancesType::M7GD_4XLARGE),
+            "m7gd.8xlarge" => Ok(AwsInstancesType::M7GD_8XLARGE),
+            "m7gd.large" => Ok(AwsInstancesType::M7GD_LARGE),
+            "m7gd.medium" => Ok(AwsInstancesType::M7GD_MEDIUM),
+            "m7gd.xlarge" => Ok(AwsInstancesType::M7GD_XLARGE),
+            "m7i-flex.2xlarge" => Ok(AwsInstancesType::M7I_FLEX_2XLARGE),
+            "m7i-flex.4xlarge" => Ok(AwsInstancesType::M7I_FLEX_4XLARGE),
+            "m7i-flex.8xlarge" => Ok(AwsInstancesType::M7I_FLEX_8XLARGE),
+            "m7i-flex.large" => Ok(AwsInstancesType::M7I_FLEX_LARGE),
+            "m7i-flex.xlarge" => Ok(AwsInstancesType::M7I_FLEX_XLARGE),
+            "m7i.2xlarge" => Ok(AwsInstancesType::M7I_2XLARGE),
+            "m7i.4xlarge" => Ok(AwsInstancesType::M7I_4XLARGE),
+            "m7i.8xlarge" => Ok(AwsInstancesType::M7I_8XLARGE),
+            "m7i.large" => Ok(AwsInstancesType::M7I_LARGE),
+            "m7i.xlarge" => Ok(AwsInstancesType::M7I_XLARGE),
             "p2.xlarge" => Ok(AwsInstancesType::P2_XLARGE),
             "p3.2xlarge" => Ok(AwsInstancesType::P3_2XLARGE),
             "r3.2xlarge" => Ok(AwsInstancesType::R3_2XLARGE),
@@ -2572,11 +3145,29 @@ impl FromStr for AwsInstancesType {
             "r6in.4xlarge" => Ok(AwsInstancesType::R6IN_4XLARGE),
             "r6in.large" => Ok(AwsInstancesType::R6IN_LARGE),
             "r6in.xlarge" => Ok(AwsInstancesType::R6IN_XLARGE),
+            "r7a.2xlarge" => Ok(AwsInstancesType::R7A_2XLARGE),
+            "r7a.4xlarge" => Ok(AwsInstancesType::R7A_4XLARGE),
+            "r7a.large" => Ok(AwsInstancesType::R7A_LARGE),
+            "r7a.medium" => Ok(AwsInstancesType::R7A_MEDIUM),
+            "r7a.xlarge" => Ok(AwsInstancesType::R7A_XLARGE),
             "r7g.2xlarge" => Ok(AwsInstancesType::R7G_2XLARGE),
             "r7g.4xlarge" => Ok(AwsInstancesType::R7G_4XLARGE),
             "r7g.large" => Ok(AwsInstancesType::R7G_LARGE),
             "r7g.medium" => Ok(AwsInstancesType::R7G_MEDIUM),
             "r7g.xlarge" => Ok(AwsInstancesType::R7G_XLARGE),
+            "r7gd.2xlarge" => Ok(AwsInstancesType::R7GD_2XLARGE),
+            "r7gd.4xlarge" => Ok(AwsInstancesType::R7GD_4XLARGE),
+            "r7gd.large" => Ok(AwsInstancesType::R7GD_LARGE),
+            "r7gd.medium" => Ok(AwsInstancesType::R7GD_MEDIUM),
+            "r7gd.xlarge" => Ok(AwsInstancesType::R7GD_XLARGE),
+            "r7i.2xlarge" => Ok(AwsInstancesType::R7I_2XLARGE),
+            "r7i.4xlarge" => Ok(AwsInstancesType::R7I_4XLARGE),
+            "r7i.large" => Ok(AwsInstancesType::R7I_LARGE),
+            "r7i.xlarge" => Ok(AwsInstancesType::R7I_XLARGE),
+            "r7iz.2xlarge" => Ok(AwsInstancesType::R7IZ_2XLARGE),
+            "r7iz.4xlarge" => Ok(AwsInstancesType::R7IZ_4XLARGE),
+            "r7iz.large" => Ok(AwsInstancesType::R7IZ_LARGE),
+            "r7iz.xlarge" => Ok(AwsInstancesType::R7IZ_XLARGE),
             "t2.2xlarge" => Ok(AwsInstancesType::T2_2XLARGE),
             "t2.large" => Ok(AwsInstancesType::T2_LARGE),
             "t2.medium" => Ok(AwsInstancesType::T2_MEDIUM),
@@ -2732,6 +3323,14 @@ mod tests {
                     AwsInstancesType::C6IN_8XLARGE => "c6in.8xlarge",
                     AwsInstancesType::C6IN_LARGE => "c6in.large",
                     AwsInstancesType::C6IN_XLARGE => "c6in.xlarge",
+                    AwsInstancesType::C7A_12XLARGE => "c7a.12xlarge",
+                    AwsInstancesType::C7A_16XLARGE => "c7a.16xlarge",
+                    AwsInstancesType::C7A_2XLARGE => "c7a.2xlarge",
+                    AwsInstancesType::C7A_4XLARGE => "c7a.4xlarge",
+                    AwsInstancesType::C7A_8XLARGE => "c7a.8xlarge",
+                    AwsInstancesType::C7A_LARGE => "c7a.large",
+                    AwsInstancesType::C7A_MEDIUM => "c7a.medium",
+                    AwsInstancesType::C7A_XLARGE => "c7a.xlarge",
                     AwsInstancesType::C7G_12XLARGE => "c7g.12xlarge",
                     AwsInstancesType::C7G_16XLARGE => "c7g.16xlarge",
                     AwsInstancesType::C7G_2XLARGE => "c7g.2xlarge",
@@ -2740,6 +3339,29 @@ mod tests {
                     AwsInstancesType::C7G_LARGE => "c7g.large",
                     AwsInstancesType::C7G_MEDIUM => "c7g.medium",
                     AwsInstancesType::C7G_XLARGE => "c7g.xlarge",
+                    AwsInstancesType::C7GD_12XLARGE => "c7gd.12xlarge",
+                    AwsInstancesType::C7GD_16XLARGE => "c7gd.16xlarge",
+                    AwsInstancesType::C7GD_2XLARGE => "c7gd.2xlarge",
+                    AwsInstancesType::C7GD_4XLARGE => "c7gd.4xlarge",
+                    AwsInstancesType::C7GD_8XLARGE => "c7gd.8xlarge",
+                    AwsInstancesType::C7GD_LARGE => "c7gd.large",
+                    AwsInstancesType::C7GD_MEDIUM => "c7gd.medium",
+                    AwsInstancesType::C7GD_XLARGE => "c7gd.xlarge",
+                    AwsInstancesType::C7GN_12XLARGE => "c7gn.12xlarge",
+                    AwsInstancesType::C7GN_16XLARGE => "c7gn.16xlarge",
+                    AwsInstancesType::C7GN_2XLARGE => "c7gn.2xlarge",
+                    AwsInstancesType::C7GN_4XLARGE => "c7gn.4xlarge",
+                    AwsInstancesType::C7GN_8XLARGE => "c7gn.8xlarge",
+                    AwsInstancesType::C7GN_LARGE => "c7gn.large",
+                    AwsInstancesType::C7GN_MEDIUM => "c7gn.medium",
+                    AwsInstancesType::C7GN_XLARGE => "c7gn.xlarge",
+                    AwsInstancesType::C7I_12XLARGE => "c7i.12xlarge",
+                    AwsInstancesType::C7I_16XLARGE => "c7i.16xlarge",
+                    AwsInstancesType::C7I_2XLARGE => "c7i.2xlarge",
+                    AwsInstancesType::C7I_4XLARGE => "c7i.4xlarge",
+                    AwsInstancesType::C7I_8XLARGE => "c7i.8xlarge",
+                    AwsInstancesType::C7I_LARGE => "c7i.large",
+                    AwsInstancesType::C7I_XLARGE => "c7i.xlarge",
                     AwsInstancesType::D2_2XLARGE => "d2.2xlarge",
                     AwsInstancesType::D2_4XLARGE => "d2.4xlarge",
                     AwsInstancesType::D2_XLARGE => "d2.xlarge",
@@ -2774,6 +3396,9 @@ mod tests {
                     AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
                     AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
                     AwsInstancesType::H1_8XLARGE => "h1.8xlarge",
+                    AwsInstancesType::HPC7G_16XLARGE => "hpc7g.16xlarge",
+                    AwsInstancesType::HPC7G_4XLARGE => "hpc7g.4xlarge",
+                    AwsInstancesType::HPC7G_8XLARGE => "hpc7g.8xlarge",
                     AwsInstancesType::I2_2XLARGE => "i2.2xlarge",
                     AwsInstancesType::I2_4XLARGE => "i2.4xlarge",
                     AwsInstancesType::I2_XLARGE => "i2.xlarge",
@@ -2785,6 +3410,10 @@ mod tests {
                     AwsInstancesType::I3EN_3XLARGE => "i3en.3xlarge",
                     AwsInstancesType::I3EN_LARGE => "i3en.large",
                     AwsInstancesType::I3EN_XLARGE => "i3en.xlarge",
+                    AwsInstancesType::I4G_2XLARGE => "i4g.2xlarge",
+                    AwsInstancesType::I4G_4XLARGE => "i4g.4xlarge",
+                    AwsInstancesType::I4G_LARGE => "i4g.large",
+                    AwsInstancesType::I4G_XLARGE => "i4g.xlarge",
                     AwsInstancesType::I4I_2XLARGE => "i4i.2xlarge",
                     AwsInstancesType::I4I_4XLARGE => "i4i.4xlarge",
                     AwsInstancesType::I4I_LARGE => "i4i.large",
@@ -2794,6 +3423,8 @@ mod tests {
                     AwsInstancesType::IM4GN_8XLARGE => "im4gn.8xlarge",
                     AwsInstancesType::IM4GN_LARGE => "im4gn.large",
                     AwsInstancesType::IM4GN_XLARGE => "im4gn.xlarge",
+                    AwsInstancesType::INF2_8XLARGE => "inf2.8xlarge",
+                    AwsInstancesType::INF2_XLARGE => "inf2.xlarge",
                     AwsInstancesType::IS4GEN_2XLARGE => "is4gen.2xlarge",
                     AwsInstancesType::IS4GEN_4XLARGE => "is4gen.4xlarge",
                     AwsInstancesType::IS4GEN_LARGE => "is4gen.large",
@@ -2875,12 +3506,34 @@ mod tests {
                     AwsInstancesType::M6IN_8XLARGE => "m6in.8xlarge",
                     AwsInstancesType::M6IN_LARGE => "m6in.large",
                     AwsInstancesType::M6IN_XLARGE => "m6in.xlarge",
+                    AwsInstancesType::M7A_2XLARGE => "m7a.2xlarge",
+                    AwsInstancesType::M7A_4XLARGE => "m7a.4xlarge",
+                    AwsInstancesType::M7A_8XLARGE => "m7a.8xlarge",
+                    AwsInstancesType::M7A_LARGE => "m7a.large",
+                    AwsInstancesType::M7A_MEDIUM => "m7a.medium",
+                    AwsInstancesType::M7A_XLARGE => "m7a.xlarge",
                     AwsInstancesType::M7G_2XLARGE => "m7g.2xlarge",
                     AwsInstancesType::M7G_4XLARGE => "m7g.4xlarge",
                     AwsInstancesType::M7G_8XLARGE => "m7g.8xlarge",
                     AwsInstancesType::M7G_LARGE => "m7g.large",
                     AwsInstancesType::M7G_MEDIUM => "m7g.medium",
                     AwsInstancesType::M7G_XLARGE => "m7g.xlarge",
+                    AwsInstancesType::M7GD_2XLARGE => "m7gd.2xlarge",
+                    AwsInstancesType::M7GD_4XLARGE => "m7gd.4xlarge",
+                    AwsInstancesType::M7GD_8XLARGE => "m7gd.8xlarge",
+                    AwsInstancesType::M7GD_LARGE => "m7gd.large",
+                    AwsInstancesType::M7GD_MEDIUM => "m7gd.medium",
+                    AwsInstancesType::M7GD_XLARGE => "m7gd.xlarge",
+                    AwsInstancesType::M7I_FLEX_2XLARGE => "m7i-flex.2xlarge",
+                    AwsInstancesType::M7I_FLEX_4XLARGE => "m7i-flex.4xlarge",
+                    AwsInstancesType::M7I_FLEX_8XLARGE => "m7i-flex.8xlarge",
+                    AwsInstancesType::M7I_FLEX_LARGE => "m7i-flex.large",
+                    AwsInstancesType::M7I_FLEX_XLARGE => "m7i-flex.xlarge",
+                    AwsInstancesType::M7I_2XLARGE => "m7i.2xlarge",
+                    AwsInstancesType::M7I_4XLARGE => "m7i.4xlarge",
+                    AwsInstancesType::M7I_8XLARGE => "m7i.8xlarge",
+                    AwsInstancesType::M7I_LARGE => "m7i.large",
+                    AwsInstancesType::M7I_XLARGE => "m7i.xlarge",
                     AwsInstancesType::P2_XLARGE => "p2.xlarge",
                     AwsInstancesType::P3_2XLARGE => "p3.2xlarge",
                     AwsInstancesType::R3_2XLARGE => "r3.2xlarge",
@@ -2949,11 +3602,29 @@ mod tests {
                     AwsInstancesType::R6IN_4XLARGE => "r6in.4xlarge",
                     AwsInstancesType::R6IN_LARGE => "r6in.large",
                     AwsInstancesType::R6IN_XLARGE => "r6in.xlarge",
+                    AwsInstancesType::R7A_2XLARGE => "r7a.2xlarge",
+                    AwsInstancesType::R7A_4XLARGE => "r7a.4xlarge",
+                    AwsInstancesType::R7A_LARGE => "r7a.large",
+                    AwsInstancesType::R7A_MEDIUM => "r7a.medium",
+                    AwsInstancesType::R7A_XLARGE => "r7a.xlarge",
                     AwsInstancesType::R7G_2XLARGE => "r7g.2xlarge",
                     AwsInstancesType::R7G_4XLARGE => "r7g.4xlarge",
                     AwsInstancesType::R7G_LARGE => "r7g.large",
                     AwsInstancesType::R7G_MEDIUM => "r7g.medium",
                     AwsInstancesType::R7G_XLARGE => "r7g.xlarge",
+                    AwsInstancesType::R7GD_2XLARGE => "r7gd.2xlarge",
+                    AwsInstancesType::R7GD_4XLARGE => "r7gd.4xlarge",
+                    AwsInstancesType::R7GD_LARGE => "r7gd.large",
+                    AwsInstancesType::R7GD_MEDIUM => "r7gd.medium",
+                    AwsInstancesType::R7GD_XLARGE => "r7gd.xlarge",
+                    AwsInstancesType::R7I_2XLARGE => "r7i.2xlarge",
+                    AwsInstancesType::R7I_4XLARGE => "r7i.4xlarge",
+                    AwsInstancesType::R7I_LARGE => "r7i.large",
+                    AwsInstancesType::R7I_XLARGE => "r7i.xlarge",
+                    AwsInstancesType::R7IZ_2XLARGE => "r7iz.2xlarge",
+                    AwsInstancesType::R7IZ_4XLARGE => "r7iz.4xlarge",
+                    AwsInstancesType::R7IZ_LARGE => "r7iz.large",
+                    AwsInstancesType::R7IZ_XLARGE => "r7iz.xlarge",
                     AwsInstancesType::T2_2XLARGE => "t2.2xlarge",
                     AwsInstancesType::T2_LARGE => "t2.large",
                     AwsInstancesType::T2_MEDIUM => "t2.medium",

@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
-    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    HelmChartNamespaces, PriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -22,6 +23,7 @@ pub struct PromtailChart {
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
+    priority_class: PriorityClass,
 }
 
 impl PromtailChart {
@@ -32,6 +34,7 @@ impl PromtailChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
+        priority_class: PriorityClass,
     ) -> Self {
         PromtailChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -49,6 +52,7 @@ impl PromtailChart {
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
             namespace,
+            priority_class,
         }
     }
 
@@ -59,37 +63,46 @@ impl PromtailChart {
 
 impl ToCommonHelmChart for PromtailChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
-        Ok(CommonChart {
-            chart_info: ChartInfo {
-                name: PromtailChart::chart_name(),
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
-                path: self.chart_path.to_string(),
-                // because of priorityClassName, we need to add it to kube-system
-                namespace: self.namespace,
-                values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "image.registry".to_string(),
-                        value: "public.ecr.aws".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "image.repository".to_string(),
-                        value: "r3m4q3r9/pub-mirror-promtail".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "config.clients[0].url".to_string(),
-                        value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
-                    },
-                ],
-                yaml_files_content: match self.customer_helm_chart_override.clone() {
-                    Some(x) => vec![x.to_chart_values_generated()],
-                    None => vec![],
+        let mut chart_info = ChartInfo {
+            name: PromtailChart::chart_name(),
+            reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
+            path: self.chart_path.to_string(),
+            namespace: self.namespace,
+            values_files: vec![self.chart_values_path.to_string()],
+            values: vec![
+                ChartSetValue {
+                    key: "image.registry".to_string(),
+                    value: "public.ecr.aws".to_string(),
                 },
-                // As promtail is on every node, it can take some time and failing the chart deployment
-                // e.g papershift production cluster has 33 nodes !
-                timeout_in_seconds: 1800,
-                ..Default::default()
+                ChartSetValue {
+                    key: "image.repository".to_string(),
+                    value: "r3m4q3r9/pub-mirror-promtail".to_string(),
+                },
+                ChartSetValue {
+                    key: "config.clients[0].url".to_string(),
+                    value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
+                },
+            ],
+            yaml_files_content: match self.customer_helm_chart_override.clone() {
+                Some(x) => vec![x.to_chart_values_generated()],
+                None => vec![],
             },
+            // As promtail is on every node, it can take some time and failing the chart deployment
+            // e.g papershift production cluster has 33 nodes !
+            timeout_in_seconds: 1800,
+            ..Default::default()
+        };
+
+        // Set custom priority class if provided
+        if let PriorityClass::Qovery(priority_class) = &self.priority_class {
+            chart_info.values.push(ChartSetValue {
+                key: "priorityClassName".to_string(),
+                value: priority_class.to_string(),
+            });
+        }
+
+        Ok(CommonChart {
+            chart_info,
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
             vertical_pod_autoscaler: match self.enable_vpa {
                 true => Some(CommonChartVpa::new(
@@ -143,7 +156,7 @@ impl ChartInstallationChecker for PromtailChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::HelmChartNamespaces;
+    use crate::cloud_provider::helm::{HelmChartNamespaces, PriorityClass};
     use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -173,6 +186,7 @@ mod tests {
             get_promtail_chart_override(),
             false,
             HelmChartNamespaces::KubeSystem,
+            PriorityClass::Default,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -203,6 +217,7 @@ mod tests {
             get_promtail_chart_override(),
             false,
             HelmChartNamespaces::KubeSystem,
+            PriorityClass::Default,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -237,6 +252,7 @@ mod tests {
             get_promtail_chart_override(),
             false,
             HelmChartNamespaces::KubeSystem,
+            PriorityClass::Default,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
