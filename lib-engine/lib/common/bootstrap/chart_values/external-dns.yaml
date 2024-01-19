@@ -13,6 +13,9 @@ pdns:
   # Qovery DNS: apiKey: "443"
   apiKey: set-by-engine-code
 
+podDisruptionBudget:
+  maxUnavailable: 1
+
 # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
 annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true)
 # set domainFilters to the domain you want to manage: [*domain]
