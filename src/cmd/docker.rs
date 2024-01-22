@@ -223,6 +223,8 @@ impl Docker {
             "create",
             "--name",
             "qovery-engine",
+            "--buildkitd-flags",
+            "'--debug'",
             "--driver-opt",
             "network=host",
             "--bootstrap",
