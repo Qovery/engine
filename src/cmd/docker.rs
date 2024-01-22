@@ -328,6 +328,7 @@ impl Docker {
                         &platform,
                         "--node",
                         node_name,
+                        "--buildkitd-flags=\"--debug\"",
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
