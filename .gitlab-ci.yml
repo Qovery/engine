@@ -681,3 +681,17 @@ gcp-whole-enchilada:
     refs:
       - main
   when: manual
+
+update_qovery_chart:
+  stage: deploy
+  retry: 1
+  dependencies:
+    - update_qovery_chart
+  script:
+    - ./helper.sh update_qovery_chart
+  tags:
+    - bm-7cpu-12gmem-0g
+  only:
+    refs:
+      - main
+  when: manual

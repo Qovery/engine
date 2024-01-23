@@ -364,6 +364,41 @@ function await_docker() {
     fi
 }
 
+function update_qovery_chart() {
+  prepare_tests
+  use_sccache
+  set -e
+
+  apt-get update && apt-get install -y git
+  mkdir /root/.ssh && chmod 700 /root/.ssh
+
+  echo $SSH_PRIVATE_KEY_GITHUB_HELM_CHART | base64 -d > /root/.ssh/id_ed25519 && chmod 600 /root/.ssh/id_ed25519
+  echo 'Host *' > /root/.ssh/config
+  echo '  HashKnownHosts no' >> /root/.ssh/config
+  echo '  StrictHostKeyChecking no' >> /root/.ssh/config
+  echo '  UserKnownHostsFile /dev/null' >> /root/.ssh/config
+
+  git clone git@github.com:Qovery/qovery-chart.git qovery-chart
+  # generate chart
+  cargo test --package qovery-engine --lib --all-features -- cloud_provider::self_managed::chart_gen::tests::generate_helm_chart
+  WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib cargo test --package qovery-engine --lib --all-features -- cloud_provider::self_managed::chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
+  # copy chart to github chart repo
+  set -x
+  rm -Rf qovery-chart/charts
+  mkdir -p qovery-chart/charts/qovery
+  cp -Rf lib-engine/.qovery-workspace/qovery_chart/* qovery-chart/charts/qovery
+  cd qovery-chart
+  #test $(git diff --shortstat | wc -l) -eq 0 && exit 0
+  git config --global user.email "noreply@qovery.com"
+  git config --global user.name "Qovery"
+  git add .
+  git status
+  current_date=$(date "+%x %X") && git commit -a -m "update $current_date"
+  git status
+
+  # push to github
+  git push
+}
 
 function update_engine_protobuf() {
   rm -rf /tmp/rust-backend
@@ -510,6 +545,9 @@ deploy_all_clusters)
   ;;
 update_engine_protobuf)
   update_engine_protobuf
+  ;;
+update_qovery_chart)
+  update_qovery_chart
   ;;
 *)
   print_help

@@ -106,7 +106,7 @@ impl ChartDotYaml {
             deps.push(ChartDotYamlDependencies {
                 name: chart_meta.name.to_string(),
                 alias: None,
-                condition: format!("{}.{}.enabled", chart_meta.category, chart_meta.name),
+                condition: format!("services.{}.{}.enabled", chart_meta.category, chart_meta.name),
                 version: chart_version.version,
                 repository: format!("file://charts/{}", chart_meta.name),
             })
