@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::{env, fs};
 
 use git2::{Cred, CredentialType};
+use retry::delay::Fibonacci;
 use sysinfo::{DiskExt, RefreshKind, SystemExt};
 use uuid::Uuid;
 
@@ -167,6 +168,37 @@ impl LocalDocker {
         }
 
         logger.send_progress(format!("⛏️ Building image. It does not exist remotely {image_name}"));
+
+        // login if there are some private registries used
+        for registry in &build.registries {
+            let url = registry.get_url_with_credentials();
+            if url.password().is_none() {
+                continue;
+            }
+
+            logger.send_progress(format!(
+                "🔓 Login to registry {} as user {}",
+                url.host_str().unwrap_or_default(),
+                url.username()
+            ));
+
+            let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
+                self.context.docker.login(&url).map_err(|err| {
+                    logger.send_warning("🔓 Retrying to login to registry due to error...".to_string());
+                    err
+                })
+            });
+
+            if let Err(err) = login_ret {
+                logger.send_warning(format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()));
+                let err = BuildError::DockerError {
+                    application: build.image.service_id.clone(),
+                    raw_error: err.error,
+                };
+                return Err(err);
+            }
+        }
+
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables

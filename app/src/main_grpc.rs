@@ -82,7 +82,7 @@ fn to_engine_task(
     msg: String,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    docker: Arc<Docker>,
+    mk_docker: Box<dyn Fn() -> Arc<Docker>>,
     task_selector: &TaskSelector,
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
@@ -100,7 +100,8 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    docker,
+                    // We need to clone docker to generate a new docker config for each task
+                    mk_docker(),
                     logger,
                     metrics_registry,
                     qovery_api,
@@ -116,7 +117,8 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    docker,
+                    // We need to clone docker to generate a new docker config for each task
+                    mk_docker(),
                     logger,
                     metrics_registry,
                     qovery_api,
@@ -360,7 +362,10 @@ pub fn main() -> io::Result<()> {
                 payload,
                 &cli.workspace_root_dir,
                 &cli.lib_root_dir,
-                docker.clone(),
+                {
+                    let docker = docker.clone();
+                    Box::new(move || Arc::new(docker.as_ref().clone()))
+                },
                 &task_selector,
                 grpc_client,
                 logger,
