@@ -268,6 +268,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
+                container_registries: Vec::new(),
             };
             environment.applications = vec![app];
         }
@@ -311,6 +312,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 default_port: None,
                 readiness_probe: None,
                 liveness_probe: None,
+                container_registries: Vec::new(),
             };
             environment.jobs = vec![job];
         }
