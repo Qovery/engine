@@ -21,7 +21,7 @@ use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
-use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
@@ -2237,6 +2237,7 @@ fn deploy_job_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            container_registries: ContainerRegistries { registries: vec![] },
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2331,6 +2332,7 @@ fn deploy_cronjob_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            container_registries: ContainerRegistries { registries: vec![] },
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2427,6 +2429,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            container_registries: ContainerRegistries { registries: vec![] },
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2546,6 +2549,7 @@ fn build_and_deploy_job_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            container_registries: ContainerRegistries { registries: vec![] },
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2904,6 +2908,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            container_registries: ContainerRegistries { registries: vec![] },
         }];
 
         let mut environment_for_delete = environment.clone();
