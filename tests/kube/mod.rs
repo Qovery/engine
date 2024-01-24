@@ -312,7 +312,6 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 default_port: None,
                 readiness_probe: None,
                 liveness_probe: None,
-                container_registries: Vec::new(),
             };
             environment.jobs = vec![job];
         }

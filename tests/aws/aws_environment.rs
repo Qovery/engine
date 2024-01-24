@@ -2237,7 +2237,6 @@ fn deploy_job_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2332,7 +2331,6 @@ fn deploy_cronjob_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2429,7 +2427,6 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2549,7 +2546,6 @@ fn build_and_deploy_job_on_aws_eks() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2908,7 +2904,6 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
