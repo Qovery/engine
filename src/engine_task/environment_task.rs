@@ -20,7 +20,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
-use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::transaction::DeploymentOption;
 use base64::Engine;
 use itertools::Itertools;
@@ -194,8 +194,8 @@ impl EnvironmentTask {
         let cr_registry = infra_ctx.container_registry();
         let build_platform = infra_ctx.build_platform();
 
-        let _ = services.iter().map(|service| {
-            metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::BuildQueueing)
+        services.iter().for_each(|service| {
+            metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::BuildQueueing);
         });
 
         let build_tasks = services
@@ -372,19 +372,6 @@ impl EnvironmentTask {
         env_logger: impl Fn(String),
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
-        let metrics_registry = Arc::new(infra_ctx.kubernetes().metrics_registry().clone_dyn());
-        let services = std::iter::empty()
-            .chain(environment.applications.iter().map(|x| x.as_service()))
-            .chain(environment.containers.iter().map(|x| x.as_service()))
-            .chain(environment.routers.iter().map(|x| x.as_service()))
-            .chain(environment.databases.iter().map(|x| x.as_service()))
-            .chain(environment.jobs.iter().map(|x| x.as_service()))
-            .chain(environment.helm_charts.iter().map(|x| x.as_service()));
-
-        for service in services.clone() {
-            metrics_registry.start_record(*service.long_id(), StepLabel::Service, StepName::Total);
-        }
-        let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
         let run_deploy = || -> Result<(), Box<EngineError>> {
@@ -432,7 +419,6 @@ impl EnvironmentTask {
 
         let deployment_err = match run_deploy() {
             Ok(_) => {
-                record.stop(StepStatus::Success);
                 return Ok(());
             } // return early if no error
             Err(err) => err,
@@ -457,7 +443,6 @@ impl EnvironmentTask {
             ));
         }
 
-        record.stop(StepStatus::Error);
         Err(deployment_err)
     }
 
@@ -516,6 +501,23 @@ impl EnvironmentTask {
 
         secrets.extend(cloud_provider_secrets);
         secrets
+    }
+
+    fn stop_total_steps_records(
+        deployment_ret: &Result<(), Box<EngineError>>,
+        record: StepRecordHandle,
+        service_records: Vec<StepRecordHandle>,
+    ) {
+        let step_status = match deployment_ret {
+            Ok(()) => StepStatus::Success,
+            Err(err) if err.tag().is_cancel() => StepStatus::Cancel,
+            Err(_) => StepStatus::Error,
+        };
+
+        for record in service_records {
+            record.stop(step_status.clone());
+        }
+        record.stop(step_status);
     }
 }
 
@@ -579,8 +581,26 @@ impl Task for EnvironmentTask {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new(msg, None)));
         };
 
+        let metrics_registry = Arc::new(infra_context.kubernetes().metrics_registry().clone_dyn());
+        let service_ids = std::iter::empty()
+            .chain(environment.applications.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.containers.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.routers.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.databases.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.jobs.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.helm_charts.iter().map(|x| x.as_service().long_id()));
+
+        let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
+        let service_records: Vec<StepRecordHandle> = service_ids
+            .into_iter()
+            .map(|service_id| metrics_registry.start_record(*service_id, StepLabel::Service, StepName::Total))
+            .collect();
+
         let deployment_ret =
             EnvironmentTask::deploy_environment(environment, &infra_context, env_logger, &self.cancel_checker());
+
+        Self::stop_total_steps_records(&deployment_ret, record, service_records);
+
         match (&self.request.action, deployment_ret) {
             (Action::Create, Ok(())) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
