@@ -1892,7 +1892,6 @@ fn deploy_job_on_scw_kapsule() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1987,7 +1986,6 @@ fn deploy_cronjob_on_scw_kapsule() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2082,7 +2080,6 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2176,7 +2173,6 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2281,7 +2277,6 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
-            container_registries: Vec::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
