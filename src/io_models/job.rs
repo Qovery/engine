@@ -223,7 +223,7 @@ impl Job {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
-            registries: self.container_registries.clone(),
+            registries: vec![],
         };
 
         build.compute_image_tag();
