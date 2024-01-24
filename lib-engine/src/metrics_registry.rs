@@ -1,6 +1,7 @@
 use crate::events::{EngineMsg, EngineMsgPayload};
 use crate::msg_publisher::{MsgPublisher, StdMsgPublisher};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -18,9 +19,9 @@ pub enum StepName {
     Deployment,
 }
 
-impl ToString for StepName {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for StepName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
             StepName::Total => "Total".to_string(),
             StepName::ProvisionBuilder => "ProvisionBuilder".to_string(),
             StepName::RegistryCreateRepository => "RegistryCreateRepository".to_string(),
@@ -30,7 +31,8 @@ impl ToString for StepName {
             StepName::MirrorImage => "MirrorImage".to_string(),
             StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
-        }
+        };
+        write!(f, "{}", str)
     }
 }
 
@@ -112,14 +114,6 @@ impl<'a> StepRecordHandle<'a> {
     }
 }
 
-impl<'a> Drop for StepRecordHandle<'a> {
-    fn drop(&mut self) {
-        if !self.is_stopped() {
-            self.stop(StepStatus::NotSet)
-        }
-    }
-}
-
 type StepRecordMap = HashMap<StepName, StepRecord>;
 
 struct MetricsRegistryMap {
@@ -171,12 +165,15 @@ impl MetricsRegistry for StdMetricsRegistry {
     }
 
     fn stop_record(&self, id: Uuid, step_name: StepName, status: StepStatus) {
-        debug!("stop record deployment step {:#?} for item {}", step_name, id);
-
-        let mut registry = self.registry.map.lock().unwrap();
+        let mut registry = self.registry.map.lock().expect("Failed to acquire lock");
         let metrics_per_id = registry.entry(id).or_default();
 
         if let Some(deployment_step_record) = metrics_per_id.get_mut(&step_name) {
+            if deployment_step_record.duration.is_some() {
+                return;
+            }
+
+            debug!("stop record deployment step {:#?} for item {}", step_name, id);
             deployment_step_record.duration = Some(deployment_step_record.start_time.elapsed());
             deployment_step_record.status = Some(status);
 
@@ -291,27 +288,6 @@ mod tests {
             // to trigger the record drop
             let record = metrics_registry.start_record(service_id, step_label, step_name.clone());
             record.stop(step_status.clone());
-        }
-
-        let records = metrics_registry.get_records(service_id);
-        assert_eq!(records.len(), 1);
-        assert_eq!(records.first().unwrap().step_name, step_name);
-        assert_eq!(records.first().unwrap().id, service_id);
-        assert!(records.first().unwrap().duration.is_some());
-        assert_eq!(records.first().unwrap().status, Some(step_status));
-    }
-
-    #[test]
-    fn test_get_records_when_record_is_dropped() {
-        let service_id = Uuid::new_v4();
-        let step_name = StepName::Deployment;
-        let step_label = StepLabel::Service;
-        let step_status = StepStatus::NotSet;
-        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
-
-        {
-            // to trigger the record drop
-            let _record = metrics_registry.start_record(service_id, step_label, step_name.clone());
         }
 
         let records = metrics_registry.get_records(service_id);
