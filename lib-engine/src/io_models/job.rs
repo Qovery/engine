@@ -149,7 +149,6 @@ pub struct Job {
     pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
-    pub container_registries: Vec<Registry>,
 }
 
 impl Job {
