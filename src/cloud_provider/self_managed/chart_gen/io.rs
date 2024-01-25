@@ -128,7 +128,7 @@ impl ChartDotYaml {
             },
             version: qovery_chart.version.to_string(),
             app_version: qovery_chart.app_version.to_string(),
-            kube_version: Some(qovery_chart.kube_version.to_string()),
+            kube_version: qovery_chart.kube_version.map(|x| x.to_string()),
             home: Some(qovery_chart.home.to_string()),
             icon: Some(qovery_chart.icon.to_string()),
         })
@@ -196,7 +196,7 @@ impl ValuesFile {
             qovery_cluster_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "latest".to_string(),
+                    tag: "67baaba8aae60ed4dbde3f4107c7b8ebf35b46a8".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
@@ -209,7 +209,7 @@ impl ValuesFile {
             qovery_shell_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "latest".to_string(),
+                    tag: "67baaba8aae60ed4dbde3f4107c7b8ebf35b46a8".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
