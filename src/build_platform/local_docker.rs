@@ -22,6 +22,7 @@ use crate::deployment_report::logger::EnvLogger;
 
 use crate::fs::workspace_directory;
 use crate::git;
+use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::utilities::to_short_id;
@@ -171,6 +172,16 @@ impl LocalDocker {
 
         // login if there are some private registries used
         for registry in &build.registries {
+            // TODO(benjaminch): To handle GCP Artifact Registry login, credentials to be injected, maybe this whole login should be done later on or delegated to container registry objects
+            // Method to be called for GCP: cmd::docker::Docker::login_artifact_registry()
+            if let Registry::GcpArtifactRegistry { url, .. } = registry {
+                logger.send_warning(format!(
+                    "Skipping logging at this step for Artifact Registry `{}`",
+                    url.host_str().unwrap_or_default()
+                ));
+                continue;
+            }
+
             let url = registry.get_url_with_credentials();
             if url.password().is_none() {
                 continue;
