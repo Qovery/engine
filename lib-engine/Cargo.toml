@@ -62,6 +62,9 @@ tracing-subscriber = { version = "0.3.17", features = ["json"] }
 # Docker deps
 # shiplift = "0.6.0"
 
+# Network
+ipnet = "2.9.0"
+
 # Filesystem
 sysinfo = "0.29.10"
 
