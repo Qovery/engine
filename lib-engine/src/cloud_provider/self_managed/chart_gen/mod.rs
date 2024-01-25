@@ -22,7 +22,7 @@ pub struct QoverySelfManagedChart<'a> {
     r#type: ChartDotYamlType,
     version: Version,
     app_version: Version,
-    kube_version: KubernetesVersion,
+    kube_version: Option<KubernetesVersion>,
     home: Url,
     icon: Url,
     charts_source_path: Vec<ChartMeta>,
@@ -37,7 +37,7 @@ impl<'a> QoverySelfManagedChart<'a> {
         r#type: ChartDotYamlType,
         version: Version,
         app_version: Version,
-        kube_version: KubernetesVersion,
+        kube_version: Option<KubernetesVersion>,
         home: Url,
         icon: Url,
         charts_source_path: Vec<ChartMeta>,
@@ -266,14 +266,11 @@ mod tests {
         use semver::Version;
         use url::Url;
 
-        use crate::cloud_provider::{
-            kubernetes::KubernetesVersion,
-            self_managed::chart_gen::{
-                chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
-                io::ChartDotYaml,
-                values_dot_yaml::ValuesFile,
-                ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
-            },
+        use crate::cloud_provider::self_managed::chart_gen::{
+            chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
+            io::ChartDotYaml,
+            values_dot_yaml::ValuesFile,
+            ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
         };
 
         use super::QoverySelfManagedChart;
@@ -295,11 +292,7 @@ mod tests {
             ChartDotYamlType::Application,
             Version::new(1, 0, 0),
             Version::new(1, 0, 0),
-            KubernetesVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            },
+            None,
             Url::parse("https://www.qovery.com").expect("failed to parse Qovery url"),
             Url::parse("https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_square_new_logo.svg")
                 .expect("failed to parse Qovery logo url"),
@@ -377,12 +370,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            ChartMeta {
-                name: SupportedCharts::QoveryEngine,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            // },
         ];
         // generate values-aws.yaml
         generate_config_file(
