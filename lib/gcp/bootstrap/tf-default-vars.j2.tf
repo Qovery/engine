@@ -53,8 +53,8 @@ variable "project_id" {
 
 variable "vpc_use_existing" {
   description = "True if reusing an existing VPC, False otherwise. VPC name has to be set for this option."
-  default     = "{{ vpc_use_existing }}"
-  type        = string
+  default     = {{ vpc_use_existing }}
+  type        = bool
 }
 
 variable "vpc_name" {
@@ -128,16 +128,14 @@ variable "auto_create_subnetworks" {
 
 variable "network_project_id" {
   type        = string
-  # TODO(benjaminch): to be discussed
   description = "The project ID of the shared VPC's host (for shared vpc support)"
-  default     = ""
+  default     = "{{ network_project_id }}"
 }
 
 variable "subnetwork" {
-# TODO(benjaminch): to be discussed
   type        = string
   description = "(Optional) The name or self_link of the Google Compute Engine subnetwork in which the cluster's instances are launched."
-  default     = "{{ kubernetes_cluster_name }}"
+  default     = "{{ subnetwork }}"
 }
 
 variable "enable_vertical_pod_autoscaling" {
@@ -197,19 +195,23 @@ variable "stack_type" {
 variable "ip_range_pods" {
   type        = string
   description = "The _name_ of the secondary subnet ip range to use for pods"
-  default     = ""
+  default     = "{{ ip_range_pods }}"
 }
 
 variable "additional_ip_range_pods" {
   type        = list(string)
   description = "List of _names_ of the additional secondary subnet ip ranges to use for pods"
-  default     = []
+  {% if additional_ip_range_pods|length > 0 %}
+  default = ["{{ additional_ip_range_pods | join(sep='", "') }}"]
+  {% else %}
+  default = []
+  {% endif %}
 }
 
 variable "ip_range_services" {
   type        = string
   description = "The _name_ of the secondary subnet range to use for services"
-  default     = ""
+  default     = "{{ ip_range_services }}"
 }
 
 variable "enable_cost_allocation" {
@@ -317,8 +319,14 @@ variable "issue_client_certificate" {
 
 variable "cluster_ipv4_cidr" {
   type        = string
-  default     = null
+  default     = "{{ cluster_ipv4_cidr_block }}"
   description = "The IP address range of the kubernetes pods in this cluster. Default is an automatically assigned CIDR."
+}
+
+variable "services_ipv4_cidr" {
+  type        = string
+  default     = "{{ services_ipv4_cidr_block }}"
+  description = "The IP address range of the services IPs in this cluster. Set to blank to have a range chosen with the default size."
 }
 
 variable "dns_cache" {
