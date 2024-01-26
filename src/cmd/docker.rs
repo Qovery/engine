@@ -4,6 +4,7 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
+use std::fs;
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,6 @@ use std::process::ExitStatus;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::{env, fs};
 use tempfile::TempDir;
 use url::Url;
 
@@ -401,8 +401,13 @@ impl Docker {
         google_creds: &str,
     ) -> Result<(), DockerError> {
         // Save creds to file as CLI cannot ingest it otherwise ...
-        let tmp_dir = env::temp_dir();
-        let gcp_credentials_file_path = format!("{}/google-credentials.json", tmp_dir.to_str().unwrap_or_default());
+        let Ok(tmp_dir) = TempDir::with_prefix("gcp-credentials-") else {
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: "Cannot create temporary directory to store google credentials".to_string(),
+            });
+        };
+        let gcp_credentials_file_path =
+            format!("{}/google-credentials.json", tmp_dir.path().to_str().unwrap_or_default());
         match fs::OpenOptions::new()
             .create(true)
             .write(true)
@@ -434,12 +439,7 @@ impl Docker {
             raw_error_message: "Cannot connected to gcloud".to_string(),
         })?;
 
-        let login_res = self.login(registry);
-
-        // Delete credentials file
-        let _ = fs::remove_dir_all(tmp_dir.to_str().unwrap_or_default()); // TODO(benjaminch): handle it
-
-        login_res
+        self.login(registry)
     }
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
