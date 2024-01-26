@@ -6,7 +6,6 @@ environmentVariables:
   CLUSTER_ID: *clusterId
   CLUSTER_JWT_TOKEN: *jwtToken
   DOCKER_HOST: tcp://0.0.0.0:2375
-  GRPC_SERVER: *engineGrpcServer
   LIB_ROOT_DIR: /home/qovery/lib
   ORGANIZATION: *shortClusterId
   ORGANIZATION_ID: *organizationId
