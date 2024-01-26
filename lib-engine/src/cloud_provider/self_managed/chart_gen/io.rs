@@ -184,8 +184,7 @@ impl ValuesFile {
                 jwt_token: "&jwtToken set-by-customer".to_string(),
                 domain: "&domain set-by-customer".to_string(),
                 domain_wildcard: "&domainWildcard set-by-customer".to_string(),
-                grpc_server: "&grpcServer set-by-customer".to_string(),
-                engine_grpc_server: "&engineGrpcServer set-by-customer".to_string(),
+                // engine_grpc_server: "&engineGrpcServer set-by-customer".to_string(),
                 qovery_dns_url: "&qoveryDnsUrl set-by-customer".to_string(),
                 loki_url: "&lokiUrl set-by-customer".to_string(),
                 promtail_loki_url: "&promtailLokiUrl set-by-customer".to_string(),
@@ -201,7 +200,6 @@ impl ValuesFile {
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
-                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("LOKI_URL".to_string(), "*lokiUrl".to_string()),
                 ]),
@@ -214,7 +212,6 @@ impl ValuesFile {
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
-                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                 ]),
             },

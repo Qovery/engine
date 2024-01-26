@@ -81,10 +81,8 @@ pub struct QoveryGlobalConfig {
     pub domain: String,
     #[serde(rename = "domainWildcard")]
     pub domain_wildcard: String,
-    #[serde(rename = "grpcServer")]
-    pub grpc_server: String,
-    #[serde(rename = "engineGrpcServer")]
-    pub engine_grpc_server: String,
+    // #[serde(rename = "engineGrpcServer")]
+    // pub engine_grpc_server: String,
     #[serde(rename = "qoveryDnsUrl")]
     pub qovery_dns_url: String,
     #[serde(rename = "lokiUrl")]

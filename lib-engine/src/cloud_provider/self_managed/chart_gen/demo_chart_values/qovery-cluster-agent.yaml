@@ -4,7 +4,6 @@ image:
 environmentVariables:
   CLUSTER_ID: *clusterId
   CLUSTER_JWT_TOKEN: *jwtToken
-  GRPC_SERVER: *grpcServer
   LOKI_URL: *lokiUrl
   ORGANIZATION_ID: *organizationId
   RUST_LOG: "info"

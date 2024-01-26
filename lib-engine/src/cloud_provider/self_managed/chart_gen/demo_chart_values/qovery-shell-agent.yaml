@@ -5,6 +5,5 @@ environmentVariables:
   CLUSTER_ID: *clusterId
   CLUSTER_JWT_TOKEN: *jwtToken
   CLUSTER_TOKEN: ""
-  GRPC_SERVER: *grpcServer
   ORGANIZATION_ID: *organizationId
   RUST_LOG: "info"
