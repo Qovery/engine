@@ -195,7 +195,7 @@ impl ValuesFile {
             qovery_cluster_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "67baaba8aae60ed4dbde3f4107c7b8ebf35b46a8".to_string(),
+                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
@@ -207,7 +207,7 @@ impl ValuesFile {
             qovery_shell_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "67baaba8aae60ed4dbde3f4107c7b8ebf35b46a8".to_string(),
+                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
