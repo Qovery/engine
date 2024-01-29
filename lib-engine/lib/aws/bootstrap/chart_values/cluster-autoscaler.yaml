@@ -13,6 +13,7 @@ priorityClassName: system-cluster-critical
 extraArgs:
   balance-similar-node-groups: true
   skip-nodes-with-local-storage: false
+  skip-nodes-with-system-pods: false
 
 # observability:
 serviceMonitor:
