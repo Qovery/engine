@@ -40,7 +40,7 @@ charts:
   - name: aws-ebs-csi-driver
     repo_name: aws-ebs-csi-driver
     dest: aws-ec2-bootstrap
-    version: 2.17.2
+    version: 2.27.0
     comment: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases?q=helm-chart&expanded=true
   - name: metrics-server
     repo_name: metrics-server

@@ -25,3 +25,6 @@ rules:
   - apiGroups: [ "snapshot.storage.k8s.io" ]
     resources: [ "volumesnapshotcontents/status" ]
     verbs: [ "update" ]
+  {{- with .Values.sidecars.snapshotter.additionalClusterRoleRules }}
+    {{- . | toYaml | nindent 2 }}
+  {{- end }}
