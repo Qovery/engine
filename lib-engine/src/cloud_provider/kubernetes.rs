@@ -312,6 +312,11 @@ impl FromStr for KubernetesVersion {
                 patch: Some(9),
                 suffix: Some(Arc::from("+k3s1")),
             }),
+            "v1.28.5+k3s1" => Ok(KubernetesVersion::V1_28 {
+                prefix: Some(Arc::from("v")),
+                patch: Some(5),
+                suffix: Some(Arc::from("+k3s1")),
+            }),
             _ => Err(()),
         }
     }
