@@ -173,6 +173,8 @@ pub struct ObservabilityServices {
 pub struct AwsServices {
     #[serde(rename = "q-storageclass-aws")]
     pub qovery_storage_class: ServiceEnabled,
+    #[serde(rename = "aws-ebs-csi-driver")]
+    pub aws_ebs_csi_driver: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]

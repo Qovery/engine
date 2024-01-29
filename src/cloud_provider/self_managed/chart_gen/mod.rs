@@ -114,6 +114,8 @@ pub enum SupportedCharts {
     QoveryGcpStorageClass,
     #[display("q-storageclass-scaleway")]
     QoveryScalewayStorageClass,
+    #[display("aws-ebs-csi-driver")]
+    AwsEbsCsiDriver,
     #[display("ingress-nginx")]
     IngressNginx,
     #[display("external-dns")]
@@ -231,6 +233,11 @@ mod tests {
             values_file_content = update_qovery_config
                 .replace_all(values_file_content.as_str(), "$1 *domainWildcard")
                 .to_string();
+            // TODO(pmavro): Remove this when all customers will have move to Qovery namespace
+            values_file_content = values_file_content.replace(
+                "cert-manager/letsencrypt-acme-qovery-cert",
+                "qovery/letsencrypt-acme-qovery-cert",
+            );
             // values_file_content = values_file_content.replace(
             //     "external-dns.alpha.kubernetes.io/hostname",
             //     "external-dns.alpha.kubernetes.io/hostnameeeeee: *domainWildcard",
@@ -308,6 +315,12 @@ mod tests {
                 name: SupportedCharts::QoveryAwsStorageClass,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::AwsEbsCsiDriver,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
                 values_source_path: None,
             },
             ChartMeta {
@@ -392,6 +405,12 @@ mod tests {
                 name: SupportedCharts::QoveryAwsStorageClass,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::AwsEbsCsiDriver,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
                 values_source_path: None,
             },
             ChartMeta {

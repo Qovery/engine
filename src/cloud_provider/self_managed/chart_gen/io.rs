@@ -259,6 +259,7 @@ impl ValuesFile {
 
         value.services.aws = Some(AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
         });
 
         value
