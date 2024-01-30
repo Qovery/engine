@@ -175,8 +175,8 @@ defaultBackend:
 
         let mut chart_set_values = vec![
             ChartSetValue {
-                key: "controller.admissionWebhooks.enabled".to_string(),
-                value: false.to_string(),
+                key: "controller.allowSnippetAnnotations".to_string(),
+                value: true.to_string(),
             },
             // enable metrics for customers who wants to manage it by their own
             ChartSetValue {
