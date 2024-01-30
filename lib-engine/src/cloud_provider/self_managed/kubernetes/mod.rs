@@ -147,6 +147,10 @@ impl Kubernetes for SelfManaged {
         vec![]
     }
 
+    fn is_self_managed(&self) -> bool {
+        true
+    }
+
     fn on_create(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }

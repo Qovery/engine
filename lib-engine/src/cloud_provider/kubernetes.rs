@@ -350,6 +350,7 @@ pub trait Kubernetes: Send + Sync {
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
+    fn is_self_managed(&self) -> bool;
     // this method should replace kube_client
     fn q_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called

@@ -1318,6 +1318,10 @@ impl Kubernetes for Gke {
         vec![CpuArchitecture::AMD64]
     }
 
+    fn is_self_managed(&self) -> bool {
+        false
+    }
+
     #[named]
     fn on_create(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
