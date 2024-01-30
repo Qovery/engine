@@ -102,7 +102,7 @@ pub enum ValuesSourcePath {
     GcpBootstrapChartValues,
     #[display("lib/scaleway/bootstrap/chart_values")]
     ScalewayBootstrapChartValues,
-    #[display("src/cloud_provider/self_managed/chart_gen/demo_chart_values")]
+    #[display("lib/self-managed/demo_chart_values")]
     DemoChartValues,
 }
 
