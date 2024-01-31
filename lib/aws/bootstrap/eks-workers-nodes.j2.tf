@@ -14,6 +14,9 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
 
     ebs {
       volume_size = {{ eks_worker_node.disk_size_in_gib }}
+      {% if eks_masters_version == "1.27" or eks_masters_version == "1.28" %}
+      encrypted   = true
+      {% endif %}
     }
   }
 
