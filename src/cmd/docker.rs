@@ -4,14 +4,15 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
+use std::fs;
 use std::io::Write;
 use std::num::NonZeroUsize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::{env, fs};
+use tempfile::TempDir;
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -142,7 +143,7 @@ impl ContainerImage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum BuilderLocation {
     Local,
     Kubernetes {
@@ -155,12 +156,14 @@ enum BuilderLocation {
 
 #[derive(Debug)]
 pub struct Docker {
+    config_path: TempDir,
     builder_location: BuilderLocation,
     socket_location: Option<Url>,
     common_envs: Vec<(String, String)>,
 }
 
 pub struct BuilderHandle {
+    config_path: PathBuf,
     pub nb_builder: NonZeroUsize,
     builder_name: Option<String>,
 }
@@ -169,7 +172,14 @@ impl Drop for BuilderHandle {
     fn drop(&mut self) {
         if let Some(builder_name) = &self.builder_name {
             let _ = docker_exec(
-                &["buildx", "rm", "-f", builder_name],
+                &[
+                    "--config",
+                    self.config_path.to_str().unwrap_or(""),
+                    "buildx",
+                    "rm",
+                    "-f",
+                    builder_name,
+                ],
                 &[],
                 &mut |_| {},
                 &mut |_| {},
@@ -179,9 +189,27 @@ impl Drop for BuilderHandle {
     }
 }
 
+impl Clone for Docker {
+    fn clone(&self) -> Self {
+        Self {
+            config_path: TempDir::with_prefix("docker-").unwrap(),
+            builder_location: self.builder_location.clone(),
+            socket_location: self.socket_location.clone(),
+            common_envs: self.common_envs.clone(),
+        }
+    }
+}
+
 impl Docker {
     pub fn new(socket_location: Option<Url>) -> Result<Self, DockerError> {
+        let Ok(tmp_dir) = TempDir::with_prefix("docker-") else {
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: "Cannot create temporary directory to store docker config".to_string(),
+            });
+        };
+
         let mut docker = Docker {
+            config_path: tmp_dir,
             builder_location: BuilderLocation::Local,
             socket_location,
             common_envs: vec![("DOCKER_BUILDKIT".to_string(), "1".to_string())],
@@ -219,6 +247,8 @@ impl Docker {
         // we need to create our specific builder, which is not the default one (aka: the docker one).
         // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
         let args = vec![
+            "--config",
+            docker.config_path.path().to_str().unwrap_or(""),
             "buildx",
             "create",
             "--name",
@@ -274,6 +304,7 @@ impl Docker {
         match &self.builder_location {
             // For local builder, we have at max 1 builder available
             BuilderLocation::Local => Ok(BuilderHandle {
+                config_path: self.config_path.path().to_path_buf(),
                 nb_builder: NonZeroUsize::new(1).unwrap(),
                 builder_name: None,
             }),
@@ -297,6 +328,7 @@ impl Docker {
 
                 // We create build handle here to force the drop to run if some operation fail
                 let build_handle = BuilderHandle {
+                    config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
                     builder_name: Some(builder_name.to_string()),
                 };
@@ -319,6 +351,8 @@ impl Docker {
                     "\"limits.memory={}Gi\""
                     ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
                     let args = vec![
+                        "--config",
+                        self.config_path.path().to_str().unwrap_or(""),
                         "buildx",
                         "create",
                         "--append",
@@ -367,9 +401,14 @@ impl Docker {
         google_creds: &str,
     ) -> Result<(), DockerError> {
         // Save creds to file as CLI cannot ingest it otherwise ...
-        let tmp_dir = env::temp_dir();
-        let gcp_credentials_file_path = format!("{}/google-credentials.json", tmp_dir.to_str().unwrap_or_default());
-        match std::fs::OpenOptions::new()
+        let Ok(tmp_dir) = TempDir::with_prefix("gcp-credentials-") else {
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: "Cannot create temporary directory to store google credentials".to_string(),
+            });
+        };
+        let gcp_credentials_file_path =
+            format!("{}/google-credentials.json", tmp_dir.path().to_str().unwrap_or_default());
+        match fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
@@ -400,12 +439,7 @@ impl Docker {
             raw_error_message: "Cannot connected to gcloud".to_string(),
         })?;
 
-        let login_res = self.login(registry);
-
-        // Delete credentials file
-        let _ = fs::remove_dir_all(tmp_dir.to_str().unwrap_or_default()); // TODO(benjaminch): handle it
-
-        login_res
+        self.login(registry)
     }
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
@@ -424,6 +458,8 @@ impl Docker {
             .and_then(|password| urlencoding::decode(password).ok())
             .unwrap_or_default();
         let args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
             "login",
             registry.host_str().unwrap_or_default(),
             "-u",
@@ -448,7 +484,13 @@ impl Docker {
         info!("Docker check locally image exist {:?}", image);
 
         let ret = docker_exec(
-            &["image", "inspect", &image.image_name()],
+            &[
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "image",
+                "inspect",
+                &image.image_name(),
+            ],
             &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
@@ -462,7 +504,14 @@ impl Docker {
         info!("Docker check remotely image exist {:?}", image);
 
         let ret = docker_exec(
-            &["buildx", "imagetools", "inspect", &image.image_name()],
+            &[
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "buildx",
+                "imagetools",
+                "inspect",
+                &image.image_name(),
+            ],
             &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
@@ -490,7 +539,12 @@ impl Docker {
         info!("Docker pull {:?}", image);
 
         docker_exec(
-            &["pull", &image.image_name()],
+            &[
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "pull",
+                &image.image_name(),
+            ],
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
@@ -562,6 +616,8 @@ impl Docker {
         info!("Docker buildkit build {:?}", image_to_build.image_name());
 
         let mut args_string: Vec<String> = vec![
+            "--config".to_string(),
+            self.config_path.path().to_str().unwrap_or("").to_string(),
             "buildx".to_string(),
             "build".to_string(),
             "--progress=plain".to_string(),
@@ -622,7 +678,12 @@ impl Docker {
     {
         info!("Docker push {:?}", image);
         for image_name in image.image_names() {
-            let args = vec!["push", image_name.as_str()];
+            let args = vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "push",
+                image_name.as_str(),
+            ];
             docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)?
         }
 
@@ -642,7 +703,7 @@ impl Docker {
         Stderr: FnMut(String),
     {
         info!("Docker tag {:?} {:?}", source_image, dest_image);
-        let mut args = vec!["tag"];
+        let mut args = vec!["--config", self.config_path.path().to_str().unwrap_or(""), "tag"];
         let source_image = source_image.image_name();
         let dest_image = dest_image.image_name();
         args.push(source_image.as_str());
@@ -688,7 +749,19 @@ impl Docker {
         let image_tag = image.image_name();
         info!("Docker create manifest {} with digests {:?}", image_tag, digests);
         docker_exec(
-            &[&["buildx", "imagetools", "create", "-t", image_tag.as_str()], digests].concat(),
+            &[
+                &[
+                    "--config",
+                    self.config_path.path().to_str().unwrap_or(""),
+                    "buildx",
+                    "imagetools",
+                    "create",
+                    "-t",
+                    image_tag.as_str(),
+                ],
+                digests,
+            ]
+            .concat(),
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
@@ -700,11 +773,44 @@ impl Docker {
         info!("Docker prune images");
 
         let all_prunes_commands = vec![
-            vec!["buildx", "prune", "-a", "-f"],
-            vec!["container", "prune", "-f"],
-            vec!["image", "prune", "-a", "-f"],
-            vec!["builder", "prune", "-a", "-f"],
-            vec!["volume", "prune", "-f"],
+            vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "buildx",
+                "prune",
+                "-a",
+                "-f",
+            ],
+            vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "container",
+                "prune",
+                "-f",
+            ],
+            vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "image",
+                "prune",
+                "-a",
+                "-f",
+            ],
+            vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "builder",
+                "prune",
+                "-a",
+                "-f",
+            ],
+            vec![
+                "--config",
+                self.config_path.path().to_str().unwrap_or(""),
+                "volume",
+                "prune",
+                "-f",
+            ],
         ];
 
         let mut errored_commands = vec![];

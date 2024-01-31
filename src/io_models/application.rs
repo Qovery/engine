@@ -5,7 +5,7 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
-use crate::io_models::container::ContainerAdvancedSettings;
+use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
@@ -275,6 +275,7 @@ pub struct Application {
     pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: ApplicationAdvancedSettings,
+    pub container_registries: Vec<Registry>,
 }
 
 fn default_root_path_value() -> String {
@@ -513,6 +514,7 @@ impl Application {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            registries: self.container_registries.clone(),
         };
 
         build.compute_image_tag();

@@ -29,7 +29,7 @@ resource "google_container_cluster" "primary" {
 
   location          = local.location
   node_locations    = local.node_locations
-  cluster_ipv4_cidr = var.cluster_ipv4_cidr
+  # cluster_ipv4_cidr = configuration declared in ip_allocation_policy var.cluster_ipv4_cidr
   network           = "projects/${local.network_project_id}/global/networks/${var.vpc_name}"
 
   dynamic "release_channel" {
@@ -61,7 +61,7 @@ resource "google_container_cluster" "primary" {
     }
   }
 
-  subnetwork = "projects/${local.network_project_id}/regions/${local.region}/subnetworks/${var.vpc_name}"
+  subnetwork = "projects/${local.network_project_id}/regions/${local.region}/subnetworks/${var.subnetwork}"
 
   default_snat_status {
     disabled = var.disable_default_snat
@@ -137,8 +137,10 @@ resource "google_container_cluster" "primary" {
   }
 
   ip_allocation_policy {
-    cluster_secondary_range_name  = var.ip_range_pods
-    services_secondary_range_name = var.ip_range_services
+    cluster_ipv4_cidr_block = var.cluster_ipv4_cidr == "" ? null : var.cluster_ipv4_cidr
+    services_ipv4_cidr_block = var.services_ipv4_cidr == "" ? null : var.services_ipv4_cidr
+    cluster_secondary_range_name  = var.ip_range_pods == "" ? null : var.ip_range_pods
+    services_secondary_range_name = var.ip_range_services == "" ? null : var.ip_range_services
     stack_type = var.stack_type
     dynamic "additional_pod_ranges_config" {
       for_each = length(var.additional_ip_range_pods) != 0 ? [1] : []
@@ -230,7 +232,11 @@ resource "google_container_cluster" "primary" {
   }
 
   depends_on = [
-    google_compute_network.vpc_network
+  {% if vpc_use_existing %}
+  data.google_compute_network.vpc_network
+  {% else %}
+  google_compute_network.vpc_network
+  {% endif %}
   ]
 }
 

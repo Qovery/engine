@@ -44,6 +44,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use governor::{Quota, RateLimiter};
+use ipnet::IpNet;
 use itertools::Itertools;
 use nonzero_ext::nonzero;
 use serde_derive::{Deserialize, Serialize};
@@ -60,8 +61,18 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpcMode {
-    Automatic,
-    ExistingVpc { vpc_name: String },
+    Automatic {
+        custom_cluster_ipv4_cidr_block: Option<IpNet>,
+        custom_services_ipv4_cidr_block: Option<IpNet>,
+    },
+    ExistingVpc {
+        vpc_project_id: Option<String>,
+        vpc_name: String,
+        subnetwork_name: Option<String>,
+        ip_range_pods_name: Option<String>,
+        additional_ip_range_pods_names: Option<Vec<String>>,
+        ip_range_services_name: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,6 +91,7 @@ pub struct GkeOptions {
     // GCP
     pub gcp_json_credentials: JsonCredentials,
 
+    // Network
     // VPC
     pub vpc_mode: VpcMode,
 
@@ -333,17 +345,68 @@ impl Gke {
         };
         context.insert("cluster_maintenance_end_time", cluster_maintenance_end_time.as_str()); // RFC3339 https://www.ietf.org/rfc/rfc3339.txt
 
+        // Network
         // VPC
         match &self.options.vpc_mode {
-            VpcMode::Automatic => {
+            VpcMode::Automatic {
+                custom_cluster_ipv4_cidr_block: cluster_ipv4_cidr_block,
+                custom_services_ipv4_cidr_block: services_ipv4_cidr_block,
+            } => {
                 // if automatic, Qovery to create a new VPC for the cluster
-                context.insert("vpc_name", self.cluster_name().as_str());
                 context.insert("vpc_use_existing", &false);
+                context.insert("vpc_name", self.cluster_name().as_str());
+                context.insert("subnetwork", self.cluster_name().as_str());
+                context.insert(
+                    "cluster_ipv4_cidr_block",
+                    &cluster_ipv4_cidr_block.map(|net| net.to_string()).unwrap_or_default(),
+                );
+                context.insert(
+                    "services_ipv4_cidr_block",
+                    &services_ipv4_cidr_block.map(|net| net.to_string()).unwrap_or_default(),
+                );
+                context.insert("network_project_id", "");
+                context.insert("ip_range_pods", "");
+                context.insert("ip_range_services", "");
+                context.insert("additional_ip_range_pods", "");
             }
-            VpcMode::ExistingVpc { vpc_name } => {
+            VpcMode::ExistingVpc {
+                vpc_project_id,
+                vpc_name,
+                subnetwork_name,
+                ip_range_pods_name,
+                additional_ip_range_pods_names,
+                ip_range_services_name,
+            } => {
                 // If VPC is provided by client, then reuse it without creating a new VPC for the cluster
-                context.insert("vpc_name", vpc_name);
                 context.insert("vpc_use_existing", &true);
+                context.insert(
+                    "network_project_id",
+                    vpc_project_id
+                        .as_ref()
+                        .unwrap_or(&self.options.gcp_json_credentials.project_id), // If no project set, use the current one
+                );
+                context.insert("vpc_name", vpc_name);
+                context.insert("subnetwork", subnetwork_name);
+                context.insert("cluster_ipv4_cidr_block", "");
+                context.insert("services_ipv4_cidr_block", "");
+                context.insert(
+                    "ip_range_pods",
+                    match ip_range_pods_name {
+                        None => "",
+                        Some(name) => name.as_str(),
+                    },
+                );
+                context.insert(
+                    "ip_range_services",
+                    match ip_range_services_name {
+                        None => "",
+                        Some(name) => name.as_str(),
+                    },
+                );
+                context.insert(
+                    "additional_ip_range_pods",
+                    &additional_ip_range_pods_names.clone().unwrap_or_default(),
+                );
             }
         }
 
@@ -399,7 +462,6 @@ impl Gke {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
-        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
 
         // add specific DNS fields
         self.dns_provider().insert_into_teracontext(&mut context);
@@ -697,6 +759,7 @@ impl Gke {
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
+            self.dns_provider.domain(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
@@ -1253,6 +1316,10 @@ impl Kubernetes for Gke {
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         // TODO(ENG-1643): GKE integration, add ARM support
         vec![CpuArchitecture::AMD64]
+    }
+
+    fn is_self_managed(&self) -> bool {
+        false
     }
 
     #[named]

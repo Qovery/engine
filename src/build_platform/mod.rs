@@ -9,6 +9,7 @@ use crate::errors::EngineError;
 use crate::events::EventDetails;
 
 use crate::cloud_provider::models::CpuArchitecture;
+use crate::io_models::container::Registry;
 use crate::metrics_registry::MetricsRegistry;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -101,6 +102,8 @@ pub struct Build {
     pub architectures: Vec<CpuArchitecture>,
     pub max_cpu_in_milli: u32,
     pub max_ram_in_gib: u32,
+    // registries used by the build where we need to login to pull image
+    pub registries: Vec<Registry>,
 }
 
 impl Build {

@@ -22,7 +22,7 @@ pub struct QoverySelfManagedChart<'a> {
     r#type: ChartDotYamlType,
     version: Version,
     app_version: Version,
-    kube_version: KubernetesVersion,
+    kube_version: Option<KubernetesVersion>,
     home: Url,
     icon: Url,
     charts_source_path: Vec<ChartMeta>,
@@ -37,7 +37,7 @@ impl<'a> QoverySelfManagedChart<'a> {
         r#type: ChartDotYamlType,
         version: Version,
         app_version: Version,
-        kube_version: KubernetesVersion,
+        kube_version: Option<KubernetesVersion>,
         home: Url,
         icon: Url,
         charts_source_path: Vec<ChartMeta>,
@@ -102,7 +102,7 @@ pub enum ValuesSourcePath {
     GcpBootstrapChartValues,
     #[display("lib/scaleway/bootstrap/chart_values")]
     ScalewayBootstrapChartValues,
-    #[display("src/cloud_provider/self_managed/chart_gen/demo_chart_values")]
+    #[display("lib/self-managed/demo_chart_values")]
     DemoChartValues,
 }
 
@@ -114,6 +114,8 @@ pub enum SupportedCharts {
     QoveryGcpStorageClass,
     #[display("q-storageclass-scaleway")]
     QoveryScalewayStorageClass,
+    #[display("aws-ebs-csi-driver")]
+    AwsEbsCsiDriver,
     #[display("ingress-nginx")]
     IngressNginx,
     #[display("external-dns")]
@@ -225,6 +227,21 @@ mod tests {
             values_file_content = update_qovery_config
                 .replace_all(values_file_content.as_str(), "$1$2")
                 .to_string();
+            // update yaml variables that serde will fail because of missing references
+            // ex: Nginx ingress has a variable where no reference is available in the override file (only available when the self-managed chart is generated). So serde will fail on validating the content
+            let update_qovery_config = Regex::new(r"(external-dns.alpha.kubernetes.io/hostname:).+").unwrap();
+            values_file_content = update_qovery_config
+                .replace_all(values_file_content.as_str(), "$1 *domainWildcard")
+                .to_string();
+            // TODO(pmavro): Remove this when all customers will have move to Qovery namespace
+            values_file_content = values_file_content.replace(
+                "cert-manager/letsencrypt-acme-qovery-cert",
+                "qovery/letsencrypt-acme-qovery-cert",
+            );
+            // values_file_content = values_file_content.replace(
+            //     "external-dns.alpha.kubernetes.io/hostname",
+            //     "external-dns.alpha.kubernetes.io/hostnameeeeee: *domainWildcard",
+            // );
         }
         values_file_content
     }
@@ -256,14 +273,11 @@ mod tests {
         use semver::Version;
         use url::Url;
 
-        use crate::cloud_provider::{
-            kubernetes::KubernetesVersion,
-            self_managed::chart_gen::{
-                chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
-                io::ChartDotYaml,
-                values_dot_yaml::ValuesFile,
-                ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
-            },
+        use crate::cloud_provider::self_managed::chart_gen::{
+            chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
+            io::ChartDotYaml,
+            values_dot_yaml::ValuesFile,
+            ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
         };
 
         use super::QoverySelfManagedChart;
@@ -285,11 +299,7 @@ mod tests {
             ChartDotYamlType::Application,
             Version::new(1, 0, 0),
             Version::new(1, 0, 0),
-            KubernetesVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
-            },
+            None,
             Url::parse("https://www.qovery.com").expect("failed to parse Qovery url"),
             Url::parse("https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_square_new_logo.svg")
                 .expect("failed to parse Qovery logo url"),
@@ -305,6 +315,12 @@ mod tests {
                 name: SupportedCharts::QoveryAwsStorageClass,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::AwsEbsCsiDriver,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
                 values_source_path: None,
             },
             ChartMeta {
@@ -367,12 +383,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            ChartMeta {
-                name: SupportedCharts::QoveryEngine,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
+            // ChartMeta {
+            //     name: SupportedCharts::QoveryEngine,
+            //     category: ChartCategory::Qovery,
+            //     source_path: ChartSourcePath::CommonBoostrapCharts,
+            //     values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            // },
         ];
         // generate values-aws.yaml
         generate_config_file(
@@ -389,6 +405,12 @@ mod tests {
                 name: SupportedCharts::QoveryAwsStorageClass,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::AwsEbsCsiDriver,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
                 values_source_path: None,
             },
             ChartMeta {

@@ -79,10 +79,10 @@ pub struct QoveryGlobalConfig {
     #[serde(rename = "jwtToken")]
     pub jwt_token: String,
     pub domain: String,
-    #[serde(rename = "grpcServer")]
-    pub grpc_server: String,
-    #[serde(rename = "engineGrpcServer")]
-    pub engine_grpc_server: String,
+    #[serde(rename = "domainWildcard")]
+    pub domain_wildcard: String,
+    // #[serde(rename = "engineGrpcServer")]
+    // pub engine_grpc_server: String,
     #[serde(rename = "qoveryDnsUrl")]
     pub qovery_dns_url: String,
     #[serde(rename = "lokiUrl")]
@@ -173,6 +173,8 @@ pub struct ObservabilityServices {
 pub struct AwsServices {
     #[serde(rename = "q-storageclass-aws")]
     pub qovery_storage_class: ServiceEnabled,
+    #[serde(rename = "aws-ebs-csi-driver")]
+    pub aws_ebs_csi_driver: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]

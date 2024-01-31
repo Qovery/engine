@@ -149,6 +149,12 @@ pub struct Job {
     pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
+    pub container_registries: ContainerRegistries,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct ContainerRegistries {
+    pub registries: Vec<Registry>,
 }
 
 impl Job {
@@ -223,6 +229,7 @@ impl Job {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            registries: self.container_registries.registries.clone(),
         };
 
         build.compute_image_tag();

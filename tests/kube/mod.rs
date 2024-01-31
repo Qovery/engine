@@ -11,7 +11,7 @@ use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::job::{Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
@@ -268,6 +268,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
+                container_registries: Vec::new(),
             };
             environment.applications = vec![app];
         }
@@ -311,6 +312,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 default_port: None,
                 readiness_probe: None,
                 liveness_probe: None,
+                container_registries: ContainerRegistries { registries: vec![] },
             };
             environment.jobs = vec![job];
         }

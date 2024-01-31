@@ -1,0 +1,20 @@
+{{- if or .Values.sidecars.snapshotter.forceEnable (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1beta1") (.Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1") }}
+{{- range .Values.volumeSnapshotClasses }}
+---
+kind: VolumeSnapshotClass
+apiVersion: snapshot.storage.k8s.io/v1
+metadata:
+  name: {{ .name }}
+  {{- with .annotations }}
+  annotations: {{- . | toYaml | trim | nindent 4 }}
+  {{- end }}
+  {{- with .labels }}
+  labels: {{- . | toYaml | trim | nindent 4 }}
+  {{- end }}
+driver: ebs.csi.aws.com
+deletionPolicy: {{ .deletionPolicy }}
+{{- with .parameters }}
+parameters: {{- . | toYaml | trim | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -272,6 +272,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             architectures: test_kube.cpu_architectures(),
             max_cpu_in_milli: 2000,
             max_ram_in_gib: 4,
+            registries: vec![],
         },
         vec![],
         None,

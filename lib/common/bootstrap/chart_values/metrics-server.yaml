@@ -4,13 +4,13 @@ apiService:
 
 # set rolling restart strategy
 updateStrategy:
-  type: set-by-engine-code
+  type: RollingUpdate # set-by-engine-code
 
 # set resources
 resources:
   limits:
-    cpu: set-by-engine-code
-    memory: set-by-engine-code
+    cpu: 250m # set-by-engine-code
+    memory: 64Mi # set-by-engine-code
   requests:
-    cpu: set-by-engine-code
-    memory: set-by-engine-code
+    cpu: 250m # set-by-engine-code
+    memory: 64Mi # set-by-engine-code

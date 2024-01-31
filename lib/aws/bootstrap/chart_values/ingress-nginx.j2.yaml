@@ -1,12 +1,11 @@
 controller:
   useComponentLabel: true
-  admissionWebhooks:
-    enabled: set-by-engine-code
+  allowSnippetAnnotations: true
   # enable if you want metrics scrapped by prometheus
   metrics:
-    enabled: set-by-engine-code
+    enabled: true # set-by-engine-code
     serviceMonitor:
-      enabled: set-by-engine-code
+      enabled: false # set-by-engine-code
   config:
     # set global default file size limit to 100m
     proxy-body-size: 100m
@@ -24,10 +23,10 @@ controller:
 
   # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
-    enabled: true
-    minReplicas: set-by-engine-code
-    maxReplicas: set-by-engine-code
-    targetCPUUtilizationPercentage: set-by-engine-code
+    enabled: false # set-by-engine-code
+    minReplicas: 2 # set-by-engine-code
+    maxReplicas: 25 # set-by-engine-code
+    targetCPUUtilizationPercentage: 50  # set-by-engine-code
 
   # required if you rely on a load balancer
   # the controller mirrors the address of this service's endpoints to the load-balancer status of all Ingress objects it satisfies.
@@ -40,7 +39,7 @@ controller:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
-      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
+      external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0

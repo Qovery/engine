@@ -1,8 +1,7 @@
 controller:
   replicaCount: 1
   useComponentLabel: true
-  admissionWebhooks:
-    enabled: set-by-engine-code
+  allowSnippetAnnotations: true
   metrics:
     enabled: set-by-engine-code
     serviceMonitor:

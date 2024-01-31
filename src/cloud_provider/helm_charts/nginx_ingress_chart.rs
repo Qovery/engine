@@ -7,10 +7,13 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
+use crate::cloud_provider::Kind;
 use crate::errors::CommandError;
+use crate::models::domain::Domain;
 use kube::Client;
 use tera::{Context, Tera};
 
@@ -22,11 +25,15 @@ pub struct NginxIngressChart {
     controller_resources: HelmChartResources,
     default_backend_resources: HelmChartResources,
     ff_metrics_history_enabled: bool,
+    domain: Domain,
+    cloud_provider: Kind,
+    kubernetes_kind: KubernetesKind,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     nginx_hpa_minimum_replicas: Option<u32>,
     nginx_hpa_maximum_replicas: Option<u32>,
     nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
     namespace: HelmChartNamespaces,
+    loadbalancer_size: Option<String>,
 }
 
 impl NginxIngressChart {
@@ -36,10 +43,14 @@ impl NginxIngressChart {
         default_backend_resources: HelmChartResourcesConstraintType,
         ff_metrics_history_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        domain: Domain,
+        cloud_provider: Kind,
+        kubernetes_kind: KubernetesKind,
         nginx_hpa_minimum_replicas: Option<u32>,
         nginx_hpa_maximum_replicas: Option<u32>,
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
         namespace: HelmChartNamespaces,
+        loadbalancer_size: Option<String>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -71,11 +82,15 @@ impl NginxIngressChart {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             ff_metrics_history_enabled,
+            domain,
+            cloud_provider,
+            kubernetes_kind,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             nginx_hpa_minimum_replicas,
             nginx_hpa_maximum_replicas,
             nginx_hpa_target_cpu_utilization_percentage,
             namespace,
+            loadbalancer_size,
         }
     }
 
@@ -160,8 +175,8 @@ defaultBackend:
 
         let mut chart_set_values = vec![
             ChartSetValue {
-                key: "controller.admissionWebhooks.enabled".to_string(),
-                value: false.to_string(),
+                key: "controller.allowSnippetAnnotations".to_string(),
+                value: true.to_string(),
             },
             // enable metrics for customers who wants to manage it by their own
             ChartSetValue {
@@ -173,6 +188,10 @@ defaultBackend:
                 value: self.ff_metrics_history_enabled.to_string(),
             },
         ];
+        chart_set_values.push(ChartSetValue {
+            key: "controller.autoscaling.enabled".to_string(),
+            value: true.to_string(),
+        });
         if let Some(value) = self.nginx_hpa_minimum_replicas {
             chart_set_values.push(ChartSetValue {
                 key: "controller.autoscaling.minReplicas".to_string(),
@@ -191,6 +210,43 @@ defaultBackend:
                 value: value.to_string(),
             })
         }
+
+        // custom cloud provider configuration
+        match self.cloud_provider {
+            Kind::Aws => {
+                if self.kubernetes_kind == KubernetesKind::Eks {
+                    chart_set_values.push(ChartSetValue {
+                        key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                            .to_string(),
+                        value: "nlb".to_string(),
+                    })
+                };
+            }
+            Kind::Scw => {
+                chart_set_values.push(ChartSetValue {
+                    key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/scw-loadbalancer-type"
+                        .to_string(),
+                    value: match self.loadbalancer_size.clone() {
+                        Some(size) => size,
+                        None => {
+                            return Err(HelmChartError::RenderingError {
+                                chart_name: NginxIngressChart::chart_name(),
+                                msg: "scw-loadbalancer-type is required but information is missing".to_string(),
+                            })
+                        }
+                    },
+                });
+            }
+            Kind::Gcp => {}
+            Kind::SelfManaged => {}
+        }
+        // external dns
+        if self.kubernetes_kind != KubernetesKind::Ec2 {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
+                value: self.domain.wildcarded().to_string(),
+            })
+        };
 
         Ok(CommonChart {
             chart_info: ChartInfo {
@@ -256,6 +312,8 @@ mod tests {
     use crate::cloud_provider::helm_charts::ToCommonHelmChart;
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
+    use crate::cloud_provider::Kind;
+    use crate::models::domain::Domain;
     use std::env;
     use std::sync::Arc;
 
@@ -268,6 +326,10 @@ mod tests {
         })
     }
 
+    fn get_domain() -> Domain {
+        Domain::new("qovery.com".to_string())
+    }
+
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn nginx_ingress_chart_directory_exists_test() {
@@ -278,10 +340,14 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            get_domain().wildcarded(),
+            Kind::Aws,
+            KubernetesKind::Eks,
             Some(1),
             Some(10),
             Some(50),
             HelmChartNamespaces::NginxIngress,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -312,10 +378,14 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            get_domain().wildcarded(),
+            Kind::Aws,
+            KubernetesKind::Eks,
             Some(1),
             Some(10),
             Some(50),
             HelmChartNamespaces::NginxIngress,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -349,10 +419,14 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            get_domain().wildcarded(),
+            Kind::Aws,
+            KubernetesKind::Ec2,
             Some(1),
             Some(10),
             Some(50),
             HelmChartNamespaces::NginxIngress,
+            None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -393,10 +467,14 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             true,
             get_nginx_ingress_chart_override(),
+            get_domain().wildcarded(),
+            Kind::Aws,
+            KubernetesKind::Ec2,
             None,
             None,
             None,
             HelmChartNamespaces::NginxIngress,
+            None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

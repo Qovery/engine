@@ -606,6 +606,10 @@ impl Kubernetes for EC2 {
     fn get_kubernetes_connection(&self) -> Option<String> {
         None
     }
+
+    fn is_self_managed(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait]

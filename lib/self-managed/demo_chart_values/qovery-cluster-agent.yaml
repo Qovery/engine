@@ -1,10 +1,9 @@
-fullnameOverride: qovery-shell-agent
+fullnameOverride: qovery-cluster-agent
 image:
-  tag: e07bc1108f2ab2c57fc4b02da00151e9b03dcca3
+  tag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
 environmentVariables:
   CLUSTER_ID: *clusterId
   CLUSTER_JWT_TOKEN: *jwtToken
-  CLUSTER_TOKEN: ""
-  GRPC_SERVER: *grpcServer
+  LOKI_URL: *lokiUrl
   ORGANIZATION_ID: *organizationId
   RUST_LOG: "info"

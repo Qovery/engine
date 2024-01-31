@@ -106,7 +106,7 @@ impl ChartDotYaml {
             deps.push(ChartDotYamlDependencies {
                 name: chart_meta.name.to_string(),
                 alias: None,
-                condition: format!("{}.{}.enabled", chart_meta.category, chart_meta.name),
+                condition: format!("services.{}.{}.enabled", chart_meta.category, chart_meta.name),
                 version: chart_version.version,
                 repository: format!("file://charts/{}", chart_meta.name),
             })
@@ -128,7 +128,7 @@ impl ChartDotYaml {
             },
             version: qovery_chart.version.to_string(),
             app_version: qovery_chart.app_version.to_string(),
-            kube_version: Some(qovery_chart.kube_version.to_string()),
+            kube_version: qovery_chart.kube_version.map(|x| x.to_string()),
             home: Some(qovery_chart.home.to_string()),
             icon: Some(qovery_chart.icon.to_string()),
         })
@@ -183,8 +183,8 @@ impl ValuesFile {
                 organization_id: "&organizationId set-by-customer".to_string(),
                 jwt_token: "&jwtToken set-by-customer".to_string(),
                 domain: "&domain set-by-customer".to_string(),
-                grpc_server: "&grpcServer set-by-customer".to_string(),
-                engine_grpc_server: "&engineGrpcServer set-by-customer".to_string(),
+                domain_wildcard: "&domainWildcard set-by-customer".to_string(),
+                // engine_grpc_server: "&engineGrpcServer set-by-customer".to_string(),
                 qovery_dns_url: "&qoveryDnsUrl set-by-customer".to_string(),
                 loki_url: "&lokiUrl set-by-customer".to_string(),
                 promtail_loki_url: "&promtailLokiUrl set-by-customer".to_string(),
@@ -195,12 +195,11 @@ impl ValuesFile {
             qovery_cluster_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "latest".to_string(),
+                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
-                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("LOKI_URL".to_string(), "*lokiUrl".to_string()),
                 ]),
@@ -208,12 +207,11 @@ impl ValuesFile {
             qovery_shell_agent: QoveryAgents {
                 full_name_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "latest".to_string(),
+                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
-                    ("GRPC_SERVER".to_string(), "*grpcServer".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                 ]),
             },
@@ -261,6 +259,7 @@ impl ValuesFile {
 
         value.services.aws = Some(AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
         });
 
         value

@@ -21,3 +21,6 @@ rules:
   - apiGroups: [ "storage.k8s.io" ]
     resources: [ "volumeattachments/status" ]
     verbs: [ "patch" ]
+  {{- with .Values.sidecars.attacher.additionalClusterRoleRules }}
+    {{- . | toYaml | nindent 2 }}
+  {{- end }}

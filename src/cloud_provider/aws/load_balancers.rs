@@ -17,6 +17,10 @@ pub fn clean_up_deleted_k8s_nlb(
     event_details: EventDetails,
     target: &DeploymentTarget,
 ) -> Result<(), Box<EngineError>> {
+    if target.kubernetes.is_self_managed() {
+        return Ok(());
+    }
+
     let conn = match target.cloud_provider.aws_sdk_client() {
         Some(x) => x,
         None => return Ok(()),

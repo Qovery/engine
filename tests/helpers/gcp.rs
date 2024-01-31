@@ -263,7 +263,10 @@ impl Cluster<Google, GkeOptions> for Gke {
             "qovery".to_string(),
             engine_location,
             credentials,
-            VpcMode::Automatic,
+            VpcMode::Automatic {
+                custom_cluster_ipv4_cidr_block: None,
+                custom_services_ipv4_cidr_block: None,
+            },
             secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
