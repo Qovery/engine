@@ -18,9 +18,9 @@ use uuid::Uuid;
 pub const AWS_EC2_KUBERNETES_MIN_NODES: i32 = 1;
 pub const AWS_EC2_KUBERNETES_MAX_NODES: i32 = 1;
 
-pub static AWS_EC2_KUBERNETES_VERSION: Lazy<KubernetesVersion> = Lazy::new(|| KubernetesVersion::V1_27 {
+pub static AWS_EC2_KUBERNETES_VERSION: Lazy<KubernetesVersion> = Lazy::new(|| KubernetesVersion::V1_28 {
     prefix: Some(Arc::from("v")),
-    patch: Some(9),
+    patch: Some(5),
     suffix: Some(Arc::from("+k3s1")),
 });
 

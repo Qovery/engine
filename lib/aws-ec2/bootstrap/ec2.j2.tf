@@ -249,6 +249,7 @@ local_ip=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 public_ip=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 flannel_iface=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 provider_id="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+public_hostname_tls_san="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
 
 CUR_HOSTNAME=$(cat /etc/hostname)
 NEW_HOSTNAME=$instance_id
@@ -266,8 +267,8 @@ chmod -R 700 /data/k3s
 export INSTALL_K3S_VERSION=${var.k3s_config.version}
 export INSTALL_K3S_CHANNEL=${var.k3s_config.channel}
 export INSTALL_K3S_EXEC="--https-listen-port=${var.k3s_config.exposed_port} --disable=traefik --disable=metrics-server"
-echo "k3s agrs: $INSTALL_K3S_EXEC"
-while ! curl -sfL https://get.k3s.io | sh -s - --tls-san "$public_ip" --node-ip "$local_ip" --advertise-address "$local_ip" --flannel-iface "$flannel_iface" --kubelet-arg="cloud-provider=external" --kubelet-arg="provider-id=aws:///$provider_id" --etcd-arg "--advertise-client-urls" ; do
+echo "k3s args: $INSTALL_K3S_EXEC"
+while ! curl -sfL https://get.k3s.io | sh -s - --tls-san "$public_ip" --tls-san "$public_hostname_tls_san" --node-ip "$local_ip" --advertise-address "$local_ip" --flannel-iface "$flannel_iface" --kubelet-arg="cloud-provider=external" --kubelet-arg="provider-id=aws:///$provider_id" --etcd-arg "--advertise-client-urls" ; do
   echo 'k3s did not install correctly'
   sleep 2
 done
