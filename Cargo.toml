@@ -206,6 +206,8 @@ test-scw-all = [
     "test-scw-whole-enchilada",
 ]
 
+test-quarantine = []
+
 # functionnal test with only a k8s cluster as a dependency
 test-local-kube = []
 test-local-docker = []

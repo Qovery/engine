@@ -37,7 +37,7 @@ use uuid::Uuid;
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-scw-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[named]
 #[test]
 fn scaleway_test_build_phase() {
