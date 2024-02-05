@@ -17,6 +17,7 @@ stages:
   - build-and-lint
   - minimal-tests
   - tests
+  - tests-quarantine
   - deploy
   - deploy-all-clusters
 
@@ -621,6 +622,38 @@ gcp-whole-enchilada:
     expire_in: 2 week
   interruptible: true
   when: manual
+
+####################
+# QUARANTINE TESTS #
+####################
+
+quarantine:
+  stage: tests-quarantine
+  retry: 2
+  timeout: 4 hours
+  script:
+    - ./helper.sh quarantine
+  tags:
+    - vm-2cpu-6gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Quarantine/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+  allow_failure: true
 
 ##########
 # DEPLOY #

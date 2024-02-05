@@ -515,6 +515,9 @@ scw_infra)
 gcp_infra)
   run_tests test-gcp-infra $commit_id 20
   ;;
+quarantine)
+  run_tests test-quarantine $commit_id 20
+  ;;
 test_all)
   run_tests test-all $commit_id 20
   ;;
