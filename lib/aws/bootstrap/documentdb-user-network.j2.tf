@@ -1,4 +1,4 @@
-{% set docdb_enabled = documentdb_subnets_zone_a_ids | length  %}
+{% set docdb_enabled = documentdb_subnets_zone_a_ids | default(value=[]) | length  %}
 {%- if user_provided_network and docdb_enabled -%}
 
 locals {
