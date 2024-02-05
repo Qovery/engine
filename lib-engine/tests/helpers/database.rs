@@ -213,7 +213,7 @@ pub fn environment_3_apps_3_databases(
     let database_db_name_mongo = "mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_password(CONTAINER);
-    let _database_uri_mongo = format!(
+    let database_uri_mongo = format!(
         "mongodb://{database_username_mongo}:{database_password_mongo}@{database_host_mongo}:{database_port_mongo}/{database_db_name_mongo}"
     );
     let version_mongo = "4.4";
@@ -384,7 +384,15 @@ pub fn environment_3_apps_3_databases(
                 root_path: String::from("/"),
                 git_credentials: None,
                 storage: vec![],
-                environment_vars_with_infos: btreemap! {},
+                environment_vars_with_infos: btreemap! {
+                    "IS_DOCUMENTDB".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(false.to_string()), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(&database_host_mongo), is_secret:false},
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_uri_mongo), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_port_mongo.to_string()), is_secret:false},
+                    "MONGODB_DBNAME".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(&database_db_name_mongo), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() =>VariableInfo { value:  general_purpose::STANDARD.encode(&database_username_mongo), is_secret:false},
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(&database_password_mongo), is_secret:false},
+                },
                 mounted_files: vec![],
                 public_domain: format!("{}.example.com", app_id),
                 ports: vec![Port {
@@ -484,7 +492,7 @@ pub fn environment_3_apps_3_databases(
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
                 name: database_db_name_mongo.clone(),
-                kube_name: database_db_name_mongo,
+                kube_name: database_db_name_mongo.to_string(),
                 created_at: Utc::now(),
                 version: version_mongo.to_string(),
                 fqdn_id: database_host_mongo.clone(),
