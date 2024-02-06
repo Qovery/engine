@@ -233,9 +233,9 @@ fn test_delete_repository() {
     });
 }
 
-#[cfg(feature = "test-gcp-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[test]
-#[ignore = "docker login fails on the CI because of not TTY, TODO(): activate it in the CI"]
+// #[ignore = "docker login fails on the CI because of not TTY, TODO(): activate it in the CI"]
 #[named]
 fn test_get_docker_image() {
     // setup:
@@ -367,9 +367,9 @@ fn test_get_docker_image() {
     });
 }
 
-#[cfg(feature = "test-gcp-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[test]
-#[ignore = "docker login fails on the CI because of not TTY"]
+// #[ignore = "docker login fails on the CI because of not TTY, TODO(): activate it in the CI"]
 #[named]
 fn test_delete_docker_image() {
     // setup:
