@@ -1,0 +1,26 @@
+apiVersion: v1
+appVersion: "2.1"
+description: 'This chart runs a pod that simply watches Kubernetes Events and logs
+  them to stdout in JSON to be collected and stored by your logging solution, e.g.
+  [fluentd](https://github.com/helm/charts/tree/master/stable/fluentd) or [fluent-bit](https://github.com/helm/charts/tree/master/stable/fluent-bit).  https://github.com/max-rocket-internet/k8s-event-logger  Events
+  in Kubernetes log very important information. If are trying to understand what happened
+  in the past then these events show clearly what your Kubernetes cluster was thinking
+  and doing. Some examples:  - Pod events like failed probes, crashes, scheduling
+  related information like `TriggeredScaleUp` or `FailedScheduling` - HorizontalPodAutoscaler
+  events like scaling up and down - Deployment events like scaling in and out of ReplicaSets
+  - Ingress events like create and update  The problem is that these events are simply
+  API objects in Kubernetes and are only stored for about 1 hour. Without some way
+  of storing these events, debugging a problem in the past very tricky. '
+home: https://github.com/max-rocket-internet/k8s-event-logger
+icon: https://github.com/kubernetes/kubernetes/raw/master/logo/logo.png
+keywords:
+- events
+- logging
+- Auditing
+maintainers:
+- email: max.williams@deliveryhero.com
+  name: max-rocket-internet
+name: k8s-event-logger
+sources:
+- https://github.com/max-rocket-internet/k8s-event-logger
+version: 1.1.6
