@@ -669,13 +669,13 @@ impl Kapsule {
             ) {
                 Ok(x) => {
                     if x.required_upgrade_on.is_some() {
-                        return self.upgrade_with_status(x);
+                        self.upgrade_with_status(x)?;
+                    } else {
+                        self.logger().log(EngineEvent::Info(
+                            event_details.clone(),
+                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                        ))
                     }
-
-                    self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
                 }
                 Err(e) => {
                     // Log a warning, this error is not blocking
