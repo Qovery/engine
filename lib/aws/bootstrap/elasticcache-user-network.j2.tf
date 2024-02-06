@@ -1,4 +1,5 @@
-{%- if user_provided_network -%}
+{% set es_enabled = elasticache_subnets_zone_a_ids | default(value=[]) | length  %}
+{%- if user_provided_network and es_enabled -%}
 
 locals {
   tags_elasticache = merge(

@@ -1,4 +1,5 @@
-{%- if user_provided_network -%}
+{% set rds_enabled = rds_subnets_zone_a_ids | default(value=[]) | length  %}
+{%- if user_provided_network and rds_enabled -%}
 
 data "aws_iam_policy_document" "rds_enhanced_monitoring" {
   statement {
