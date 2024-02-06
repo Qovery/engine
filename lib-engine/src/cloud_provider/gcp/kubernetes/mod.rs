@@ -536,13 +536,13 @@ impl Gke {
                 ) {
                     Ok(kubernetes_upgrade_status) => {
                         if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                            return self.upgrade_with_status(kubernetes_upgrade_status);
+                            self.upgrade_with_status(kubernetes_upgrade_status)?;
+                        } else {
+                            self.logger().log(EngineEvent::Info(
+                                event_details.clone(),
+                                EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                            ))
                         }
-
-                        self.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                        ))
                     }
                     Err(e) => {
                         // Log a warning, this error is not blocking
