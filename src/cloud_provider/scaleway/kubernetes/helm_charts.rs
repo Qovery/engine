@@ -80,7 +80,6 @@ pub struct ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: KapsuleOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -110,7 +109,6 @@ impl ChartsConfigPrerequisites {
         external_dns_provider: String,
         lets_encrypt_config: LetsEncryptConfig,
         dns_provider_config: DnsProviderConfiguration,
-        disable_pleco: bool,
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
     ) -> Self {
@@ -138,7 +136,6 @@ impl ChartsConfigPrerequisites {
             external_dns_provider,
             lets_encrypt_config,
             dns_provider_config,
-            disable_pleco,
             infra_options,
             cluster_advanced_settings,
         }
@@ -460,37 +457,6 @@ pub fn scw_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let pleco = match chart_config_prerequisites.disable_pleco {
-        true => None,
-        false => Some(CommonChart {
-            chart_info: ChartInfo {
-                name: "pleco".to_string(),
-                path: chart_path("common/charts/pleco"),
-                values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
-                values: vec![
-                    ChartSetValue {
-                        key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
-                        value: chart_config_prerequisites.scw_access_key.clone(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.SCW_SECRET_KEY".to_string(),
-                        value: chart_config_prerequisites.scw_secret_key.clone(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
-                        value: 24i32.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.LOG_LEVEL".to_string(),
-                        value: "debug".to_string(),
-                    },
-                ],
-                ..Default::default()
-            },
-            ..Default::default()
-        }),
-    };
-
     // K8s Event Logger
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
@@ -643,7 +609,7 @@ pub fn scw_helm_charts(
 
     let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
@@ -671,11 +637,6 @@ pub fn scw_helm_charts(
     }
     if let Some(grafana_chart) = grafana {
         level_2.push(Box::new(grafana_chart))
-    }
-
-    // pleco
-    if let Some(pleco_chart) = pleco {
-        level_6.push(Box::new(pleco_chart));
     }
 
     info!("charts configuration preparation finished");

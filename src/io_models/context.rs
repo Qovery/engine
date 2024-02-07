@@ -95,13 +95,6 @@ impl Context {
         }
     }
 
-    pub fn disable_pleco(&self) -> bool {
-        match &self.metadata {
-            Some(meta) => meta.disable_pleco.unwrap_or(true),
-            _ => true,
-        }
-    }
-
     pub fn requires_forced_upgrade(&self) -> bool {
         match &self.metadata {
             Some(meta) => matches!(meta.forced_upgrade, Some(true)),
@@ -155,7 +148,6 @@ pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
     pub forced_upgrade: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
-    pub disable_pleco: Option<bool>,
     pub is_first_cluster_deployment: Option<bool>,
 }
 
@@ -164,14 +156,12 @@ impl Metadata {
         dry_run_deploy: Option<bool>,
         resource_expiration_in_seconds: Option<u32>,
         forced_upgrade: Option<bool>,
-        disable_pleco: Option<bool>,
         is_first_cluster_deployment: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
             forced_upgrade,
-            disable_pleco,
             is_first_cluster_deployment,
         }
     }
@@ -222,7 +212,6 @@ mod tests {
         assert_eq!(None, result.is_first_cluster_deployment);
         assert_eq!(None, result.resource_expiration_in_seconds);
         assert_eq!(None, result.forced_upgrade);
-        assert_eq!(None, result.disable_pleco);
         assert_eq!(None, result.dry_run_deploy);
     }
 
