@@ -66,7 +66,6 @@ pub struct ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub disable_pleco: bool,
     pub loki_logging_service_account_email: String,
     pub logs_bucket_name: String,
     // qovery options form json input
@@ -97,7 +96,6 @@ impl ChartsConfigPrerequisites {
         external_dns_provider: String,
         lets_encrypt_config: LetsEncryptConfig,
         dns_provider_config: DnsProviderConfiguration,
-        disable_pleco: bool,
         loki_logging_service_account_email: String,
         logs_bucket_name: String,
         infra_options: GkeOptions,
@@ -125,7 +123,6 @@ impl ChartsConfigPrerequisites {
             external_dns_provider,
             lets_encrypt_config,
             dns_provider_config,
-            disable_pleco,
             loki_logging_service_account_email,
             logs_bucket_name,
             infra_options,
