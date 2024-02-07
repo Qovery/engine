@@ -299,7 +299,7 @@ impl Cluster<AWS, Options> for AWS {
             qovery_engine_url: secrets.ENGINE_SERVER_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             user_ssh_keys: vec![],
-            user_network_config: None,
+            user_provided_network: None,
             aws_addon_cni_version_override: None,
             aws_addon_ebs_csi_version_override: None,
             aws_addon_kube_proxy_version_override: None,

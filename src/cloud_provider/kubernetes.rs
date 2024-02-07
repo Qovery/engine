@@ -213,6 +213,14 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { .. } => None,
         }
     }
+
+    pub fn is_equal_to(&self, version: &KubernetesVersion) -> bool {
+        return self.major() == version.major()
+            && self.minor() == version.minor()
+            && self.patch() == version.patch()
+            && self.prefix() == version.prefix()
+            && self.suffix() == version.suffix();
+    }
 }
 
 impl Display for KubernetesVersion {
@@ -771,6 +779,19 @@ pub trait Kubernetes: Send + Sync {
         })
     }
 
+    fn check_control_plane_on_upgrade(&self, targeted_version: KubernetesVersion) -> Result<(), CommandError>
+    where
+        Self: Sized,
+    {
+        send_progress_on_long_task(self, Action::Create, || {
+            check_master_version_status(
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
+                self.cloud_provider().credentials_environment_variables(),
+                &targeted_version,
+            )
+        })
+    }
+
     fn check_workers_on_create(&self) -> Result<(), CommandError>
     where
         Self: Sized,
@@ -1180,6 +1201,44 @@ where
         },
         Err(retry::Error { error, .. }) => Err(error),
     };
+}
+
+pub fn check_master_version_status<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    target_version: &KubernetesVersion,
+) -> Result<(), CommandError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Fixed::from_millis(10000).take(360), || {
+        match kubectl_exec_version(kubernetes_config.as_ref(), envs.clone()) {
+            Err(e) => OperationResult::Err(e),
+            Ok(version) => {
+                let to_kube_version = match KubernetesVersion::from_str(
+                    format!("{}.{}", version.server_version.major, version.server_version.minor).as_str(),
+                ) {
+                    Ok(kubeversion) => kubeversion,
+                    Err(_) => {
+                        return OperationResult::Err(CommandError::new_from_safe_message(
+                            "Cannot find master nodes version.".to_string(),
+                        ))
+                    }
+                };
+                if target_version.is_equal_to(&to_kube_version) {
+                    OperationResult::Ok(())
+                } else {
+                    OperationResult::Retry(CommandError::new_from_safe_message(
+                        "Master nodes are still upgrading".to_string(),
+                    ))
+                }
+            }
+        }
+    });
+    match result {
+        Ok(_) => Ok(()),
+        Err(retry::Error { error, .. }) => Err(error),
+    }
 }
 
 pub fn check_workers_status<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>

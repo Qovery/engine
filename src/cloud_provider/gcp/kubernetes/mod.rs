@@ -35,10 +35,12 @@ use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::google_object_storage::GoogleOS;
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
+use crate::runtime::block_on;
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
+use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -53,6 +55,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, fs};
 use tera::Context as TeraContext;
@@ -533,13 +536,13 @@ impl Gke {
                 ) {
                     Ok(kubernetes_upgrade_status) => {
                         if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                            return self.upgrade_with_status(kubernetes_upgrade_status);
+                            self.upgrade_with_status(kubernetes_upgrade_status)?;
+                        } else {
+                            self.logger().log(EngineEvent::Info(
+                                event_details.clone(),
+                                EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                            ))
                         }
-
-                        self.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                        ))
                     }
                     Err(e) => {
                         // Log a warning, this error is not blocking
@@ -803,7 +806,7 @@ impl Gke {
                 "container",
                 "clusters",
                 "get-credentials",
-                &self.name,
+                self.cluster_name().as_str(),
                 format!("--region={}", self.region.to_cloud_provider_format()).as_str(),
                 format!("--project={}", self.options.gcp_json_credentials.project_id).as_str(),
             ],
@@ -1350,8 +1353,210 @@ impl Kubernetes for Gke {
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
-    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(benjaminch): GKE integration
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Start preparing GKE cluster upgrade process".to_string()),
+        ));
+        let temp_dir = self.get_temp_dir(event_details.clone())?;
+
+        // generate terraform files and copy them into temp dir
+        let mut context = self.tera_context()?;
+        context.insert(
+            "kubernetes_cluster_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
+
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            context,
+        ) {
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details,
+                self.template_directory.to_string(),
+                temp_dir,
+                e,
+            )));
+        }
+
+        let dirs_to_be_copied_to = vec![
+            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/gcp/bootstrap/common/charts directory.
+            // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
+            (
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                format!("{}/common/charts", temp_dir.as_str()),
+            ),
+            // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/gcp/bootstrap/common/chart_values directory.
+            (
+                format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
+                format!("{}/common/chart_values", temp_dir.as_str()),
+            ),
+        ];
+        for (source_dir, target_dir) in dirs_to_be_copied_to {
+            if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
+                return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    event_details,
+                    source_dir,
+                    target_dir,
+                    e,
+                )));
+            }
+        }
+
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Upgrading GKE cluster.".to_string()),
+        ));
+
+        //
+        // Upgrade nodes
+        //
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Preparing nodes for upgrade for Kubernetes cluster.".to_string()),
+        ));
+
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Upgrading Kubernetes nodes.".to_string()),
+        ));
+
+        self.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Checking clusters content health".to_string()),
+        ));
+
+        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+                                                                          // disable all replicas with issues to avoid upgrade failures
+        let kube_client = self.q_kube_client()?;
+        let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
+        for deploy in deployments {
+            let status = match deploy.status {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let replicas = status.replicas.unwrap_or(0);
+            let ready_replicas = status.ready_replicas.unwrap_or(0);
+
+            // if number of replicas > 0: it is not already disabled
+            // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
+            if replicas > 0 && ready_replicas == 0 {
+                self.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                        deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
+                    )),
+                ));
+                block_on(kube_client.set_deployment_replicas_number(
+                    event_details.clone(),
+                    deploy.metadata.name.as_str(),
+                    deploy.metadata.namespace.as_str(),
+                    0,
+                ))?;
+            } else {
+                info!(
+                    "Deployment {}/{} has {}/{} replicas ready. No action needed.",
+                    deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
+                );
+            }
+        }
+        // same with statefulsets
+        let statefulsets =
+            block_on(kube_client.get_statefulsets(event_details.clone(), None, SelectK8sResourceBy::All))?;
+        for sts in statefulsets {
+            let status = match sts.status {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let ready_replicas = status.ready_replicas.unwrap_or(0);
+
+            // if number of replicas > 0: it is not already disabled
+            // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
+            if status.replicas > 0 && ready_replicas == 0 {
+                self.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                        sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
+                    )),
+                ));
+                block_on(kube_client.set_statefulset_replicas_number(
+                    event_details.clone(),
+                    sts.metadata.name.as_str(),
+                    sts.metadata.namespace.as_str(),
+                    0,
+                ))?;
+            } else {
+                info!(
+                    "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
+                    sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
+                );
+            }
+        }
+
+        if let Err(e) = self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(3),
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
+            return Err(e);
+        }
+
+        if let Err(e) = self.delete_completed_jobs(
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
+            return Err(e);
+        }
+
+        let requested_version = kubernetes_upgrade_status.requested_version.to_string();
+        let kubernetes_version = match KubernetesVersion::from_str(requested_version.as_str()) {
+            Ok(kubeversion) => kubeversion,
+            Err(_) => {
+                return Err(Box::new(EngineError::new_cannot_determine_k8s_master_version(
+                    event_details,
+                    kubernetes_upgrade_status.requested_version.to_string(),
+                )))
+            }
+        };
+
+        match terraform_init_validate_plan_apply(
+            temp_dir.as_str(),
+            self.context.is_dry_run_deploy(),
+            self.cloud_provider().credentials_environment_variables().as_slice(),
+        ) {
+            Ok(_) => match self.check_control_plane_on_upgrade(kubernetes_version) {
+                Ok(_) => {
+                    self.logger().log(EngineEvent::Info(
+                        event_details,
+                        EventMessage::new_from_safe(
+                            "Kubernetes control plane has been successfully upgraded.".to_string(),
+                        ),
+                    ));
+                }
+                Err(e) => {
+                    return Err(Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
+                        event_details,
+                        kubernetes_upgrade_status.requested_version.to_string(),
+                        e,
+                    )));
+                }
+            },
+            Err(e) => {
+                return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
+            }
+        }
+
+        Ok(())
     }
 
     fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
