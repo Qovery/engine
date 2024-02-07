@@ -132,7 +132,7 @@ pub struct Options {
     // Others
     pub tls_email_report: String,
     #[serde(default)]
-    pub user_network_config: Option<UserNetworkConfig>,
+    pub user_provided_network: Option<UserNetworkConfig>,
     #[serde(default)]
     pub aws_addon_cni_version_override: Option<String>,
     #[serde(default)]
@@ -230,7 +230,7 @@ fn tera_context(
     let mut context = TeraContext::new();
 
     context.insert("user_provided_network", &false);
-    if let Some(user_network_cfg) = &options.user_network_config {
+    if let Some(user_network_cfg) = &options.user_provided_network {
         context.insert("user_provided_network", &true);
 
         context.insert("documentdb_subnets_zone_a_ids", &user_network_cfg.documentdb_subnets_zone_a_ids);

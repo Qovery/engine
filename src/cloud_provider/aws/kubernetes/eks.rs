@@ -268,7 +268,7 @@ impl Kubernetes for EKS {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        self.options.user_network_config.is_some()
+        self.options.user_provided_network.is_some()
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
