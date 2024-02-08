@@ -34,11 +34,20 @@ pub struct BackupInfos {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct ChartDependencyYAML {
+    #[serde(default)]
+    pub repository: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ChartYAML {
     #[serde(default)]
     pub version: String,
     #[serde(default)]
     pub app_version: String,
+    #[serde(default)]
+    pub dependencies: Vec<ChartDependencyYAML>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

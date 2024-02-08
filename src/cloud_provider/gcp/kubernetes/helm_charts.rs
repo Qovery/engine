@@ -7,6 +7,7 @@ use crate::cloud_provider::helm::{
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::cloud_provider::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
@@ -349,6 +350,10 @@ pub fn gcp_helm_charts(
     )
     .to_common_helm_chart()?;
 
+    // K8s Event Logger
+    let k8s_event_logger =
+        K8sEventLoggerChart::new(chart_prefix_path, false, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+
     // Qovery cluster agent
     let qovery_cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
@@ -509,6 +514,7 @@ pub fn gcp_helm_charts(
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(qovery_engine)),
+        Some(Box::new(k8s_event_logger)),
     ];
 
     Ok(vec![

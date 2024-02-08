@@ -4,6 +4,7 @@ use crate::cloud_provider::helm::{
     PriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
@@ -326,6 +327,10 @@ pub fn eks_aws_helm_charts(
             ..Default::default()
         },
     };*/
+
+    // K8s Event Logger
+    let k8s_event_logger =
+        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
     // Kube prometheus stack
     let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
@@ -666,6 +671,7 @@ pub fn eks_aws_helm_charts(
         Box::new(cluster_agent),
         Box::new(qovery_shell_agent),
         Box::new(qovery_engine),
+        Box::new(k8s_event_logger),
     ];
 
     // observability

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 
@@ -5,10 +6,11 @@ use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist,
 };
+use crate::cmd::helm_utils::ChartYAML;
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
@@ -20,6 +22,7 @@ use std::fs::File;
 use std::str::FromStr;
 use tempfile::TempDir;
 use url::Url;
+use uuid::Uuid;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
@@ -87,6 +90,8 @@ pub enum HelmCommand {
     PULL,
     LOGIN,
     DEPENDENCY,
+    SHOW,
+    REPO,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1011,6 +1016,7 @@ impl Helm {
     pub fn dependency_build<STDOUT, STDERR>(
         &self,
         release_name: &str,
+        working_directory_path: &Path,
         chart_path: &Path,
         args: &[&str],
         envs: &[(&str, &str)],
@@ -1022,11 +1028,40 @@ impl Helm {
         STDOUT: FnMut(String),
         STDERR: FnMut(String),
     {
+        let (registry_config_path, repository_config_path, repository_cache_path) =
+            Helm::get_helm_cmd_paths(working_directory_path);
+        let repositories_ret = self.get_repo_dependencies(chart_path, args, envs, cmd_killer, stderr_output);
+        match repositories_ret {
+            Ok(repositories) => repositories.iter().for_each(|repository_url| {
+                let _ = self.helm_add_repo(
+                    working_directory_path,
+                    chart_path,
+                    repository_url,
+                    args,
+                    envs,
+                    cmd_killer,
+                    stdout_output,
+                    stderr_output,
+                );
+            }),
+            Err(err) => warn!("Helm error: {:?}", err),
+        }
+
         let chart_path = chart_path.to_string_lossy();
-        let args: Vec<&str> = ["dependency", "build", chart_path.as_ref()]
-            .into_iter()
-            .chain(args.iter().copied())
-            .collect();
+        let args: Vec<&str> = [
+            "dependency",
+            "build",
+            chart_path.as_ref(),
+            "--registry-config",
+            &registry_config_path,
+            "--repository-config",
+            &repository_config_path,
+            "--repository-cache",
+            &repository_cache_path,
+        ]
+        .into_iter()
+        .chain(args.iter().copied())
+        .collect();
 
         let mut stderr_msg = String::new();
         let helm_ret = helm_exec_with_output(
@@ -1054,6 +1089,141 @@ impl Helm {
                 _ => {
                     error!("Helm error: {:?}", err);
                     Err(CmdError(release_name.to_string(), HelmCommand::DEPENDENCY, err.into()))
+                }
+            },
+        }
+    }
+
+    pub fn get_repo_dependencies<STDERR>(
+        &self,
+        chart_path: &Path,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stderr_output: &mut STDERR,
+    ) -> Result<HashSet<String>, HelmError>
+    where
+        STDERR: FnMut(String),
+    {
+        let chart_path = chart_path.to_string_lossy();
+        let args: Vec<&str> = ["show", "chart", chart_path.as_ref()]
+            .into_iter()
+            .chain(args.iter().copied())
+            .collect();
+
+        let mut stderr_msg = String::new();
+        let mut output_string: Vec<String> = Vec::with_capacity(20);
+        let helm_ret = helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| output_string.push(line),
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart_path, line);
+                stderr_output(line);
+            },
+            cmd_killer,
+        );
+
+        match helm_ret {
+            Ok(_) => {
+                let parse_result = serde_yaml::from_str::<ChartYAML>(output_string.join("\n").as_str());
+                match parse_result {
+                    Ok(yaml) => {
+                        let dependencies: HashSet<String> = yaml
+                            .dependencies
+                            .iter()
+                            .filter(|dependency| dependency.repository.starts_with("https://"))
+                            .map(|dependency| dependency.repository.clone())
+                            .collect();
+                        Ok(dependencies)
+                    }
+                    Err(err) => {
+                        error!("Helm error: can't parse chart");
+                        Err(CmdError(
+                            "".to_string(),
+                            DEPENDENCY,
+                            errors::CommandError::new(
+                                "Error while parsing YAML chart file.".to_string(),
+                                Some(err.to_string()),
+                                None,
+                            ),
+                        ))
+                    }
+                }
+            }
+            Err(err) => match err {
+                CommandError::TimeoutError(_) => Err(HelmError::Timeout("".to_string(), HelmCommand::SHOW, stderr_msg)),
+                CommandError::Killed(_) => Err(HelmError::Killed("".to_string(), DEPENDENCY)),
+                _ => {
+                    error!("Helm error: {:?}", err);
+                    Err(CmdError("".to_string(), HelmCommand::DEPENDENCY, err.into()))
+                }
+            },
+        }
+    }
+
+    pub fn helm_add_repo<STDOUT, STDERR>(
+        &self,
+        working_directory_path: &Path,
+        chart_path: &Path,
+        chart_url: &str,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+    ) -> Result<(), HelmError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
+        let (registry_config_path, repository_config_path, repository_cache_path) =
+            Helm::get_helm_cmd_paths(working_directory_path);
+
+        let chart_name = Uuid::new_v4().to_string();
+        let chart_path = chart_path.to_string_lossy();
+
+        let args: Vec<&str> = [
+            "repo",
+            "add",
+            chart_name.as_ref(),
+            chart_url,
+            "--registry-config",
+            &registry_config_path,
+            "--repository-config",
+            &repository_config_path,
+            "--repository-cache",
+            &repository_cache_path,
+        ]
+        .into_iter()
+        .chain(args.iter().copied())
+        .collect();
+
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| {
+                stdout_output(line);
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart_path, line);
+                stderr_output(line);
+            },
+            cmd_killer,
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                CommandError::TimeoutError(_) => Err(HelmError::Timeout(chart_url.to_string(), REPO, stderr_msg)),
+                CommandError::Killed(_) => Err(HelmError::Killed(chart_url.to_string(), REPO)),
+                _ => {
+                    error!("Helm error: {:?}", err);
+                    Err(CmdError(chart_url.to_string(), REPO, err.into()))
                 }
             },
         }

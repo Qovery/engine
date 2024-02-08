@@ -13,6 +13,7 @@ pub mod cert_manager_config_chart;
 pub mod coredns_config_chart;
 pub mod external_dns_chart;
 pub mod grafana_chart;
+pub mod k8s_event_logger;
 pub mod kube_prometheus_stack_chart;
 pub mod kube_state_metrics;
 pub mod loki_chart;

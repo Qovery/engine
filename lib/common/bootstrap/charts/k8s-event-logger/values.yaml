@@ -1,0 +1,41 @@
+containerName: k8s-event-logger
+image:
+  repository: maxrocketinternet/k8s-event-logger
+  # image.tag -- Overrides the image tag whose default is the chart appVersion.
+  # tag: "2.0"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# env -- A map of environment variables
+env: {}
+
+securityContext: {}
+
+podSecurityContext:
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podLabels: {}
+annotations: {}
+podAnnotations: {}

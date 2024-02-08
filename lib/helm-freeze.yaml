@@ -110,6 +110,10 @@ charts:
     dest_folder_override: vertical-pod-autoscaler
     repo_name: fairwinds
     version: 2.2.1
+  - name: k8s-event-logger
+    repo_name: deliveryhero
+    version: 1.1.6
+    comment: https://artifacthub.io/packages/helm/deliveryhero/k8s-event-logger
 
 repos:
   - name: stable
@@ -144,6 +148,8 @@ repos:
     url: https://kubernetes-sigs.github.io/metrics-server/
   - name: fairwinds
     url: https://charts.fairwinds.com/stable
+  - name: deliveryhero
+    url: https://charts.deliveryhero.io/
 
 destinations:
   - name: default

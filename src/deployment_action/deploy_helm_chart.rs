@@ -425,6 +425,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
         .helm
         .dependency_build(
             this.helm_release_name(),
+            this.workspace_directory(),
             this.chart_workspace_directory(),
             &[],
             &[],
