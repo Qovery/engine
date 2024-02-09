@@ -1,8 +1,8 @@
 use crate::cloud_provider::service::ServiceType;
 use crate::deployment_report::application::reporter::AppDeploymentReport;
 use crate::deployment_report::utils::{
-    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_services_render_context,
-    PodsRenderContext, PvcRenderContext, ServiceRenderContext,
+    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_replicasets_render_context,
+    to_services_render_context, PodsRenderContext, PvcRenderContext, ReplicaSetRenderContext, ServiceRenderContext,
 };
 use crate::utilities::to_short_id;
 use serde::Serialize;
@@ -14,6 +14,7 @@ pub struct AppDeploymentRenderContext {
     pub tag_name: String,
     pub tag: String,
     pub services: Vec<ServiceRenderContext>,
+    pub replicasets: Vec<ReplicaSetRenderContext>,
     pub nb_pods: usize,
     pub pods_current_version: PodsRenderContext,
     pub pods_old_version: PodsRenderContext,
@@ -29,6 +30,13 @@ const REPORT_TEMPLATE: &str = r#"
 ┃  |__ 💭 {{ service.message }}
 {%- endif -%}
 {%- for event in service.events %}
+┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+{%- endfor -%}
+{%- endfor %}
+┃
+{%- for replicaset in replicasets %}
+┃ 🛰 ReplicaSet {{ replicaset.name }} ({{ replicaset.status }})
+{%- for event in replicaset.events %}
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
@@ -70,6 +78,7 @@ pub(super) fn render_app_deployment_report(
     deployment_info: &AppDeploymentReport,
 ) -> Result<String, tera::Error> {
     let services_ctx = to_services_render_context(&deployment_info.services, &deployment_info.events);
+    let replicasets_ctx = to_replicasets_render_context(&deployment_info.replicasets, &deployment_info.events);
     let (pods_current_version, pods_old_version): (PodsRenderContext, PodsRenderContext) =
         to_pods_render_context_by_version(&deployment_info.pods, &deployment_info.events, service_tag);
     let pvcs_ctx = to_pvc_render_context(&deployment_info.pvcs, &deployment_info.events);
@@ -84,6 +93,7 @@ pub(super) fn render_app_deployment_report(
         .to_string(),
         tag: service_tag.to_string(),
         services: services_ctx,
+        replicasets: replicasets_ctx,
         nb_pods: deployment_info.pods.len(),
         pods_current_version,
         pods_old_version,
@@ -101,7 +111,7 @@ mod test {
     };
     use crate::deployment_report::utils::{
         exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
-        QContainerState, QContainerStateTerminated,
+        QContainerState, QContainerStateTerminated, ReplicaSetRenderContext,
     };
     use crate::utilities::to_short_id;
 
@@ -130,6 +140,16 @@ mod test {
                     },
                     EventRenderContext {
                         message: "Pool of ip exhausted".to_string(),
+                        type_: "Warning".to_string(),
+                    },
+                ],
+            }],
+            replicasets: vec![ReplicaSetRenderContext{
+                name: "app-z17892111-nginx-bb99bb964".to_string(),
+                status: Some("FailedCreate".to_string()),
+                events: vec![
+                    EventRenderContext {
+                        message: "Error creating: pods \"app-z17892111-nginx-bb99bb964-\" is forbidden".to_string(),
                         type_: "Warning".to_string(),
                     },
                 ],
@@ -283,6 +303,9 @@ mod test {
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
 ┃  |__ ⚠️ Pool of ip exhausted
+┃
+┃ 🛰 ReplicaSet app-z17892111-nginx-bb99bb964 (FailedCreate)
+┃  |__ ⚠️ Error creating: pods "app-z17892111-nginx-bb99bb964-" is forbidden
 ┃
 ┃ 🛰 Application at old version has 1 pods: 1 running, 0 starting, 0 terminating and 0 in error
 ┃ 🛰 Application at new commit 34645524c3221a596fb59e8dbad4381f10f93933 has 5 pods: 1 running, 1 starting, 1 terminating and 2 in error
