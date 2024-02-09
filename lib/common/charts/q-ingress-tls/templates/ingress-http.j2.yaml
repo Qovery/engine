@@ -68,6 +68,7 @@ metadata:
       {%- endfor %}
       {%- endif %}
 spec:
+  ingressClassName: "nginx-qovery"
   tls:
     {%- if certificate_alternative_names|length > 0 %}
     - secretName: "router-tls-{{ id }}"
