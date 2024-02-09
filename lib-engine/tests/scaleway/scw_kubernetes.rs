@@ -52,9 +52,18 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 
 #[cfg(feature = "test-scw-infra")]
 #[named]
+#[ignore]
 #[test]
 fn create_and_destroy_kapsule_cluster_par_2() {
     let zone = ScwZone::Paris2;
+    create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
+}
+
+#[cfg(feature = "test-scw-infra")]
+#[named]
+#[test]
+fn create_and_destroy_kapsule_cluster_waw() {
+    let zone = ScwZone::Warsaw1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
 }
 

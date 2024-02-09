@@ -15,6 +15,50 @@ use crate::helpers::utilities::{
 #[cfg(feature = "test-scw-whole-enchilada")]
 #[named]
 #[test]
+fn create_and_destroy_kapsule_cluster_with_env_in_waw_1() {
+    let logger = logger();
+    let metrics_registry = metrics_registry();
+    let zone = ScwZone::Warsaw1;
+    let secrets = FuncTestsSecrets::new();
+    let organization_id = generate_id();
+    let cluster_id = generate_cluster_id(zone.as_str());
+    let context = context_for_cluster(organization_id, cluster_id, None);
+    let cluster_domain = format!(
+        "{}.{}",
+        to_short_id(&cluster_id),
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str()
+    );
+
+    let environment = helpers::environment::working_minimal_environment(&context);
+    let env_action = environment;
+
+    engine_run_test(|| {
+        cluster_test(
+            function_name!(),
+            Kind::Scw,
+            KKind::ScwKapsule,
+            context.clone(),
+            logger,
+            metrics_registry,
+            zone.as_str(),
+            None,
+            ClusterTestType::Classic,
+            &ClusterDomain::Custom { domain: cluster_domain },
+            None,
+            CpuArchitecture::AMD64,
+            Some(&env_action),
+        )
+    })
+}
+
+#[cfg(feature = "test-scw-whole-enchilada")]
+#[named]
+#[ignore]
+#[test]
 fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
     let metrics_registry = metrics_registry();
