@@ -7,7 +7,9 @@ locals {
 resource "google_service_account" "loki_service_account" {
   account_id   = local.loki_service_account_name
   display_name = "Service account for Loki"
-  project      =  var.project_id
+  project      = var.project_id
+  # Putting tags as JSON in description since services accounts don't support tags
+  description  = jsonencode(local.minimal_tags_common) # limited length to 256 chars
 }
 
 resource "google_project_iam_binding" "project" {

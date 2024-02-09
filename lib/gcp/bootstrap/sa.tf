@@ -43,6 +43,8 @@ resource "google_service_account" "cluster_service_account" {
   project      = var.project_id
   account_id   = var.service_account_name == "" ? local.service_account_default_name : var.service_account_name
   display_name = "Qovery-managed service account for cluster ${var.kubernetes_cluster_name}"
+  # Putting tags as JSON in description since services accounts don't support tags
+  description  = jsonencode(local.minimal_tags_common) # limited length to 256 chars
 }
 
 resource "google_project_iam_member" "cluster_service_account-log_writer" {

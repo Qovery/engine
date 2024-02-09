@@ -1,9 +1,6 @@
 use crate::cloud_provider::gcp::kubernetes::GkeOptions;
 use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::cloud_provider::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy,
-};
+use crate::cloud_provider::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -37,7 +34,6 @@ use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
-use crate::models::ToCloudProviderFormat;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::Path;
@@ -162,9 +158,6 @@ pub fn gcp_helm_charts(
             ));
         }
     };
-    let chart_prefix = chart_prefix_path.unwrap_or("./");
-    let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let _prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Qovery;
@@ -258,7 +251,7 @@ pub fn gcp_helm_charts(
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(benjaminch): should be activated once prometheus will be installed
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
@@ -322,7 +315,7 @@ pub fn gcp_helm_charts(
             ),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(benjaminch): should be activated once prometheus will be installed
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Gcp,
@@ -396,104 +389,6 @@ pub fn gcp_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let qovery_engine = CommonChart {
-        chart_info: ChartInfo {
-            name: "qovery-engine".to_string(),
-            action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
-            path: chart_path("common/charts/qovery-engine"),
-            namespace: HelmChartNamespaces::Qovery,
-            timeout_in_seconds: 900,
-            values: vec![
-                ChartSetValue {
-                    key: "image.tag".to_string(),
-                    value: qovery_api.service_version(EngineServiceType::Engine).map_err(|e| {
-                        CommandError::new("cannot get engine version".to_string(), Some(e.to_string()), None)
-                    })?,
-                },
-                // metrics
-                ChartSetValue {
-                    key: "metrics.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                // autoscaler
-                ChartSetValue {
-                    key: "autoscaler.enabled".to_string(),
-                    value: "true".to_string(),
-                },
-                // env vars
-                ChartSetValue {
-                    key: "environmentVariables.ORGANIZATION".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.REGION".to_string(),
-                    value: chart_config_prerequisites.region.to_cloud_provider_format().to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.LIB_ROOT_DIR".to_string(),
-                    value: "/home/qovery/lib".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.DOCKER_HOST".to_string(),
-                    value: "tcp://0.0.0.0:2375".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.GRPC_SERVER".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_engine_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
-                    value: chart_config_prerequisites.infra_options.jwt_token.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_ID".to_string(),
-                    value: chart_config_prerequisites.cluster_long_id.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
-                    value: chart_config_prerequisites.organization_long_id.to_string(),
-                },
-                // builder (look also in values string)
-                ChartSetValue {
-                    key: "buildContainer.enabled".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES".to_string(),
-                    value: chart_config_prerequisites
-                        .cpu_architectures
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<String>>()
-                        .join(","),
-                },
-                // engine resources limits
-                ChartSetValue {
-                    key: "engineResources.limits.cpu".to_string(),
-                    value: "1000m".to_string(),
-                },
-                ChartSetValue {
-                    key: "engineResources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "engineResources.limits.memory".to_string(),
-                    value: "2Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "engineResources.requests.memory".to_string(),
-                    value: "2Gi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     // chart deployment order matters!!!
     // Helm chart deployment order
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
@@ -510,7 +405,6 @@ pub fn gcp_helm_charts(
         Some(Box::new(cert_manager_config)),
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
-        Some(Box::new(qovery_engine)),
         Some(Box::new(k8s_event_logger)),
     ];
 
