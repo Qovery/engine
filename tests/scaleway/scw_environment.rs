@@ -37,7 +37,7 @@ use uuid::Uuid;
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-scw-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[named]
 #[test]
 fn scaleway_test_build_phase() {
@@ -67,7 +67,7 @@ fn scaleway_test_build_phase() {
         let (env, ret) = environment.build_environment(&env_action, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        // Check the the image exist in the registry
+        // Check the image exist in the registry
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);

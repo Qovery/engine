@@ -900,7 +900,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, false);
+    test_redis_configuration("5.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -908,14 +908,14 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, true);
+    test_redis_configuration("5.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, false);
+    test_redis_configuration("6.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
@@ -923,19 +923,19 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, true);
+    test_redis_configuration("6.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v7_deploy_a_working_dev_environment() {
-    test_redis_configuration("7", function_name!(), CONTAINER, false);
+    test_redis_configuration("7.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v7_deploy_a_working_dev_environment() {
-    test_redis_configuration("7", function_name!(), CONTAINER, true);
+    test_redis_configuration("7.0", function_name!(), CONTAINER, true);
 }

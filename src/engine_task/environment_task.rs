@@ -129,14 +129,14 @@ impl EnvironmentTask {
         should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
-        let mut build_needs_builpacks = false;
+        let mut build_needs_buildpacks = false;
         let metrics_registry: Arc<dyn MetricsRegistry> =
             Arc::from(infra_ctx.kubernetes().metrics_registry().clone_dyn());
         let services = services
             .into_iter()
             .filter(|srv| {
                 if let Some(build) = srv.build() {
-                    build_needs_builpacks = build_needs_builpacks || build.use_buildpacks();
+                    build_needs_buildpacks = build_needs_buildpacks || build.use_buildpacks();
                     true
                 } else {
                     false
@@ -157,7 +157,7 @@ impl EnvironmentTask {
             max_build_in_parallel,
             env_logger,
             &should_abort,
-            build_needs_builpacks,
+            build_needs_buildpacks,
             &services,
             first_service,
         ) {

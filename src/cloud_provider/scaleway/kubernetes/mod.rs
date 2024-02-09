@@ -1031,7 +1031,6 @@ impl Kapsule {
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
-            self.context.disable_pleco(),
             self.options.clone(),
             self.advanced_settings().clone(),
         );

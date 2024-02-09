@@ -11,7 +11,7 @@ use std::time::Duration;
 use tempfile::NamedTempFile;
 use tracing::{info, span, Level};
 
-#[cfg(feature = "test-aws-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[named]
 #[test]
 fn test_delete_hard_strategy_bucket() {
@@ -202,7 +202,7 @@ fn test_get_bucket() {
     })
 }
 
-#[cfg(feature = "test-aws-minimal")]
+#[cfg(feature = "test-quarantine")]
 #[named]
 #[test]
 fn test_recreate_bucket() {

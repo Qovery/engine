@@ -747,7 +747,6 @@ impl Gke {
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
-            self.context.disable_pleco(),
             qovery_terraform_config.loki_logging_service_account_email,
             self.logs_bucket_name(),
             self.options.clone(),

@@ -277,7 +277,13 @@ pub fn environment_2_app_2_routers_1_psql(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars_with_infos: btreemap! {},
+                environment_vars_with_infos: btreemap! {
+                     "PG_DBNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_name.clone()), is_secret: false},
+                     "PG_HOST".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(fqdn.clone()),is_secret: false},
+                     "PG_PORT".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_port.to_string()), is_secret: false},
+                     "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
+                     "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
+                },
                 mounted_files: vec![],
                 ports: vec![Port {
                     long_id: Default::default(),
@@ -334,7 +340,13 @@ pub fn environment_2_app_2_routers_1_psql(
                 action: Action::Create,
                 git_credentials: None,
                 storage: vec![],
-                environment_vars_with_infos: btreemap! {},
+                environment_vars_with_infos: btreemap! {
+                     "PG_DBNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_name.clone()), is_secret: false},
+                     "PG_HOST".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(fqdn.clone()),is_secret: false},
+                     "PG_PORT".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_port.to_string()), is_secret: false},
+                     "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
+                     "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
+                },
                 mounted_files: vec![],
                 public_domain: format!("{}.{}", application_id2, test_domain),
                 ports: vec![Port {
