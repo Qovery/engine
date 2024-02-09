@@ -34,5 +34,7 @@ resource "google_compute_network" "vpc_network" {
   project                 = var.project_id
   name                    = var.vpc_name
   auto_create_subnetworks = var.auto_create_subnetworks
+  # Putting tags as JSON in description since VPC don't support tags
+  description             = jsonencode(local.tags_common) # limited length to 2048 chars
 }
 {% endif %}

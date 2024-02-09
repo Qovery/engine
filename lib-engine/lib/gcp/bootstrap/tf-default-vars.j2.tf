@@ -89,6 +89,7 @@ variable "zones" {
 }
 
 // Kubernetes
+
 variable "kubernetes_cluster_long_id" {
   description = "Kubernetes cluster long id"
   default     = "{{ kubernetes_cluster_long_id }}"

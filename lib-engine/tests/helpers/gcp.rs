@@ -34,7 +34,9 @@ use uuid::Uuid;
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
-pub const GCP_DATABASE_DISK_TYPE: GcpStorageType = GcpStorageType::Balanced;
+pub const GCP_SELF_HOSTED_DATABASE_DISK_TYPE: GcpStorageType = GcpStorageType::Balanced;
+pub const GCP_MANAGED_DATABASE_DISK_TYPE: &str = ""; // TODO: once managed DB is implemented
+pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed DB is implemented
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
