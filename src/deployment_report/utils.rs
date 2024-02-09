@@ -1,5 +1,6 @@
 use crate::deployment_report::utils::Strategy::OnlyWarningIfAny;
 use itertools::Itertools;
+use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateTerminated, ContainerStateWaiting, Event, LoadBalancerStatus, PersistentVolumeClaim,
@@ -24,6 +25,13 @@ pub struct ServiceRenderContext {
     pub type_: String,
     pub state: DeploymentState,
     pub message: Option<String>,
+    pub events: Vec<EventRenderContext>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReplicaSetRenderContext {
+    pub name: String,
+    pub status: Option<String>,
     pub events: Vec<EventRenderContext>,
 }
 
@@ -319,6 +327,50 @@ pub fn to_pods_render_context_by_state(
     }
 
     (pods_starting, pods_terminating, pods_failing, pods_running)
+}
+
+pub fn to_replicasets_render_context(replicasets: &[ReplicaSet], events: &[Event]) -> Vec<ReplicaSetRenderContext> {
+    if replicasets.is_empty() {
+        return vec![];
+    }
+
+    let mut replicasets_ctx: Vec<ReplicaSetRenderContext> = Vec::with_capacity(replicasets.len());
+    for replicaset in replicasets {
+        // extract values
+        let replicaset_name = if let Some(name) = &replicaset.metadata.name {
+            name
+        } else {
+            continue;
+        };
+        let replicaset_uid = if let Some(uid) = &replicaset.metadata.uid {
+            uid
+        } else {
+            continue;
+        };
+
+        let events: Vec<_> = get_last_events_for(events.iter(), replicaset_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
+            .into_iter()
+            .flat_map(to_event_context)
+            .collect();
+
+        if !events.is_empty() {
+            let replicaset_status = replicaset
+                .status
+                .as_ref()
+                .and_then(|status| status.conditions.as_ref())
+                .and_then(|conditions| conditions.first())
+                .map(|condition| condition.reason.as_deref().unwrap_or("").to_string());
+
+            replicasets_ctx.push(ReplicaSetRenderContext {
+                name: replicaset_name.to_string(),
+                status: replicaset_status,
+                events,
+            });
+        }
+        continue;
+    }
+
+    replicasets_ctx
 }
 
 pub fn to_pods_render_context_by_version(
