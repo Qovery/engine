@@ -626,10 +626,7 @@ impl Task for EnvironmentTask {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new(
-                        r#"
-💣 Deployment aborted following a failure to deploy a service. 
-This is a general/global message. Look at your services deployment status to know which one made the deployment fail
-                        "#
+                        "💣 Deployment aborted following a failure to deploy a service. This is a general/global message. Look at your services deployment status to know which one made the deployment fail"
                         .trim()
                         .to_string(),
                         Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
