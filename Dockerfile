@@ -10,6 +10,7 @@ ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:25.0.3-1~debian.12~bookworm"
+ARG BUILDX_VERSION="0.12.1-1~debian.12~bookworm"
 ARG CONTAINERD_VERSION="1.6.28-1"
 
 ARG BIN_DEST_FOLDER="/binaries"
@@ -39,6 +40,7 @@ RUN apt-get update && \
   make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg \
   docker-ce=$DOCKER_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
+  docker-buildx-plugin=$BUILDX_VERSION \
   containerd.io=$CONTAINERD_VERSION \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
@@ -142,6 +144,7 @@ RUN apt-get update && apt-get install -y \
   apt-get dist-upgrade -y && \
   apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
+  docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
