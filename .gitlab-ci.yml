@@ -142,14 +142,90 @@ unit-Tests:
     expire_in: 1 week
   interruptible: true
 
-all-minimal-Tests:
+scw-minimal-tests:
   stage: minimal-tests
   retry: 1
   timeout: 3 hours
   before_script:
     - ci_helper await_docker_socket
   script:
-    - ./helper.sh all_minimal_tests
+    - ./helper.sh scw_minimal_tests
+  only:
+    refs:
+      - merge_requests
+  tags:
+    - bm-2cpu-6gmem-0g
+  dependencies:
+    - build-and-lint-code
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
+  interruptible: true
+  allow_failure: true # SCW issues with registry
+
+aws-minimal-tests:
+  stage: minimal-tests
+  retry: 1
+  timeout: 3 hours
+  before_script:
+    - ci_helper await_docker_socket
+  script:
+    - ./helper.sh aws_minimal_tests
+  only:
+    refs:
+      - merge_requests
+  tags:
+    - bm-2cpu-6gmem-0g
+  dependencies:
+    - build-and-lint-code
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
+  interruptible: true
+
+aws-ec2-minimal-tests:
+  stage: minimal-tests
+  retry: 1
+  timeout: 3 hours
+  before_script:
+    - ci_helper await_docker_socket
+  script:
+    - ./helper.sh aws_ec2_minimal_tests
+  only:
+    refs:
+      - merge_requests
+  tags:
+    - bm-2cpu-6gmem-0g
+  dependencies:
+    - build-and-lint-code
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
+  interruptible: true
+
+gcp-minimal-tests:
+  stage: minimal-tests
+  retry: 1
+  timeout: 3 hours
+  before_script:
+    - ci_helper await_docker_socket
+  script:
+    - ./helper.sh gcp_minimal_tests
   only:
     refs:
       - merge_requests

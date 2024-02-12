@@ -211,6 +211,12 @@ test-scw-all = [
     "test-scw-self-hosted",
     "test-scw-whole-enchilada",
 ]
+test-gcp-all = [
+    "test-gcp-infra",
+    "test-gcp-managed-services",
+    "test-gcp-self-hosted",
+    "test-gcp-whole-enchilada",
+]
 
 test-quarantine = []
 

@@ -473,8 +473,17 @@ gcp_self_hosted)
 all_self_hosted)
   run_tests test-all-self-hosted $commit_id 20
   ;;
-all_minimal_tests)
-  run_tests test-all-minimal $commit_id 20
+aws_minimal_tests)
+  run_tests test-aws-minimal $commit_id 20
+  ;;
+aws_ec2_minimal_tests)
+  run_tests test-aws-ec2-minimal $commit_id 20
+  ;;
+gcp_minimal_tests)
+  run_tests test-gcp-minimal $commit_id 20
+  ;;
+scw_minimal_tests)
+  run_tests test-scw-minimal $commit_id 20
   ;;
 aws_managed_services)
   run_tests test-aws-managed-services $commit_id 20
