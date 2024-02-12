@@ -31,7 +31,7 @@ pub struct ServiceRenderContext {
 #[derive(Debug, Serialize)]
 pub struct ReplicaSetRenderContext {
     pub name: String,
-    pub status: Option<String>,
+    pub status: String,
     pub events: Vec<EventRenderContext>,
 }
 
@@ -360,12 +360,13 @@ pub fn to_replicasets_render_context(replicasets: &[ReplicaSet], events: &[Event
                 .and_then(|status| status.conditions.as_ref())
                 .and_then(|conditions| conditions.first())
                 .map(|condition| condition.reason.as_deref().unwrap_or("").to_string());
-
-            replicasets_ctx.push(ReplicaSetRenderContext {
-                name: replicaset_name.to_string(),
-                status: replicaset_status,
-                events,
-            });
+            if let Some(status) = replicaset_status {
+                replicasets_ctx.push(ReplicaSetRenderContext {
+                    name: replicaset_name.to_string(),
+                    status,
+                    events,
+                });
+            }
         }
         continue;
     }
