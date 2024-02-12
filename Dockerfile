@@ -9,8 +9,8 @@ ARG HELM_DIFF_VERSION="v3.8.1"
 ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
-ARG DOCKER_VERSION="5:24.0.6-1~debian.12~bookworm"
-ARG CONTAINERD_VERSION="1.6.24-1"
+ARG DOCKER_VERSION="5:25.0.3-1~debian.12~bookworm"
+ARG CONTAINERD_VERSION="1.6.28-1"
 
 ARG BIN_DEST_FOLDER="/binaries"
 
