@@ -24,6 +24,12 @@ const REPORT_TEMPLATE: &str = r#"
 ┃ 🛰 {{ job_type | capitalize }} at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
 ┃ 🛰 {{ job_type | capitalize }} at new tag {{ tag }} has {{ pods_current_version.nb_pods }} pods: {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
 {%- set all_current_version_pods = pods_current_version.pods_failing | concat(with=pods_current_version.pods_starting) -%}
+{%- if job %}
+┃  |__ Job {{ job.name }}
+{%- for event in job.events %}
+┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+{%- endfor -%}
+{%- endif -%}
 {%- for pod in all_current_version_pods %}
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }}
 {%- if pod.message %}
@@ -77,21 +83,30 @@ mod test {
 
     use crate::cloud_provider::service::Action;
     use crate::deployment_report::utils::{
-        exit_code_to_msg, fmt_event_type, DeploymentState, PodRenderContext, QContainerState, QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, QContainerState,
+        QContainerStateTerminated,
     };
     use crate::utilities::to_short_id;
 
     use super::*;
 
     #[test]
-    fn test_application_rendering() {
+    fn test_job_rendering() {
         let app_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
         let render_ctx = JobDeploymentRenderContext {
             name: to_short_id(&app_id),
             job_type: JobType::Job(Action::Create).to_string(),
             tag: "public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6".to_string(),
             nb_pods: 1,
-            job: None,
+            job: Some(JobRenderContext {
+                name: "job-z5a0dd39e-job".to_string(),
+                state: DeploymentState::Starting,
+                message: None,
+                events: vec![EventRenderContext {
+                    message: "Error creating: pods \"job-z5a0dd39e-job-\" is forbidden".to_string(),
+                    type_: "Warning".to_string(),
+                }],
+            }),
             pods_old_version: PodsRenderContext {
                 nb_pods: 0,
                 pods_running: vec![],
@@ -139,6 +154,8 @@ mod test {
 ┃
 ┃ 🛰 Job at old version has 0 pods: 0 running, 0 starting, 0 terminating and 0 in error
 ┃ 🛰 Job at new tag public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6 has 1 pods: 0 running, 0 starting, 0 terminating and 1 in error
+┃  |__ Job job-z5a0dd39e-job
+┃     |__ ⚠️ Error creating: pods "job-z5a0dd39e-job-" is forbidden
 ┃  |__ Pod app-pod-1 is FAILING
 ┃     |__ 💭 Pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z

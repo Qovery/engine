@@ -17,6 +17,7 @@ use kube::Api;
 use std::sync::Arc;
 
 use crate::deployment_report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
+use k8s_openapi::api::apps::v1::ReplicaSet;
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -271,6 +272,7 @@ pub(super) struct AppDeploymentReport {
     pub pods: Vec<Pod>,
     pub services: Vec<Service>,
     pub pvcs: Vec<PersistentVolumeClaim>,
+    pub replicasets: Vec<ReplicaSet>,
     pub events: Vec<Event>,
 }
 
@@ -283,21 +285,25 @@ async fn fetch_app_deployment_report(
     let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
     let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
     let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
+    let replicaset_api: Api<ReplicaSet> = Api::namespaced(kube.clone(), namespace);
     let event_api: Api<Event> = Api::namespaced(kube.clone(), namespace);
 
     let list_params = ListParams::default().labels(selector).timeout(15);
     let pods = pods_api.list(&list_params);
     let services = svc_api.list(&list_params);
     let pvcs = pvc_api.list(&list_params);
+    let replicasets = replicaset_api.list(&list_params);
     let events_params = ListParams::default().timeout(15);
     let events = event_api.list(&events_params);
-    let (pods, services, pvcs, events) = futures::future::try_join4(pods, services, pvcs, events).await?;
+    let (pods, services, pvcs, replicasets, events) =
+        futures::future::try_join5(pods, services, pvcs, replicasets, events).await?;
 
     Ok(AppDeploymentReport {
         id: *service_id,
         pods: pods.items,
         services: services.items,
         pvcs: pvcs.items,
+        replicasets: replicasets.items,
         events: events.items,
     })
 }
