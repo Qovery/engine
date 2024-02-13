@@ -39,8 +39,10 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
 
+use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
+use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -769,7 +771,7 @@ pub fn test_db(
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
-        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -819,7 +821,20 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
-                KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => Gke::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Gke,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::QoverySide,
+                ),
             };
             &computed_infra_ctx
         }
@@ -939,7 +954,20 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
-                KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
+                KubernetesKind::Gke => Gke::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::ScwKapsule,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                ),
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration

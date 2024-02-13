@@ -34,6 +34,7 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
+use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
@@ -876,15 +877,18 @@ pub fn db_infos(
 
 pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
     match provider_kind {
-        Kind::Aws => "gp2",
+        Kind::Aws => "gp2".to_string(),
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+        }
+        .to_string(),
+        Kind::Gcp => match database_mode {
+            MANAGED => todo!(),
+            DatabaseMode::CONTAINER => GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
         },
-        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::SelfManaged => todo!(),
     }
-    .to_string()
 }
 
 pub fn db_instance_type(
@@ -903,7 +907,7 @@ pub fn db_instance_type(
             MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
             DatabaseMode::CONTAINER => None,
         },
-        Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+        Kind::Gcp => None, // TODO: once managed DB is implemented
         Kind::SelfManaged => todo!(),
     }
 }

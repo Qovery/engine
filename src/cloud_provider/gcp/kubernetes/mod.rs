@@ -277,6 +277,10 @@ impl Gke {
         // GCP
         // credentials
         context.insert(
+            "gcp_json_credentials_raw",
+            &self.options.gcp_json_credentials.r#type.to_string(),
+        );
+        context.insert(
             "gcp_json_credentials_type",
             &self.options.gcp_json_credentials.r#type.to_string(),
         );

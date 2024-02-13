@@ -5,7 +5,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::logger::Logger;
 use crate::metrics_registry::{StepLabel, StepName, StepStatus};
@@ -173,7 +173,12 @@ impl<'a> EnvironmentDeployment<'a> {
         )?;
 
         // clean up nlb
-        clean_up_deleted_k8s_nlb(event_details.clone(), target)?;
+        if let Err(err) = clean_up_deleted_k8s_nlb(event_details.clone(), target) {
+            error!(
+                "clean_up_deleted_k8s_nlb fails: {}",
+                err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+            )
+        }
 
         Ok(())
     }

@@ -148,7 +148,27 @@ pub fn get_cluster_test_kubernetes<'a>(
             )
             .unwrap(),
         ),
-        KubernetesKind::Gke => todo!(),            // TODO(benjaminch): GKE integration
+        KubernetesKind::Gke => Box::new(
+            Gke::new(
+                context.clone(),
+                cluster_id.as_str(),
+                Uuid::new_v4(),
+                &cluster_name,
+                boot_version,
+                GcpRegion::from_str(localisation).expect("Unknown zone set for GKE"),
+                cloud_provider,
+                dns_provider,
+                Gke::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide),
+                logger,
+                metrics_registry,
+                ClusterAdvancedSettings {
+                    pleco_resources_ttl: 14400,
+                    ..Default::default()
+                },
+                None,
+            )
+            .unwrap(),
+        ),
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
@@ -314,7 +334,20 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+                Kind::Gcp => Gke::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    region,
+                    KubernetesKind::Gke,
+                    upgrade_to_version,
+                    cluster_domain,
+                    vpc_network_mode,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::QoverySide,
+                ),
                 Kind::SelfManaged => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
@@ -366,7 +399,20 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
+                Kind::Gcp => Gke::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    region,
+                    KubernetesKind::Gke,
+                    kubernetes_boot_version,
+                    cluster_domain,
+                    vpc_network_mode,
+                    min_nodes,
+                    max_nodes,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::QoverySide,
+                ),
                 Kind::SelfManaged => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
@@ -403,7 +449,7 @@ pub fn cluster_test(
         }
     }
 
-    // // Delete
+    // Delete
     let mut delete_tx = Transaction::new(&engine).unwrap();
     if let Err(err) = delete_tx.delete_kubernetes() {
         panic!("{err:?}")

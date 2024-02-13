@@ -151,19 +151,23 @@ test-all-minimal = [
 test-aws-self-hosted = ["env-logger-check"]
 test-aws-ec2-self-hosted = ["env-logger-check"]
 test-scw-self-hosted = ["env-logger-check"]
+test-gcp-self-hosted = ["env-logger-check"]
 test-all-self-hosted = [
     "test-aws-self-hosted",
     "test-aws-ec2-self-hosted",
     "test-scw-self-hosted",
+    "test-gcp-self-hosted",
 ]
 
 test-aws-managed-services = ["env-logger-check"]
 test-aws-ec2-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
+test-gcp-managed-services = ["env-logger-check"]
 test-all-managed-services = [
     "test-aws-managed-services",
     "test-aws-ec2-managed-services",
     "test-scw-managed-services",
+    "test-gcp-managed-services",
 ]
 
 test-aws-infra = []
@@ -180,10 +184,12 @@ test-all-infra = [
 test-aws-whole-enchilada = []
 test-aws-ec2-whole-enchilada = []
 test-scw-whole-enchilada = []
+test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
     "test-aws-whole-enchilada",
     "test-aws-ec2-whole-enchilada",
     "test-scw-whole-enchilada",
+    "test-gcp-whole-enchilada",
 ]
 
 # functionnal tests by provider
@@ -204,6 +210,12 @@ test-scw-all = [
     "test-scw-managed-services",
     "test-scw-self-hosted",
     "test-scw-whole-enchilada",
+]
+test-gcp-all = [
+    "test-gcp-infra",
+    "test-gcp-managed-services",
+    "test-gcp-self-hosted",
+    "test-gcp-whole-enchilada",
 ]
 
 test-quarantine = []

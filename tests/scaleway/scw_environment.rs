@@ -1716,12 +1716,19 @@ fn deploy_container_with_router_on_scw() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: "my-little-container".to_string(),
+            kube_name: format!("my-little-container-{}", suffix),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -1788,9 +1795,9 @@ fn deploy_container_with_router_on_scw() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
-            kube_name: "default-router".to_string(),
+            kube_name: format!("router-{}", suffix),
             action: Action::Create,
-            default_domain: "main".to_string(),
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {

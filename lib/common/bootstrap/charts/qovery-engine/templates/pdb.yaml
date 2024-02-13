@@ -10,4 +10,16 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/instance: qovery-engine
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qovery-engine-builder
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      qovery.com/no-kill: "true"
 {{- end }}

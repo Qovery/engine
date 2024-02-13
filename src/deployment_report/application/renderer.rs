@@ -33,14 +33,14 @@ const REPORT_TEMPLATE: &str = r#"
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
-┃
 {%- for replicaset in replicasets %}
+┃
 ┃ 🛰 ReplicaSet {{ replicaset.name }} ({{ replicaset.status }})
 {%- for event in replicaset.events %}
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
-{%- endfor -%}
 {%- endfor %}
 ┃
+{%- endfor %}
 ┃ 🛰 {{ service_type }} at old version has {{ pods_old_version.nb_pods }} pods: {{ pods_old_version.pods_running | length }} running, {{ pods_old_version.pods_starting | length }} starting, {{ pods_old_version.pods_terminating | length }} terminating and {{ pods_old_version.pods_failing | length }} in error
 ┃ 🛰 {{ service_type }} at new {{ tag_name }} {{ tag }} has {{ pods_current_version.nb_pods }} pods: {{ pods_current_version.pods_running | length }} running, {{ pods_current_version.pods_starting | length }} starting, {{ pods_current_version.pods_terminating | length }} terminating and {{ pods_current_version.pods_failing | length }} in error
 {%- set all_current_version_pods = pods_current_version.pods_failing | concat(with=pods_current_version.pods_starting) -%}
@@ -146,7 +146,7 @@ mod test {
             }],
             replicasets: vec![ReplicaSetRenderContext{
                 name: "app-z17892111-nginx-bb99bb964".to_string(),
-                status: Some("FailedCreate".to_string()),
+                status: "FailedCreate".to_string(),
                 events: vec![
                     EventRenderContext {
                         message: "Error creating: pods \"app-z17892111-nginx-bb99bb964-\" is forbidden".to_string(),

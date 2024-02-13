@@ -345,6 +345,7 @@ impl Docker {
                     "\"replicas={}\",",
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                    "\"labels=qovery.com/no-kill=true\",",
                     "\"requests.cpu={}m\",",
                     "\"limits.cpu={}m\",",
                     "\"requests.memory={}Gi\",",

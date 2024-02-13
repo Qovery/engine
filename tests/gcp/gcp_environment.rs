@@ -1,18 +1,26 @@
 use crate::helpers;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::gcp::gcp_default_infra_config;
+use crate::helpers::gcp::{clean_environments, gcp_default_infra_config};
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
+    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
 };
 use function_name::named;
+use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::cloud_provider::Kind;
+use qovery_engine::io_models::application::{Port, Protocol};
+use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::router::CustomDomain;
+use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
+use std::str::FromStr;
+use tracing::log::warn;
 use tracing::span;
 use tracing::Level;
+use uuid::Uuid;
 
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-#[ignore]
 fn gcp_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -53,7 +61,6 @@ fn gcp_test_build_phase() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
-#[ignore]
 fn gcp_gke_deploy_a_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -109,7 +116,6 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
-#[ignore]
 fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -167,7 +173,6 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
-#[ignore]
 fn gcp_gke_deploy_a_working_environment_and_pause() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -206,7 +211,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -214,7 +219,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -224,7 +229,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -243,7 +248,6 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
-#[ignore]
 fn gcp_gke_deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {

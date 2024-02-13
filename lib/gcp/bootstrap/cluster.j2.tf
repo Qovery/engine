@@ -243,17 +243,6 @@ resource "google_container_cluster" "primary" {
 resource "time_static" "on_cluster_create" {}
 
 locals {
-  tags_common = {
-    cluster_id = var.kubernetes_cluster_id
-    cluster_long_id = var.kubernetes_cluster_long_id
-    organization_id = var.organization_id,
-    organization_long_id = var.organization_long_id,
-    region = var.region
-    creation_date = time_static.on_cluster_create.unix
-    qovery_product = "gke"
-    {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
-  }
-
   tags_gke = merge(
     local.tags_common,
     {
