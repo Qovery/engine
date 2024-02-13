@@ -257,6 +257,7 @@ infra-without-cloud-providers:
   tags:
     - bm-2cpu-8gmem-0g
   interruptible: true
+  retry: 2 # because of docker rate exceeded error
 
 #########
 # TESTS #
