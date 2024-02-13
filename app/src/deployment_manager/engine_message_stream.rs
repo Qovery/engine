@@ -157,7 +157,7 @@ impl EngineMessageStream {
 
             msg = ctx.log_receiver.recv() => match msg {
                 Some(engine_event) => {
-                    let start_time = Instant::now();
+                    let deadline = Instant::now() + ctx.log_buffer_duration;
                     // Buffer msg to avoid flooding the gateway
                     ctx.log_buffer.clear();
                     ctx.log_buffer.push(EngineEventIo::from(engine_event));
@@ -168,11 +168,7 @@ impl EngineMessageStream {
                             Ok(engine_event) => engine_event,
                             _ => {
                                 // no message available, wait for our allocated budget if any
-                                let remaining_time = ctx.log_buffer_duration - start_time.elapsed();
-                                if remaining_time.as_millis() == 0 {
-                                    break;
-                                }
-                                match tokio::time::timeout(remaining_time, ctx.log_receiver.recv()).await {
+                                match tokio::time::timeout_at(deadline, ctx.log_receiver.recv()).await {
                                     Ok(Some(engine_event)) => engine_event,
                                     Ok(None) => break,
                                     Err(_timeout) => break,
