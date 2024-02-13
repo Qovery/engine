@@ -11,6 +11,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{watch, OwnedMutexGuard};
+use tokio::time::error::Elapsed;
+use tokio::time::Instant;
 use tracing::Span;
 use tracing_futures::Instrument;
 
@@ -155,15 +157,30 @@ impl EngineMessageStream {
 
             msg = ctx.log_receiver.recv() => match msg {
                 Some(engine_event) => {
+                    let start_time = Instant::now();
                     // Buffer msg to avoid flooding the gateway
                     ctx.log_buffer.clear();
                     ctx.log_buffer.push(EngineEventIo::from(engine_event));
-                    tokio::time::sleep(ctx.log_buffer_duration).await;
+
                     while ctx.log_buffer.len() < ctx.log_buffer.capacity() {
-                        match ctx.log_receiver.try_recv() {
-                            Ok(engine_event) => ctx.log_buffer.push(EngineEventIo::from(engine_event)),
-                            _ => break,
-                        }
+                        let engine_event = match ctx.log_receiver.try_recv() {
+                            // msg is directly available dequeue it
+                            Ok(engine_event) => engine_event,
+                            _ => {
+                                // no message available, wait for our allocated budget if any
+                                let remaining_time = ctx.log_buffer_duration - start_time.elapsed();
+                                if remaining_time.as_millis() == 0 {
+                                    break;
+                                }
+                                match tokio::time::timeout(remaining_time, ctx.log_receiver.recv()).await {
+                                    Ok(Some(engine_event)) => engine_event,
+                                    Ok(None) => break,
+                                    Err(_timeout) => break,
+                                }
+                            },
+                        };
+
+                        ctx.log_buffer.push(EngineEventIo::from(engine_event));
                     }
 
                     Some(Self::convert_logs_to_grpc_message(&ctx.log_buffer))
