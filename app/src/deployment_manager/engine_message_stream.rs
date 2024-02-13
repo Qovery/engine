@@ -9,6 +9,7 @@ use std::ops::DerefMut;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{watch, OwnedMutexGuard};
 use tokio::time::error::Elapsed;
@@ -166,14 +167,13 @@ impl EngineMessageStream {
                         let engine_event = match ctx.log_receiver.try_recv() {
                             // msg is directly available dequeue it
                             Ok(engine_event) => engine_event,
-                            _ => {
-                                // no message available, wait for our allocated budget if any
-                                match tokio::time::timeout_at(deadline, ctx.log_receiver.recv()).await {
+                            // no message available, wait for our allocated budget if any
+                            Err(TryRecvError::Empty) => match tokio::time::timeout_at(deadline, ctx.log_receiver.recv()).await {
                                     Ok(Some(engine_event)) => engine_event,
                                     Ok(None) => break,
                                     Err(_timeout) => break,
-                                }
-                            },
+                            }
+                            Err(TryRecvError::Disconnected) => break,
                         };
 
                         ctx.log_buffer.push(EngineEventIo::from(engine_event));
