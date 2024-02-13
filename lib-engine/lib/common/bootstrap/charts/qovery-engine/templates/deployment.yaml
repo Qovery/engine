@@ -14,6 +14,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       labels:
         {{- include "qovery-engine.selectorLabels" . | nindent 8 }}
     spec:
