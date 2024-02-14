@@ -36,5 +36,10 @@ resource "google_compute_network" "vpc_network" {
   auto_create_subnetworks = var.auto_create_subnetworks
   # Putting tags as JSON in description since VPC don't support tags
   description             = jsonencode(local.tags_common) # limited length to 2048 chars
+  # ignore changes in description since it's not supposed to change and because it creates an issue when network is destroying,
+  # there is an open bug on GCP side => https://issuetracker.google.com/issues/186792016
+  lifecycle {
+    ignore_changes = [description]
+  }
 }
 {% endif %}

@@ -48,7 +48,7 @@ environmentVariables:
 buildContainer:
   enabled: true
   image: public.ecr.aws/r3m4q3r9/pub-mirror-docker
-  tag: 24.0.6-dind
+  tag: 25.0.3-dind
   environmentVariables:
     BUILDER_KUBE_ENABLED: "true"
     BUILDER_CPU_ARCHITECTURES: "ARM64"
