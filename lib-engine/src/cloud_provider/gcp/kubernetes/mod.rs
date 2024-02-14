@@ -49,6 +49,7 @@ use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
 use itertools::Itertools;
 use nonzero_ext::nonzero;
+use once_cell::sync::Lazy;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -61,6 +62,18 @@ use std::{env, fs};
 use tera::Context as TeraContext;
 use time::{format_description, Time};
 use uuid::Uuid;
+
+// Namespaces which are not deleteable because managed by GKE
+// Example error: GKE Warden authz [denied by managed-namespaces-limitation]: the namespace "gke-gmp-system" is managed and the request's verb "delete" is denied
+pub static GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES: Lazy<Vec<&str>> = Lazy::new(|| {
+    vec![
+        "kube-system",
+        "gke-gmp-system",
+        "gke-managed-filestorecsi",
+        "gmp-public",
+        "gke-managed-cim",
+    ]
+});
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpcMode {
@@ -945,17 +958,9 @@ impl Gke {
                         EventMessage::new_from_safe("Deleting non Qovery namespaces".to_string()),
                     ));
 
-                    // Namespaces which are not deleteable because managed by GKE
-                    // Example error: GKE Warden authz [denied by managed-namespaces-limitation]: the namespace "gke-gmp-system" is managed and the request's verb "delete" is denied
-                    let undeletable_namespaces = [
-                        "gke-gmp-system",
-                        "gke-managed-filestorecsi",
-                        "gmp-public",
-                        "gke-managed-cim",
-                    ];
                     for namespace_to_delete in namespaces_to_delete
                         .into_iter()
-                        .filter(|ns| !undeletable_namespaces.contains(ns))
+                        .filter(|ns| !(*GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES).contains(ns))
                     {
                         match kubectl_exec_delete_namespace(
                             kubeconfig_path,
@@ -1004,18 +1009,8 @@ impl Gke {
             self.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-            // delete custom metrics api to avoid stale namespaces on deletion
             let helm = Helm::new(kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
                 .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
-            let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-
-            if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                // this error is not blocking
-                self.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_engine_error(EngineError::new_helm_error(event_details.clone(), e)),
-                ));
-            }
 
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
@@ -1516,6 +1511,7 @@ impl Kubernetes for Gke {
         if let Err(e) = self.delete_completed_jobs(
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
+            Some(GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES.to_vec()),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);
