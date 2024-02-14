@@ -30,7 +30,7 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::ScopedJoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -252,31 +252,46 @@ impl EnvironmentTask {
             env_logger(format!(
                 "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
             ));
-            match infra_ctx.context().docker.spawn_builder(
-                infra_ctx.context().execution_id(),
-                nb_builder,
-                infra_ctx
-                    .kubernetes()
-                    .cpu_architectures()
-                    .iter()
-                    .map(docker::Architecture::from)
-                    .collect_vec()
-                    .as_slice(),
-                (max_cpu - 1000, max_cpu),
-                (max_ram - 1, max_ram),
-                &CommandKiller::from_cancelable(should_abort),
-            ) {
-                Ok(build_handle) => build_handle,
-                Err(err) => {
-                    let build_error = to_build_error(first_service.long_id().to_string(), err);
-                    let engine_error = build_platform::to_engine_error(
-                        first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
-                        build_error,
-                        "Cannot provision docker builder. Please retry later.".to_string(),
-                    );
-                    return Err(Box::new(engine_error));
+
+            // Docker has an hardcoded timeout of 1 minute for the builder creation
+            // it may be too short for us, so retry until we reach our deadline
+            // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
+            let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
+            let builder_handle = loop {
+                match infra_ctx.context().docker.spawn_builder(
+                    infra_ctx.context().execution_id(),
+                    nb_builder,
+                    infra_ctx
+                        .kubernetes()
+                        .cpu_architectures()
+                        .iter()
+                        .map(docker::Architecture::from)
+                        .collect_vec()
+                        .as_slice(),
+                    (max_cpu - 1000, max_cpu),
+                    (max_ram - 1, max_ram),
+                    &CommandKiller::from_cancelable(should_abort),
+                ) {
+                    Ok(build_handle) => break build_handle,
+                    Err(err) => {
+                        error!("cannot provision docker builder: {}", err);
+                        if err.is_aborted() || Instant::now() >= deadline {
+                            env_logger("❌ Cannot provision docker builder. Aborting".to_string());
+                            let build_error = to_build_error(first_service.long_id().to_string(), err);
+                            let engine_error = build_platform::to_engine_error(
+                                first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
+                                build_error,
+                                "Cannot provision docker builder. Please retry later.".to_string(),
+                            );
+                            return Err(Box::new(engine_error));
+                        }
+
+                        env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
+                    }
                 }
-            }
+            };
+
+            builder_handle
         };
         Ok(builder_handle)
     }
