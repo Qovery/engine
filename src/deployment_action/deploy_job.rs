@@ -203,14 +203,12 @@ where
             chart,
         );
 
-        if job.schedule().is_job() {
-            // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
-            helm.on_delete(target)?;
-        }
-
         // Wait for the job to terminate in order to have his status
         // For cronjob we dont care as we don't control when it is executed
         if job.schedule().is_job() {
+            // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
+            helm.on_delete(target)?;
+
             // create job
             helm.on_create(target)?;
 
@@ -361,13 +359,32 @@ where
                 EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {err}"))
             })?;
 
-            let job = block_on(await_condition(k8s_job_api, job.kube_name(), is_job_terminated())).map_err(|_err| {
+            let fut = async {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(3800), // We wait 1h + delta max for the job to be terminated
+                    await_condition(k8s_job_api, job.kube_name(), is_job_terminated()),
+                )
+                .await
+                {
+                    Ok(Ok(job_st)) => Ok(job_status(&job_st.as_ref())),
+                    Ok(Err(err)) => Err(err),
+                    Err(_) => Ok(JobStatus::Running), // timeout
+                }
+            };
+            let job_status = block_on(fut).map_err(|_err| {
                 EngineError::new_job_error(event_details.clone(), "Cannot find job for terminated pod".to_string())
             })?;
 
-            let cronjob_result = match job_status(&job.as_ref()) {
+            let cronjob_result = match job_status {
                 JobStatus::Success => Ok(()),
-                JobStatus::NotRunning | JobStatus::Running => unreachable!(),
+                JobStatus::Running => {
+                    logger.info("Job is still running after 1h. Stopping waiting for it. Please check live-logs and service status to know its status".to_string());
+                    Ok(())
+                }
+                JobStatus::NotRunning => {
+                    let msg = "Job failed to correctly run due to `NotRunning`. This should not happen".to_string();
+                    Err(EngineError::new_job_error(event_details.clone(), msg))
+                }
                 JobStatus::Failure { reason, message } => {
                     let msg = format!("Job failed to correctly run due to {reason} {message}");
                     Err(EngineError::new_job_error(event_details.clone(), msg))
