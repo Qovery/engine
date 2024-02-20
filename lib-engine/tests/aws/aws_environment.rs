@@ -200,12 +200,14 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_deployment.status, Some(StepStatus::Success));
         assert!(record_deployment.duration.is_some());
 
-        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
-        assert_eq!(record_total.step_name, StepName::Total);
-        assert_eq!(record_total.label, StepLabel::Service);
-        assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
-        assert_eq!(record_total.status, Some(StepStatus::Success));
-        assert!(record_total.duration.is_some());
+        // The start of the Total record has been moved to the EnvironmentTask.run() method. As a result, it is no longer invoked during test execution.
+
+        // let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        // assert_eq!(record_total.step_name, StepName::Total);
+        // assert_eq!(record_total.label, StepLabel::Service);
+        // assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
+        // assert_eq!(record_total.status, Some(StepStatus::Success));
+        // assert!(record_total.duration.is_some());
 
         let queueing_total = records
             .iter()
@@ -218,14 +220,16 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert!(queueing_total.duration.is_some());
 
         let records = metrics_registry_for_deployment.get_records(environment.long_id);
-        assert_eq!(records.len(), 2);
+        assert_eq!(records.len(), 1);
 
-        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
-        assert_eq!(record_total.step_name, StepName::Total);
-        assert_eq!(record_total.label, StepLabel::Environment);
-        assert_eq!(record_total.id, environment.long_id);
-        assert_eq!(record_total.status, Some(StepStatus::Success));
-        assert!(record_total.duration.is_some());
+        // The start of the Total record has been moved to the EnvironmentTask.run() method. As a result, it is no longer invoked during test execution.
+
+        // let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        // assert_eq!(record_total.step_name, StepName::Total);
+        // assert_eq!(record_total.label, StepLabel::Environment);
+        // assert_eq!(record_total.id, environment.long_id);
+        // assert_eq!(record_total.status, Some(StepStatus::Success));
+        // assert!(record_total.duration.is_some());
 
         let record_provision = records
             .iter()
