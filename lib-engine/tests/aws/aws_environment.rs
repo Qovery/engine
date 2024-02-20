@@ -3581,6 +3581,7 @@ fn deploy_helm_chart_with_router() {
 
         // generate an extra namespace to deploy a service and ingress
         let extra_namespace = format!("extra-env-{}", Uuid::new_v4());
+        let host_suffix = Uuid::new_v4();
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
@@ -3623,7 +3624,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: "service1-p8080".to_string(),
+                    name: format!("service1-p8080-{}", host_suffix),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: None,
@@ -3633,7 +3634,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: "service2-p8080".to_string(),
+                    name: format!("service2-p8080-{}", host_suffix),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: Some(extra_namespace.clone()),
