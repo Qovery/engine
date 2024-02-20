@@ -1065,8 +1065,11 @@ mod tests {
     fn test_with_kube_builder() {
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let mut kube_config = dirs::home_dir().unwrap();
+        kube_config.push(".kube/config");
         let args = vec![
             ("AWS_DEFAULT_REGION", "eu-west-3"),
+            ("KUBECONFIG", kube_config.to_str().unwrap()),
             // ("AWS_SECRET_ACCESS_KEY", "xxxxx"),
             // ("AWS_ACCESS_KEY_ID", "xxxx"),
             // ("KUBECONFIG", "xxx"),
