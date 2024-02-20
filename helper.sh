@@ -264,7 +264,7 @@ function test_local_stack() {
     prepare_tests
     use_sccache
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-    docker run -d --rm -p 5000:5000 --name engine-registry public.ecr.aws/r3m4q3r9/pub-mirror-registry:2.8.1
+    docker run -d --rm -p 5000:5000 --name engine-registry -e REGISTRY_STORAGE_DELETE_ENABLED=true public.ecr.aws/r3m4q3r9/pub-mirror-registry:2.8.1
 
     kube_cluster_name="kube-test-cluster-$(date +%S%N)"
 
