@@ -12,6 +12,7 @@ ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 ARG DOCKER_VERSION="5:25.0.3-1~debian.12~bookworm"
 ARG BUILDX_VERSION="0.12.1-1~debian.12~bookworm"
 ARG CONTAINERD_VERSION="1.6.28-1"
+ARG SKOPEO_VERSION=1.9.3+ds1-1+b5
 
 ARG BIN_DEST_FOLDER="/binaries"
 
@@ -35,10 +36,12 @@ ARG BUILDX_VERSION
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
 ARG CONTAINERD_VERSION
+ARG SKOPEO_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
   make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg \
+  skopeo=$SKOPEO_VERSION \
   docker-ce=$DOCKER_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
@@ -131,6 +134,7 @@ ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
 ARG BUILDX_VERSION
 ARG CONTAINERD_VERSION
+ARG SKOPEO_VERSION
 
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
@@ -145,6 +149,7 @@ RUN apt-get update && apt-get install -y \
   apt-get update && \
   apt-get dist-upgrade -y && \
   apt-get install -y \
+  skopeo=$SKOPEO_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
