@@ -133,7 +133,7 @@ fn should_increase_app_storage_size() {
         );
         assert!(ret.is_ok());
 
-        //assert app can be redeployed
+        // assert app can be redeployed
         let rea = resized_env.clone();
         assert!(matches!(
             resized_env.deploy_environment(&rea, &infra_ctx),
@@ -144,7 +144,7 @@ fn should_increase_app_storage_size() {
         let pvcs = match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
             &deployment_target.kube,
             deployment_target.environment.namespace(),
-            &invalid_statefulset.statefulset_selector,
+            &format!("appId={}", test_app.id()),
         )) {
             Ok(result) => result.items,
             Err(_) => panic!("Unable to get pvcs"),
