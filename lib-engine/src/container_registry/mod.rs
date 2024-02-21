@@ -13,13 +13,13 @@ use crate::io_models::QoveryIdentifier;
 
 pub mod ecr;
 pub mod errors;
+pub mod generic_cr;
 pub mod google_artifact_registry;
 pub mod scaleway_container_registry;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Repository {
     pub registry_id: String,
-    pub id: String,
     pub name: String,
     pub uri: Option<String>,
     pub ttl: Option<Duration>,
@@ -108,6 +108,7 @@ pub enum Kind {
     Ecr,
     ScalewayCr,
     GcpArtifactRegistry,
+    LocalRegistry,
 }
 
 #[derive(Clone, PartialEq, Debug)]

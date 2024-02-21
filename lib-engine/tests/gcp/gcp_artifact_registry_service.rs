@@ -81,7 +81,6 @@ fn test_get_repository() {
         assert_eq!(
             Repository {
                 registry_id: repository_parent.to_string(),
-                id: format!("{}/repositories/{}", repository_parent, repository_name),
                 name: repository_name.to_string(),
                 labels: Some(HashMap::from_iter(vec![(
                     "test_name".to_string(),
@@ -160,7 +159,6 @@ fn test_create_repository() {
         assert_eq!(
             Ok(Repository {
                 registry_id: repository_parent.to_string(),
-                id: format!("{}/repositories/{}", repository_parent, repository_name),
                 name: repository_name.to_string(),
                 labels: Some(HashMap::from_iter(vec![(
                     "test_name".to_string(),

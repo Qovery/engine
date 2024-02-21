@@ -263,12 +263,13 @@ impl Docker {
             "--name",
             "qovery-engine",
             "--buildkitd-flags",
-            "'--debug'",
+            "--debug --allow-insecure-entitlement security.insecure",
             "--driver-opt",
             "network=host",
             "--bootstrap",
             "--use",
         ];
+        println!("{:?}", args);
         let _ = docker_exec(
             &args,
             &docker.get_all_envs(&[]),
@@ -372,7 +373,8 @@ impl Docker {
                         &platform,
                         "--node",
                         node_name,
-                        "--buildkitd-flags=\"--debug\"",
+                        "--buildkitd-flags",
+                        "--debug --allow-insecure-entitlement security.insecure",
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
@@ -673,6 +675,7 @@ impl Docker {
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
+            //"--allow=security.insecure".to_string(),
             "--cache-from".to_string(),
             format!("type=registry,ref={}", cache.image_name()),
             // Disabled for now, because private ECR does not support it ...

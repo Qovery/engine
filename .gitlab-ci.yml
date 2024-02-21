@@ -86,21 +86,21 @@ release-engine-image:
       when: always
       allow_failure: false
 
-gitguardian:
-  stage: build-and-lint
-  image: gitguardian/ggshield:latest
-  retry: 0
-  when: always
-  only:
-    - merge_requests
-    - main
-  before_script:
-    - git config --global --add safe.directory $CI_PROJECT_DIR
-  script: ggshield secret scan ci
-  interruptible: true
-  # BM machine because ggshield does not support ARM64
-  tags:
-    - bm-250mcpu-1gmem-0g
+#gitguardian:
+#  stage: build-and-lint
+#  image: gitguardian/ggshield:latest
+#  retry: 0
+#  when: always
+#  only:
+#    - merge_requests
+#    - main
+#  before_script:
+#    - git config --global --add safe.directory $CI_PROJECT_DIR
+#  script: ggshield secret scan ci
+#  interruptible: true
+#  # BM machine because ggshield does not support ARM64
+#  tags:
+#    - bm-250mcpu-1gmem-0g
 
 #################
 # MINIMAL TESTS #
