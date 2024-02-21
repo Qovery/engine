@@ -1817,6 +1817,7 @@ impl Kubernetes for Kapsule {
         if let Err(e) = self.delete_completed_jobs(
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
+            None,
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);

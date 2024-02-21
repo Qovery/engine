@@ -884,13 +884,18 @@ pub trait Kubernetes: Send + Sync {
         Ok(())
     }
 
-    fn delete_completed_jobs(&self, envs: Vec<(&str, &str)>, stage: Stage) -> Result<(), Box<EngineError>> {
+    fn delete_completed_jobs(
+        &self,
+        envs: Vec<(&str, &str)>,
+        stage: Stage,
+        ignored_namespaces: Option<Vec<&str>>,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(stage);
 
         match self.get_kubeconfig_file() {
             Err(e) => return Err(e),
             Ok(config_path) => {
-                if let Err(e) = kubectl_delete_completed_jobs(config_path, envs) {
+                if let Err(e) = kubectl_delete_completed_jobs(config_path, envs, ignored_namespaces) {
                     return Err(Box::new(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e)));
                 };
             }

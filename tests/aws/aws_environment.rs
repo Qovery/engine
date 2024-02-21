@@ -200,12 +200,14 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_deployment.status, Some(StepStatus::Success));
         assert!(record_deployment.duration.is_some());
 
-        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
-        assert_eq!(record_total.step_name, StepName::Total);
-        assert_eq!(record_total.label, StepLabel::Service);
-        assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
-        assert_eq!(record_total.status, Some(StepStatus::Success));
-        assert!(record_total.duration.is_some());
+        // The start of the Total record has been moved to the EnvironmentTask.run() method. As a result, it is no longer invoked during test execution.
+
+        // let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        // assert_eq!(record_total.step_name, StepName::Total);
+        // assert_eq!(record_total.label, StepLabel::Service);
+        // assert_eq!(record_total.id, environment.applications.first().unwrap().long_id);
+        // assert_eq!(record_total.status, Some(StepStatus::Success));
+        // assert!(record_total.duration.is_some());
 
         let queueing_total = records
             .iter()
@@ -218,14 +220,16 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert!(queueing_total.duration.is_some());
 
         let records = metrics_registry_for_deployment.get_records(environment.long_id);
-        assert_eq!(records.len(), 2);
+        assert_eq!(records.len(), 1);
 
-        let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
-        assert_eq!(record_total.step_name, StepName::Total);
-        assert_eq!(record_total.label, StepLabel::Environment);
-        assert_eq!(record_total.id, environment.long_id);
-        assert_eq!(record_total.status, Some(StepStatus::Success));
-        assert!(record_total.duration.is_some());
+        // The start of the Total record has been moved to the EnvironmentTask.run() method. As a result, it is no longer invoked during test execution.
+
+        // let record_total = records.iter().find(|step| step.step_name == StepName::Total).unwrap();
+        // assert_eq!(record_total.step_name, StepName::Total);
+        // assert_eq!(record_total.label, StepLabel::Environment);
+        // assert_eq!(record_total.id, environment.long_id);
+        // assert_eq!(record_total.status, Some(StepStatus::Success));
+        // assert!(record_total.duration.is_some());
 
         let record_provision = records
             .iter()
@@ -3581,6 +3585,7 @@ fn deploy_helm_chart_with_router() {
 
         // generate an extra namespace to deploy a service and ingress
         let extra_namespace = format!("extra-env-{}", Uuid::new_v4());
+        let host_suffix = Uuid::new_v4();
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
@@ -3623,7 +3628,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: "service1-p8080".to_string(),
+                    name: format!("service1-p8080-{}", host_suffix),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: None,
@@ -3633,7 +3638,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: "service2-p8080".to_string(),
+                    name: format!("service2-p8080-{}", host_suffix),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: Some(extra_namespace.clone()),
