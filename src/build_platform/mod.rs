@@ -185,17 +185,31 @@ impl Image {
     pub fn repository_name(&self) -> &str {
         &self.repository_name
     }
+
     pub fn full_image_name_with_tag(&self) -> String {
-        format!(
-            "{}/{}:{}",
-            self.registry_url.host_str().unwrap_or_default(),
-            self.name,
-            self.tag
-        )
+        match self.registry_url.port_or_known_default() {
+            None | Some(443) => {
+                let host = self.registry_url.host_str().unwrap_or_default();
+                format!("{}/{}:{}", host, self.name, self.tag)
+            }
+            Some(port) => {
+                let host = self.registry_url.host_str().unwrap_or_default();
+                format!("{}:{}/{}:{}", host, port, self.name, self.tag)
+            }
+        }
     }
 
     pub fn full_image_name(&self) -> String {
-        format!("{}/{}", self.registry_url.host_str().unwrap_or_default(), self.name,)
+        match self.registry_url.port_or_known_default() {
+            None | Some(443) => {
+                let host = self.registry_url.host_str().unwrap_or_default();
+                format!("{}/{}", host, self.name)
+            }
+            Some(port) => {
+                let host = self.registry_url.host_str().unwrap_or_default();
+                format!("{}:{}/{}", host, port, self.name)
+            }
+        }
     }
 
     pub fn name(&self) -> String {

@@ -16,6 +16,7 @@ use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
 use crate::cloud_provider::self_managed::SelfManaged;
 use crate::container_registry::ecr::ECR;
+use crate::container_registry::generic_cr::GenericCr;
 use crate::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
@@ -510,7 +511,7 @@ pub struct ContainerRegistry {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub options: Options,
+    pub options: serde_json::Value,
 }
 
 impl ContainerRegistry {
@@ -521,40 +522,48 @@ impl ContainerRegistry {
         tags: HashMap<String, String>,
     ) -> Option<Box<dyn container_registry::ContainerRegistry>> {
         match self.kind {
-            container_registry::Kind::Ecr => Some(Box::new(
-                ECR::new(
-                    context,
-                    self.id.as_str(),
-                    self.long_id,
-                    self.name.as_str(),
-                    self.options.access_key_id.as_ref()?.as_str(),
-                    self.options.secret_access_key.as_ref()?.as_str(),
-                    self.options.region.as_ref()?.as_str(),
-                    logger,
-                    tags,
-                )
-                .ok()?,
-            )),
-            container_registry::Kind::ScalewayCr => Some(Box::new(
-                ScalewayCR::new(
-                    context,
-                    self.id.as_str(),
-                    self.long_id,
-                    self.name.as_str(),
-                    self.options.scaleway_secret_key.as_ref()?.as_str(),
-                    self.options.scaleway_project_id.as_ref()?.as_str(),
-                    ScwZone::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
-                        panic!(
-                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
-                            self.options.region.as_deref().unwrap_or_default()
-                        )
-                    }),
-                )
-                .ok()?,
-            )),
+            container_registry::Kind::Ecr => {
+                let options: EcrOptions = serde_json::from_value(self.options.clone())
+                    .unwrap_or_else(|err| panic!("bad options for ECR {:?}", err));
+                Some(Box::new(
+                    ECR::new(
+                        context,
+                        self.id.as_str(),
+                        self.long_id,
+                        self.name.as_str(),
+                        &options.access_key_id,
+                        &options.secret_access_key,
+                        &options.region,
+                        logger,
+                        tags,
+                    )
+                    .ok()?,
+                ))
+            }
+            container_registry::Kind::ScalewayCr => {
+                let options: ScwCrOptions = serde_json::from_value(self.options.clone())
+                    .unwrap_or_else(|err| panic!("bad options for scaleway CR {:?}", err));
+
+                Some(Box::new(
+                    ScalewayCR::new(
+                        context,
+                        self.id.as_str(),
+                        self.long_id,
+                        self.name.as_str(),
+                        &options.scaleway_secret_key,
+                        &options.scaleway_project_id,
+                        ScwZone::from_str(&options.region).unwrap_or_else(|_| {
+                            panic!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
+                        }),
+                    )
+                    .ok()?,
+                ))
+            }
             container_registry::Kind::GcpArtifactRegistry => {
+                let options: GcpCrOptions = serde_json::from_value(self.options.clone())
+                    .unwrap_or_else(|err| panic!("bad option for gcp artifact registry {:?}", err));
                 let credentials = JsonCredentials::try_from(
-                    self.options
+                    options
                         .gcp_credentials
                         .clone()
                         .unwrap_or_else(|| panic!("gcp_credentials not set",)),
@@ -568,10 +577,10 @@ impl ContainerRegistry {
                         self.long_id,
                         self.name.as_str(),
                         credentials.project_id.as_str(),
-                        GcpRegion::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
+                        GcpRegion::from_str(options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
                             panic!(
                                 "cannot parse `{}`, it doesn't seem to be a valid GCP region",
-                                self.options.region.as_deref().unwrap_or_default()
+                                options.region.as_deref().unwrap_or_default()
                             )
                         }),
                         credentials.clone(),
@@ -583,6 +592,22 @@ impl ContainerRegistry {
                             )
                             .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
                         ),
+                    )
+                    .ok()?,
+                ))
+            }
+            container_registry::Kind::LocalRegistry => {
+                let options: GenericCrOptions = serde_json::from_value(self.options.clone())
+                    .unwrap_or_else(|err| panic!("bad option for container registry {:?}", err));
+                Some(Box::new(
+                    GenericCr::new(
+                        context,
+                        self.long_id,
+                        &self.name,
+                        options.url.clone(),
+                        options.skip_tls_verify,
+                        options.repository_name.clone(),
+                        options.login.and_then(|l| options.password.map(|p| (l, p))),
                     )
                     .ok()?,
                 ))
@@ -670,6 +695,43 @@ pub struct Options {
     pub gcp_credentials: Option<JsonCredentialsIo>,
     #[derivative(Debug = "ignore")]
     pub token: Option<String>,
+    region: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct EcrOptions {
+    access_key_id: String,
+    #[derivative(Debug = "ignore")]
+    secret_access_key: String,
+    region: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct ScwCrOptions {
+    scaleway_project_id: String,
+    #[derivative(Debug = "ignore")]
+    pub scaleway_secret_key: String,
+    region: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct GenericCrOptions {
+    pub url: Url,
+    pub login: Option<String>,
+    #[derivative(Debug = "ignore")]
+    pub password: Option<String>,
+    pub skip_tls_verify: bool,
+    repository_name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct GcpCrOptions {
+    #[derivative(Debug = "ignore")]
+    #[serde(alias = "json_credentials")]
+    #[serde(deserialize_with = "gcp_credentials_from_str")] // Allow to deserialize string field to its struct counterpart
+    #[serde(default)]
+    pub gcp_credentials: Option<JsonCredentialsIo>,
+    #[derivative(Debug = "ignore")]
     region: Option<String>,
 }
 
