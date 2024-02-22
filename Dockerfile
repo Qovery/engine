@@ -11,6 +11,7 @@ ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # within the engine chart
 ARG DOCKER_VERSION="5:25.0.3-1~debian.12~bookworm"
 ARG BUILDX_VERSION="0.12.1-1~debian.12~bookworm"
+ARG PACK_VERSION="0.33.1"
 ARG CONTAINERD_VERSION="1.6.28-1"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b5
 
@@ -33,6 +34,7 @@ ARG TERRAFORM_VERSION
 ARG VAULT_VERSION
 ARG HELM_DIFF_VERSION
 ARG BUILDX_VERSION
+ARG PACK_VERSION
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
 ARG CONTAINERD_VERSION
@@ -49,7 +51,7 @@ RUN apt-get update && \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
   vault=$VAULT_VERSION && \
-  curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
+  curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
   mkdir -p $TF_PLUGIN_CACHE_DIR
@@ -133,6 +135,7 @@ ARG HELM_DIFF_VERSION
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
 ARG BUILDX_VERSION
+ARG PACK_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 
@@ -155,7 +158,7 @@ RUN apt-get update && apt-get install -y \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
-  curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.28.0/pack-v0.28.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
+  curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/').zip" -o "awscliv2.zip" && \
