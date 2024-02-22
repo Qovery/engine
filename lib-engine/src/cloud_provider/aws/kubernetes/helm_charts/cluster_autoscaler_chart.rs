@@ -1,6 +1,6 @@
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -18,6 +18,7 @@ pub struct ClusterAutoscalerChart {
     aws_iam_cluster_autoscaler_role_arn: String,
     prometheus_namespace: HelmChartNamespaces,
     ff_metrics_history_enabled: bool,
+    replaced_by_karpenter: bool,
 }
 
 impl ClusterAutoscalerChart {
@@ -29,6 +30,7 @@ impl ClusterAutoscalerChart {
         aws_iam_cluster_autoscaler_role_arn: String,
         prometheus_namespace: HelmChartNamespaces,
         ff_metrics_history_enabled: bool,
+        replaced_by_karpenter: bool,
     ) -> Self {
         ClusterAutoscalerChart {
             chart_path: HelmChartPath::new(
@@ -47,6 +49,7 @@ impl ClusterAutoscalerChart {
             aws_iam_cluster_autoscaler_role_arn,
             prometheus_namespace,
             ff_metrics_history_enabled,
+            replaced_by_karpenter,
         }
     }
 
@@ -60,6 +63,10 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: ClusterAutoscalerChart::chart_name(),
+                action: match self.replaced_by_karpenter {
+                    true => HelmAction::Destroy,
+                    false => HelmAction::Deploy,
+                },
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
@@ -148,6 +155,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -182,6 +190,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -217,6 +226,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             true,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

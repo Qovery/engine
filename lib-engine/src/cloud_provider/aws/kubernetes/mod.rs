@@ -16,6 +16,7 @@ use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::addons::aws_core_dns_addon::AwsCoreDnsAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
@@ -139,6 +140,8 @@ pub struct Options {
     pub aws_addon_kube_proxy_version_override: Option<String>,
     #[serde(default)]
     pub aws_addon_ebs_csi_version_override: Option<String>,
+    #[serde(default)]
+    pub aws_addon_coredns_version_override: Option<String>,
     #[serde(default)]
     pub ec2_exposed_port: Option<u16>,
 }
@@ -424,6 +427,7 @@ fn tera_context(
     // Other Kubernetes
     context.insert("kubernetes_cluster_name", &kubernetes.cluster_name());
     context.insert("enable_cluster_autoscaler", &true);
+    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
 
     // AWS
     context.insert("aws_access_key", &kubernetes.cloud_provider().access_key_id());
@@ -626,6 +630,14 @@ fn tera_context(
             &(match &options.aws_addon_ebs_csi_version_override {
                 None => AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
                 Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
+            }),
+        );
+        // COREDNS
+        context.insert(
+            "eks_addon_coredns",
+            &(match &options.aws_addon_coredns_version_override {
+                None => AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version()),
+                Some(overridden_version) => AwsCoreDnsAddon::new_with_overridden_version(overridden_version),
             }),
         );
     }
@@ -901,12 +913,12 @@ fn create(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
+    let terraform_apply = |kubernetes_action: KubernetesClusterAction, applied_node_groups: &[NodeGroups]| {
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
             kubernetes_action,
-            node_groups,
+            applied_node_groups,
             aws_eks_client.clone(),
         )?;
 
@@ -1099,7 +1111,15 @@ fn create(
     // upgrade cluster instead if required
     if kubernetes.context().is_first_cluster_deployment() {
         // terraform deployment dedicated to cloud resources
-        terraform_apply(KubernetesClusterAction::Bootstrap)?;
+
+        // don't create node groups if karpenter is enabled
+        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+            &[]
+        } else {
+            node_groups
+        };
+
+        terraform_apply(KubernetesClusterAction::Bootstrap, applied_node_groups)?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
@@ -1169,7 +1189,16 @@ fn create(
     }
 
     // apply to generate tf_qovery_config.json
-    terraform_apply(KubernetesClusterAction::Update(None))?;
+    // don't create node groups if karpenter is enabled and Karpenter is deployed
+    let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter
+        && (karpenter_pods_is_running(kubernetes, &event_details) || kubernetes.context().is_first_cluster_deployment())
+    {
+        &[]
+    } else {
+        node_groups
+    };
+
+    terraform_apply(KubernetesClusterAction::Update(None), applied_node_groups)?;
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
@@ -1256,6 +1285,7 @@ fn create(
 
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
+            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
             let charts_prerequisites = EksChartsConfigPrerequisites {
                 organization_id: kubernetes.cloud_provider().organization_id().to_string(),
                 organization_long_id: kubernetes.cloud_provider().organization_long_id(),
@@ -1299,6 +1329,7 @@ fn create(
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
+                disk_size_in_gib,
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
@@ -1408,7 +1439,7 @@ fn create(
         }
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
-        return deploy_charts_levels(
+        deploy_charts_levels(
             &kubernetes.kube_client()?,
             kubeconfig_path,
             credentials_environment_variables
@@ -1419,7 +1450,61 @@ fn create(
             helm_charts_to_deploy,
             kubernetes.context().is_dry_run_deploy(),
         )
-        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)));
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
+
+        if kubernetes.advanced_settings().aws_enable_karpenter {
+            let has_node_group_running = node_groups.iter().any(|ng| {
+                matches!(
+                    node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
+                    Ok(Some(_v))
+                )
+            });
+
+            // after deploy karpenter, we can remove the node groups
+            if has_node_group_running {
+                terraform_apply(KubernetesClusterAction::Update(None), &[])?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn karpenter_pods_is_running(kubernetes: &dyn Kubernetes, event_details: &EventDetails) -> bool {
+    match kubernetes.q_kube_client() {
+        Ok(kube_client) => {
+            let pods_list = block_on(kube_client.get_pods(
+                event_details.clone(),
+                None,
+                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+            ))
+            .unwrap_or(Vec::with_capacity(0));
+
+            !pods_list.is_empty()
+        }
+        _ => false,
+    }
+}
+
+fn node_group_is_running(
+    kubernetes: &dyn Kubernetes,
+    event_details: &EventDetails,
+    node_group: &NodeGroups,
+    eks_client: Option<EksClient>,
+) -> Result<Option<i32>, Box<EngineError>> {
+    let client = match eks_client {
+        Some(client) => client,
+        None => return Ok(None),
+    };
+
+    let current_nodes =
+        get_nodegroup_autoscaling_config_from_aws(event_details.clone(), kubernetes, node_group.clone(), client)?;
+    match current_nodes {
+        Some(config) => match config.desired_size {
+            Some(n) => Ok(Some(n as i32)),
+            None => Ok(None),
+        },
+        None => Ok(None),
     }
 }
 
