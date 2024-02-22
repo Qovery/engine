@@ -100,7 +100,7 @@ charts:
     comment: |
       https://artifacthub.io/packages/helm/bitnami/redis
   - name: iam-eks-user-mapper
-    version: 1.3.1
+    version: 1.4.1
     repo_name: iam-eks-user-mapper
     dest: aws-bootstrap
   - name: datadog
@@ -114,6 +114,11 @@ charts:
     repo_name: deliveryhero
     version: 1.1.6
     comment: https://artifacthub.io/packages/helm/deliveryhero/k8s-event-logger
+  - name: karpenter
+    dest_folder_override: karpenter
+    repo_name: oci://public.ecr.aws/karpenter
+    dest: aws-bootstrap
+    version: v0.33.2
 
 repos:
   - name: stable

@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "karpenter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "karpenter.labels" . | nindent 4 }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-metrics
+      port: {{ .Values.controller.metrics.port }}
+      targetPort: http-metrics
+      protocol: TCP
+  {{- if .Values.webhook.enabled }}
+    - name: webhook-metrics
+      port: {{ .Values.webhook.metrics.port }}
+      targetPort: webhook-metrics
+      protocol: TCP
+    - name: https-webhook
+      port: {{ .Values.webhook.port }}
+      targetPort: https-webhook
+      protocol: TCP
+  {{- end }}
+  selector:
+    {{- include "karpenter.selectorLabels" . | nindent 4 }}

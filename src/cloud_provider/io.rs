@@ -70,6 +70,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_iam_user_mapper_sso_enabled: bool,
     #[serde(alias = "aws.iam.sso_role_arn")]
     pub aws_iam_user_mapper_sso_role_arn: Option<String>,
+    #[serde(alias = "aws.enable_karpenter")]
+    pub aws_enable_karpenter: bool,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
@@ -153,6 +155,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_max_number_instances: 25,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
+            aws_enable_karpenter: false,
         }
     }
 }
