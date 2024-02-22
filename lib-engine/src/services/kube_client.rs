@@ -195,7 +195,8 @@ impl QubeClient {
                 ))),
             },
             SelectK8sResourceBy::Name(deployment_name) => match client.get(deployment_name.as_str()).await {
-                Ok(x) => Ok(Some(ObjectList {
+                Ok(x) => Ok(Some(ObjectList::<Deployment> {
+                    types: Default::default(),
                     metadata: ListMeta::default(),
                     items: vec![x],
                 })),
