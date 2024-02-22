@@ -1841,7 +1841,8 @@ mod tests {
     }
 
     pub fn get_svc_template() -> ObjectList<Service> {
-        ObjectList {
+        ObjectList::<Service> {
+            types: Default::default(),
             metadata: ListMeta { ..Default::default() },
             items: vec![
                 Service {
