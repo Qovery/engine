@@ -596,7 +596,7 @@ impl ContainerRegistry {
                     .ok()?,
                 ))
             }
-            container_registry::Kind::LocalRegistry => {
+            container_registry::Kind::GenericCr => {
                 let options: GenericCrOptions = serde_json::from_value(self.options.clone())
                     .unwrap_or_else(|err| panic!("bad option for container registry {:?}", err));
                 Some(Box::new(

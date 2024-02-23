@@ -108,7 +108,7 @@ pub enum Kind {
     Ecr,
     ScalewayCr,
     GcpArtifactRegistry,
-    LocalRegistry,
+    GenericCr,
 }
 
 #[derive(Clone, PartialEq, Debug)]
