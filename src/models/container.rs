@@ -244,7 +244,7 @@ impl<T: CloudProvider> Container<T> {
                 image_full: format!(
                     "{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(&get_mirror_repository_name(
+                    registry_info.get_image_name(&get_mirror_repository_name(
                         self.long_id(),
                         kubernetes.long_id(),
                         &kubernetes.advanced_settings().registry_mirroring_mode,

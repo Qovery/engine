@@ -41,6 +41,7 @@ pub enum Protocol {
     TCP,
     UDP,
 }
+
 impl Protocol {
     pub fn is_layer4(&self) -> bool {
         matches!(self, Protocol::TCP | Protocol::UDP)
@@ -448,13 +449,13 @@ impl Application {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: (cr_info.get_image_name)(&self.name),
-            tag: "".to_string(), // It needs to be compute after creation
+            name: cr_info.get_image_name(&self.name),
+            tag: "".to_string(), // It needs to be computed after creation
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
-            repository_name: (cr_info.get_repository_name)(&self.name),
+            repository_name: cr_info.get_repository_name(&self.name),
         }
     }
 

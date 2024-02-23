@@ -1,3 +1,5 @@
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::time::Duration;
 
 use crate::build_platform::Image;
@@ -32,17 +34,41 @@ impl GenericCr {
         repository_name: String,
         credentials: Option<(String, String)>,
     ) -> Result<Self, ContainerRegistryError> {
+        let mut registry_docker_json_config = None;
+        if let Some((user, pass)) = &credentials {
+            let mut registry_url = url.clone();
+            let _ = registry_url.set_username(user);
+            let _ = registry_url.set_password(Some(pass));
+
+            context
+                .docker
+                .login(&registry_url)
+                .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
+
+            registry_docker_json_config = Some(GenericCr::get_docker_json_config_raw(
+                url.host_str().unwrap_or(""),
+                url.port_or_known_default().unwrap_or(443),
+                user,
+                pass,
+            ));
+        }
+
         let skopeo = Skopeo::new(credentials).map_err(|err| ContainerRegistryError::CannotInstantiateClient {
             raw_error_message: err.to_string(),
         })?;
 
-        let repository = repository_name.clone();
         let container_registry_info = ContainerRegistryInfo {
             endpoint: url.clone(),
             registry_name: name.to_string(),
-            registry_docker_json_config: None,
-            get_image_name: Box::new(move |name| format!("{}/{}", repository, name)),
-            get_repository_name: Box::new(|name| name.to_string()),
+            registry_docker_json_config,
+            get_image_name: Box::new({
+                let repository = repository_name.clone();
+                move |name| format!("{}/{}", repository, name)
+            }),
+            get_repository_name: Box::new({
+                let repository = repository_name.clone();
+                move |name| format!("{}/{}", repository, name)
+            }),
         };
 
         let cr = Self {
@@ -56,8 +82,24 @@ impl GenericCr {
             cr_info: container_registry_info,
         };
 
-        //cr.is_credentials_valid()?;
         Ok(cr)
+    }
+
+    fn get_docker_json_config_raw(host: &str, port: u16, login: &str, secret_token: &str) -> String {
+        let port = if port == 443 {
+            "".to_string()
+        } else {
+            format!(":{}", port)
+        };
+        general_purpose::STANDARD.encode(
+            format!(
+                r#"{{"auths":{{"{}{}":{{"auth":"{}"}}}}}}"#,
+                host,
+                port,
+                general_purpose::STANDARD.encode(format!("{login}:{secret_token}").as_bytes())
+            )
+            .as_bytes(),
+        )
     }
 }
 
