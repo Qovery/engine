@@ -125,7 +125,7 @@ unit-Tests:
   script:
     - ./helper.sh unit_tests
   tags:
-    - bm-2cpu-4gmem-0g
+    - vm-3cpu-8gmem-0g
   only:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -154,7 +154,7 @@ scw-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - bm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -180,7 +180,7 @@ aws-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - bm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -205,7 +205,7 @@ aws-ec2-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - bm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -230,7 +230,7 @@ gcp-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - bm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -255,7 +255,7 @@ infra-without-cloud-providers:
   dependencies:
     - build-and-lint-code
   tags:
-    - bm-2cpu-8gmem-0g
+    - vm-3cpu-8gmem-0g
   interruptible: true
   retry: 2 # because of docker rate exceeded error
 
@@ -299,7 +299,7 @@ aws-ec2-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   only:
     refs:
       - merge_requests
@@ -324,7 +324,7 @@ aws-managed-services:
   script:
     - ./helper.sh aws_managed_services
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -351,7 +351,7 @@ aws-ec2-managed-services:
   script:
     - ./helper.sh aws_ec2_managed_services
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -378,7 +378,7 @@ aws-self-hosted:
   script:
     - ./helper.sh aws_self_hosted
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -405,7 +405,7 @@ aws-ec2-self-hosted:
   script:
     - ./helper.sh aws_ec2_self_hosted
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -434,7 +434,7 @@ aws-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -489,7 +489,7 @@ scw-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   only:
     refs:
       - merge_requests
@@ -514,7 +514,7 @@ scw-managed-services:
   script:
     - ./helper.sh scw_managed_services
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -543,7 +543,7 @@ scw-self-hosted:
   script:
     - ./helper.sh scw_self_hosted
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -571,7 +571,7 @@ scw-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -601,7 +601,7 @@ gcp-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   only:
     refs:
       - merge_requests
@@ -626,7 +626,7 @@ gcp-managed-services:
   script:
     - ./helper.sh gcp_managed_services
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -655,7 +655,7 @@ gcp-self-hosted:
   script:
     - ./helper.sh gcp_self_hosted
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -682,7 +682,7 @@ gcp-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-12gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -713,7 +713,7 @@ quarantine:
   script:
     - ./helper.sh quarantine
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-8gmem-0g
   dependencies:
     - build-and-lint-code
   only:
