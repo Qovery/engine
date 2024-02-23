@@ -92,6 +92,7 @@ pub enum JobSchedule {
     OnDelete {},
     Cron { schedule: String, timezone: String },
 }
+
 impl JobSchedule {
     pub fn is_cronjob(&self) -> bool {
         matches!(self, JobSchedule::Cron { .. })
@@ -128,9 +129,12 @@ pub struct Job {
     pub action: Action,
     pub schedule: JobSchedule,
     pub source: JobSource,
-    pub max_nb_restart: u32,       // .spec.backoffLimit
-    pub max_duration_in_sec: u64,  // .spec.activeDeadlineSeconds
-    pub default_port: Option<u16>, // for probes
+    pub max_nb_restart: u32,
+    // .spec.backoffLimit
+    pub max_duration_in_sec: u64,
+    // .spec.activeDeadlineSeconds
+    pub default_port: Option<u16>,
+    // for probes
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
     pub force_trigger: bool,
@@ -241,13 +245,13 @@ impl Job {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: (cr_info.get_image_name)(&self.long_id.to_string()),
+            name: cr_info.get_image_name(&self.long_id.to_string()),
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
-            repository_name: (cr_info.get_repository_name)(&self.long_id.to_string()),
+            repository_name: cr_info.get_repository_name(&self.long_id.to_string()),
         }
     }
 

@@ -90,16 +90,27 @@ pub fn to_engine_error(event_details: EventDetails, err: ContainerRegistryError)
 }
 
 pub struct ContainerRegistryInfo {
-    pub endpoint: Url, // Contains username and password if necessary
+    pub endpoint: Url,
+    // Contains username and password if necessary
     pub registry_name: String,
     pub registry_docker_json_config: Option<String>,
     // give it the name of your image, and it returns the full name with prefix if needed
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
-    pub get_image_name: Box<dyn Fn(&str) -> String + Send + Sync>,
+    get_image_name: Box<dyn Fn(&str) -> String + Send + Sync>,
 
-    // Give it the name of your image, and it return the name of the repository that will be used
-    pub get_repository_name: Box<dyn Fn(&str) -> String + Send + Sync>,
+    // Give it the name of your image, and it returns the name of the repository that will be used
+    get_repository_name: Box<dyn Fn(&str) -> String + Send + Sync>,
+}
+
+impl ContainerRegistryInfo {
+    pub fn get_repository_name(&self, image_name: &str) -> String {
+        (self.get_repository_name)(image_name)
+    }
+
+    pub fn get_image_name(&self, image_name: &str) -> String {
+        (self.get_image_name)(image_name)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]

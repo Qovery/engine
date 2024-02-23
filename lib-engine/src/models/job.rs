@@ -36,7 +36,8 @@ pub struct Job<T: CloudProvider> {
     pub(super) schedule: JobSchedule,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration: Duration,
-    pub(super) default_port: Option<u16>, // for probes
+    pub(super) default_port: Option<u16>,
+    // for probes
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) force_trigger: bool,
@@ -179,7 +180,7 @@ impl<T: CloudProvider> Job<T> {
                     format!(
                         "{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
-                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
+                        registry_info.get_image_name(&models::container::get_mirror_repository_name(
                             self.long_id(),
                             target.kubernetes.long_id(),
                             &target.kubernetes.advanced_settings().registry_mirroring_mode,

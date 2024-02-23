@@ -37,7 +37,10 @@ pub fn delete_cached_image(
     }
 
     // Delete previous image from cache to cleanup resources
-    if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
+    if let Some(last_image_tag) = last_image
+        .as_ref()
+        .and_then(|img| img.split(':').last().map(str::to_string))
+    {
         if is_service_deletion || last_image_tag != current_image_tag {
             logger.send_success(format!("🪓 Deleting previous cached image {last_image_tag}"));
 
@@ -46,6 +49,10 @@ pub fn delete_cached_image(
                 target.kubernetes.long_id(),
                 &target.kubernetes.advanced_settings().registry_mirroring_mode,
             );
+            let mirror_repo_name = target
+                .container_registry
+                .registry_info()
+                .get_repository_name(&mirror_repo_name);
             let image = Image {
                 name: mirror_repo_name.clone(),
                 tag: last_image_tag,
@@ -83,7 +90,7 @@ pub fn mirror_image_if_necessary(
     );
     let dest_image = ContainerImage::new(
         target.container_registry.registry_info().endpoint.clone(),
-        (registry_info.get_image_name)(&mirror_repo_name),
+        registry_info.get_image_name(&mirror_repo_name),
         vec![tag_for_mirror],
     );
 
