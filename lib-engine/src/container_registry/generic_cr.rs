@@ -67,7 +67,7 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn kind(&self) -> Kind {
-        Kind::LocalRegistry
+        Kind::GenericCr
     }
 
     fn id(&self) -> &str {
