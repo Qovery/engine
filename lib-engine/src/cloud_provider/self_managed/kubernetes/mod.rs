@@ -10,7 +10,6 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{self, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
@@ -27,7 +26,6 @@ pub struct SelfManaged {
     version: KubernetesVersion,
     cloud_provider: Arc<dyn CloudProvider>,
     region: String,
-    dns_provider: Arc<dyn DnsProvider>,
     #[allow(dead_code)] //TODO(pmavro): not yet implemented
     options: SelfManagedOptions,
     logger: Box<dyn Logger>,
@@ -44,7 +42,6 @@ impl SelfManaged {
         name: String,
         version: KubernetesVersion,
         cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
         options: SelfManagedOptions,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
@@ -59,7 +56,6 @@ impl SelfManaged {
             version,
             cloud_provider: cloud_provider.clone(),
             region: cloud_provider.region(),
-            dns_provider,
             options,
             logger,
             metrics_registry,
@@ -113,14 +109,6 @@ impl Kubernetes for SelfManaged {
 
     fn zones(&self) -> Option<Vec<&str>> {
         None
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref()
     }
 
     fn logger(&self) -> &dyn Logger {

@@ -318,7 +318,7 @@ impl Kapsule {
             None => {
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(
                     CommandError::new_from_safe_message(error_cluster_id),
-                ))
+                ));
             }
             Some(x) => x,
         };
@@ -478,7 +478,7 @@ impl Kapsule {
         let managed_dns_domains_root_terraform_format =
             terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
         let managed_dns_resolvers_terraform_format = terraform_list_format(
-            self.dns_provider()
+            self.dns_provider
                 .resolvers()
                 .iter()
                 .map(|x| x.clone().to_string())
@@ -497,10 +497,10 @@ impl Kapsule {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
-        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
+        context.insert("wildcard_managed_dns", &self.dns_provider.domain().wildcarded().to_string());
 
         // add specific DNS fields
-        self.dns_provider().insert_into_teracontext(&mut context);
+        self.dns_provider.insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -529,21 +529,21 @@ impl Kapsule {
         // AWS S3 tfstates storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.access_key_id.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.secret_access_key.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_region_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.region.as_str(),
                 None => "",
             },
@@ -629,7 +629,7 @@ impl Kapsule {
                             return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
                                 event_details,
                                 err.to_string(),
-                            )))
+                            )));
                         }
                     }
                 }
@@ -637,7 +637,7 @@ impl Kapsule {
                     return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
                         event_details,
                         err.to_string(),
-                    )))
+                    )));
                 }
             }
         };
@@ -687,7 +687,6 @@ impl Kapsule {
                 }
             },
             Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
-
         };
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
@@ -804,7 +803,7 @@ impl Kapsule {
             None,
             cluster_endpoint,
             self.kind(),
-            self.cloud_provider().name().to_string(),
+            self.cloud_provider.name().to_string(),
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
@@ -832,7 +831,7 @@ impl Kapsule {
                         return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
                             Some(c),
-                        )))
+                        )));
                     }
                     ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
@@ -949,7 +948,7 @@ impl Kapsule {
                                     self.logger.log(EngineEvent::Error(current_error.clone(), None));
                                     OperationResult::Retry(current_error)
                                 }
-                            }
+                            };
                         }
                     };
                     match scw_ng.status == scaleway_api_rs::models::scaleway_k8s_v1_pool::Status::Ready {
@@ -977,7 +976,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create() {
+        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1021,7 +1020,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             terraform_list_format(
-                self.dns_provider()
+                self.dns_provider
                     .resolvers()
                     .iter()
                     .map(|x| x.clone().to_string())
@@ -1030,7 +1029,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
-            self.dns_provider().provider_configuration(),
+            self.dns_provider.provider_configuration(),
             self.options.clone(),
             self.advanced_settings().clone(),
         );
@@ -1052,7 +1051,7 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client()?,
+            &self.kube_client(self.cloud_provider.as_ref())?,
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1182,7 +1181,7 @@ impl Kapsule {
                     let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
                         return match kubectl_exec_api_custom_metrics(
                             &kubernetes_config_file_path,
-                            self.cloud_provider().credentials_environment_variables(),
+                            self.cloud_provider.credentials_environment_variables(),
                             "qovery",
                             None,
                             metric_name,
@@ -1218,7 +1217,7 @@ impl Kapsule {
                             self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
                         Err(retry::Error { error, .. }) => {
-                            return Err(Box::new(error))
+                            return Err(Box::new(error));
                         }
                     }
                 }
@@ -1235,7 +1234,7 @@ impl Kapsule {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = self.check_workers_on_pause() {
+        if let Err(e) = self.check_workers_on_pause(self.cloud_provider.as_ref()) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1333,7 +1332,7 @@ impl Kapsule {
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
             );
 
             match all_namespaces {
@@ -1350,7 +1349,7 @@ impl Kapsule {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
                             kubeconfig_path,
                             namespace_to_delete,
-                            self.cloud_provider().credentials_environment_variables(),
+                            self.cloud_provider.credentials_environment_variables(),
                         ) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
@@ -1410,7 +1409,7 @@ impl Kapsule {
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
@@ -1462,7 +1461,7 @@ impl Kapsule {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                     kubeconfig_path,
                     qovery_namespace,
-                    self.cloud_provider().credentials_environment_variables(),
+                    self.cloud_provider.credentials_environment_variables(),
                 );
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
@@ -1526,7 +1525,7 @@ impl Kapsule {
         if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
             temp_dir.as_str(),
             false,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1603,14 +1602,6 @@ impl Kubernetes for Kapsule {
 
     fn zones(&self) -> Option<Vec<&str>> {
         Some(vec![self.zone.as_str()])
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref()
     }
 
     fn logger(&self) -> &dyn Logger {
@@ -1734,7 +1725,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client()?;
+        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1807,7 +1798,7 @@ impl Kubernetes for Kapsule {
             None,
             None,
             Some(3),
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -1815,7 +1806,7 @@ impl Kubernetes for Kapsule {
         }
 
         if let Err(e) = self.delete_completed_jobs(
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -1824,7 +1815,10 @@ impl Kubernetes for Kapsule {
         }
 
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
-            Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
+            Ok(_) => match self.check_workers_on_upgrade(
+                self.cloud_provider.as_ref(),
+                kubernetes_upgrade_status.requested_version.to_string(),
+            ) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
                         event_details,
@@ -1858,7 +1852,7 @@ impl Kubernetes for Kapsule {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
     }
 
     #[named]

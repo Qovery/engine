@@ -36,7 +36,9 @@ pub trait DatabaseInstanceType: Send + Sync {
 }
 
 pub struct Managed {}
+
 pub struct Container {}
+
 pub trait DatabaseMode: Send {
     fn is_managed() -> bool;
     fn is_container() -> bool {
@@ -59,8 +61,11 @@ impl DatabaseMode for Container {
 /////////////////////////////////////////////////////////////////
 // Database types, will be only used as a marker
 pub struct PostgresSQL {}
+
 pub struct MySQL {}
+
 pub struct MongoDB {}
+
 pub struct Redis {}
 
 pub trait DatabaseType<T: CloudProvider, M: DatabaseMode>: Send + Sync {
@@ -377,7 +382,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         let version = self.get_version(event_details)?.matched_version().to_string();
         context.insert("version", &version);
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

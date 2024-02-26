@@ -223,12 +223,12 @@ impl EC2 {
                 }
                 false => {
                     kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_config.aws_ec2_public_hostname
-                            )),
-                        ));
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                            &qovery_terraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
                     OperationResult::Retry(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
                         event_details.clone(),
                     )))
@@ -276,14 +276,6 @@ impl Kubernetes for EC2 {
         Some(self.zones.iter().map(|z| z.to_cloud_provider_format()).collect())
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        (*self.cloud_provider).borrow()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        (*self.dns_provider).borrow()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -322,6 +314,8 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -342,7 +336,9 @@ impl Kubernetes for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
+        send_progress_on_long_task(self, Action::Create, || {
+            kubernetes::create_error(self, self.cloud_provider.as_ref())
+        })
     }
 
     fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
@@ -358,6 +354,8 @@ impl Kubernetes for EC2 {
         // generate terraform files and copy them into temp dir
         let context = kubernetes::tera_context(
             self,
+            self.cloud_provider.as_ref(),
+            self.dns_provider.as_ref(),
             &self.zones,
             &[NodeGroupsWithDesiredState::new_from_node_groups(
                 &self.node_group_from_instance_type(),
@@ -399,7 +397,7 @@ impl Kubernetes for EC2 {
         terraform_init_validate_plan_apply(
             temp_dir.as_str(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
@@ -410,9 +408,9 @@ impl Kubernetes for EC2 {
         ));
 
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-            self.cloud_provider().access_key_id(),
+            self.cloud_provider.access_key_id(),
             self.region().to_string(),
-            self.cloud_provider().secret_access_key(),
+            self.cloud_provider.secret_access_key(),
             None,
             None,
             self.kind(),
@@ -420,7 +418,7 @@ impl Kubernetes for EC2 {
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
-            self.cloud_provider().organization_long_id().to_string(),
+            self.cloud_provider.organization_long_id().to_string(),
             self.context().is_test_cluster(),
         ));
 
@@ -461,7 +459,7 @@ impl Kubernetes for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
     }
 
     #[named]
@@ -490,7 +488,15 @@ impl Kubernetes for EC2 {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || {
-            kubernetes::pause(self, self.template_directory.as_str(), &self.zones, &[], &self.options)
+            kubernetes::pause(
+                self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
+                self.template_directory.as_str(),
+                &self.zones,
+                &[],
+                &self.options,
+            )
         })
     }
 
@@ -522,6 +528,8 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &[self.node_group_from_instance_type()],
@@ -667,7 +675,7 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
                     event_details.clone(),
                     e,
                     Some(instance_id),
-                )))
+                )));
             }
         };
 

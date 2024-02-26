@@ -22,7 +22,6 @@ use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
 
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -34,7 +33,6 @@ use crate::cmd::kubectl::{
     kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
@@ -48,7 +46,6 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::services::kube_client::QubeClient;
-use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 use crate::utilities::create_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
@@ -351,8 +348,6 @@ pub trait Kubernetes: Send + Sync {
             Some(zones) => zones.first().unwrap_or(&""),
         }
     }
-    fn cloud_provider(&self) -> &dyn CloudProvider;
-    fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
     fn metrics_registry(&self) -> &dyn MetricsRegistry;
     fn config_file_store(&self) -> &dyn ObjectStorage;
@@ -360,11 +355,10 @@ pub trait Kubernetes: Send + Sync {
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
     // this method should replace kube_client
-    fn q_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
+    fn q_kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.get_kubeconfig_file_path()?;
-        let kube_credentials: Vec<(String, String)> = self
-            .cloud_provider()
+        let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -377,11 +371,10 @@ pub trait Kubernetes: Send + Sync {
         )
     }
     // AVOID USE: to be replaced by q_kube_client
-    fn kube_client(&self) -> Result<kube::Client, Box<EngineError>> {
+    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.get_kubeconfig_file_path()?;
-        let kube_credentials: Vec<(String, String)> = self
-            .cloud_provider()
+        let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -428,7 +421,7 @@ pub trait Kubernetes: Send + Sync {
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
         EventDetails::new(
-            Some(self.cloud_provider().kind()),
+            Some(self.kind().get_cloud_provider_kind()),
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
@@ -556,7 +549,7 @@ pub trait Kubernetes: Send + Sync {
                                         "Cannot get parent directory for `{}`",
                                         file_path.to_str().unwrap_or_default()
                                     )),
-                                ))
+                                ));
                             }
                         };
                         let _ = block_on(tokio::fs::create_dir_all(parent_dir));
@@ -690,51 +683,10 @@ pub trait Kubernetes: Send + Sync {
         })
     }
 
-    fn resources(&self, _environment: &Environment) -> Result<Resources, Box<EngineError>> {
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
-        let stage = Infrastructure(InfrastructureStep::RetrieveClusterResources);
-
-        let nodes = match kubectl_exec_get_node(
-            kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        ) {
-            Ok(k) => k,
-            Err(err) => {
-                let error = EngineError::new_cannot_get_cluster_nodes(self.get_event_details(stage), err);
-
-                self.logger().log(EngineEvent::Error(error.clone(), None));
-
-                return Err(Box::new(error));
-            }
-        };
-
-        let mut resources = Resources {
-            free_cpu: 0.0,
-            max_cpu: 0.0,
-            free_ram_in_mib: 0,
-            max_ram_in_mib: 0,
-            free_pods: 0,
-            max_pods: 0,
-            running_nodes: 0,
-        };
-
-        for node in nodes.items {
-            resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
-            resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
-            resources.free_ram_in_mib += any_to_mi(node.status.allocatable.memory);
-            resources.max_ram_in_mib += any_to_mi(node.status.capacity.memory);
-            resources.free_pods = node.status.allocatable.pods.parse::<u32>().unwrap_or(0);
-            resources.max_pods = node.status.capacity.pods.parse::<u32>().unwrap_or(0);
-            resources.running_nodes += 1;
-        }
-
-        Ok(resources)
-    }
-
     fn on_create(&self) -> Result<(), Box<EngineError>>;
     fn on_create_error(&self) -> Result<(), Box<EngineError>>;
 
-    fn upgrade(&self) -> Result<(), Box<EngineError>> {
+    fn upgrade(&self, cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
         // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
         if self.kind() != Kind::Ec2 {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
@@ -746,14 +698,14 @@ pub trait Kubernetes: Send + Sync {
 
             return match is_kubernetes_upgradable(
                 kubeconfig.clone(),
-                self.cloud_provider().credentials_environment_variables(),
+                cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
             ) {
                 Err(e) => Err(e),
                 Ok(..) => match is_kubernetes_upgrade_required(
                     kubeconfig,
                     self.version(),
-                    self.cloud_provider().credentials_environment_variables(),
+                    cloud_provider.credentials_environment_variables(),
                     event_details,
                     self.logger(),
                 ) {
@@ -766,33 +718,41 @@ pub trait Kubernetes: Send + Sync {
         Ok(())
     }
 
-    fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), CommandError>
+    fn check_workers_on_upgrade(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+        targeted_version: String,
+    ) -> Result<(), CommandError>
     where
         Self: Sized,
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_workers_upgrade_status(
                 self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
-                self.cloud_provider().credentials_environment_variables(),
+                cloud_provider.credentials_environment_variables(),
                 targeted_version.clone(),
             )
         })
     }
 
-    fn check_control_plane_on_upgrade(&self, targeted_version: KubernetesVersion) -> Result<(), CommandError>
+    fn check_control_plane_on_upgrade(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+        targeted_version: KubernetesVersion,
+    ) -> Result<(), CommandError>
     where
         Self: Sized,
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_master_version_status(
                 self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
-                self.cloud_provider().credentials_environment_variables(),
+                cloud_provider.credentials_environment_variables(),
                 &targeted_version,
             )
         })
     }
 
-    fn check_workers_on_create(&self) -> Result<(), CommandError>
+    fn check_workers_on_create(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
     where
         Self: Sized,
     {
@@ -802,11 +762,11 @@ pub trait Kubernetes: Send + Sync {
         };
 
         send_progress_on_long_task(self, Action::Create, || {
-            check_workers_status(&kubeconfig, self.cloud_provider().credentials_environment_variables())
+            check_workers_status(&kubeconfig, cloud_provider.credentials_environment_variables())
         })
     }
 
-    fn check_workers_on_pause(&self) -> Result<(), CommandError>
+    fn check_workers_on_pause(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
     where
         Self: Sized,
     {
@@ -816,7 +776,7 @@ pub trait Kubernetes: Send + Sync {
         };
 
         send_progress_on_long_task(self, Action::Create, || {
-            check_workers_pause(&kubeconfig, self.cloud_provider().credentials_environment_variables())
+            check_workers_pause(&kubeconfig, cloud_provider.credentials_environment_variables())
         })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
@@ -1093,7 +1053,7 @@ where
                 return OperationResult::Retry(EngineError::new_cannot_execute_k8s_exec_version(
                     event_details.clone(),
                     e,
-                ))
+                ));
             }
         };
         let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
@@ -1126,7 +1086,7 @@ where
                 return Err(Box::new(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
                     event_details,
                     node.status.node_info.kubelet_version.to_string(),
-                )))
+                )));
             }
         }
 
@@ -1137,7 +1097,7 @@ where
                 return Err(Box::new(EngineError::new_cannot_determine_k8s_kube_proxy_version(
                     event_details,
                     node.status.node_info.kube_proxy_version.to_string(),
-                )))
+                )));
             }
         }
     }
@@ -1227,7 +1187,7 @@ where
                     Err(_) => {
                         return OperationResult::Err(CommandError::new_from_safe_message(
                             "Cannot find master nodes version.".to_string(),
-                        ))
+                        ));
                     }
                 };
                 if target_version.is_equal_to(&to_kube_version) {
@@ -1363,7 +1323,7 @@ fn check_kubernetes_upgrade_status(
                     wished_version,
                     e,
                 ),
-            ))
+            ));
         }
     };
 
@@ -1413,7 +1373,7 @@ fn check_kubernetes_upgrade_status(
                         wished_version,
                         e,
                     ),
-                ))
+                ));
             }
         }
     }
@@ -1463,7 +1423,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         None => {
             return Err(CommandError::new_from_safe_message(
                 "deployed kubernetes minor version was missing and is missing".to_string(),
-            ))
+            ));
         }
     };
 
@@ -1472,7 +1432,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         None => {
             return Err(CommandError::new_from_safe_message(
                 "wished kubernetes minor version was expected and is missing".to_string(),
-            ))
+            ));
         }
     };
 
@@ -1937,7 +1897,7 @@ mod tests {
         assert!(block_on(kube_create_namespace_if_not_exists(
             &kube_client,
             "qovery-test-ns",
-            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())])
+            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())]),
         ))
         .is_ok());
     }
@@ -2402,7 +2362,7 @@ mod tests {
             validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "0.25".to_string(),
-                cpu_limit: "1".to_string()
+                cpu_limit: "1".to_string(),
             }
         );
 
@@ -2412,7 +2372,7 @@ mod tests {
             validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "1".to_string(),
-                cpu_limit: "1".to_string()
+                cpu_limit: "1".to_string(),
             }
         );
     }
@@ -2513,7 +2473,7 @@ mod tests {
                     k8s_version.major().to_string(),
                     Some(k8s_version.minor().to_string()),
                     None,
-                    None
+                    None,
                 ),
                 VersionsNumber::from(k8s_version)
             );

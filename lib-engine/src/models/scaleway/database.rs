@@ -137,7 +137,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

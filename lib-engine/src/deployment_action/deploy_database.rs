@@ -64,6 +64,7 @@ struct DbInstance {
     #[serde(alias = "DBInstanceStatus")]
     pub db_instance_status: String,
 }
+
 #[derive(Deserialize, Default)]
 struct DbInstancesResponse {
     #[serde(alias = "DBInstances")]
@@ -365,14 +366,14 @@ where
     helm.on_create(target)?;
 
     // We don't manage START/PAUSE for managed database elsewhere than for AWS
-    if target.kubernetes.cloud_provider().kind() != Aws {
+    if target.cloud_provider.kind() != Aws {
         return Ok(());
     }
 
     // Terraform does not ensure that the database is correctly started
     // So we must force it ourselves in case
     let credentials = {
-        let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+        let mut credentials = target.cloud_provider.credentials_environment_variables();
         credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
         credentials
     };
@@ -588,7 +589,7 @@ where
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // We don't manage PAUSE for managed database elsewhere than for AWS
-                if target.kubernetes.cloud_provider().kind() != Aws {
+                if target.cloud_provider.kind() != Aws {
                     return Ok(());
                 }
 
@@ -600,7 +601,7 @@ where
                 // Terraform does not ensure that the database is correctly started
                 // So we must force it ourselves in case
                 let credentials = {
-                    let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+                    let mut credentials = target.cloud_provider.credentials_environment_variables();
                     credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
                     credentials
                 };

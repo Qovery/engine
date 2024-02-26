@@ -488,7 +488,6 @@ impl Kubernetes {
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     cloud_provider,
-                    dns_provider,
                     serde_json::from_value::<cloud_provider::self_managed::kubernetes::SelfManagedOptions>(
                         self.options.clone(),
                     )
