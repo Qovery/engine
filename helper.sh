@@ -282,7 +282,7 @@ function test_local_stack() {
     echo "==========================TEST WITH LOCAL STACK==========================="
     trap "destroy_kube_cluster $kube_cluster_name" EXIT
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-    cargo test -j 2 --manifest-path lib-engine/Cargo.toml --features test-all-local
+    cargo test -j 2 --manifest-path lib-engine/Cargo.toml --features test-all-local --lib
 }
 
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
@@ -307,7 +307,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
   set -x
-  cargo +nightly test $features_to_test_option --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  cargo +nightly test $features_to_test_option --lib --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
   ENDTIME=$(date +%s)
