@@ -342,12 +342,13 @@ pub trait Kubernetes: Send + Sync {
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
     fn zones(&self) -> Option<Vec<&str>>;
-    fn default_zone(&self) -> &str {
-        match &self.zones() {
-            None => "",
-            Some(zones) => zones.first().unwrap_or(&""),
+    fn default_zone(&self) -> Option<&str> {
+        match self.zones() {
+            Some(zones) => zones.first().copied(),
+            None => None,
         }
     }
+
     fn logger(&self) -> &dyn Logger;
     fn metrics_registry(&self) -> &dyn MetricsRegistry;
     fn config_file_store(&self) -> &dyn ObjectStorage;
