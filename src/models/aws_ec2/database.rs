@@ -300,7 +300,7 @@ where
             context.insert("database_elasticache_instances_number", &1);
         }
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

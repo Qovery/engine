@@ -194,7 +194,7 @@ impl<T: CloudProvider> Router<T> {
 
         // Get the alternative names we need to generate for the certificate
         // For custom domain, we need to generate a subdomain for each port. p80.mydomain.com, p443.mydomain.com
-        let cluster_domain = kubernetes.dns_provider().domain().to_string();
+        let cluster_domain = target.dns_provider.domain().to_string();
         context.insert(
             "certificate_alternative_names",
             &generate_certificate_alternative_names(&self.custom_domains, &cluster_domain, &ports),
@@ -210,7 +210,7 @@ impl<T: CloudProvider> Router<T> {
             .filter(|port| port.protocol == Protocol::GRPC)
             .cloned()
             .collect();
-        let cluster_domain = target.kubernetes.dns_provider().domain().to_string();
+        let cluster_domain = target.dns_provider.domain().to_string();
         let http_hosts_per_namespace = to_host_data_template(
             service_name,
             &http_ports,

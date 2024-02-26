@@ -182,7 +182,7 @@ impl EKS {
         let namespace = "kube-system";
         kubectl_exec_scale_replicas(
             kubeconfig_path,
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             namespace,
             ScalingKind::Deployment,
             selector,
@@ -243,14 +243,6 @@ impl Kubernetes for EKS {
         Some(self.zones.iter().map(|z| z.to_cloud_provider_format()).collect())
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        (*self.cloud_provider).borrow()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        (*self.dns_provider).borrow()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -293,6 +285,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -313,7 +307,9 @@ impl Kubernetes for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
+        send_progress_on_long_task(self, Action::Create, || {
+            kubernetes::create_error(self, self.cloud_provider.as_ref())
+        })
     }
 
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
@@ -326,7 +322,7 @@ impl Kubernetes for EKS {
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
 
-        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self) {
+        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self, self.cloud_provider.as_ref()) {
             Ok(value) => Some(value),
             Err(_) => None,
         };
@@ -341,7 +337,7 @@ impl Kubernetes for EKS {
 
         // in case error, this should no be in the blocking process
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = self.q_kube_client() {
+        if let Ok(kube_client) = self.q_kube_client(self.cloud_provider.as_ref()) {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or_else(|_| Vec::with_capacity(0));
 
@@ -357,6 +353,8 @@ impl Kubernetes for EKS {
         // generate terraform files and copy them into temp dir
         let mut context = kubernetes::tera_context(
             self,
+            self.cloud_provider.as_ref(),
+            self.dns_provider.as_ref(),
             &self.zones,
             &node_groups_with_desired_states,
             &self.options,
@@ -508,7 +506,7 @@ impl Kubernetes for EKS {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client()?;
+        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -581,7 +579,7 @@ impl Kubernetes for EKS {
             None,
             None,
             Some(3),
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -589,7 +587,7 @@ impl Kubernetes for EKS {
         }
 
         if let Err(e) = self.delete_completed_jobs(
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -606,12 +604,15 @@ impl Kubernetes for EKS {
         terraform_init_validate_plan_apply(
             temp_dir.as_str(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string())
-            .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
+        self.check_workers_on_upgrade(
+            self.cloud_provider.as_ref(),
+            kubernetes_upgrade_status.requested_version.to_string(),
+        )
+        .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
 
         self.logger().log(EngineEvent::Info(
             event_details,
@@ -632,7 +633,7 @@ impl Kubernetes for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
+        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
     }
 
     #[named]
@@ -663,6 +664,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
@@ -699,6 +702,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
@@ -807,7 +812,7 @@ pub fn select_nodegroups_autoscaling_group_behavior(
         // desired nodes can't be lower than min nodes
         if x < nodegroup.min_nodes {
             (true, nodegroup.min_nodes)
-        // desired nodes can't be higher than max nodes
+            // desired nodes can't be higher than max nodes
         } else if x > nodegroup.max_nodes {
             (true, nodegroup.max_nodes)
         } else {
@@ -943,7 +948,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_cannot_list_clusters_error(
                 event_details.clone(),
                 CommandError::new("Couldn't list clusters from AWS".to_string(), Some(e.to_string()), None),
-            )))
+            )));
         }
     };
 
@@ -965,7 +970,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_nodegroup_list_error(
                 event_details,
                 CommandError::new_from_safe_message(e.to_string()),
-            )))
+            )));
         }
     };
 
@@ -978,7 +983,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                 event_details,
                 e.to_string(),
-            )))
+            )));
         }
     };
 
@@ -1038,7 +1043,7 @@ pub async fn delete_eks_nodegroups(
                 return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                     event_details,
                     format!("{nodegroup:?}"),
-                )))
+                )));
             }
         };
 
@@ -1379,7 +1384,7 @@ mod tests {
                 vec![
                     NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),
@@ -1390,7 +1395,7 @@ mod tests {
                 vec![
                     NodeGroups::new("".to_string(), 3, 5, "t3a.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),
@@ -1402,7 +1407,7 @@ mod tests {
                     NodeGroups::new("".to_string(), 3, 5, "t1000.terminator".to_string(), 20, CpuArchitecture::AMD64)
                         .unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),
