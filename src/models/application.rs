@@ -144,20 +144,15 @@ impl<T: CloudProvider> Application<T> {
     }
 
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
-        let environment = &target.environment;
-        let kubernetes = &target.kubernetes;
+        let environment = target.environment;
+        let kubernetes = target.kubernetes;
         let registry_info = target.container_registry.registry_info();
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
-            cluster: ClusterTeraContext {
-                long_id: *kubernetes.long_id(),
-                name: kubernetes.name().to_string(),
-                region: kubernetes.region().to_string(),
-                zone: kubernetes.default_zone().to_string(),
-            },
+            cluster: ClusterTeraContext::from(kubernetes),
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),

@@ -145,7 +145,7 @@ pub fn default_tera_context(
     context.insert("environment_id", environment.id.as_str());
     context.insert("environment_long_id", &environment.long_id);
     context.insert("region", kubernetes.region());
-    context.insert("zone", kubernetes.default_zone());
+    context.insert("zone", kubernetes.default_zone().unwrap_or(""));
     context.insert("name", service.name());
     context.insert("sanitized_name", &service.kube_name());
     context.insert("namespace", environment.namespace());
@@ -310,7 +310,7 @@ pub async fn increase_storage_size(
                     "Unable to get statefulset with selector {}",
                     invalid_statefulset.statefulset_selector
                 )),
-            )))
+            )));
         }
         Some(statefulset) => statefulset.clone(),
     };
@@ -399,7 +399,7 @@ pub async fn increase_storage_size(
                     namespace,
                     &invalid_statefulset.statefulset_selector,
                     e,
-                )))
+                )));
             }
         };
         sleep(Duration::from_secs(10)).await;

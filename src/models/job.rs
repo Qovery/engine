@@ -7,7 +7,7 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::models;
-use crate::models::container::RegistryTeraContext;
+use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -170,8 +170,8 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
-        let environment = &target.environment;
-        let kubernetes = &target.kubernetes;
+        let environment = target.environment;
+        let kubernetes = target.kubernetes;
         let registry_info = target.container_registry.registry_info();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
@@ -198,12 +198,7 @@ impl<T: CloudProvider> Job<T> {
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
-            cluster: ClusterTeraContext {
-                long_id: *kubernetes.long_id(),
-                name: kubernetes.name().to_string(),
-                region: kubernetes.region().to_string(),
-                zone: kubernetes.default_zone().to_string(),
-            },
+            cluster: ClusterTeraContext::from(kubernetes),
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
@@ -467,14 +462,6 @@ where
 pub enum ImageSource {
     Registry { source: Box<RegistryImageSource> },
     Build { source: Box<Build> },
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub(super) struct ClusterTeraContext {
-    pub(super) long_id: Uuid,
-    pub(super) name: String,
-    pub(super) region: String,
-    pub(super) zone: String,
 }
 
 #[derive(Serialize, Debug, Clone)]

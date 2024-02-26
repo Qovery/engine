@@ -799,7 +799,7 @@ impl Kapsule {
             self.cloud_provider.secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.region().to_string(),
-            self.default_zone().to_string(),
+            self.default_zone().unwrap_or("").to_string(),
             None,
             cluster_endpoint,
             self.kind(),
