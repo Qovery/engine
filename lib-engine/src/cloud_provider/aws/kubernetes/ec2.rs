@@ -5,8 +5,8 @@ use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
-    KubernetesVersion,
+    create_kubeconfig_from_kubernetes_connection, event_details, send_progress_on_long_task, InstanceType, Kind,
+    Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
 };
 use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::service::Action;
@@ -66,6 +66,7 @@ pub struct EC2 {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    kubeconfig: Option<String>,
 }
 
 impl EC2 {
@@ -85,13 +86,14 @@ impl EC2 {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
-        let s3 = kubernetes::s3(&region, &*cloud_provider);
+        let s3 = mk_s3(&region, &*cloud_provider);
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
@@ -108,7 +110,7 @@ impl EC2 {
         }
 
         // copy listeners from CloudProvider
-        Ok(EC2 {
+        let cluster = EC2 {
             context,
             id: id.to_string(),
             long_id,
@@ -126,7 +128,11 @@ impl EC2 {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            kubeconfig,
+        };
+
+        create_kubeconfig_from_kubernetes_connection(&cluster as &dyn Kubernetes)?;
+        Ok(cluster)
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -296,6 +302,14 @@ impl Kubernetes for EC2 {
         false
     }
 
+    fn is_self_managed(&self) -> bool {
+        false
+    }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        self.kubeconfig.clone()
+    }
+
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         vec![self.instance.instance_architecture]
     }
@@ -449,34 +463,6 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::upgrade_error(self))
-    }
-
-    #[named]
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
@@ -610,14 +596,6 @@ impl Kubernetes for EC2 {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
     }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
-    }
 }
 
 #[async_trait]
@@ -710,4 +688,14 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
 
         Ok(())
     }
+}
+
+pub fn mk_s3(region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
+    S3::new(
+        "s3-temp-id".to_string(),
+        "default-s3".to_string(),
+        cloud_provider.access_key_id(),
+        cloud_provider.secret_access_key(),
+        region.clone(),
+    )
 }

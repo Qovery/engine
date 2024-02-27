@@ -4,8 +4,9 @@ pub mod node;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
-    Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
+    self, create_kubeconfig_from_kubernetes_connection, is_kubernetes_upgrade_required, send_progress_on_long_task,
+    uninstall_cert_manager, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
+    ProviderOptions,
 };
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -160,6 +161,7 @@ pub struct Kapsule {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    kubeconfig: Option<String>,
 }
 
 impl Kapsule {
@@ -177,6 +179,7 @@ impl Kapsule {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
         let event_details = kubernetes::event_details(&*cloud_provider, long_id, name.to_string(), &context);
@@ -233,7 +236,7 @@ impl Kapsule {
             zone,
         );
 
-        Ok(Kapsule {
+        let cluster = Kapsule {
             context,
             id: to_short_id(&long_id),
             long_id,
@@ -250,7 +253,11 @@ impl Kapsule {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            kubeconfig,
+        };
+
+        create_kubeconfig_from_kubernetes_connection(&cluster as &dyn Kubernetes)?;
+        Ok(cluster)
     }
 
     fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
@@ -770,7 +777,7 @@ impl Kapsule {
         }
 
         // push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
@@ -1090,15 +1097,6 @@ impl Kapsule {
         Ok(())
     }
 
-    fn upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
-            EventMessage::new_from_safe("SCW.upgrade_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         self.logger().log(EngineEvent::Info(
@@ -1171,7 +1169,7 @@ impl Kapsule {
             return Ok(());
         }
 
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
+        let kubernetes_config_file_path = self.get_kubeconfig_file()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.get_engine_location() == EngineLocation::ClientSide {
@@ -1317,7 +1315,7 @@ impl Kapsule {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
 
         if !skip_kubernetes_step {
@@ -1842,34 +1840,6 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
-    }
-
-    #[named]
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
@@ -1971,6 +1941,6 @@ impl Kubernetes for Kapsule {
     }
 
     fn get_kubernetes_connection(&self) -> Option<String> {
-        None
+        self.kubeconfig.clone()
     }
 }

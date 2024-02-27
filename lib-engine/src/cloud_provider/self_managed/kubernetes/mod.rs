@@ -7,7 +7,9 @@ use base64::Engine;
 use uuid::Uuid;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{self, Kubernetes, KubernetesVersion};
+use crate::cloud_provider::kubernetes::{
+    self, create_kubeconfig_from_kubernetes_connection, Kubernetes, KubernetesVersion,
+};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
 use crate::errors::{CommandError, EngineError};
@@ -63,7 +65,7 @@ impl SelfManaged {
             kubeconfig,
         };
         // create kubeconfig file so it can be used later
-        self_managed.create_kubeconfig_from_kubernetes_connection()?;
+        create_kubeconfig_from_kubernetes_connection(&self_managed as &dyn Kubernetes)?;
         Ok(self_managed)
     }
 }
@@ -131,12 +133,16 @@ impl Kubernetes for SelfManaged {
         true
     }
 
-    fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
-        vec![]
-    }
-
     fn is_self_managed(&self) -> bool {
         true
+    }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        self.kubeconfig.clone()
+    }
+
+    fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
+        vec![]
     }
 
     fn on_create(&self) -> Result<(), Box<EngineError>> {
@@ -151,14 +157,6 @@ impl Kubernetes for SelfManaged {
         &self,
         _kubernetes_upgrade_status: kubernetes::KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
@@ -228,9 +226,5 @@ impl Kubernetes for SelfManaged {
         >,
     > {
         None
-    }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
     }
 }

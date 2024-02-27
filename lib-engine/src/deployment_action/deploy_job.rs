@@ -213,7 +213,7 @@ where
             helm.on_create(target)?;
 
             // Get kube config file
-            let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file_path()?;
+            let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file()?;
             let job_pod_selector = format!("job-name={}", job.kube_name());
             let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
@@ -579,7 +579,7 @@ fn get_active_job_pod_by_selector(
                 return OperationResult::Retry(EngineError::new_job_error(
                     event_details.clone(),
                     format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
-                ))
+                ));
             }
         };
 
@@ -630,7 +630,7 @@ fn get_active_job_pod_by_selector(
                 return OperationResult::Retry(EngineError::new_job_error(
                     event_details.clone(),
                     format!("Cannot find active pod having label {}", &job_pod_selector),
-                ))
+                ));
             }
         };
 
@@ -748,14 +748,14 @@ mod test {
             hashmap.get("foo").unwrap(),
             &JobOutputVariable {
                 value: "bar".to_string(),
-                sensitive: true
+                sensitive: true,
             }
         );
         assert_eq!(
             hashmap.get("foo_2").unwrap(),
             &JobOutputVariable {
                 value: "bar_2".to_string(),
-                sensitive: false
+                sensitive: false,
             }
         );
     }
@@ -775,14 +775,14 @@ mod test {
             hashmap.get("foo").unwrap(),
             &JobOutputVariable {
                 value: "123".to_string(),
-                sensitive: true
+                sensitive: true,
             }
         );
         assert_eq!(
             hashmap.get("foo_2").unwrap(),
             &JobOutputVariable {
                 value: "123.456".to_string(),
-                sensitive: false
+                sensitive: false,
             }
         );
         let json_final = serde_json::to_string(&hashmap).unwrap();
