@@ -275,6 +275,11 @@ pub fn eks_aws_helm_charts(
             .aws_enable_karpenter,
         qovery_terraform_config.cluster_security_group_id,
         chart_config_prerequisites.disk_size_in_gib,
+        &chart_config_prerequisites.cluster_id,
+        chart_config_prerequisites.cluster_long_id,
+        &chart_config_prerequisites.organization_id,
+        chart_config_prerequisites.organization_long_id,
+        chart_config_prerequisites.region.to_cloud_provider_format(),
     )
     .to_common_helm_chart()?;
 

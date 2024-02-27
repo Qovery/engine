@@ -19,3 +19,9 @@ spec:
         volumeType: gp2
         encrypted: true
         deleteOnTermination: true
+
+  # Optional, propagates tags to underlying EC2 resources
+  tags:
+    {{- range $key, $value := .Values.tags }}
+       {{ $key }}: {{ $value }}
+    {{- end }}

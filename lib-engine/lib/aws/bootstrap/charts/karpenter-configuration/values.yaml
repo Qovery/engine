@@ -7,3 +7,10 @@ clusterName: ""
 securityGroupId: ""
 
 diskSizeInGib: 0
+
+tags:
+  clusterId: ""
+  clusterLongId: ""
+  organizationId: ""
+  organizationLongId: ""
+  region: ""
