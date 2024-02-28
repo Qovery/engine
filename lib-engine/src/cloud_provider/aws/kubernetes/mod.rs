@@ -890,8 +890,8 @@ fn create(
         cloud_provider.organization_long_id().to_string(),
         kubernetes.context().is_test_cluster(),
     ));
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+    let temp_dir = kubernetes.temp_dir();
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
     // old method with rusoto
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
@@ -961,13 +961,11 @@ fn create(
             bootstrap_on_fargate,
         )?;
 
-        if let Err(e) =
-            crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-        {
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, context) {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details.clone(),
                 template_directory.to_string(),
-                temp_dir.clone(),
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -977,12 +975,12 @@ fn create(
             // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/aws/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -1003,7 +1001,7 @@ fn create(
 
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
             match terraform_init_validate_plan_apply(
-                temp_dir.as_str(),
+                temp_dir.to_string_lossy().as_ref(),
                 kubernetes.context().is_dry_run_deploy(),
                 cloud_provider.credentials_environment_variables().as_slice(),
             ) {
@@ -1024,7 +1022,7 @@ fn create(
                                 ),
                             ));
                             match terraform_import(
-                                temp_dir.as_str(),
+                                temp_dir.to_string_lossy().as_ref(),
                                 format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
                                 bucket_name,
                                 cloud_provider.credentials_environment_variables().as_slice(),
@@ -1079,7 +1077,7 @@ fn create(
                             }
                             Kind::Ec2 => {
                                 if let Err(err) = force_terraform_ec2_instance_type_switch(
-                                    temp_dir.as_str(),
+                                    temp_dir.to_string_lossy().as_ref(),
                                     e.clone(),
                                     kubernetes.logger(),
                                     &event_details,
@@ -1313,7 +1311,7 @@ fn create(
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
                 &charts_prerequisites,
-                Some(&temp_dir),
+                Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
@@ -1358,7 +1356,7 @@ fn create(
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
                 &charts_prerequisites,
-                Some(&temp_dir),
+                Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
@@ -1565,7 +1563,7 @@ fn pause(
         EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
     ));
 
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let temp_dir = kubernetes.temp_dir();
 
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
         Ok(value) => Some(value),
@@ -1612,13 +1610,15 @@ fn pause(
     let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
     context.insert("eks_worker_nodes", &worker_nodes);
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-    {
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        template_directory,
+        temp_dir.to_string_lossy().as_ref(),
+        context,
+    ) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
-            temp_dir,
+            temp_dir.to_string_lossy().to_string(),
             e,
         )));
     }
@@ -1626,7 +1626,7 @@ fn pause(
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap-{type}/common/charts directory.
     // this is due to the required dependencies of lib/aws/bootstrap-{type}/*.tf files
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
@@ -1639,7 +1639,7 @@ fn pause(
     // pause: only select terraform workers elements to pause to avoid applying on the whole config
     // this to avoid failures because of helm deployments on removing workers nodes
     let tf_workers_resources = match terraform_init_validate_state_list(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         cloud_provider.credentials_environment_variables().as_slice(),
     ) {
         Ok(x) => {
@@ -1730,7 +1730,7 @@ fn pause(
     ));
 
     match terraform_apply_with_tf_workers_resources(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         tf_workers_resources,
         cloud_provider.credentials_environment_variables().as_slice(),
     ) {
@@ -1777,8 +1777,8 @@ fn delete(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+    let temp_dir = kubernetes.temp_dir();
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
             let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
@@ -1840,13 +1840,11 @@ fn delete(
     )?;
     context.insert("is_deletion_step", &true);
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-    {
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, context) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
-            temp_dir,
+            temp_dir.to_string_lossy().to_string(),
             e,
         )));
     }
@@ -1854,7 +1852,7 @@ fn delete(
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
     // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
@@ -1882,7 +1880,7 @@ fn delete(
     ));
 
     if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
     ) {
@@ -2248,7 +2246,7 @@ fn delete(
 
         for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
             match cmd::terraform::terraform_remove_resource_from_tf_state(
-                temp_dir.as_str(),
+                temp_dir.to_string_lossy().as_ref(),
                 resource_to_be_removed_from_tf_state.0,
             ) {
                 Ok(_) => {
@@ -2288,7 +2286,7 @@ fn delete(
     }
 
     if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
     ) {

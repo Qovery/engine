@@ -15,6 +15,7 @@ use crate::utilities::to_short_id;
 use std::collections::HashMap;
 use std::iter;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -84,7 +85,7 @@ pub struct Router<T: CloudProvider> {
     pub(crate) routes: Vec<Route>,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
 }
 
@@ -134,7 +135,7 @@ impl<T: CloudProvider> Router<T> {
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>>

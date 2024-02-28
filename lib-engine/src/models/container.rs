@@ -26,6 +26,7 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -61,7 +62,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
 }
 
@@ -335,7 +336,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 
     fn service_version(&self) -> String {

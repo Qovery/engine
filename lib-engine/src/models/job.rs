@@ -16,6 +16,7 @@ use crate::utilities::to_short_id;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -50,7 +51,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: JobAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
@@ -293,7 +294,7 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 }
 

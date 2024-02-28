@@ -22,6 +22,7 @@ use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -157,7 +158,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
     pub(crate) options: T::DatabaseOptions,
-    pub(crate) workspace_directory: String,
+    pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
 }
 
@@ -226,7 +227,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 
     pub(super) fn fqdn(&self, target: &DeploymentTarget, fqdn: &str) -> String {

@@ -47,7 +47,7 @@ use function_name::named;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -78,6 +78,7 @@ pub struct EKS {
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl EKS {
@@ -98,6 +99,7 @@ impl EKS {
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -109,7 +111,7 @@ impl EKS {
             logger.log(EngineEvent::Error(*e.clone(), None));
             return Err(Box::new(*e));
         };
-        advanced_settings.validate(event_details)?;
+        advanced_settings.validate(event_details.clone())?;
 
         let s3 = mk_s3(&region, &*cloud_provider);
 
@@ -132,11 +134,12 @@ impl EKS {
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
+            temp_dir,
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
             create_kubeconfig_from_kubernetes_connection(
-                &cluster.kubeconfig_local_file_path().unwrap(),
+                &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
@@ -280,10 +283,6 @@ impl Kubernetes for EKS {
         false
     }
 
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
-    }
-
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         self.nodes_groups.iter().map(|x| x.instance_architecture).collect()
     }
@@ -337,8 +336,7 @@ impl Kubernetes for EKS {
             EventMessage::new_from_safe("Start preparing EKS cluster upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self, self.cloud_provider.as_ref()) {
             Ok(value) => Some(value),
             Err(_) => None,
@@ -403,18 +401,18 @@ impl Kubernetes for EKS {
 
                 if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
                     self.template_directory.as_str(),
-                    temp_dir.as_str(),
+                    temp_dir,
                     context.clone(),
                 ) {
                     return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                         event_details,
                         self.template_directory.to_string(),
-                        temp_dir,
+                        temp_dir.to_string_lossy().to_string(),
                         e,
                     )));
                 }
 
-                let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+                let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
                 let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
                 if let Err(e) = crate::template::copy_non_template_files(
                     common_bootstrap_charts.as_str(),
@@ -434,7 +432,7 @@ impl Kubernetes for EKS {
                 ));
 
                 match terraform_init_validate_plan_apply(
-                    temp_dir.as_str(),
+                    temp_dir.to_string_lossy().as_ref(),
                     self.context.is_dry_run_deploy(),
                     self.cloud_provider.credentials_environment_variables().as_slice(),
                 ) {
@@ -487,20 +485,20 @@ impl Kubernetes for EKS {
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
-            temp_dir.as_str(),
+            temp_dir,
             context.clone(),
         ) {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -620,7 +618,7 @@ impl Kubernetes for EKS {
         });
 
         terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
             self.cloud_provider.credentials_environment_variables().as_slice(),
         )
@@ -700,6 +698,10 @@ impl Kubernetes for EKS {
                 &self.options,
             )
         })
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     #[named]

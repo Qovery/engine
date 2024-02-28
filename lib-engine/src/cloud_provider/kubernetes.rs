@@ -36,7 +36,7 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::fs::{delete_file_if_exists, workspace_directory};
+use crate::fs::delete_file_if_exists;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
@@ -388,7 +388,6 @@ pub trait Kubernetes: Send + Sync {
             ))
         })
     }
-    fn get_kubernetes_connection(&self) -> Option<String>;
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -410,28 +409,25 @@ pub trait Kubernetes: Send + Sync {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn kubeconfig_local_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+    fn kubeconfig_local_file_path(&self) -> PathBuf {
         let bucket_name = self.get_bucket_name();
         let object_key = self.get_kubeconfig_filename();
 
-        match self.get_temp_dir(event_details) {
-            Ok(x) => Ok(PathBuf::from(format!("{}/{}/{}", &x, &bucket_name, &object_key))),
-            Err(e) => Err(e),
-        }
+        PathBuf::from(format!(
+            "{}/{}/{}",
+            self.temp_dir().to_string_lossy(),
+            &bucket_name,
+            &object_key
+        ))
     }
 
     fn get_kubeconfig_file(&self) -> Result<PathBuf, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
-        match self.kubeconfig_local_file_path() {
-            Ok(kubeconfig_local_file_path) if kubeconfig_local_file_path.exists() => {
-                return Ok(kubeconfig_local_file_path)
-            }
-            Ok(_) => {}
-            Err(_) => {}
-        };
+        if self.kubeconfig_local_file_path().exists() {
+            return Ok(self.kubeconfig_local_file_path());
+        }
 
         // otherwise, try to get it from object storage
         let object_key = self.get_kubeconfig_filename();
@@ -442,11 +438,7 @@ pub trait Kubernetes: Send + Sync {
                 .get_object(bucket_name.as_str(), object_key.as_str())
             {
                 Ok(bucket_object) => {
-                    let file_path = match self.kubeconfig_local_file_path() {
-                        Ok(p) => p,
-                        Err(e) => return OperationResult::Retry(e),
-                    };
-
+                    let file_path = self.kubeconfig_local_file_path();
                     let kubeconfig = String::from_utf8_lossy(&bucket_object.value);
                     if let Err(err) = create_kubeconfig_from_kubernetes_connection(
                         &file_path,
@@ -499,20 +491,16 @@ pub trait Kubernetes: Send + Sync {
             }
         };
 
-        Ok(self.kubeconfig_local_file_path().unwrap())
+        Ok(self.kubeconfig_local_file_path())
     }
 
     fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let file_path = match self.kubeconfig_local_file_path() {
-            Ok(p) => p,
-            Err(e) => return Err(e),
-        };
-
+        let file_path = self.kubeconfig_local_file_path();
         delete_file_if_exists(&file_path).map_err(|e| {
             Box::new(EngineError::new_delete_local_kubeconfig_file_error(
                 event_details,
-                file_path.to_str().unwrap_or_default(),
+                file_path.to_string_lossy().as_ref(),
                 e,
             ))
         })
@@ -587,19 +575,7 @@ pub trait Kubernetes: Send + Sync {
     fn on_pause_error(&self) -> Result<(), Box<EngineError>>;
     fn on_delete(&self) -> Result<(), Box<EngineError>>;
     fn on_delete_error(&self) -> Result<(), Box<EngineError>>;
-    fn get_temp_dir(&self, event_details: EventDetails) -> Result<String, Box<EngineError>> {
-        workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| {
-            Box::new(EngineError::new_cannot_get_workspace_directory(
-                event_details,
-                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
-            ))
-        })
-    }
+    fn temp_dir(&self) -> &Path;
 
     fn delete_crashlooping_pods(
         &self,

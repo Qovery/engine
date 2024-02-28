@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use base64::engine::general_purpose;
@@ -36,6 +37,7 @@ pub struct SelfManaged {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl SelfManaged {
@@ -51,6 +53,7 @@ impl SelfManaged {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<SelfManaged, Box<EngineError>> {
         let cluster = SelfManaged {
             context,
@@ -65,11 +68,12 @@ impl SelfManaged {
             metrics_registry,
             advanced_settings,
             kubeconfig,
+            temp_dir,
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
             create_kubeconfig_from_kubernetes_connection(
-                &cluster.kubeconfig_local_file_path().unwrap(),
+                &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
@@ -146,10 +150,6 @@ impl Kubernetes for SelfManaged {
         true
     }
 
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
-    }
-
     fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
         vec![]
     }
@@ -183,6 +183,10 @@ impl Kubernetes for SelfManaged {
 
     fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
         Ok(())
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     fn update_vault_config(
@@ -222,7 +226,7 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn advanced_settings(&self) -> &crate::cloud_provider::io::ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 

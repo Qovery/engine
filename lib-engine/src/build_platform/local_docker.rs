@@ -358,7 +358,7 @@ impl LocalDocker {
         }
     }
 
-    fn get_repository_build_root_path(&self, build: &Build) -> Result<String, BuildError> {
+    fn get_repository_build_root_path(&self, build: &Build) -> Result<PathBuf, BuildError> {
         workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
@@ -404,7 +404,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         // LOGGING
-        let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
+        let repository_root_path = self.get_repository_build_root_path(build)?;
         logger.send_progress(format!("📥 Cloning repository {}", build.git_repository.url));
 
         // Retrieve git credentials
