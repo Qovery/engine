@@ -9,7 +9,7 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
 
   tags                     = local.tags_eks
 
-{% if enable_karpenter %}
+{% if enable_karpenter and bootstrap_on_fargate %}
   depends_on = [
     aws_eks_fargate_profile.ebs_csi
   ]

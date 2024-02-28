@@ -231,6 +231,7 @@ fn tera_context(
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
     eks_upgrade_timeout_in_min: ChronoDuration,
+    bootstrap_on_fargate: bool,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
@@ -420,11 +421,14 @@ fn tera_context(
     // Other Kubernetes
     context.insert("kubernetes_cluster_name", &kubernetes.cluster_name());
     context.insert("enable_cluster_autoscaler", &true);
-    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
 
     // AWS
     context.insert("aws_access_key", &cloud_provider.access_key_id());
     context.insert("aws_secret_key", &cloud_provider.secret_access_key());
+
+    // Karpenter
+    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
+    context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
 
     // AWS S3 tfstate storage
     context.insert(
@@ -707,6 +711,9 @@ fn should_update_desired_nodes(
                 let current_nodes = get_autoscaling_config(node_group, eks_client)?;
                 select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Resume(current_nodes), node_group)
             }
+            KubernetesClusterAction::CleanKarpenterMigration => {
+                select_nodegroups_autoscaling_group_behavior(action, node_group)
+            }
         };
         node_groups_with_size.push(node_group_with_desired_state)
     }
@@ -908,7 +915,26 @@ fn create(
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    let terraform_apply = |kubernetes_action: KubernetesClusterAction, applied_node_groups: &[NodeGroups]| {
+    let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
+        // don't create node groups if karpenter is enabled
+        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+            node_groups_when_karpenter_is_enabled(
+                kubernetes,
+                node_groups,
+                &event_details,
+                kubernetes_action,
+                cloud_provider,
+            )
+        } else {
+            node_groups
+        };
+
+        let bootstrap_on_fargate = if kubernetes.advanced_settings().aws_enable_karpenter {
+            bootstrap_on_fargate_when_karpenter_is_enabled(kubernetes, kubernetes_action)
+        } else {
+            false
+        };
+
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
@@ -942,6 +968,7 @@ fn create(
             &node_groups_with_desired_states,
             options,
             cluster_upgrade_timeout_in_min,
+            bootstrap_on_fargate,
         )?;
 
         if let Err(e) =
@@ -1100,14 +1127,7 @@ fn create(
     if kubernetes.context().is_first_cluster_deployment() {
         // terraform deployment dedicated to cloud resources
 
-        // don't create node groups if karpenter is enabled
-        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
-            &[]
-        } else {
-            node_groups
-        };
-
-        terraform_apply(KubernetesClusterAction::Bootstrap, applied_node_groups)?;
+        terraform_apply(KubernetesClusterAction::Bootstrap)?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
@@ -1177,17 +1197,7 @@ fn create(
     }
 
     // apply to generate tf_qovery_config.json
-    // don't create node groups if karpenter is enabled and Karpenter is deployed
-    let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter
-        && (karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
-            || kubernetes.context().is_first_cluster_deployment())
-    {
-        &[]
-    } else {
-        node_groups
-    };
-
-    terraform_apply(KubernetesClusterAction::Update(None), applied_node_groups)?;
+    terraform_apply(KubernetesClusterAction::Update(None))?;
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
@@ -1430,13 +1440,54 @@ fn create(
                 )
             });
 
-            // after deploy karpenter, we can remove the node groups
-            if has_node_group_running {
-                terraform_apply(KubernetesClusterAction::Update(None), &[])?;
+            // after Karpenter is deployed, we can remove the node groups
+            // after Karpenter is deployed, we can remove fargate profile for add-ons
+            if has_node_group_running || kubernetes.context().is_first_cluster_deployment() {
+                terraform_apply(KubernetesClusterAction::CleanKarpenterMigration)?;
             }
         }
 
         Ok(())
+    }
+}
+
+fn bootstrap_on_fargate_when_karpenter_is_enabled(
+    kubernetes: &dyn Kubernetes,
+    kubernetes_action: KubernetesClusterAction,
+) -> bool {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap => true,
+        KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
+        KubernetesClusterAction::Update(_) => false,
+        KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => false,
+    }
+}
+
+fn node_groups_when_karpenter_is_enabled<'a>(
+    kubernetes: &dyn Kubernetes,
+    node_groups: &'a [NodeGroups],
+    event_details: &EventDetails,
+    kubernetes_action: KubernetesClusterAction,
+    cloud_provider: &dyn CloudProvider,
+) -> &'a [NodeGroups] {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap
+        | KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => &[],
+        KubernetesClusterAction::Update(_)
+            if karpenter_pods_is_running(kubernetes, cloud_provider, event_details)
+                || kubernetes.context().is_first_cluster_deployment() =>
+        {
+            &[]
+        }
+        KubernetesClusterAction::Update(_) => node_groups,
     }
 }
 
@@ -1573,6 +1624,7 @@ fn pause(
         &node_groups_with_desired_states,
         options,
         cluster_upgrade_timeout_in_min,
+        false,
     )?;
 
     // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
@@ -1803,6 +1855,7 @@ fn delete(
         &node_groups_with_desired_states,
         options,
         cluster_upgrade_timeout_in_min,
+        false,
     )?;
     context.insert("is_deletion_step", &true);
 

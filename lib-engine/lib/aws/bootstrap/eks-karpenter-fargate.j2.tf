@@ -111,6 +111,7 @@ resource "aws_eks_fargate_profile" "karpenter" {
   }
 }
 
+{% if bootstrap_on_fargate %}
 resource "aws_eks_fargate_profile" "ebs_csi" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "ebs_csi-${var.kubernetes_cluster_name}"
@@ -153,6 +154,7 @@ resource "aws_eks_fargate_profile" "core-dns" {
     }
   }
 }
+{% endif %}
 
 resource "aws_iam_role" "karpenter-fargate" {
   name = "qovery-eks-fargate-profile-${var.kubernetes_cluster_id}"

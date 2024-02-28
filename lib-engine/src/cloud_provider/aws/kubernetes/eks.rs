@@ -359,6 +359,7 @@ impl Kubernetes for EKS {
             &node_groups_with_desired_states,
             &self.options,
             cluster_upgrade_timeout_in_min,
+            false,
         )?;
 
         //
@@ -843,6 +844,9 @@ pub fn select_nodegroups_autoscaling_group_behavior(
                 None => nodegroup.min_nodes,
             };
             NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, resume_nodes_number, true)
+        }
+        KubernetesClusterAction::CleanKarpenterMigration => {
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, 0, false)
         }
     }
 }
