@@ -364,6 +364,7 @@ impl Kubernetes for EC2 {
             )],
             &self.options,
             Duration::minutes(0), // not used for EC2
+            false,
         )?;
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
