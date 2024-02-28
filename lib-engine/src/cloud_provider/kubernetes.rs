@@ -10,7 +10,7 @@ use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -358,7 +358,7 @@ pub trait Kubernetes: Send + Sync {
     // this method should replace kube_client
     fn q_kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file()?;
+        let kubeconfig_path = self.get_kubeconfig_file_path()?;
         let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
@@ -374,7 +374,7 @@ pub trait Kubernetes: Send + Sync {
     // AVOID USE: to be replaced by q_kube_client
     fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file()?;
+        let kubeconfig_path = self.get_kubeconfig_file_path()?;
         let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
@@ -389,6 +389,35 @@ pub trait Kubernetes: Send + Sync {
         })
     }
     fn get_kubernetes_connection(&self) -> Option<String>;
+    fn create_kubeconfig_from_kubernetes_connection(&self) -> Result<(), Box<EngineError>> {
+        if let Some(kubeconfig_content) = self.get_kubernetes_connection() {
+            let kubeconfig_path = self.kubeconfig_local_file_path()?;
+            fs::create_dir_all(
+                kubeconfig_path
+                    .parent()
+                    .expect("Couldn't create kubeconfig folder parent path"),
+            )
+            .map_err(|err| {
+                EngineError::new_cannot_create_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+            let mut file = File::create(kubeconfig_path).map_err(|err| {
+                EngineError::new_cannot_create_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+            file.write_all(kubeconfig_content.as_bytes()).map_err(|err| {
+                EngineError::new_cannot_write_file(
+                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    err.into(),
+                )
+            })?;
+        }
+        Ok(())
+    }
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -404,6 +433,29 @@ pub trait Kubernetes: Send + Sync {
 
     fn get_kubeconfig_filename(&self) -> String {
         format!("{}.yaml", self.id())
+    }
+
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &Path) -> Result<(), Box<EngineError>> {
+        if let Err(e) = self.config_file_store().put_object(
+            self.get_bucket_name().as_str(),
+            self.get_kubeconfig_filename().as_str(),
+            file_path,
+        ) {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+        };
+        Ok(())
+    }
+
+    fn delete_kubeconfig_from_object_storage(&self) -> Result<(), Box<EngineError>> {
+        if let Err(e) = self
+            .config_file_store()
+            .delete_object(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+        {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+        };
+        Ok(())
     }
 
     fn get_bucket_name(&self) -> String {
@@ -460,7 +512,7 @@ pub trait Kubernetes: Send + Sync {
         };
 
         // otherwise, try to get it from object storage
-        let (string_path, mut file) = match local_kubeconfig {
+        let (string_path, file) = match local_kubeconfig {
             Some(local_kubeconfig_generated) => {
                 let kubeconfig_file =
                     File::open(&local_kubeconfig_generated).expect("couldn't read kubeconfig file, but file exists");
@@ -585,14 +637,6 @@ pub trait Kubernetes: Send + Sync {
             )));
         };
 
-        // Upload kubeconfig, so we can store it
-        let mut kubeconfig_str = String::new();
-        file.read_to_string(&mut kubeconfig_str)
-            .expect("couldn't read kubeconfig file");
-        if let Err(err) = self.context().qovery_api.update_cluster_credentials(kubeconfig_str) {
-            error!("Cannot update cluster credentials {}", err);
-        }
-
         let mut permissions = metadata.permissions();
         permissions.set_mode(0o400);
         if let Err(err) = std::fs::set_permissions(&string_path, permissions) {
@@ -605,6 +649,23 @@ pub trait Kubernetes: Send + Sync {
         }
 
         Ok(string_path)
+    }
+
+    fn get_kubeconfig_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
+        self.get_kubeconfig_file()
+    }
+
+    fn delete_local_kubeconfig_terraform(&self) -> Result<(), Box<EngineError>> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let file = self.kubeconfig_local_file_path()?;
+
+        delete_file_if_exists(&file).map_err(|e| {
+            Box::new(EngineError::new_delete_local_kubeconfig_file_error(
+                event_details,
+                file.to_str().unwrap_or_default(),
+                e,
+            ))
+        })
     }
 
     fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
@@ -627,7 +688,7 @@ pub trait Kubernetes: Send + Sync {
     fn on_create_error(&self) -> Result<(), Box<EngineError>>;
 
     fn upgrade(&self, cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
-        // since we don't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
+        // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
         if self.kind() != Kind::Ec2 {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
@@ -668,7 +729,7 @@ pub trait Kubernetes: Send + Sync {
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_workers_upgrade_status(
-                self.get_kubeconfig_file().expect("Unable to get Kubeconfig"),
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
                 cloud_provider.credentials_environment_variables(),
                 targeted_version.clone(),
             )
@@ -685,7 +746,7 @@ pub trait Kubernetes: Send + Sync {
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_master_version_status(
-                self.get_kubeconfig_file().expect("Unable to get Kubeconfig"),
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
                 cloud_provider.credentials_environment_variables(),
                 &targeted_version,
             )
@@ -720,6 +781,8 @@ pub trait Kubernetes: Send + Sync {
         })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>>;
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>>;
     fn on_pause(&self) -> Result<(), Box<EngineError>>;
     fn on_pause_error(&self) -> Result<(), Box<EngineError>>;
     fn on_delete(&self) -> Result<(), Box<EngineError>>;
@@ -1743,36 +1806,6 @@ pub async fn kube_copy_secret_to_another_namespace(
             _ => Err(kube_err),
         },
     }
-}
-
-pub(super) fn create_kubeconfig_from_kubernetes_connection(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    if let Some(kubeconfig_content) = kube.get_kubernetes_connection() {
-        let kubeconfig_path = kube.kubeconfig_local_file_path()?;
-        fs::create_dir_all(
-            kubeconfig_path
-                .parent()
-                .expect("Couldn't create kubeconfig folder parent path"),
-        )
-        .map_err(|err| {
-            EngineError::new_cannot_create_file(
-                kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                err.into(),
-            )
-        })?;
-        let mut file = File::create(kubeconfig_path).map_err(|err| {
-            EngineError::new_cannot_create_file(
-                kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                err.into(),
-            )
-        })?;
-        file.write_all(kubeconfig_content.as_bytes()).map_err(|err| {
-            EngineError::new_cannot_write_file(
-                kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                err.into(),
-            )
-        })?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

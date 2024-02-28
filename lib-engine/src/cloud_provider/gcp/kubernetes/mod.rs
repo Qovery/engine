@@ -173,7 +173,6 @@ pub struct Gke {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    kubeconfig: Option<String>,
 }
 
 impl Gke {
@@ -191,7 +190,6 @@ impl Gke {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-        kubeconfig: Option<String>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = EventDetails::new(
             Some(cloud_provider.kind()),
@@ -247,7 +245,6 @@ impl Gke {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-            kubeconfig,
         })
     }
 
@@ -667,7 +664,7 @@ impl Gke {
             .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         // Push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
+        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
@@ -930,7 +927,7 @@ impl Gke {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
+        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
 
         if !skip_kubernetes_step {
@@ -1553,6 +1550,14 @@ impl Kubernetes for Gke {
         Ok(())
     }
 
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
+        Ok(()) // TODO(benjaminch): GKE integration
+    }
+
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
+        Ok(()) // TODO(benjaminch): GKE integration
+    }
+
     #[named]
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
@@ -1626,7 +1631,7 @@ impl Kubernetes for Gke {
     }
 
     fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
+        None
     }
 }
 

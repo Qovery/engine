@@ -5,8 +5,8 @@ use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    create_kubeconfig_from_kubernetes_connection, event_details, send_progress_on_long_task, InstanceType, Kind,
-    Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus, KubernetesVersion,
+    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
+    KubernetesUpgradeStatus, KubernetesVersion,
 };
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
@@ -22,6 +22,8 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep}
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
+use crate::object_storage::s3::S3;
+use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -37,10 +39,7 @@ use aws_sdk_eks::output::{
 };
 use aws_smithy_client::SdkError;
 
-use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::models::ToCloudProviderFormat;
-use crate::object_storage::s3::S3;
-use crate::object_storage::ObjectStorage;
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
@@ -77,7 +76,6 @@ pub struct EKS {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    kubeconfig: Option<String>,
 }
 
 impl EKS {
@@ -97,7 +95,6 @@ impl EKS {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-        kubeconfig: Option<String>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -111,9 +108,10 @@ impl EKS {
         };
         advanced_settings.validate(event_details)?;
 
-        let s3 = mk_s3(&region, &*cloud_provider);
+        let s3 = kubernetes::s3(&region, &*cloud_provider);
 
-        let cluster = EKS {
+        // copy listeners from CloudProvider
+        Ok(EKS {
             context,
             id: id.to_string(),
             long_id,
@@ -131,11 +129,7 @@ impl EKS {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-            kubeconfig,
-        };
-
-        create_kubeconfig_from_kubernetes_connection(&cluster as &dyn Kubernetes)?;
-        Ok(cluster)
+        })
     }
 
     pub fn validate_node_groups(
@@ -269,16 +263,12 @@ impl Kubernetes for EKS {
         self.options.user_provided_network.is_some()
     }
 
-    fn is_self_managed(&self) -> bool {
-        false
-    }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
-    }
-
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         self.nodes_groups.iter().map(|x| x.instance_architecture).collect()
+    }
+
+    fn is_self_managed(&self) -> bool {
+        false
     }
 
     #[named]
@@ -633,6 +623,34 @@ impl Kubernetes for EKS {
     }
 
     #[named]
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+            event_details,
+            self.logger(),
+        );
+        send_progress_on_long_task(self, Action::Create, || self.upgrade(self.cloud_provider.as_ref()))
+    }
+
+    #[named]
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        print_action(
+            self.cloud_provider_name(),
+            self.struct_name(),
+            function_name!(),
+            self.name(),
+            event_details,
+            self.logger(),
+        );
+        send_progress_on_long_task(self, Action::Create, || kubernetes::upgrade_error(self))
+    }
+
+    #[named]
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
@@ -753,6 +771,10 @@ impl Kubernetes for EKS {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn get_kubernetes_connection(&self) -> Option<String> {
+        None
     }
 }
 

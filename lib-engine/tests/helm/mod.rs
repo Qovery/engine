@@ -118,7 +118,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 ..Default::default()
             },
             None,
-            None,
         )
         .unwrap(),
     )

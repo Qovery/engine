@@ -1135,7 +1135,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         // checking cookie is properly set on the app
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file()
+            .get_kubeconfig_file_path()
             .expect("Cannot get kubeconfig file path");
         let router = environment
             .routers
@@ -1243,7 +1243,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file()
+            .get_kubeconfig_file_path()
             .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
@@ -1365,7 +1365,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file()
+            .get_kubeconfig_file_path()
             .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
