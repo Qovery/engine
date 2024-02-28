@@ -381,7 +381,6 @@ impl Kubernetes {
                 metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
-                self.kubeconfig.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -407,7 +406,6 @@ impl Kubernetes {
                 metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
-                self.kubeconfig.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -441,7 +439,6 @@ impl Kubernetes {
                     metrics_registry,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
-                    self.kubeconfig.clone(),
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
@@ -475,7 +472,6 @@ impl Kubernetes {
                     metrics_registry,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
-                    self.kubeconfig.clone(),
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
