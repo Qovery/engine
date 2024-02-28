@@ -25,6 +25,7 @@ use crate::dns_provider::qoverydns::QoveryDns;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::fs::workspace_directory;
 use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::{Action, QoveryIdentifier};
@@ -35,6 +36,7 @@ use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::models::gcp::JsonCredentials;
 use crate::models::scaleway::ScwZone;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
+use crate::utilities::to_short_id;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
 use anyhow::{anyhow, Context as OtherContext};
 use derivative::Derivative;
@@ -338,6 +340,18 @@ impl Kubernetes {
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
+        let temp_dir = workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("bootstrap/{}", to_short_id(&self.long_id)),
+        )
+        .map_err(|err| {
+            Box::new(EngineError::new_cannot_get_workspace_directory(
+                event_details.clone(),
+                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
+            ))
+        })?;
+
         let decoded_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> =
             match &self.customer_helm_charts_override {
                 Some(customer_helm_charts_override) => {
@@ -382,6 +396,7 @@ impl Kubernetes {
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
                 self.kubeconfig.clone(),
+                temp_dir,
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -408,6 +423,7 @@ impl Kubernetes {
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
                 self.kubeconfig.clone(),
+                temp_dir,
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
@@ -442,6 +458,7 @@ impl Kubernetes {
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
                     self.kubeconfig.clone(),
+                    temp_dir,
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
@@ -476,6 +493,7 @@ impl Kubernetes {
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
                     self.kubeconfig.clone(),
+                    temp_dir,
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
@@ -500,6 +518,7 @@ impl Kubernetes {
                     metrics_registry,
                     ClusterAdvancedSettings::default(),
                     self.kubeconfig.clone(),
+                    temp_dir,
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),

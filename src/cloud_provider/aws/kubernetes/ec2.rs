@@ -67,6 +67,7 @@ pub struct EC2 {
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     _kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl EC2 {
@@ -87,6 +88,7 @@ impl EC2 {
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
@@ -129,6 +131,7 @@ impl EC2 {
             advanced_settings,
             customer_helm_charts_override,
             _kubeconfig: kubeconfig,
+            temp_dir,
         };
 
         Ok(cluster)
@@ -305,11 +308,6 @@ impl Kubernetes for EC2 {
         false
     }
 
-    // for ec2 as during the upgrade we replace the kubeconfig, we want to fetch it everytime from s3
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
-    }
-
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         vec![self.instance.instance_architecture]
     }
@@ -363,7 +361,7 @@ impl Kubernetes for EC2 {
             EventMessage::new_from_safe("Start preparing EC2 node upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
         let context = kubernetes::tera_context(
@@ -381,22 +379,20 @@ impl Kubernetes for EC2 {
             false,
         )?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -410,7 +406,7 @@ impl Kubernetes for EC2 {
         }
 
         terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
             self.cloud_provider.credentials_environment_variables().as_slice(),
         )
@@ -437,7 +433,7 @@ impl Kubernetes for EC2 {
             self.context().is_test_cluster(),
         ));
 
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
         if let Ok(k3s_kubeconfig) = self.get_kubeconfig_file() {
             if let Err(e) = self.update_vault_config(
                 event_details.clone(),
@@ -523,6 +519,10 @@ impl Kubernetes for EC2 {
                 &self.options,
             )
         })
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     #[named]

@@ -22,6 +22,7 @@ use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
+use qovery_engine::fs::workspace_directory;
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
@@ -77,6 +78,14 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
     let cluster_id = Uuid::new_v4();
     let context = context_for_cluster(Uuid::new_v4(), cluster_id, None);
     let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(&context, Eks, "us-east-2");
+
+    let temp_dir = workspace_directory(
+        context.workspace_root_dir(),
+        context.execution_id(),
+        format!("bootstrap/{}", to_short_id(&cluster_id)),
+    )
+    .unwrap();
+
     Box::new(
         EKS::new(
             context.clone(),
@@ -120,6 +129,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             },
             None,
             fs::read_to_string(kubeconfig_path()).ok(),
+            temp_dir,
         )
         .unwrap(),
     )

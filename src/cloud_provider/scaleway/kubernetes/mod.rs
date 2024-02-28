@@ -58,7 +58,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tera::Context as TeraContext;
@@ -162,6 +162,7 @@ pub struct Kapsule {
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl Kapsule {
@@ -180,6 +181,7 @@ impl Kapsule {
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
         let event_details = kubernetes::event_details(&*cloud_provider, long_id, name.to_string(), &context);
@@ -226,7 +228,7 @@ impl Kapsule {
             }
         }
 
-        advanced_settings.validate(event_details)?;
+        advanced_settings.validate(event_details.clone())?;
 
         let object_storage = ScalewayOS::new(
             "s3-temp-id".to_string(),
@@ -254,11 +256,12 @@ impl Kapsule {
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
+            temp_dir,
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
             create_kubeconfig_from_kubernetes_connection(
-                &cluster.kubeconfig_local_file_path().unwrap(),
+                &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
@@ -703,21 +706,19 @@ impl Kapsule {
             Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
         };
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+        let temp_dir = self.temp_dir();
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -727,12 +728,12 @@ impl Kapsule {
             // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/scaleway/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -779,7 +780,11 @@ impl Kapsule {
         }
 
         // terraform deployment dedicated to cloud resources
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
+        if let Err(e) = terraform_init_validate_plan_apply(
+            temp_dir.to_string_lossy().as_ref(),
+            self.context.is_dry_run_deploy(),
+            &[],
+        ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
@@ -1053,9 +1058,9 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
         ));
         let helm_charts_to_deploy = scw_helm_charts(
-            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+            format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
-            Some(&temp_dir),
+            Some(temp_dir.to_string_lossy().as_ref()),
             kubeconfig_path,
             &credentials_environment_variables,
             &*self.context.qovery_api,
@@ -1111,7 +1116,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -1120,15 +1125,13 @@ impl Kapsule {
         let scw_ks_worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
         context.insert("scw_ks_worker_nodes", &scw_ks_worker_nodes);
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -1136,7 +1139,7 @@ impl Kapsule {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -1149,7 +1152,7 @@ impl Kapsule {
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
-        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str(), &[]) {
+        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.to_string_lossy().as_ref(), &[]) {
             Ok(x) => {
                 let mut tf_workers_resources_name = Vec::new();
                 for name in x {
@@ -1235,7 +1238,9 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        if let Err(e) = terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources, &[]) {
+        if let Err(e) =
+            terraform_apply_with_tf_workers_resources(temp_dir.to_string_lossy().as_ref(), tf_workers_resources, &[])
+        {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
@@ -1267,20 +1272,17 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -1288,7 +1290,7 @@ impl Kapsule {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -1314,7 +1316,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
 
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false, &[]) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.to_string_lossy().as_ref(), false, &[]) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error(event_details.clone(), e),
@@ -1528,7 +1530,7 @@ impl Kapsule {
         ));
 
         if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             false,
             self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
@@ -1629,15 +1631,15 @@ impl Kubernetes for Kapsule {
         false
     }
 
+    fn is_self_managed(&self) -> bool {
+        false
+    }
+
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         self.nodes_groups
             .iter()
             .map(|node| node.instance_architecture)
             .collect()
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
     }
 
     #[named]
@@ -1675,8 +1677,7 @@ impl Kubernetes for Kapsule {
             EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
 
@@ -1693,20 +1694,18 @@ impl Kubernetes for Kapsule {
             format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
         );
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -1819,7 +1818,11 @@ impl Kubernetes for Kapsule {
             return Err(e);
         }
 
-        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
+        match terraform_init_validate_plan_apply(
+            temp_dir.to_string_lossy().as_ref(),
+            self.context.is_dry_run_deploy(),
+            &[],
+        ) {
             Ok(_) => match self.check_workers_on_upgrade(
                 self.cloud_provider.as_ref(),
                 kubernetes_upgrade_status.requested_version.to_string(),
@@ -1902,6 +1905,10 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
+    }
+
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -1945,9 +1952,5 @@ impl Kubernetes for Kapsule {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
-    }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
     }
 }
