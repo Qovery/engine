@@ -78,7 +78,7 @@ impl TerraformDeployment {
         namespace: &str,
         secret_name: &str,
     ) -> Result<(), Box<EngineError>> {
-        let config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        let config_file_path = kubernetes.get_kubeconfig_file()?;
 
         // create the namespace to insert the tfstate in secrets
         let _ = kubectl_exec_delete_secret(

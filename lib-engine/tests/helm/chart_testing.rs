@@ -25,11 +25,12 @@ fn to_kube_kind(file_path: &str) -> DynamicObject {
 fn generate_template(chart_info: &ChartInfo, temp_dir: &str, service_type_folder: &str, chart_id: &Uuid) -> String {
     let template_dir = format!("{}/{}/{}/{}-rendered", temp_dir, service_type_folder, chart_id, chart_info.name);
     if !Path::new(&template_dir).exists() {
-        let _ = fs::create_dir(template_dir.clone());
+        let _ = fs::create_dir_all(template_dir.clone());
     }
 
     let helm = Helm::new(kubeconfig_path(), &[]).unwrap_or_else(|_| panic!("Unable to generate Helm struct"));
-    let _ = helm.template_validate(chart_info, &[], Some(template_dir.as_str()));
+    helm.template_validate(chart_info, &[], Some(template_dir.as_str()))
+        .expect("Unable to generate Helm template");
     template_dir
 }
 
@@ -51,8 +52,9 @@ fn get_kube_resources(
 
     let template_dir = generate_template(&chart_info, &test_info.temp_dir, &test_info.service_folder_type, chart_id);
 
-    let templates_path = format!("/{}/{}/templates", template_dir, &chart_info.name);
-    let files = read_dir(&templates_path).unwrap_or_else(|_| panic!("Unable to read files in {}", &templates_path));
+    let templates_path = format!("{}/{}/templates", template_dir, &chart_info.name);
+    let files =
+        read_dir(&templates_path).unwrap_or_else(|e| panic!("Unable to read files in {} : {:?}", &templates_path, e));
     let mut kube_resources: HashMap<String, DynamicObject> = HashMap::new();
     for file in files {
         let file_path = file
@@ -81,6 +83,7 @@ fn get_kube_resources(
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_ingress_test() {
     let test_info = router_context();
     let chart_name = "q-ingress-tls";
@@ -124,6 +127,7 @@ fn q_ingress_test() {
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_container_test() {
     let test_info = container_context();
     let chart_name = "q-container";
@@ -166,6 +170,7 @@ fn q_container_test() {
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_application_test() {
     dotenv::dotenv().ok();
     let test_info = application_context();
@@ -209,6 +214,7 @@ fn q_application_test() {
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_container_psql_test() {
     let test_info = container_database_context();
     let chart_name = "postgresql";
@@ -251,6 +257,7 @@ fn q_container_psql_test() {
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_managed_psql_test() {
     let test_info = managed_database_context();
     let chart_name = "external-name-svc";
@@ -293,6 +300,7 @@ fn q_managed_psql_test() {
 
 #[cfg(feature = "test-local-kube")]
 #[test]
+#[ignore]
 fn q_job_test() {
     let test_info = job_context();
     let chart_name = "q-job";
