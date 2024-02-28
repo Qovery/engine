@@ -11,6 +11,7 @@ use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::utils;
 use crate::utilities::to_short_id;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -172,6 +173,13 @@ impl<T: CloudProvider> Job<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
+        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+            &self.advanced_settings.deployment_affinity_node_required,
+            &target.kubernetes.cpu_architectures(),
+        );
+        let mut advanced_settings = self.advanced_settings.clone();
+        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+
         let registry_info = target.container_registry.registry_info();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
@@ -227,7 +235,7 @@ impl<T: CloudProvider> Job<T> {
                 },
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
-                advanced_settings: self.advanced_settings.clone(),
+                advanced_settings,
             },
             registry: registry_info
                 .registry_docker_json_config

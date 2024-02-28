@@ -1615,7 +1615,17 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .unwrap()
                 .required_during_scheduling_ignored_during_execution
                 .unwrap()
-                .node_selector_terms[0]
+                .node_selector_terms
+                .into_iter()
+                .find(|node_selector| {
+                    node_selector
+                        .match_expressions
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .any(|selector| selector.key == node_selector_key)
+                })
+                .unwrap()
                 .clone()
                 .match_expressions
                 .unwrap();
