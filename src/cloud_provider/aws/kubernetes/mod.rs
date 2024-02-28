@@ -52,7 +52,6 @@ use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::kubernetes::K8sPod;
 use crate::models::third_parties::LetsEncryptConfig;
 
-use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
@@ -69,6 +68,7 @@ use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
 use crate::dns_provider::DnsProvider;
+use crate::events::Stage::Infrastructure;
 
 use super::models::QoveryAwsSdkConfigEks;
 
@@ -194,16 +194,6 @@ fn aws_zones(
     }
 
     Ok(aws_zones)
-}
-
-fn s3(region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
-    S3::new(
-        "s3-temp-id".to_string(),
-        "default-s3".to_string(),
-        cloud_provider.access_key_id(),
-        cloud_provider.secret_access_key(),
-        region.clone(),
-    )
 }
 
 /// divide by 2 the total number of subnet to get the exact same number as private and public
@@ -1201,8 +1191,8 @@ fn create(
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
-            let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
-            kubernetes.put_kubeconfig_file_to_object_storage(&current_kubeconfig_path)?;
+            let current_kubeconfig_path = kubernetes.get_kubeconfig_file()?;
+            put_kubeconfig_file_to_object_storage(kubernetes, &current_kubeconfig_path)?;
             current_kubeconfig_path
         }
         Kind::Ec2 => {
@@ -1559,15 +1549,6 @@ fn create_error(kubernetes: &dyn Kubernetes, cloud_provider: &dyn CloudProvider)
     Ok(())
 }
 
-fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
-        EventMessage::new_from_safe(format!("{}.upgrade_error() called.", kubernetes.kind())),
-    ));
-
-    Ok(())
-}
-
 fn pause(
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
@@ -1687,7 +1668,7 @@ fn pause(
         return Ok(());
     }
 
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file()?;
 
     // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
     if options.qovery_engine_location == EngineLocation::ClientSide {
@@ -1915,13 +1896,13 @@ fn delete(
         ));
     };
 
-    // // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
     if kubernetes.kind() != Kind::Ec2 {
-        let _ = kubernetes.delete_kubeconfig_from_object_storage();
+        let _ = delete_kubeconfig_from_object_storage(kubernetes);
     };
 
     let kubernetes_config_file_path = match kubernetes.kind() {
-        Kind::Eks => match kubernetes.get_kubeconfig_file_path() {
+        Kind::Eks => match kubernetes.get_kubeconfig_file() {
             Ok(x) => x,
             Err(e) => {
                 let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
@@ -2376,6 +2357,29 @@ async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Res
     daemon_set
         .patch("kube-proxy", &patch_params, &Patch::Strategic(daemonset_patch))
         .await
+}
+
+fn put_kubeconfig_file_to_object_storage(kube: &dyn Kubernetes, file_path: &Path) -> Result<(), Box<EngineError>> {
+    if let Err(e) = kube.config_file_store().put_object(
+        kube.get_bucket_name().as_str(),
+        kube.get_kubeconfig_filename().as_str(),
+        file_path,
+    ) {
+        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+    };
+    Ok(())
+}
+
+fn delete_kubeconfig_from_object_storage(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
+    if let Err(e) = kube
+        .config_file_store()
+        .delete_object(kube.get_bucket_name().as_str(), kube.get_kubeconfig_filename().as_str())
+    {
+        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+    };
+    Ok(())
 }
 
 #[cfg(test)]

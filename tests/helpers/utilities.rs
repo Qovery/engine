@@ -34,6 +34,7 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
+
 use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -170,6 +171,8 @@ pub fn obfuscation_service() -> Box<dyn ObfuscationService> {
 pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
+    pub AWS_TEST_KUBECONFIG: Option<String>,
+    pub AWS_EC2_KUBECONFIG: Option<String>,
     pub AWS_EC2_DEFAULT_REGION: Option<String>,
     pub AWS_EC2_TEST_MANAGED_REGION: Option<String>,
     pub AWS_EC2_TEST_CONTAINER_REGION: Option<String>,
@@ -200,6 +203,7 @@ pub struct FuncTestsSecrets {
     pub GCP_TEST_CLUSTER_ID: Option<String>,
     pub GCP_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub GCP_DEFAULT_REGION: Option<String>,
+    pub GCP_TEST_KUBECONFIG: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
     pub HTTP_LISTEN_ON: Option<String>,
     pub LETS_ENCRYPT_EMAIL_REPORT: Option<String>,
@@ -218,6 +222,7 @@ pub struct FuncTestsSecrets {
     pub SCALEWAY_TEST_ORGANIZATION_ID: Option<String>,
     pub SCALEWAY_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub SCALEWAY_TEST_CLUSTER_REGION: Option<String>,
+    pub SCALEWAY_TEST_KUBECONFIG: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -254,7 +259,7 @@ impl FuncTestsSecrets {
                 return Err(Error::new(
                     ErrorKind::NotFound,
                     "VAULT_ADDR environment variable is missing".to_string(),
-                ))
+                ));
             }
         };
 
@@ -264,7 +269,7 @@ impl FuncTestsSecrets {
                 return Err(Error::new(
                     ErrorKind::NotFound,
                     "VAULT_TOKEN environment variable is missing".to_string(),
-                ))
+                ));
             }
         };
 
@@ -279,6 +284,8 @@ impl FuncTestsSecrets {
         let empty_secrets = FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
+            AWS_TEST_KUBECONFIG: None,
+            AWS_EC2_KUBECONFIG: None,
             AWS_EC2_DEFAULT_REGION: None,
             AWS_EC2_TEST_MANAGED_REGION: None,
             AWS_EC2_TEST_CONTAINER_REGION: None,
@@ -327,6 +334,7 @@ impl FuncTestsSecrets {
             SCALEWAY_TEST_ORGANIZATION_ID: None,
             SCALEWAY_TEST_ORGANIZATION_LONG_ID: None,
             SCALEWAY_TEST_CLUSTER_REGION: None,
+            SCALEWAY_TEST_KUBECONFIG: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -337,6 +345,7 @@ impl FuncTestsSecrets {
             QOVERY_DNS_API_URL: None,
             QOVERY_DNS_API_KEY: None,
             QOVERY_DNS_DOMAIN: None,
+            GCP_TEST_KUBECONFIG: None,
         };
 
         let vault_config = match Self::get_vault_config() {
@@ -378,6 +387,8 @@ impl FuncTestsSecrets {
         FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
+            AWS_TEST_KUBECONFIG: Self::select_secret("AWS_TEST_KUBECONFIG", secrets.AWS_TEST_KUBECONFIG),
+            AWS_EC2_KUBECONFIG: Self::select_secret("AWS_EC2_KUBECONFIG", secrets.AWS_EC2_KUBECONFIG),
             AWS_EC2_DEFAULT_REGION: Self::select_secret("AWS_EC2_DEFAULT_REGION", secrets.AWS_EC2_DEFAULT_REGION),
             AWS_EC2_TEST_MANAGED_REGION: Self::select_secret(
                 "AWS_EC2_TEST_MANAGED_REGION",
@@ -477,6 +488,7 @@ impl FuncTestsSecrets {
                 "SCALEWAY_TEST_CLUSTER_REGION",
                 secrets.SCALEWAY_TEST_CLUSTER_REGION,
             ),
+            SCALEWAY_TEST_KUBECONFIG: Self::select_secret("SCALEWAY_TEST_KUBECONFIG", secrets.SCALEWAY_TEST_KUBECONFIG),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
@@ -496,6 +508,7 @@ impl FuncTestsSecrets {
             QOVERY_DNS_API_URL: Self::select_secret("QOVERY_DNS_API_URL", secrets.QOVERY_DNS_API_URL),
             QOVERY_DNS_API_KEY: Self::select_secret("QOVERY_DNS_API_KEY", secrets.QOVERY_DNS_API_KEY),
             QOVERY_DNS_DOMAIN: Self::select_secret("QOVERYDNS_DOMAIN", secrets.QOVERY_DNS_DOMAIN),
+            GCP_TEST_KUBECONFIG: Self::select_secret("GCP_TEST_KUBECONFIG", secrets.GCP_TEST_KUBECONFIG),
         }
     }
 }
@@ -633,7 +646,7 @@ pub fn is_pod_restarted_env(
     service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
     assert!(kubeconfig.is_ok());
 
     match kubeconfig {
@@ -663,7 +676,7 @@ pub fn get_pods(
     service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
     assert!(kubeconfig.is_ok());
 
     cmd::kubectl::kubectl_exec_get_pods(
@@ -741,7 +754,7 @@ pub fn get_pvc(
     environment_check: &EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
     assert!(kubeconfig.is_ok());
 
     match kubeconfig {
@@ -765,7 +778,7 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
     assert!(kubeconfig.is_ok());
 
     match kubeconfig {
