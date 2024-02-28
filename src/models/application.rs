@@ -19,6 +19,7 @@ use crate::models::container::{
 };
 use crate::models::probe::Probe;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
@@ -146,6 +147,12 @@ impl<T: CloudProvider> Application<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
+        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+            &self.advanced_settings.deployment_affinity_node_required,
+            &target.kubernetes.cpu_architectures(),
+        );
+        let mut advanced_settings = self.advanced_settings.clone();
+        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
         let registry_info = target.container_registry.registry_info();
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -187,7 +194,7 @@ impl<T: CloudProvider> Application<T> {
                 storages: vec![],
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
-                advanced_settings: self.advanced_settings.to_container_advanced_settings(),
+                advanced_settings: advanced_settings.to_container_advanced_settings(),
                 legacy_deployment_matchlabels: true,
                 legacy_volumeclaim_template: true,
                 legacy_deployment_from_scaleway: T::cloud_provider() == Scw,

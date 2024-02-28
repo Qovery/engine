@@ -16,6 +16,7 @@ pub mod scaleway;
 pub mod selfmanaged;
 pub mod third_parties;
 pub mod types;
+pub mod utils;
 
 pub trait ToCloudProviderFormat {
     /// Returns cloud provider string representation.
