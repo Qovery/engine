@@ -112,6 +112,12 @@ pub struct Options {
     pub elasticache_zone_a_subnet_blocks: Vec<String>,
     pub elasticache_zone_b_subnet_blocks: Vec<String>,
     pub elasticache_zone_c_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_a_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_b_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_c_subnet_blocks: Vec<String>,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
@@ -346,6 +352,10 @@ fn tera_context(
     let elasticache_zone_b_subnet_blocks = format_ips(&options.elasticache_zone_b_subnet_blocks);
     let elasticache_zone_c_subnet_blocks = format_ips(&options.elasticache_zone_c_subnet_blocks);
 
+    let fargate_profile_zone_a_subnet_blocks = format_ips(&options.fargate_profile_zone_a_subnet_blocks);
+    let fargate_profile_zone_b_subnet_blocks = format_ips(&options.fargate_profile_zone_b_subnet_blocks);
+    let fargate_profile_zone_c_subnet_blocks = format_ips(&options.fargate_profile_zone_c_subnet_blocks);
+
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
     let cloudwatch_eks_log_group = format!("/aws/eks/{}/cluster", kubernetes.cluster_name());
@@ -424,6 +434,9 @@ fn tera_context(
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
     context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
+    context.insert("fargate_profile_zone_a_subnet_blocks", &fargate_profile_zone_a_subnet_blocks);
+    context.insert("fargate_profile_zone_b_subnet_blocks", &fargate_profile_zone_b_subnet_blocks);
+    context.insert("fargate_profile_zone_c_subnet_blocks", &fargate_profile_zone_c_subnet_blocks);
 
     // AWS S3 tfstate storage
     context.insert(
