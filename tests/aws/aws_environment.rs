@@ -1133,10 +1133,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig file path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = environment
             .routers
             .first()
@@ -1241,10 +1238,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
             .routers
             .first()
@@ -1363,10 +1357,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
             .routers
             .first()

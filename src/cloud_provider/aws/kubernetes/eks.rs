@@ -5,8 +5,8 @@ use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    create_kubeconfig_from_kubernetes_connection, event_details, send_progress_on_long_task, InstanceType, Kind,
-    Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus, KubernetesVersion,
+    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
+    KubernetesUpgradeStatus, KubernetesVersion,
 };
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
@@ -38,6 +38,7 @@ use aws_sdk_eks::output::{
 use aws_smithy_client::SdkError;
 
 use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
+use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -138,11 +139,13 @@ impl EKS {
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
-            create_kubeconfig_from_kubernetes_connection(
+            write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
+        } else {
+            fetch_kubeconfig(&cluster)?;
         }
 
         Ok(cluster)
@@ -193,11 +196,10 @@ impl EKS {
             event_details.clone(),
             EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{autoscaler_new_state}`.")),
         ));
-        let kubeconfig_path = self.get_kubeconfig_file()?;
         let selector = "cluster-autoscaler-aws-cluster-autoscaler";
         let namespace = "kube-system";
         kubectl_exec_scale_replicas(
-            kubeconfig_path,
+            self.kubeconfig_local_file_path(),
             self.cloud_provider.credentials_environment_variables(),
             namespace,
             ScalingKind::Deployment,
@@ -743,7 +745,7 @@ impl Kubernetes for EKS {
                         )
                     })
                     .expect("kubeconfig was not found while it should be present"),
-                None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
+                None => "".to_string(),
             };
             let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
 
@@ -763,6 +765,10 @@ impl Kubernetes for EKS {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
     }
 }
 

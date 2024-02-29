@@ -38,7 +38,7 @@ use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources, terraform_import,
@@ -56,6 +56,9 @@ use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
 use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
+use crate::cloud_provider::kubeconfig_helper::{
+    delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
+};
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
@@ -69,7 +72,6 @@ use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
 use crate::dns_provider::DnsProvider;
-use crate::events::Stage::Infrastructure;
 
 use super::models::QoveryAwsSdkConfigEks;
 
@@ -973,13 +975,13 @@ fn create(
         }
 
         let dirs_to_be_copied_to = vec![
-            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+            // copy lib/common/bootstrap/charts directory (and subdirectory) into the lib/aws/bootstrap/common/charts directory.
             // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
                 format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
-            // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/aws/bootstrap/common/chart_values directory.
+            // copy lib/common/bootstrap/chart_values directory (and subdirectory) into the lib/aws/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
                 format!("{}/common/chart_values", temp_dir.to_string_lossy()),
@@ -1145,44 +1147,49 @@ fn create(
                 }
             }
         };
-        match kubernetes.get_kubeconfig_file() {
-            Ok(path) => match is_kubernetes_upgrade_required(
-                path,
-                kubernetes.version(),
-                cloud_provider.credentials_environment_variables(),
-                event_details.clone(),
-                kubernetes.logger(),
-            ) {
-                Ok(x) => {
-                    if x.required_upgrade_on.is_some() {
-                        // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
-                        let res = kubernetes.upgrade_with_status(x);
-                        // push endpoint to Vault for EC2
-                        if kubernetes.kind() == Kind::Ec2 {
-                            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+        match is_kubernetes_upgrade_required(
+            kubernetes.kubeconfig_local_file_path(),
+            kubernetes.version(),
+            cloud_provider.credentials_environment_variables(),
+            event_details.clone(),
+            kubernetes.logger(),
+        ) {
+            Ok(x) => {
+                if x.required_upgrade_on.is_some() {
+                    // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
+                    let res = kubernetes.upgrade_with_status(x);
+                    // push endpoint to Vault for EC2
+                    if kubernetes.kind() == Kind::Ec2 {
+                        let qovery_terraform_config =
+                            get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
                                 .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-                            cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
-                            let _ = kubernetes.update_vault_config(event_details.clone(), qovery_terraform_config_file.clone(), cluster_secrets.clone(), None);
-                        };
-                        // return error on upgrade failure
-                        res?;
-                    } else {
-                        kubernetes.logger().log(EngineEvent::Info(
+                        cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
+                        let _ = kubernetes.update_vault_config(
                             event_details.clone(),
-                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                        ));
-                    }
-                }
-                Err(e) => {
-                    // Log a warning, this error is not blocking
-                    kubernetes.logger().log(EngineEvent::Warning(
+                            qovery_terraform_config_file.clone(),
+                            cluster_secrets.clone(),
+                            None,
+                        );
+                    };
+                    // return error on upgrade failure
+                    res?;
+                } else {
+                    kubernetes.logger().log(EngineEvent::Info(
                         event_details.clone(),
-                        EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                        )),
-                    );
+                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                    ));
                 }
-            },
-            Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+            }
+            Err(e) => {
+                // Log a warning, this error is not blocking
+                kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
+                ));
+            }
         };
     }
 
@@ -1191,9 +1198,8 @@ fn create(
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
-            let current_kubeconfig_path = kubernetes.get_kubeconfig_file()?;
-            put_kubeconfig_file_to_object_storage(kubernetes, &current_kubeconfig_path)?;
-            current_kubeconfig_path
+            put_kubeconfig_file_to_object_storage(kubernetes)?;
+            kubernetes.kubeconfig_local_file_path()
         }
         Kind::Ec2 => {
             // wait for EC2 k3S kubeconfig to be ready and valid
@@ -1561,28 +1567,11 @@ fn node_group_is_running(
     }
 }
 
-fn create_error(kubernetes: &dyn Kubernetes, cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
-    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-    let kubeconfig_path = kubernetes.get_kubeconfig_file()?;
-    let environment_variables = cloud_provider.credentials_environment_variables();
-
+fn create_error(kubernetes: &dyn Kubernetes, _cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
     kubernetes.logger().log(EngineEvent::Warning(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
         EventMessage::new_from_safe(format!("{}.create_error() called.", kubernetes.kind())),
     ));
-
-    match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-        Ok(ok_line) => kubernetes
-            .logger()
-            .log(EngineEvent::Info(event_details, EventMessage::new(ok_line, None))),
-        Err(err) => kubernetes.logger().log(EngineEvent::Warning(
-            event_details,
-            EventMessage::new(
-                "Error trying to get kubernetes events".to_string(),
-                Some(err.message(ErrorMessageVerbosity::FullDetails)),
-            ),
-        )),
-    };
 
     Ok(())
 }
@@ -1708,7 +1697,7 @@ fn pause(
         return Ok(());
     }
 
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file()?;
+    let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
 
     // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
     if options.qovery_engine_location == EngineLocation::ClientSide {
@@ -1951,19 +1940,7 @@ fn delete(
     };
 
     let kubernetes_config_file_path = match kubernetes.kind() {
-        Kind::Eks => match kubernetes.get_kubeconfig_file() {
-            Ok(x) => x,
-            Err(e) => {
-                let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
-                kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
-                ));
-
-                skip_kubernetes_step = true;
-                PathBuf::from("")
-            }
-        },
+        Kind::Eks => kubernetes.kubeconfig_local_file_path(),
         Kind::Ec2 => {
             // read config generated after terraform infra bootstrap/update
             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
@@ -2023,14 +2000,12 @@ fn delete(
             // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
             // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
             let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
-                // force s3 kubeconfig retrieve
-                if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
-                    return OperationResult::Err(e);
-                };
-                let current_kubeconfig_path = match kubernetes.get_kubeconfig_file() {
-                    Ok(p) => p,
+                match fetch_kubeconfig(kubernetes) {
+                    Ok(_) => (),
                     Err(e) => return OperationResult::Retry(e),
                 };
+
+                let current_kubeconfig_path = kubernetes.kubeconfig_local_file_path();
                 let mut kubeconfig_file = File::open(&current_kubeconfig_path).expect("Cannot open kubeconfig file");
 
                 // ensure the kubeconfig content address match with the current instance dns
@@ -2406,29 +2381,6 @@ async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Res
     daemon_set
         .patch("kube-proxy", &patch_params, &Patch::Strategic(daemonset_patch))
         .await
-}
-
-fn put_kubeconfig_file_to_object_storage(kube: &dyn Kubernetes, file_path: &Path) -> Result<(), Box<EngineError>> {
-    if let Err(e) = kube.config_file_store().put_object(
-        kube.get_bucket_name().as_str(),
-        kube.get_kubeconfig_filename().as_str(),
-        file_path,
-    ) {
-        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
-    };
-    Ok(())
-}
-
-fn delete_kubeconfig_from_object_storage(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    if let Err(e) = kube
-        .config_file_store()
-        .delete_object(kube.get_bucket_name().as_str(), kube.get_kubeconfig_filename().as_str())
-    {
-        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
-    };
-    Ok(())
 }
 
 #[cfg(test)]

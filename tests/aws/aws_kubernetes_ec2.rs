@@ -33,11 +33,13 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
         let zones = localisation.get_zones();
         let cluster_id = generate_cluster_id(localisation.to_cloud_provider_format());
         let organization_id = generate_organization_id(localisation.to_cloud_provider_format());
+        let mut ctx = context_for_ec2(organization_id, cluster_id);
+        ctx.update_is_first_cluster_deployment(true);
         cluster_test(
             test_name,
             Kind::Aws,
             KKind::Ec2,
-            context_for_ec2(organization_id, cluster_id),
+            ctx,
             logger(),
             metrics_registry(),
             localisation.to_cloud_provider_format(),
