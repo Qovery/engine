@@ -6,8 +6,8 @@ use std::sync::Arc;
 pub fn is_allowed_containered_postgres_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
-    // Allow only major from 10 to 15
-    if !&["10", "11", "12", "13", "14", "15"].contains(&requested_version.major.as_str()) {
+    // Allow only major from 10 to 16
+    if !&["10", "11", "12", "13", "14", "15", "16"].contains(&requested_version.major.as_str()) {
         return Err(DatabaseError::UnsupportedDatabaseVersion {
             database_type: DatabaseType::PostgreSQL,
             database_version: Arc::from(requested_version.to_string()),
@@ -286,6 +286,16 @@ mod tests {
             &VersionsNumberBuilder::new().major(15).minor(11).patch(6).build()
         )
         .is_ok());
+
+        // v16
+        assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).build()).is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).minor(11).build()).is_ok()
+        );
+        assert!(is_allowed_containered_postgres_version(
+            &VersionsNumberBuilder::new().major(16).minor(12).patch(7).build()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -300,10 +310,10 @@ mod tests {
             }
         );
         assert_eq!(
-            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).build()).unwrap_err(),
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).build()).unwrap_err(),
             DatabaseError::UnsupportedDatabaseVersion {
                 database_type: DatabaseType::PostgreSQL,
-                database_version: Arc::from("16"),
+                database_version: Arc::from("17"),
             }
         );
     }
