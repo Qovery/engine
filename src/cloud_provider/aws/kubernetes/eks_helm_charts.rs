@@ -130,29 +130,10 @@ pub fn eks_aws_helm_charts(
                 None => None,
             }
         });
-    let content_file = match File::open(qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
+
+    let qovery_terraform_config = get_qovery_terraform_config(qovery_terraform_config_file, envs)?;
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let reader = BufReader::new(content_file);
-    let qovery_terraform_config: AwsEksQoveryTerraformConfig = match serde_json::from_reader(reader) {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(CommandError::new(
-                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
@@ -773,4 +754,32 @@ pub fn eks_aws_helm_charts(
 
     info!("charts configuration preparation finished");
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8])
+}
+
+pub fn get_qovery_terraform_config(
+    qovery_terraform_config_file: &str,
+    envs: &[(String, String)],
+) -> Result<AwsEksQoveryTerraformConfig, CommandError> {
+    let content_file = match File::open(qovery_terraform_config_file) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(CommandError::new(
+                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
+                Some(e.to_string()),
+                Some(envs.to_vec()),
+            ));
+        }
+    };
+    let reader = BufReader::new(content_file);
+    let qovery_terraform_config: AwsEksQoveryTerraformConfig = match serde_json::from_reader(reader) {
+        Ok(config) => config,
+        Err(e) => {
+            return Err(CommandError::new(
+                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
+                Some(e.to_string()),
+                Some(envs.to_vec()),
+            ));
+        }
+    };
+    Ok(qovery_terraform_config)
 }
