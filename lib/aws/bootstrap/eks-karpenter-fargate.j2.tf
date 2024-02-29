@@ -1,19 +1,19 @@
 {% if enable_karpenter %}
 variable "eks_fargate_subnets_zone_a_private" {
   description = "EKS fargate private subnets Zone A"
-  default     = ["10.0.166.0/24"] # TODO PG remove hardcoded ip range and remove when VPC provided
+  default     = {{ fargate_profile_zone_a_subnet_blocks }}
   type        = list(string)
 }
 
 variable "eks_fargate_subnets_zone_b_private" {
   description = "EKS fargate private subnets Zone B"
-  default     = ["10.0.168.0/24"] # TODO PG remove hardcoded ip range and remove when VPC provided
+  default     = {{ fargate_profile_zone_b_subnet_blocks }}
   type        = list(string)
 }
 
 variable "eks_fargate_subnets_zone_c_private" {
   description = "EKS fargate private subnets Zone C"
-  default     = ["10.0.170.0/24"] # TODO PG remove hardcoded ip range and remove when VPC provided
+  default     = {{ fargate_profile_zone_c_subnet_blocks }}
   type        = list(string)
 }
 
