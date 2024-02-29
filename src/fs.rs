@@ -53,7 +53,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<String, Error>
+pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<PathBuf, Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -61,7 +61,7 @@ where
     workspace_directory(working_root_dir, execution_id, ".")
 }
 
-pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<String, Error>
+pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<PathBuf, Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -75,9 +75,7 @@ where
 
     create_dir_all(&dir)?;
 
-    dir.to_str()
-        .map(|e| e.to_string())
-        .ok_or_else(|| Error::from(ErrorKind::NotFound))
+    Ok(dir)
 }
 
 fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<PathBuf, Error> {
@@ -108,7 +106,7 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
         }
 
         let relative_path = entry
-            .strip_prefix(workspace_dir.as_str())
+            .strip_prefix(&workspace_dir)
             .map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
 
         tar.append_path_with_name(entry, relative_path)?;
@@ -119,30 +117,21 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), Error> {
     return match root_workspace_directory(working_root_dir, execution_id) {
-        Ok(workspace_dir) => match fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
-            Some(striped_workspace_dir) => striped_workspace_dir, // Removing extra dir name allowing to delete directory properly ("/dir/." => "dir")
-            None => &workspace_dir,
-        }) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                error!(
-                    "{}",
-                    format!(
-                        "error trying to remove workspace directory '{}', error: {}",
-                        workspace_dir.as_str(),
-                        err
-                    )
-                );
-                Err(err)
+        Ok(workspace_dir) => {
+            let workspace_dir = workspace_dir.to_string_lossy();
+            match fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
+                Some(striped_workspace_dir) => striped_workspace_dir, // Removing extra dir name allowing to delete directory properly ("/dir/." => "dir")
+                None => workspace_dir.as_ref(),
+            }) {
+                Ok(_) => Ok(()),
+                Err(err) => {
+                    error!("error trying to remove workspace directory '{}', error: {}", workspace_dir, err);
+                    Err(err)
+                }
             }
-        },
+        }
         Err(err) => {
-            error!(
-                "{}",
-                format!(
-                    "error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}"
-                )
-            );
+            error!("error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}");
             Err(err)
         }
     };

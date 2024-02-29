@@ -22,6 +22,7 @@ use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -36,7 +37,9 @@ pub trait DatabaseInstanceType: Send + Sync {
 }
 
 pub struct Managed {}
+
 pub struct Container {}
+
 pub trait DatabaseMode: Send {
     fn is_managed() -> bool;
     fn is_container() -> bool {
@@ -59,8 +62,11 @@ impl DatabaseMode for Container {
 /////////////////////////////////////////////////////////////////
 // Database types, will be only used as a marker
 pub struct PostgresSQL {}
+
 pub struct MySQL {}
+
 pub struct MongoDB {}
+
 pub struct Redis {}
 
 pub trait DatabaseType<T: CloudProvider, M: DatabaseMode>: Send + Sync {
@@ -152,7 +158,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
     pub(crate) options: T::DatabaseOptions,
-    pub(crate) workspace_directory: String,
+    pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
 }
 
@@ -221,7 +227,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 
     pub(super) fn fqdn(&self, target: &DeploymentTarget, fqdn: &str) -> String {
@@ -370,14 +376,14 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         );
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        let kube_config_file_path = kubernetes.get_kubeconfig_file()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
         context.insert("namespace", environment.namespace());
 
         let version = self.get_version(event_details)?.matched_version().to_string();
         context.insert("version", &version);
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

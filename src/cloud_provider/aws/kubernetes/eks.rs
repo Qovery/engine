@@ -5,8 +5,8 @@ use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType,
-    KubernetesUpgradeStatus, KubernetesVersion,
+    create_kubeconfig_from_kubernetes_connection, event_details, send_progress_on_long_task, InstanceType, Kind,
+    Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus, KubernetesVersion,
 };
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
@@ -22,8 +22,6 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep}
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
-use crate::object_storage::s3::S3;
-use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -39,14 +37,17 @@ use aws_sdk_eks::output::{
 };
 use aws_smithy_client::SdkError;
 
+use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::models::ToCloudProviderFormat;
+use crate::object_storage::s3::S3;
+use crate::object_storage::ObjectStorage;
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -76,6 +77,8 @@ pub struct EKS {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl EKS {
@@ -95,6 +98,8 @@ impl EKS {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -106,12 +111,11 @@ impl EKS {
             logger.log(EngineEvent::Error(*e.clone(), None));
             return Err(Box::new(*e));
         };
-        advanced_settings.validate(event_details)?;
+        advanced_settings.validate(event_details.clone())?;
 
-        let s3 = kubernetes::s3(&region, &*cloud_provider);
+        let s3 = mk_s3(&region, &*cloud_provider);
 
-        // copy listeners from CloudProvider
-        Ok(EKS {
+        let cluster = EKS {
             context,
             id: id.to_string(),
             long_id,
@@ -129,7 +133,19 @@ impl EKS {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            kubeconfig,
+            temp_dir,
+        };
+
+        if let Some(kubeconfig) = &cluster.kubeconfig {
+            create_kubeconfig_from_kubernetes_connection(
+                &cluster.kubeconfig_local_file_path(),
+                kubeconfig,
+                cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+            )?;
+        }
+
+        Ok(cluster)
     }
 
     pub fn validate_node_groups(
@@ -182,7 +198,7 @@ impl EKS {
         let namespace = "kube-system";
         kubectl_exec_scale_replicas(
             kubeconfig_path,
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             namespace,
             ScalingKind::Deployment,
             selector,
@@ -243,14 +259,6 @@ impl Kubernetes for EKS {
         Some(self.zones.iter().map(|z| z.to_cloud_provider_format()).collect())
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        (*self.cloud_provider).borrow()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        (*self.dns_provider).borrow()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -271,12 +279,12 @@ impl Kubernetes for EKS {
         self.options.user_provided_network.is_some()
     }
 
-    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
-        self.nodes_groups.iter().map(|x| x.instance_architecture).collect()
-    }
-
     fn is_self_managed(&self) -> bool {
         false
+    }
+
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+        self.nodes_groups.iter().map(|x| x.instance_architecture).collect()
     }
 
     #[named]
@@ -293,6 +301,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -313,7 +323,9 @@ impl Kubernetes for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
+        send_progress_on_long_task(self, Action::Create, || {
+            kubernetes::create_error(self, self.cloud_provider.as_ref())
+        })
     }
 
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
@@ -324,9 +336,8 @@ impl Kubernetes for EKS {
             EventMessage::new_from_safe("Start preparing EKS cluster upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
-        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self) {
+        let temp_dir = self.temp_dir();
+        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self, self.cloud_provider.as_ref()) {
             Ok(value) => Some(value),
             Err(_) => None,
         };
@@ -341,7 +352,7 @@ impl Kubernetes for EKS {
 
         // in case error, this should no be in the blocking process
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = self.q_kube_client() {
+        if let Ok(kube_client) = self.q_kube_client(self.cloud_provider.as_ref()) {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or_else(|_| Vec::with_capacity(0));
 
@@ -357,10 +368,13 @@ impl Kubernetes for EKS {
         // generate terraform files and copy them into temp dir
         let mut context = kubernetes::tera_context(
             self,
+            self.cloud_provider.as_ref(),
+            self.dns_provider.as_ref(),
             &self.zones,
             &node_groups_with_desired_states,
             &self.options,
             cluster_upgrade_timeout_in_min,
+            false,
         )?;
 
         //
@@ -387,18 +401,18 @@ impl Kubernetes for EKS {
 
                 if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
                     self.template_directory.as_str(),
-                    temp_dir.as_str(),
+                    temp_dir,
                     context.clone(),
                 ) {
                     return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                         event_details,
                         self.template_directory.to_string(),
-                        temp_dir,
+                        temp_dir.to_string_lossy().to_string(),
                         e,
                     )));
                 }
 
-                let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+                let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
                 let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
                 if let Err(e) = crate::template::copy_non_template_files(
                     common_bootstrap_charts.as_str(),
@@ -418,7 +432,7 @@ impl Kubernetes for EKS {
                 ));
 
                 match terraform_init_validate_plan_apply(
-                    temp_dir.as_str(),
+                    temp_dir.to_string_lossy().as_ref(),
                     self.context.is_dry_run_deploy(),
                     self.cloud_provider.credentials_environment_variables().as_slice(),
                 ) {
@@ -471,20 +485,20 @@ impl Kubernetes for EKS {
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
-            temp_dir.as_str(),
+            temp_dir,
             context.clone(),
         ) {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -508,7 +522,7 @@ impl Kubernetes for EKS {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client()?;
+        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -581,7 +595,7 @@ impl Kubernetes for EKS {
             None,
             None,
             Some(3),
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -589,7 +603,7 @@ impl Kubernetes for EKS {
         }
 
         if let Err(e) = self.delete_completed_jobs(
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -604,14 +618,17 @@ impl Kubernetes for EKS {
         });
 
         terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string())
-            .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
+        self.check_workers_on_upgrade(
+            self.cloud_provider.as_ref(),
+            kubernetes_upgrade_status.requested_version.to_string(),
+        )
+        .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
 
         self.logger().log(EngineEvent::Info(
             event_details,
@@ -619,34 +636,6 @@ impl Kubernetes for EKS {
         ));
 
         Ok(())
-    }
-
-    #[named]
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::upgrade_error(self))
     }
 
     #[named]
@@ -663,6 +652,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
@@ -699,12 +690,18 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
             )
         })
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     #[named]
@@ -767,10 +764,6 @@ impl Kubernetes for EKS {
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
     }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
-    }
 }
 
 #[cfg(test)]
@@ -807,7 +800,7 @@ pub fn select_nodegroups_autoscaling_group_behavior(
         // desired nodes can't be lower than min nodes
         if x < nodegroup.min_nodes {
             (true, nodegroup.min_nodes)
-        // desired nodes can't be higher than max nodes
+            // desired nodes can't be higher than max nodes
         } else if x > nodegroup.max_nodes {
             (true, nodegroup.max_nodes)
         } else {
@@ -838,6 +831,9 @@ pub fn select_nodegroups_autoscaling_group_behavior(
                 None => nodegroup.min_nodes,
             };
             NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, resume_nodes_number, true)
+        }
+        KubernetesClusterAction::CleanKarpenterMigration => {
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, 0, false)
         }
     }
 }
@@ -943,7 +939,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_cannot_list_clusters_error(
                 event_details.clone(),
                 CommandError::new("Couldn't list clusters from AWS".to_string(), Some(e.to_string()), None),
-            )))
+            )));
         }
     };
 
@@ -965,7 +961,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_nodegroup_list_error(
                 event_details,
                 CommandError::new_from_safe_message(e.to_string()),
-            )))
+            )));
         }
     };
 
@@ -978,7 +974,7 @@ pub async fn delete_eks_nodegroups(
             return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                 event_details,
                 e.to_string(),
-            )))
+            )));
         }
     };
 
@@ -1038,7 +1034,7 @@ pub async fn delete_eks_nodegroups(
                 return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                     event_details,
                     format!("{nodegroup:?}"),
-                )))
+                )));
             }
         };
 
@@ -1379,7 +1375,7 @@ mod tests {
                 vec![
                     NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),
@@ -1390,7 +1386,7 @@ mod tests {
                 vec![
                     NodeGroups::new("".to_string(), 3, 5, "t3a.small".to_string(), 20, CpuArchitecture::AMD64).unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),
@@ -1402,7 +1398,7 @@ mod tests {
                     NodeGroups::new("".to_string(), 3, 5, "t1000.terminator".to_string(), 20, CpuArchitecture::AMD64)
                         .unwrap()
                 ],
-                &event_details
+                &event_details,
             )
             .unwrap_err()
             .tag(),

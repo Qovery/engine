@@ -305,6 +305,7 @@ pub fn scw_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
+                Kind::Scw,
             )
             .to_common_helm_chart()?,
         ),

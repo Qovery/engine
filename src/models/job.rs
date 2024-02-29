@@ -7,14 +7,16 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::models;
-use crate::models::container::RegistryTeraContext;
+use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::utils;
 use crate::utilities::to_short_id;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -36,7 +38,8 @@ pub struct Job<T: CloudProvider> {
     pub(super) schedule: JobSchedule,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration: Duration,
-    pub(super) default_port: Option<u16>, // for probes
+    pub(super) default_port: Option<u16>,
+    // for probes
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) force_trigger: bool,
@@ -48,7 +51,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: JobAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
@@ -169,8 +172,15 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
-        let environment = &target.environment;
-        let kubernetes = &target.kubernetes;
+        let environment = target.environment;
+        let kubernetes = target.kubernetes;
+        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+            &self.advanced_settings.deployment_affinity_node_required,
+            &target.kubernetes.cpu_architectures(),
+        );
+        let mut advanced_settings = self.advanced_settings.clone();
+        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+
         let registry_info = target.container_registry.registry_info();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
@@ -179,7 +189,7 @@ impl<T: CloudProvider> Job<T> {
                     format!(
                         "{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
-                        (registry_info.get_image_name)(&models::container::get_mirror_repository_name(
+                        registry_info.get_image_name(&models::container::get_mirror_repository_name(
                             self.long_id(),
                             target.kubernetes.long_id(),
                             &target.kubernetes.advanced_settings().registry_mirroring_mode,
@@ -197,12 +207,7 @@ impl<T: CloudProvider> Job<T> {
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
-            cluster: ClusterTeraContext {
-                long_id: *kubernetes.long_id(),
-                name: kubernetes.name().to_string(),
-                region: kubernetes.region().to_string(),
-                zone: kubernetes.default_zone().to_string(),
-            },
+            cluster: ClusterTeraContext::from(kubernetes),
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
@@ -231,7 +236,7 @@ impl<T: CloudProvider> Job<T> {
                 },
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
-                advanced_settings: self.advanced_settings.clone(),
+                advanced_settings,
             },
             registry: registry_info
                 .registry_docker_json_config
@@ -289,7 +294,7 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 }
 
@@ -466,14 +471,6 @@ where
 pub enum ImageSource {
     Registry { source: Box<RegistryImageSource> },
     Build { source: Box<Build> },
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub(super) struct ClusterTeraContext {
-    pub(super) long_id: Uuid,
-    pub(super) name: String,
-    pub(super) region: String,
-    pub(super) zone: String,
 }
 
 #[derive(Serialize, Debug, Clone)]

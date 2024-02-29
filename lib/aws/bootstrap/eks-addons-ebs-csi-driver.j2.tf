@@ -8,6 +8,12 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
   resolve_conflicts        = "OVERWRITE"
 
   tags                     = local.tags_eks
+
+{% if enable_karpenter and bootstrap_on_fargate %}
+  depends_on = [
+    aws_eks_fargate_profile.ebs_csi
+  ]
+{% endif %}
 }
 
 resource "aws_iam_role" "ebs_csi_irsa_role" {

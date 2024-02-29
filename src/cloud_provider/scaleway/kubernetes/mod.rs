@@ -4,8 +4,9 @@ pub mod node;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
-    Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
+    self, create_kubeconfig_from_kubernetes_connection, is_kubernetes_upgrade_required, send_progress_on_long_task,
+    uninstall_cert_manager, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
+    ProviderOptions,
 };
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -57,7 +58,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tera::Context as TeraContext;
@@ -160,6 +161,8 @@ pub struct Kapsule {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl Kapsule {
@@ -177,6 +180,8 @@ impl Kapsule {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
         let event_details = kubernetes::event_details(&*cloud_provider, long_id, name.to_string(), &context);
@@ -223,7 +228,7 @@ impl Kapsule {
             }
         }
 
-        advanced_settings.validate(event_details)?;
+        advanced_settings.validate(event_details.clone())?;
 
         let object_storage = ScalewayOS::new(
             "s3-temp-id".to_string(),
@@ -233,7 +238,7 @@ impl Kapsule {
             zone,
         );
 
-        Ok(Kapsule {
+        let cluster = Kapsule {
             context,
             id: to_short_id(&long_id),
             long_id,
@@ -250,7 +255,19 @@ impl Kapsule {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            kubeconfig,
+            temp_dir,
+        };
+
+        if let Some(kubeconfig) = &cluster.kubeconfig {
+            create_kubeconfig_from_kubernetes_connection(
+                &cluster.kubeconfig_local_file_path(),
+                kubeconfig,
+                cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+            )?;
+        }
+
+        Ok(cluster)
     }
 
     fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
@@ -318,7 +335,7 @@ impl Kapsule {
             None => {
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(
                     CommandError::new_from_safe_message(error_cluster_id),
-                ))
+                ));
             }
             Some(x) => x,
         };
@@ -478,7 +495,7 @@ impl Kapsule {
         let managed_dns_domains_root_terraform_format =
             terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
         let managed_dns_resolvers_terraform_format = terraform_list_format(
-            self.dns_provider()
+            self.dns_provider
                 .resolvers()
                 .iter()
                 .map(|x| x.clone().to_string())
@@ -497,10 +514,10 @@ impl Kapsule {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
-        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
+        context.insert("wildcard_managed_dns", &self.dns_provider.domain().wildcarded().to_string());
 
         // add specific DNS fields
-        self.dns_provider().insert_into_teracontext(&mut context);
+        self.dns_provider.insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -529,21 +546,21 @@ impl Kapsule {
         // AWS S3 tfstates storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.access_key_id.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.secret_access_key.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_region_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.region.as_str(),
                 None => "",
             },
@@ -629,7 +646,7 @@ impl Kapsule {
                             return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
                                 event_details,
                                 err.to_string(),
-                            )))
+                            )));
                         }
                     }
                 }
@@ -637,7 +654,7 @@ impl Kapsule {
                     return Err(Box::new(EngineError::new_scaleway_cannot_fetch_private_networks(
                         event_details,
                         err.to_string(),
-                    )))
+                    )));
                 }
             }
         };
@@ -687,24 +704,21 @@ impl Kapsule {
                 }
             },
             Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
-
         };
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+        let temp_dir = self.temp_dir();
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -714,12 +728,12 @@ impl Kapsule {
             // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/scaleway/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -766,12 +780,16 @@ impl Kapsule {
         }
 
         // terraform deployment dedicated to cloud resources
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
+        if let Err(e) = terraform_init_validate_plan_apply(
+            temp_dir.to_string_lossy().as_ref(),
+            self.context.is_dry_run_deploy(),
+            &[],
+        ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
         // push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
@@ -800,11 +818,11 @@ impl Kapsule {
             self.cloud_provider.secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.region().to_string(),
-            self.default_zone().to_string(),
+            self.default_zone().unwrap_or("").to_string(),
             None,
             cluster_endpoint,
             self.kind(),
-            self.cloud_provider().name().to_string(),
+            self.cloud_provider.name().to_string(),
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
@@ -832,7 +850,7 @@ impl Kapsule {
                         return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
                             Some(c),
-                        )))
+                        )));
                     }
                     ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
@@ -949,7 +967,7 @@ impl Kapsule {
                                     self.logger.log(EngineEvent::Error(current_error.clone(), None));
                                     OperationResult::Retry(current_error)
                                 }
-                            }
+                            };
                         }
                     };
                     match scw_ng.status == scaleway_api_rs::models::scaleway_k8s_v1_pool::Status::Ready {
@@ -977,7 +995,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create() {
+        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1021,7 +1039,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             terraform_list_format(
-                self.dns_provider()
+                self.dns_provider
                     .resolvers()
                     .iter()
                     .map(|x| x.clone().to_string())
@@ -1030,7 +1048,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
-            self.dns_provider().provider_configuration(),
+            self.dns_provider.provider_configuration(),
             self.options.clone(),
             self.advanced_settings().clone(),
         );
@@ -1040,9 +1058,9 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
         ));
         let helm_charts_to_deploy = scw_helm_charts(
-            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+            format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
-            Some(&temp_dir),
+            Some(temp_dir.to_string_lossy().as_ref()),
             kubeconfig_path,
             &credentials_environment_variables,
             &*self.context.qovery_api,
@@ -1052,7 +1070,7 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client()?,
+            &self.kube_client(self.cloud_provider.as_ref())?,
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1091,15 +1109,6 @@ impl Kapsule {
         Ok(())
     }
 
-    fn upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
-            EventMessage::new_from_safe("SCW.upgrade_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         self.logger().log(EngineEvent::Info(
@@ -1107,7 +1116,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -1116,15 +1125,13 @@ impl Kapsule {
         let scw_ks_worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
         context.insert("scw_ks_worker_nodes", &scw_ks_worker_nodes);
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -1132,7 +1139,7 @@ impl Kapsule {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -1145,7 +1152,7 @@ impl Kapsule {
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
-        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str(), &[]) {
+        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.to_string_lossy().as_ref(), &[]) {
             Ok(x) => {
                 let mut tf_workers_resources_name = Vec::new();
                 for name in x {
@@ -1172,7 +1179,7 @@ impl Kapsule {
             return Ok(());
         }
 
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
+        let kubernetes_config_file_path = self.get_kubeconfig_file()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.get_engine_location() == EngineLocation::ClientSide {
@@ -1182,7 +1189,7 @@ impl Kapsule {
                     let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
                         return match kubectl_exec_api_custom_metrics(
                             &kubernetes_config_file_path,
-                            self.cloud_provider().credentials_environment_variables(),
+                            self.cloud_provider.credentials_environment_variables(),
                             "qovery",
                             None,
                             metric_name,
@@ -1218,7 +1225,7 @@ impl Kapsule {
                             self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
                         Err(retry::Error { error, .. }) => {
-                            return Err(Box::new(error))
+                            return Err(Box::new(error));
                         }
                     }
                 }
@@ -1231,11 +1238,13 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        if let Err(e) = terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources, &[]) {
+        if let Err(e) =
+            terraform_apply_with_tf_workers_resources(temp_dir.to_string_lossy().as_ref(), tf_workers_resources, &[])
+        {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = self.check_workers_on_pause() {
+        if let Err(e) = self.check_workers_on_pause(self.cloud_provider.as_ref()) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1263,20 +1272,17 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -1284,7 +1290,7 @@ impl Kapsule {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -1310,7 +1316,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
 
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false, &[]) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.to_string_lossy().as_ref(), false, &[]) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error(event_details.clone(), e),
@@ -1318,7 +1324,7 @@ impl Kapsule {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
 
         if !skip_kubernetes_step {
@@ -1333,7 +1339,7 @@ impl Kapsule {
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
             );
 
             match all_namespaces {
@@ -1350,7 +1356,7 @@ impl Kapsule {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
                             kubeconfig_path,
                             namespace_to_delete,
-                            self.cloud_provider().credentials_environment_variables(),
+                            self.cloud_provider.credentials_environment_variables(),
                         ) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
@@ -1410,7 +1416,7 @@ impl Kapsule {
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
@@ -1462,7 +1468,7 @@ impl Kapsule {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                     kubeconfig_path,
                     qovery_namespace,
-                    self.cloud_provider().credentials_environment_variables(),
+                    self.cloud_provider.credentials_environment_variables(),
                 );
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
@@ -1524,9 +1530,9 @@ impl Kapsule {
         ));
 
         if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1605,14 +1611,6 @@ impl Kubernetes for Kapsule {
         Some(vec![self.zone.as_str()])
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -1633,15 +1631,15 @@ impl Kubernetes for Kapsule {
         false
     }
 
+    fn is_self_managed(&self) -> bool {
+        false
+    }
+
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         self.nodes_groups
             .iter()
             .map(|node| node.instance_architecture)
             .collect()
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
     }
 
     #[named]
@@ -1679,8 +1677,7 @@ impl Kubernetes for Kapsule {
             EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
 
@@ -1697,20 +1694,18 @@ impl Kubernetes for Kapsule {
             format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
         );
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -1734,7 +1729,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client()?;
+        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1807,7 +1802,7 @@ impl Kubernetes for Kapsule {
             None,
             None,
             Some(3),
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -1815,7 +1810,7 @@ impl Kubernetes for Kapsule {
         }
 
         if let Err(e) = self.delete_completed_jobs(
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -1823,8 +1818,15 @@ impl Kubernetes for Kapsule {
             return Err(e);
         }
 
-        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy(), &[]) {
-            Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
+        match terraform_init_validate_plan_apply(
+            temp_dir.to_string_lossy().as_ref(),
+            self.context.is_dry_run_deploy(),
+            &[],
+        ) {
+            Ok(_) => match self.check_workers_on_upgrade(
+                self.cloud_provider.as_ref(),
+                kubernetes_upgrade_status.requested_version.to_string(),
+            ) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
                         event_details,
@@ -1845,34 +1847,6 @@ impl Kubernetes for Kapsule {
         }
 
         Ok(())
-    }
-
-    #[named]
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
     }
 
     #[named]
@@ -1931,6 +1905,10 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
+    }
+
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -1974,9 +1952,5 @@ impl Kubernetes for Kapsule {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
-    }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
     }
 }

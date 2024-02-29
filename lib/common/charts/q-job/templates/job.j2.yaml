@@ -36,11 +36,11 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
         {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-        - matchExpressions:
-            - key: "{{ key }}"
-              operator: In
-              values:
-                - {{ value }}
+            - matchExpressions:
+                - key: "{{ key }}"
+                  operator: In
+                  values:
+                  - {{ value }}
         {%- endfor %}
         {%- endif %}
       restartPolicy: Never
@@ -64,7 +64,7 @@ spec:
         {%- endfor %}
       containers:
         - name: qovery-wait-container-output
-          image: "busybox:1.34.1"
+          image: "debian:stable-slim"
           command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
           volumeMounts:
             - name: output

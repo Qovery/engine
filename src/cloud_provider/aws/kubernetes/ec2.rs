@@ -66,6 +66,8 @@ pub struct EC2 {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    _kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl EC2 {
@@ -85,13 +87,15 @@ impl EC2 {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
-        let s3 = kubernetes::s3(&region, &*cloud_provider);
+        let s3 = mk_s3(&region, &*cloud_provider);
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
@@ -108,7 +112,7 @@ impl EC2 {
         }
 
         // copy listeners from CloudProvider
-        Ok(EC2 {
+        let cluster = EC2 {
             context,
             id: id.to_string(),
             long_id,
@@ -126,7 +130,11 @@ impl EC2 {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            _kubeconfig: kubeconfig,
+            temp_dir,
+        };
+
+        Ok(cluster)
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -223,12 +231,12 @@ impl EC2 {
                 }
                 false => {
                     kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_config.aws_ec2_public_hostname
-                            )),
-                        ));
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                            &qovery_terraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
                     OperationResult::Retry(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
                         event_details.clone(),
                     )))
@@ -276,14 +284,6 @@ impl Kubernetes for EC2 {
         Some(self.zones.iter().map(|z| z.to_cloud_provider_format()).collect())
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        (*self.cloud_provider).borrow()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        (*self.dns_provider).borrow()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -301,6 +301,10 @@ impl Kubernetes for EC2 {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
+        false
+    }
+
+    fn is_self_managed(&self) -> bool {
         false
     }
 
@@ -322,6 +326,8 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -342,7 +348,9 @@ impl Kubernetes for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
+        send_progress_on_long_task(self, Action::Create, || {
+            kubernetes::create_error(self, self.cloud_provider.as_ref())
+        })
     }
 
     fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
@@ -353,11 +361,13 @@ impl Kubernetes for EC2 {
             EventMessage::new_from_safe("Start preparing EC2 node upgrade process".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
         let context = kubernetes::tera_context(
             self,
+            self.cloud_provider.as_ref(),
+            self.dns_provider.as_ref(),
             &self.zones,
             &[NodeGroupsWithDesiredState::new_from_node_groups(
                 &self.node_group_from_instance_type(),
@@ -366,24 +376,23 @@ impl Kubernetes for EC2 {
             )],
             &self.options,
             Duration::minutes(0), // not used for EC2
+            false,
         )?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
@@ -397,9 +406,9 @@ impl Kubernetes for EC2 {
         }
 
         terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
@@ -410,9 +419,9 @@ impl Kubernetes for EC2 {
         ));
 
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-            self.cloud_provider().access_key_id(),
+            self.cloud_provider.access_key_id(),
             self.region().to_string(),
-            self.cloud_provider().secret_access_key(),
+            self.cloud_provider.secret_access_key(),
             None,
             None,
             self.kind(),
@@ -420,11 +429,11 @@ impl Kubernetes for EC2 {
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
-            self.cloud_provider().organization_long_id().to_string(),
+            self.cloud_provider.organization_long_id().to_string(),
             self.context().is_test_cluster(),
         ));
 
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
         if let Ok(k3s_kubeconfig) = self.get_kubeconfig_file() {
             if let Err(e) = self.update_vault_config(
                 event_details.clone(),
@@ -451,34 +460,6 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::upgrade_error(self))
-    }
-
-    #[named]
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
@@ -490,7 +471,15 @@ impl Kubernetes for EC2 {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || {
-            kubernetes::pause(self, self.template_directory.as_str(), &self.zones, &[], &self.options)
+            kubernetes::pause(
+                self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
+                self.template_directory.as_str(),
+                &self.zones,
+                &[],
+                &self.options,
+            )
         })
     }
 
@@ -522,12 +511,18 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
                 self,
+                self.cloud_provider.as_ref(),
+                self.dns_provider.as_ref(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &[self.node_group_from_instance_type()],
                 &self.options,
             )
         })
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     #[named]
@@ -602,14 +597,6 @@ impl Kubernetes for EC2 {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
     }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
-    }
 }
 
 #[async_trait]
@@ -667,7 +654,7 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
                     event_details.clone(),
                     e,
                     Some(instance_id),
-                )))
+                )));
             }
         };
 
@@ -702,4 +689,14 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
 
         Ok(())
     }
+}
+
+pub fn mk_s3(region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
+    S3::new(
+        "s3-temp-id".to_string(),
+        "default-s3".to_string(),
+        cloud_provider.access_key_id(),
+        cloud_provider.secret_access_key(),
+        region.clone(),
+    )
 }

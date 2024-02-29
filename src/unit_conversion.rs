@@ -28,45 +28,6 @@ pub fn cpu_string_to_float<T: Into<String>>(cpu: T) -> f32 {
     }
 }
 
-/// convert ki to mi
-pub fn ki_to_mi<T: Into<String>>(ram: T) -> u32 {
-    let ram = ram.into().to_lowercase().replace("ki", "");
-    match ram.parse::<f32>() {
-        Ok(v) => (v / 1000.0) as u32,
-        _ => 0,
-    }
-}
-
-/// convert gi to mi
-pub fn gi_to_mi<T: Into<String>>(ram: T) -> u32 {
-    let ram = ram.into().to_lowercase().replace("gi", "");
-    match ram.parse::<f32>() {
-        Ok(v) => (v * 1000.0) as u32,
-        _ => 0,
-    }
-}
-
-/// convert mi to mi (but without the Mi at the end)
-pub fn mi_to_mi<T: Into<String>>(ram: T) -> u32 {
-    let ram = ram.into().to_lowercase().replace("mi", "");
-    match ram.parse::<f32>() {
-        Ok(v) => v as u32,
-        _ => 0,
-    }
-}
-
-/// convert ki, mi or gi to mi
-pub fn any_to_mi<T: Into<String>>(ram: T) -> u32 {
-    let ram = ram.into();
-    if ram.to_lowercase().ends_with("mi") {
-        mi_to_mi(ram)
-    } else if ram.to_lowercase().ends_with("ki") {
-        ki_to_mi(ram)
-    } else {
-        gi_to_mi(ram)
-    }
-}
-
 pub fn extract_volume_size(string_to_parse: String) -> Result<u32, CommandError> {
     let first_non_digit_index = match string_to_parse.find(|c: char| !c.is_numeric()) {
         None => string_to_parse.len(),
@@ -80,8 +41,8 @@ pub fn extract_volume_size(string_to_parse: String) -> Result<u32, CommandError>
 
 #[cfg(test)]
 mod tests {
-    use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
-    use crate::unit_conversion::{extract_volume_size, ki_to_mi};
+    use crate::unit_conversion::cpu_string_to_float;
+    use crate::unit_conversion::extract_volume_size;
 
     #[test]
     fn test_cpu_conversions() {
@@ -94,20 +55,6 @@ mod tests {
         assert_eq!(cpu_string_to_float("-250m"), 0.0);
         assert_eq!(cpu_string_to_float("-10"), 0.0);
         assert_eq!(cpu_string_to_float("1000"), 1000.0);
-    }
-
-    #[test]
-    fn test_kib_to_mib_conversions() {
-        assert_eq!(ki_to_mi("15564756Ki"), 15_564);
-    }
-
-    #[test]
-    fn test_any_to_mib_conversions() {
-        assert_eq!(any_to_mi("15564756Ki"), 15_564);
-        assert_eq!(any_to_mi("1024Mi"), 1024);
-        assert_eq!(any_to_mi("1Gi"), 1000);
-        assert_eq!(any_to_mi("1.5Gi"), 1_500);
-        assert_eq!(any_to_mi("150.0Gi"), 150_000);
     }
 
     #[test]

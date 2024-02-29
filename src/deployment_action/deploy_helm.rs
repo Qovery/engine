@@ -24,6 +24,7 @@ pub fn default_helm_timeout() -> Duration {
         Err(_) => Duration::from_secs(10 * 60),
     }
 }
+
 /// Helm Deployment manages Helm + jinja support
 pub struct HelmDeployment {
     event_details: EventDetails,
@@ -94,7 +95,7 @@ impl DeploymentAction for HelmDeployment {
 
         let service_chart = ServiceChart::new(self.helm_chart.clone());
         let chart: Box<dyn HelmChart> = Box::new(service_chart);
-        let kubeconfig = target.kubernetes.get_kubeconfig_file_path()?;
+        let kubeconfig = target.kubernetes.get_kubeconfig_file()?;
 
         chart
             .run(

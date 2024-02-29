@@ -22,7 +22,6 @@ use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
 
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -34,11 +33,10 @@ use crate::cmd::kubectl::{
     kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::fs::{delete_file_if_exists, workspace_directory};
+use crate::fs::delete_file_if_exists;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
@@ -48,7 +46,6 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::services::kube_client::QubeClient;
-use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 use crate::utilities::create_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
@@ -345,14 +342,13 @@ pub trait Kubernetes: Send + Sync {
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
     fn zones(&self) -> Option<Vec<&str>>;
-    fn default_zone(&self) -> &str {
-        match &self.zones() {
-            None => "",
-            Some(zones) => zones.first().unwrap_or(&""),
+    fn default_zone(&self) -> Option<&str> {
+        match self.zones() {
+            Some(zones) => zones.first().copied(),
+            None => None,
         }
     }
-    fn cloud_provider(&self) -> &dyn CloudProvider;
-    fn dns_provider(&self) -> &dyn DnsProvider;
+
     fn logger(&self) -> &dyn Logger;
     fn metrics_registry(&self) -> &dyn MetricsRegistry;
     fn config_file_store(&self) -> &dyn ObjectStorage;
@@ -360,11 +356,10 @@ pub trait Kubernetes: Send + Sync {
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
     // this method should replace kube_client
-    fn q_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
+    fn q_kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file_path()?;
-        let kube_credentials: Vec<(String, String)> = self
-            .cloud_provider()
+        let kubeconfig_path = self.get_kubeconfig_file()?;
+        let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -377,11 +372,10 @@ pub trait Kubernetes: Send + Sync {
         )
     }
     // AVOID USE: to be replaced by q_kube_client
-    fn kube_client(&self) -> Result<kube::Client, Box<EngineError>> {
+    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.get_kubeconfig_file_path()?;
-        let kube_credentials: Vec<(String, String)> = self
-            .cloud_provider()
+        let kubeconfig_path = self.get_kubeconfig_file()?;
+        let kube_credentials: Vec<(String, String)> = cloud_provider
             .credentials_environment_variables()
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -394,41 +388,11 @@ pub trait Kubernetes: Send + Sync {
             ))
         })
     }
-    fn get_kubernetes_connection(&self) -> Option<String>;
-    fn create_kubeconfig_from_kubernetes_connection(&self) -> Result<(), Box<EngineError>> {
-        if let Some(kubeconfig_content) = self.get_kubernetes_connection() {
-            let kubeconfig_path = self.kubeconfig_local_file_path()?;
-            fs::create_dir_all(
-                kubeconfig_path
-                    .parent()
-                    .expect("Couldn't create kubeconfig folder parent path"),
-            )
-            .map_err(|err| {
-                EngineError::new_cannot_create_file(
-                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                    err.into(),
-                )
-            })?;
-            let mut file = File::create(kubeconfig_path).map_err(|err| {
-                EngineError::new_cannot_create_file(
-                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                    err.into(),
-                )
-            })?;
-            file.write_all(kubeconfig_content.as_bytes()).map_err(|err| {
-                EngineError::new_cannot_write_file(
-                    self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-                    err.into(),
-                )
-            })?;
-        }
-        Ok(())
-    }
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
         EventDetails::new(
-            Some(self.cloud_provider().kind()),
+            Some(self.kind().get_cloud_provider_kind()),
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
@@ -441,358 +405,145 @@ pub trait Kubernetes: Send + Sync {
         format!("{}.yaml", self.id())
     }
 
-    fn put_kubeconfig_file_to_object_storage(&self, file_path: &Path) -> Result<(), Box<EngineError>> {
-        if let Err(e) = self.config_file_store().put_object(
-            self.get_bucket_name().as_str(),
-            self.get_kubeconfig_filename().as_str(),
-            file_path,
-        ) {
-            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
-        };
-        Ok(())
-    }
-
-    fn delete_kubeconfig_from_object_storage(&self) -> Result<(), Box<EngineError>> {
-        if let Err(e) = self
-            .config_file_store()
-            .delete_object(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
-        {
-            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
-        };
-        Ok(())
-    }
-
     fn get_bucket_name(&self) -> String {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn kubeconfig_local_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+    fn kubeconfig_local_file_path(&self) -> PathBuf {
         let bucket_name = self.get_bucket_name();
         let object_key = self.get_kubeconfig_filename();
 
-        match self.get_temp_dir(event_details) {
-            Ok(x) => Ok(PathBuf::from(format!("{}/{}/{}", &x, &bucket_name, &object_key))),
-            Err(e) => Err(e),
-        }
+        PathBuf::from(format!(
+            "{}/{}/{}",
+            self.temp_dir().to_string_lossy(),
+            &bucket_name,
+            &object_key
+        ))
     }
 
     fn get_kubeconfig_file(&self) -> Result<PathBuf, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let object_key = self.get_kubeconfig_filename();
-        let bucket_name = self.get_bucket_name();
         let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
-        // check if kubernetes_connection exists, meaning the local kubeconfig exists
-        if self.get_kubernetes_connection().is_some() {
-            return self.kubeconfig_local_file_path();
+        if self.kubeconfig_local_file_path().exists() {
+            return Ok(self.kubeconfig_local_file_path());
         }
-
-        // else check if the file is present
-        let local_kubeconfig = match self.kubeconfig_local_file_path() {
-            Ok(kubeconfig_local_file_path) => {
-                if Path::new(&kubeconfig_local_file_path).exists() {
-                    match File::open(&kubeconfig_local_file_path) {
-                        Ok(_) => Some(kubeconfig_local_file_path),
-                        Err(err) => {
-                            self.logger().log(EngineEvent::Debug(
-                                self.get_event_details(stage.clone()),
-                                EventMessage::new(
-                                    err.to_string(),
-                                    Some(format!(
-                                        "Error, couldn't open {} file",
-                                        kubeconfig_local_file_path.to_str().unwrap_or_default()
-                                    )),
-                                ),
-                            ));
-                            None
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
-            Err(_) => None,
-        };
 
         // otherwise, try to get it from object storage
-        let (string_path, file) = match local_kubeconfig {
-            Some(local_kubeconfig_generated) => {
-                let kubeconfig_file =
-                    File::open(&local_kubeconfig_generated).expect("couldn't read kubeconfig file, but file exists");
+        let object_key = self.get_kubeconfig_filename();
+        let bucket_name = self.get_bucket_name();
+        match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+            match self
+                .config_file_store()
+                .get_object(bucket_name.as_str(), object_key.as_str())
+            {
+                Ok(bucket_object) => {
+                    let file_path = self.kubeconfig_local_file_path();
+                    let kubeconfig = String::from_utf8_lossy(&bucket_object.value);
+                    if let Err(err) = create_kubeconfig_from_kubernetes_connection(
+                        &file_path,
+                        &kubeconfig,
+                        self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                    ) {
+                        return OperationResult::Retry(err);
+                    }
 
-                (local_kubeconfig_generated, kubeconfig_file)
+                    // Upload kubeconfig, so we can store it
+                    if let Err(err) = self
+                        .context()
+                        .qovery_api
+                        .update_cluster_credentials(kubeconfig.to_string())
+                    {
+                        error!("Cannot update cluster credentials {}", err);
+                    }
+
+                    OperationResult::Ok(file_path)
+                }
+                Err(err) => {
+                    let error = EngineError::new_cannot_retrieve_cluster_config_file(
+                        self.get_event_details(stage.clone()),
+                        err.into(),
+                    );
+
+                    OperationResult::Retry(Box::new(error))
+                }
             }
-            None => match retry::retry(Fibonacci::from_millis(5000).take(5), || {
-                match self
-                    .config_file_store()
-                    .get_object(bucket_name.as_str(), object_key.as_str())
-                {
-                    Ok(bucket_object) => {
-                        let file_path = match self.kubeconfig_local_file_path() {
-                            Ok(p) => p,
-                            Err(e) => return OperationResult::Retry(*e),
-                        };
-
-                        // Upload kubeconfig, so we can store it
-                        if let Err(err) = self
-                            .context()
-                            .qovery_api
-                            .update_cluster_credentials(String::from_utf8_lossy(&bucket_object.value).to_string())
-                        {
-                            error!("Cannot update cluster credentials {}", err);
-                        }
-
-                        // Save content to file
-                        // create parent dir
-                        let parent_dir = match file_path.parent() {
-                            Some(d) => d,
-                            None => {
-                                return OperationResult::Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                                    self.get_event_details(stage.clone()),
-                                    CommandError::new_from_safe_message(format!(
-                                        "Cannot get parent directory for `{}`",
-                                        file_path.to_str().unwrap_or_default()
-                                    )),
-                                ))
-                            }
-                        };
-                        let _ = block_on(tokio::fs::create_dir_all(parent_dir));
-
-                        // create file
-                        match std::fs::OpenOptions::new()
-                            .create(true)
-                            .write(true)
-                            .truncate(true)
-                            .open(&file_path)
-                            .map_err(|err| {
-                                EngineError::new_cannot_retrieve_cluster_config_file(
-                                    self.get_event_details(stage.clone()),
-                                    err.into(),
-                                )
-                            }) {
-                            Ok(mut f) => {
-                                if let Err(e) = f.write(bucket_object.value.as_slice()).map_err(|err| {
-                                    EngineError::new_cannot_retrieve_cluster_config_file(
-                                        self.get_event_details(stage.clone()),
-                                        err.into(),
-                                    )
-                                }) {
-                                    return OperationResult::Retry(e);
-                                }
-
-                                OperationResult::Ok(file_path)
-                            }
-                            Err(e) => OperationResult::Retry(e),
-                        }
-                    }
-                    Err(err) => {
-                        let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                            self.get_event_details(stage.clone()),
-                            err.into(),
-                        );
-
-                        OperationResult::Retry(error)
-                    }
+        }) {
+            Ok(path) => (path.clone(), File::open(path).unwrap()), // Return file as read only mode
+            Err(retry::Error { error, .. }) => {
+                // If existing cluster, it should be a warning.
+                if self.context().is_first_cluster_deployment() {
+                    // if cluster first deployment, this case if normal, hence we do not log anything to end user
+                    return Err(error);
                 }
-            }) {
-                Ok(path) => (path.clone(), File::open(path).unwrap()), // Return file as read only mode
-                Err(retry::Error { error, .. }) => {
-                    // If existing cluster, it should be a warning.
-                    if self.context().is_first_cluster_deployment() {
-                        // if cluster first deployment, this case if normal, hence we do not log anything to end user
-                        return Err(Box::new(error));
-                    }
 
-                    // It's not cluster first deployment
-                    // OR we don't know if it's cluster first deployment, we do log an info log to end user.
-                    self.logger().log(EngineEvent::Info(
-                        event_details,
-                        EventMessage::new(
-                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
-                            Some(error.to_string()),
-                        ),
-                    ));
+                // It's not cluster first deployment
+                // OR we don't know if it's cluster first deployment, we do log an info log to end user.
+                self.logger().log(EngineEvent::Info(
+                    event_details,
+                    EventMessage::new(
+                        "Cannot retrieve kubeconfig from previous installation.".to_string(),
+                        Some(error.to_string()),
+                    ),
+                ));
 
-                    return Err(Box::new(error));
-                }
-            },
-        };
-
-        let metadata = match file.metadata() {
-            Ok(metadata) => metadata,
-            Err(err) => {
-                let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                    self.get_event_details(stage),
-                    CommandError::new("Error getting file metadata.".to_string(), Some(err.to_string()), None),
-                );
-                self.logger().log(EngineEvent::Error(error.clone(), None));
-                return Err(Box::new(error));
+                return Err(error);
             }
         };
 
-        // security: ensure size match with a kubeconfig file (< 16k)
-        let max_size = 16 * 1024;
-        if metadata.len() > max_size {
-            return Err(Box::new(EngineError::new_kubeconfig_size_security_check_error(
-                event_details,
-                metadata.len(),
-                max_size,
-            )));
-        };
-
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(0o400);
-        if let Err(err) = std::fs::set_permissions(&string_path, permissions) {
-            let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                self.get_event_details(stage),
-                CommandError::new("Error getting file permissions.".to_string(), Some(err.to_string()), None),
-            );
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
-        }
-
-        Ok(string_path)
-    }
-
-    fn get_kubeconfig_file_path(&self) -> Result<PathBuf, Box<EngineError>> {
-        self.get_kubeconfig_file()
-    }
-
-    fn delete_local_kubeconfig_terraform(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let file = self.kubeconfig_local_file_path()?;
-
-        delete_file_if_exists(&file).map_err(|e| {
-            Box::new(EngineError::new_delete_local_kubeconfig_file_error(
-                event_details,
-                file.to_str().unwrap_or_default(),
-                e,
-            ))
-        })
+        Ok(self.kubeconfig_local_file_path())
     }
 
     fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let file_path = match self.kubeconfig_local_file_path() {
-            Ok(p) => p,
-            Err(e) => return Err(e),
-        };
-
+        let file_path = self.kubeconfig_local_file_path();
         delete_file_if_exists(&file_path).map_err(|e| {
             Box::new(EngineError::new_delete_local_kubeconfig_file_error(
                 event_details,
-                file_path.to_str().unwrap_or_default(),
+                file_path.to_string_lossy().as_ref(),
                 e,
             ))
         })
-    }
-
-    fn resources(&self, _environment: &Environment) -> Result<Resources, Box<EngineError>> {
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
-        let stage = Infrastructure(InfrastructureStep::RetrieveClusterResources);
-
-        let nodes = match kubectl_exec_get_node(
-            kubernetes_config_file_path,
-            self.cloud_provider().credentials_environment_variables(),
-        ) {
-            Ok(k) => k,
-            Err(err) => {
-                let error = EngineError::new_cannot_get_cluster_nodes(self.get_event_details(stage), err);
-
-                self.logger().log(EngineEvent::Error(error.clone(), None));
-
-                return Err(Box::new(error));
-            }
-        };
-
-        let mut resources = Resources {
-            free_cpu: 0.0,
-            max_cpu: 0.0,
-            free_ram_in_mib: 0,
-            max_ram_in_mib: 0,
-            free_pods: 0,
-            max_pods: 0,
-            running_nodes: 0,
-        };
-
-        for node in nodes.items {
-            resources.free_cpu += cpu_string_to_float(node.status.allocatable.cpu);
-            resources.max_cpu += cpu_string_to_float(node.status.capacity.cpu);
-            resources.free_ram_in_mib += any_to_mi(node.status.allocatable.memory);
-            resources.max_ram_in_mib += any_to_mi(node.status.capacity.memory);
-            resources.free_pods = node.status.allocatable.pods.parse::<u32>().unwrap_or(0);
-            resources.max_pods = node.status.capacity.pods.parse::<u32>().unwrap_or(0);
-            resources.running_nodes += 1;
-        }
-
-        Ok(resources)
     }
 
     fn on_create(&self) -> Result<(), Box<EngineError>>;
     fn on_create_error(&self) -> Result<(), Box<EngineError>>;
 
-    fn upgrade(&self) -> Result<(), Box<EngineError>> {
-        // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
-        if self.kind() != Kind::Ec2 {
-            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-
-            let kubeconfig = match self.get_kubeconfig_file() {
-                Ok(path) => path,
-                Err(e) => return Err(e),
-            };
-
-            return match is_kubernetes_upgradable(
-                kubeconfig.clone(),
-                self.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
-            ) {
-                Err(e) => Err(e),
-                Ok(..) => match is_kubernetes_upgrade_required(
-                    kubeconfig,
-                    self.version(),
-                    self.cloud_provider().credentials_environment_variables(),
-                    event_details,
-                    self.logger(),
-                ) {
-                    Ok(x) => self.upgrade_with_status(x),
-                    Err(e) => Err(e),
-                },
-            };
-        };
-
-        Ok(())
-    }
-
-    fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), CommandError>
+    fn check_workers_on_upgrade(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+        targeted_version: String,
+    ) -> Result<(), CommandError>
     where
         Self: Sized,
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_workers_upgrade_status(
-                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
-                self.cloud_provider().credentials_environment_variables(),
+                self.get_kubeconfig_file().expect("Unable to get Kubeconfig"),
+                cloud_provider.credentials_environment_variables(),
                 targeted_version.clone(),
             )
         })
     }
 
-    fn check_control_plane_on_upgrade(&self, targeted_version: KubernetesVersion) -> Result<(), CommandError>
+    fn check_control_plane_on_upgrade(
+        &self,
+        cloud_provider: &dyn CloudProvider,
+        targeted_version: KubernetesVersion,
+    ) -> Result<(), CommandError>
     where
         Self: Sized,
     {
         send_progress_on_long_task(self, Action::Create, || {
             check_master_version_status(
-                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
-                self.cloud_provider().credentials_environment_variables(),
+                self.get_kubeconfig_file().expect("Unable to get Kubeconfig"),
+                cloud_provider.credentials_environment_variables(),
                 &targeted_version,
             )
         })
     }
 
-    fn check_workers_on_create(&self) -> Result<(), CommandError>
+    fn check_workers_on_create(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
     where
         Self: Sized,
     {
@@ -802,11 +553,11 @@ pub trait Kubernetes: Send + Sync {
         };
 
         send_progress_on_long_task(self, Action::Create, || {
-            check_workers_status(&kubeconfig, self.cloud_provider().credentials_environment_variables())
+            check_workers_status(&kubeconfig, cloud_provider.credentials_environment_variables())
         })
     }
 
-    fn check_workers_on_pause(&self) -> Result<(), CommandError>
+    fn check_workers_on_pause(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
     where
         Self: Sized,
     {
@@ -816,29 +567,15 @@ pub trait Kubernetes: Send + Sync {
         };
 
         send_progress_on_long_task(self, Action::Create, || {
-            check_workers_pause(&kubeconfig, self.cloud_provider().credentials_environment_variables())
+            check_workers_pause(&kubeconfig, cloud_provider.credentials_environment_variables())
         })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>>;
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>>;
     fn on_pause(&self) -> Result<(), Box<EngineError>>;
     fn on_pause_error(&self) -> Result<(), Box<EngineError>>;
     fn on_delete(&self) -> Result<(), Box<EngineError>>;
     fn on_delete_error(&self) -> Result<(), Box<EngineError>>;
-    fn get_temp_dir(&self, event_details: EventDetails) -> Result<String, Box<EngineError>> {
-        workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("bootstrap/{}", self.id()),
-        )
-        .map_err(|err| {
-            Box::new(EngineError::new_cannot_get_workspace_directory(
-                event_details,
-                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
-            ))
-        })
-    }
+    fn temp_dir(&self) -> &Path;
 
     fn delete_crashlooping_pods(
         &self,
@@ -1093,7 +830,7 @@ where
                 return OperationResult::Retry(EngineError::new_cannot_execute_k8s_exec_version(
                     event_details.clone(),
                     e,
-                ))
+                ));
             }
         };
         let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
@@ -1126,7 +863,7 @@ where
                 return Err(Box::new(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
                     event_details,
                     node.status.node_info.kubelet_version.to_string(),
-                )))
+                )));
             }
         }
 
@@ -1137,7 +874,7 @@ where
                 return Err(Box::new(EngineError::new_cannot_determine_k8s_kube_proxy_version(
                     event_details,
                     node.status.node_info.kube_proxy_version.to_string(),
-                )))
+                )));
             }
         }
     }
@@ -1227,7 +964,7 @@ where
                     Err(_) => {
                         return OperationResult::Err(CommandError::new_from_safe_message(
                             "Cannot find master nodes version.".to_string(),
-                        ))
+                        ));
                     }
                 };
                 if target_version.is_equal_to(&to_kube_version) {
@@ -1363,7 +1100,7 @@ fn check_kubernetes_upgrade_status(
                     wished_version,
                     e,
                 ),
-            ))
+            ));
         }
     };
 
@@ -1413,7 +1150,7 @@ fn check_kubernetes_upgrade_status(
                         wished_version,
                         e,
                     ),
-                ))
+                ));
             }
         }
     }
@@ -1463,7 +1200,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         None => {
             return Err(CommandError::new_from_safe_message(
                 "deployed kubernetes minor version was missing and is missing".to_string(),
-            ))
+            ));
         }
     };
 
@@ -1472,7 +1209,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         None => {
             return Err(CommandError::new_from_safe_message(
                 "wished kubernetes minor version was expected and is missing".to_string(),
-            ))
+            ));
         }
     };
 
@@ -1847,6 +1584,55 @@ pub async fn kube_copy_secret_to_another_namespace(
     }
 }
 
+pub(super) fn create_kubeconfig_from_kubernetes_connection(
+    kubeconfig_path: &Path,
+    kubeconfig: &str,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    fs::create_dir_all(
+        kubeconfig_path
+            .parent()
+            .expect("Couldn't create kubeconfig folder parent path"),
+    )
+    .map_err(|err| EngineError::new_cannot_create_file(event_details.clone(), err.into()))?;
+    let mut file = File::create(kubeconfig_path)
+        .map_err(|err| EngineError::new_cannot_create_file(event_details.clone(), err.into()))?;
+    file.write_all(kubeconfig.as_bytes())
+        .map_err(|err| EngineError::new_cannot_write_file(event_details.clone(), err.into()))?;
+
+    let metadata = match file.metadata() {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            let error = EngineError::new_cannot_retrieve_cluster_config_file(
+                event_details.clone(),
+                CommandError::new("Error getting file metadata.".to_string(), Some(err.to_string()), None),
+            );
+            return Err(Box::new(error));
+        }
+    };
+
+    let max_size = 16 * 1024;
+    if metadata.len() > max_size {
+        return Err(Box::new(EngineError::new_kubeconfig_size_security_check_error(
+            event_details.clone(),
+            metadata.len(),
+            max_size,
+        )));
+    };
+
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o400);
+    if let Err(err) = file.set_permissions(permissions) {
+        let error = EngineError::new_cannot_retrieve_cluster_config_file(
+            event_details.clone(),
+            CommandError::new("Error getting file permissions.".to_string(), Some(err.to_string()), None),
+        );
+        return Err(Box::new(error));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
@@ -1881,7 +1667,8 @@ mod tests {
     }
 
     pub fn get_svc_template() -> ObjectList<Service> {
-        ObjectList {
+        ObjectList::<Service> {
+            types: Default::default(),
             metadata: ListMeta { ..Default::default() },
             items: vec![
                 Service {
@@ -1937,7 +1724,7 @@ mod tests {
         assert!(block_on(kube_create_namespace_if_not_exists(
             &kube_client,
             "qovery-test-ns",
-            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())])
+            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())]),
         ))
         .is_ok());
     }
@@ -2402,7 +2189,7 @@ mod tests {
             validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "0.25".to_string(),
-                cpu_limit: "1".to_string()
+                cpu_limit: "1".to_string(),
             }
         );
 
@@ -2412,7 +2199,7 @@ mod tests {
             validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "1".to_string(),
-                cpu_limit: "1".to_string()
+                cpu_limit: "1".to_string(),
             }
         );
     }
@@ -2513,7 +2300,7 @@ mod tests {
                     k8s_version.major().to_string(),
                     Some(k8s_version.minor().to_string()),
                     None,
-                    None
+                    None,
                 ),
                 VersionsNumber::from(k8s_version)
             );

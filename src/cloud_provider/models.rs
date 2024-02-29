@@ -170,6 +170,7 @@ pub enum KubernetesClusterAction {
     Pause,
     Resume(Option<i32>),
     Delete,
+    CleanKarpenterMigration,
 }
 
 #[derive(Debug, Clone)]

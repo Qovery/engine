@@ -22,6 +22,7 @@ use qovery_engine::cloud_provider::service::{Action, Service};
 use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
+use qovery_engine::fs::workspace_directory;
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
@@ -73,9 +74,18 @@ pub struct TestInfo {
 }
 
 fn test_kubernetes() -> Box<dyn Kubernetes> {
+    dotenv::dotenv().ok();
     let cluster_id = Uuid::new_v4();
     let context = context_for_cluster(Uuid::new_v4(), cluster_id, None);
     let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(&context, Eks, "us-east-2");
+
+    let temp_dir = workspace_directory(
+        context.workspace_root_dir(),
+        context.execution_id(),
+        format!("bootstrap/{}", to_short_id(&cluster_id)),
+    )
+    .unwrap();
+
     Box::new(
         EKS::new(
             context.clone(),
@@ -118,26 +128,15 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 ..Default::default()
             },
             None,
+            fs::read_to_string(kubeconfig_path()).ok(),
+            temp_dir,
         )
         .unwrap(),
     )
 }
 
-fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
-    let temp_dir = kube
-        .get_temp_dir(test_env.event_details().clone())
-        .expect("Unable to get temp dir");
-    let short_id = to_short_id(kube.long_id());
-    let kubeconfig_dir_path = format!("{temp_dir}/qovery-kubeconfigs-{short_id}");
-    fs::create_dir(&kubeconfig_dir_path)
-        .unwrap_or_else(|e| panic!("Unable to create directory {}: {}", &kubeconfig_dir_path, e));
-    let local_kubeconfig = format!("{temp_dir}/qovery-kubeconfigs-{short_id}/{short_id}.yaml");
-    let _ = fs::copy(kubeconfig_path(), &local_kubeconfig)
-        .unwrap_or_else(|e| panic!("Unable to create file {}: {}", &local_kubeconfig, e));
-}
-
-fn test_environment(kube: &dyn Kubernetes) -> Environment {
-    let app = test_application(kube);
+fn test_environment(kube: &dyn Kubernetes, domain: &str) -> Environment {
+    let app = test_application(kube, domain);
     let app_id = *app.long_id();
     let env_id = Uuid::new_v4();
     Environment::new(
@@ -225,7 +224,7 @@ fn test_route(uuid: Uuid) -> Route {
 }
 
 #[allow(deprecated)]
-pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
+pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application<AWSType> {
     let long_id = Uuid::new_v4();
     Application::new(
         test_kube.context(),
@@ -233,7 +232,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
         Action::Create,
         "my_application_name",
         "my-application-name".to_string(),
-        format!("{}.{}", long_id, test_kube.dns_provider().domain()),
+        format!("{}.{}", long_id, domain),
         vec![test_port()],
         "1".to_string(),
         "2".to_string(),
@@ -620,21 +619,16 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
     )
 }
 
-fn deployment_target<'a>(
-    test_kube: &'a dyn Kubernetes,
-    test_env: &'a Environment,
-    infra_ctx: &'a InfrastructureContext,
-) -> DeploymentTarget<'a> {
-    create_fake_kubeconfig(test_kube, test_env);
+fn deployment_target<'a>(test_env: &'a Environment, infra_ctx: &'a InfrastructureContext) -> DeploymentTarget<'a> {
     DeploymentTarget::new(infra_ctx, test_env, &|| false)
         .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 
 pub fn application_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -654,9 +648,9 @@ pub fn application_context() -> TestInfo {
 
 pub fn container_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -676,9 +670,9 @@ pub fn container_context() -> TestInfo {
 
 pub fn managed_database_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -698,9 +692,9 @@ pub fn managed_database_context() -> TestInfo {
 
 pub fn container_database_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -720,9 +714,9 @@ pub fn container_database_context() -> TestInfo {
 
 pub fn router_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -742,9 +736,9 @@ pub fn router_context() -> TestInfo {
 
 pub fn job_context() -> TestInfo {
     let test_kube = test_kubernetes();
-    let test_env = test_environment(test_kube.as_ref());
     let infra_ctx = infra_ctx(test_kube.as_ref());
-    let target = deployment_target(test_kube.as_ref(), &test_env, &infra_ctx);
+    let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
+    let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),

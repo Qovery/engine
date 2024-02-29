@@ -466,7 +466,6 @@ impl ContainerRegistry for ECR {
 
                             Ok(Repository {
                                 registry_id: r.registry_id.unwrap_or("".to_string()),
-                                id: created_repository_name.to_string(),
                                 name: created_repository_name.to_string(),
                                 uri: r.repository_uri,
                                 ttl,

@@ -101,7 +101,6 @@ pub fn from_gcp_repository(
 
     Ok(Repository {
         registry_id: repository_parent.to_string(),
-        id: gcp_repository.name.to_string(), // fully qualified repository id
         name: repository_name.to_string(),
         uri: Some(format!(
             "{}-docker.pkg.dev/{}/{}/",

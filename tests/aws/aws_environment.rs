@@ -770,7 +770,10 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -1132,7 +1135,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         // checking cookie is properly set on the app
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file_path()
+            .get_kubeconfig_file()
             .expect("Cannot get kubeconfig file path");
         let router = environment
             .routers
@@ -1240,7 +1243,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file_path()
+            .get_kubeconfig_file()
             .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
@@ -1362,7 +1365,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 
         let kubeconfig = infra_ctx
             .kubernetes()
-            .get_kubeconfig_file_path()
+            .get_kubeconfig_file()
             .expect("Cannot get kubeconfig path");
         let router = whitelist_all_environment
             .routers
@@ -1543,7 +1546,10 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let kube_conn = infra_ctx.kubernetes().q_kube_client().expect("kube client is not set");
+        let kube_conn = infra_ctx
+            .kubernetes()
+            .q_kube_client(infra_ctx.cloud_provider())
+            .expect("kube client is not set");
         // ensure default pod affinity is set to preferred
         let preferred = block_on(kube_conn.get_deployments_from_api(
             context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
@@ -1609,7 +1615,17 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .unwrap()
                 .required_during_scheduling_ignored_during_execution
                 .unwrap()
-                .node_selector_terms[0]
+                .node_selector_terms
+                .into_iter()
+                .find(|node_selector| {
+                    node_selector
+                        .match_expressions
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .any(|selector| selector.key == node_selector_key)
+                })
+                .unwrap()
                 .clone()
                 .match_expressions
                 .unwrap();
@@ -2010,7 +2026,10 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2460,7 +2479,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         let k8s_cronjob_api: Api<CronJob> = Api::namespaced(
             infra_ctx
                 .kubernetes()
-                .kube_client()
+                .kube_client(infra_ctx.cloud_provider())
                 .expect("should always contain kube_client"),
             &cronjob_namespace,
         );
@@ -2939,7 +2958,10 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");

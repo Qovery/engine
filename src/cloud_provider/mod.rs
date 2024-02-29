@@ -144,9 +144,9 @@ impl<'a> DeploymentTarget<'a> {
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
-        let kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
+        let kubeconfig_path = kubernetes.get_kubeconfig_file()?;
         let kubeconfig_path_str = kubeconfig_path.to_str().unwrap_or_default();
-        let kube_credentials: Vec<(String, String)> = kubernetes
+        let kube_credentials: Vec<(String, String)> = infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
             .into_iter()
@@ -158,7 +158,7 @@ impl<'a> DeploymentTarget<'a> {
 
         let helm = Helm::new(
             kubeconfig_path_str,
-            &kubernetes.cloud_provider().credentials_environment_variables(),
+            &infra_ctx.cloud_provider().credentials_environment_variables(),
         )
         .map_err(|e| to_engine_error(event_details, e))?;
 

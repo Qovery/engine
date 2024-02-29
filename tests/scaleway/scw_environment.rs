@@ -583,7 +583,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -1079,7 +1082,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
         assert!(kubeconfig.is_ok());
         let router = environment
             .routers
@@ -1200,7 +1203,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
         assert!(kubeconfig.is_ok());
         let router = whitelist_all_environment
             .routers
@@ -1333,7 +1336,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
         assert!(kubeconfig.is_ok());
         let router = whitelist_all_environment
             .routers
@@ -1662,7 +1665,10 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2308,7 +2314,10 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx.kubernetes().kube_client().expect("kube client is not set"),
+            infra_ctx
+                .kubernetes()
+                .kube_client(infra_ctx.cloud_provider())
+                .expect("kube client is not set"),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");

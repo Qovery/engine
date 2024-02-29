@@ -29,20 +29,29 @@ impl SkopeoError {
 
 #[derive(Debug)]
 pub struct Skopeo {
+    credentials: Option<(String, String)>,
     common_envs: Vec<(String, String)>,
 }
 
 impl Skopeo {
-    pub fn new() -> Result<Self, SkopeoError> {
-        Ok(Self { common_envs: vec![] })
+    pub fn new(credentials: Option<(String, String)>) -> Result<Self, SkopeoError> {
+        Ok(Self {
+            credentials,
+            common_envs: vec![],
+        })
     }
 
     pub fn delete_image(&self, image: &ContainerImage, tls_verify: bool) -> Result<(), SkopeoError> {
         let uri = format!("docker://{}", image.image_name());
         info!("Deleting image {}", uri);
         let tls = format!("--tls-verify={}", tls_verify);
+        let creds = if let Some((user, pass)) = &self.credentials {
+            format!("--creds={}:{}", user, pass)
+        } else {
+            "--no-creds".to_string()
+        };
 
-        let args = &["delete", &tls, &uri];
+        let args = &["delete", &tls, &creds, "--retry-times=5", &uri];
         skopeo_exec(
             args,
             &self.get_all_envs(&[]),
@@ -57,7 +66,12 @@ impl Skopeo {
         info!("listing image tags {}", uri);
 
         let tls = format!("--tls-verify={}", tls_verify);
-        let args = &["list-tags", &tls, &uri];
+        let creds = if let Some((user, pass)) = &self.credentials {
+            format!("--creds={}:{}", user, pass)
+        } else {
+            "--no-creds".to_string()
+        };
+        let args = &["list-tags", &tls, &creds, "--retry-times=5", &uri];
         let mut output: Vec<String> = vec![];
         skopeo_exec(
             args,
@@ -164,7 +178,7 @@ mod tests {
         assert!(ret.is_ok());
 
         // now delete it
-        let skopeo = Skopeo::new().unwrap();
+        let skopeo = Skopeo::new(None).unwrap();
         let ret = skopeo.delete_image(&image_dest, false);
         assert!(ret.is_ok());
 
@@ -199,7 +213,7 @@ mod tests {
         );
         assert!(ret.is_ok());
 
-        let skopeo = Skopeo::new().unwrap();
+        let skopeo = Skopeo::new(None).unwrap();
         let ret = skopeo.list_tags(&image_dest, false);
         assert!(ret.is_ok());
         let ret = ret.unwrap();

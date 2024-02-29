@@ -129,7 +129,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        let kube_config_file_path = kubernetes.get_kubeconfig_file()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
         context.insert("namespace", environment.namespace());
 
@@ -137,7 +137,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

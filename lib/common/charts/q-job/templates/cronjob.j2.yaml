@@ -52,11 +52,11 @@ spec:
               requiredDuringSchedulingIgnoredDuringExecution:
                 nodeSelectorTerms:
             {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-            - matchExpressions:
-                - key: "{{ key }}"
-                  operator: In
-                  values:
-                    - {{ value }}
+                - matchExpressions:
+                    - key: "{{ key }}"
+                      operator: In
+                      values:
+                      - {{ value }}
             {%- endfor %}
             {%- endif %}
           restartPolicy: OnFailure

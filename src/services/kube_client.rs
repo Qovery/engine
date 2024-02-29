@@ -1,3 +1,6 @@
+use json_patch::PatchOperation;
+use k8s_openapi::api::autoscaling::v1::Scale;
+use k8s_openapi::api::core::v1::Node;
 use k8s_openapi::api::{
     apps::v1::{Deployment, StatefulSet},
     core::v1::{Pod, Secret},
@@ -118,6 +121,57 @@ impl QubeClient {
         }
     }
 
+    pub async fn get_nodes(
+        &self,
+        event_details: EventDetails,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<Node>, Box<EngineError>> {
+        let client: Api<Node> = Api::all(self.client.clone());
+
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match client.list(&params).await {
+            Ok(node_list) => Ok(node_list.items),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+            Err(e) => Err(Box::new(EngineError::new_k8s_cannot_get_nodes(
+                event_details,
+                CommandError::new_from_safe_message(format!(
+                    "Error while trying to get kubernetes nodes with labels `{labels}`. {e}"
+                )),
+            ))),
+        }
+    }
+
+    pub async fn patch_node(
+        &self,
+        event_details: EventDetails,
+        node: Node,
+        patch_operations: &[PatchOperation],
+    ) -> Result<(), Box<EngineError>> {
+        let client: Api<Node> = Api::all(self.client.clone());
+
+        let json_patch = json_patch::Patch(patch_operations.to_vec());
+        let patch: Patch<Scale> = Patch::Json(json_patch);
+
+        if let Some(name) = node.metadata.name {
+            if let Err(e) = client.patch(&name, &PatchParams::default(), &patch).await {
+                return Err(Box::new(EngineError::new_k8s_patch_node_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!("Error while trying to patch a kubernetes node. {e}")),
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn get_pods(
         &self,
         event_details: EventDetails,
@@ -195,7 +249,8 @@ impl QubeClient {
                 ))),
             },
             SelectK8sResourceBy::Name(deployment_name) => match client.get(deployment_name.as_str()).await {
-                Ok(x) => Ok(Some(ObjectList {
+                Ok(x) => Ok(Some(ObjectList::<Deployment> {
+                    types: Default::default(),
                     metadata: ListMeta::default(),
                     items: vec![x],
                 })),

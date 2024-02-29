@@ -16,6 +16,7 @@ use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::aws::kubernetes::addons::aws_core_dns_addon::AwsCoreDnsAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
@@ -24,7 +25,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -51,10 +52,10 @@ use crate::models::domain::{ToHelmString, ToTerraformString};
 use crate::models::kubernetes::K8sPod;
 use crate::models::third_parties::LetsEncryptConfig;
 
-use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
+use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
@@ -67,6 +68,8 @@ use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
+use crate::dns_provider::DnsProvider;
+use crate::events::Stage::Infrastructure;
 
 use super::models::QoveryAwsSdkConfigEks;
 
@@ -76,6 +79,7 @@ mod ec2_helm_charts;
 pub mod eks;
 pub mod eks_helm_charts;
 pub mod helm_charts;
+mod karpenter;
 pub mod node;
 
 static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::new(|| ChronoDuration::hours(1));
@@ -140,6 +144,8 @@ pub struct Options {
     #[serde(default)]
     pub aws_addon_ebs_csi_version_override: Option<String>,
     #[serde(default)]
+    pub aws_addon_coredns_version_override: Option<String>,
+    #[serde(default)]
     pub ec2_exposed_port: Option<u16>,
 }
 
@@ -192,16 +198,6 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
-    S3::new(
-        "s3-temp-id".to_string(),
-        "default-s3".to_string(),
-        cloud_provider.access_key_id(),
-        cloud_provider.secret_access_key(),
-        region.clone(),
-    )
-}
-
 /// divide by 2 the total number of subnet to get the exact same number as private and public
 fn check_odd_subnets(
     event_details: EventDetails,
@@ -221,10 +217,13 @@ fn check_odd_subnets(
 
 fn tera_context(
     kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    dns_provider: &dyn DnsProvider,
     zones: &[AwsZone],
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
     eks_upgrade_timeout_in_min: ChronoDuration,
+    bootstrap_on_fargate: bool,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
@@ -359,11 +358,8 @@ fn tera_context(
     let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
 
     // Qovery
-    context.insert("organization_id", kubernetes.cloud_provider().organization_id());
-    context.insert(
-        "organization_long_id",
-        &kubernetes.cloud_provider().organization_long_id().to_string(),
-    );
+    context.insert("organization_id", cloud_provider.organization_id());
+    context.insert("organization_long_id", &cloud_provider.organization_long_id().to_string());
     context.insert("qovery_api_url", &qovery_api_url);
 
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
@@ -381,21 +377,14 @@ fn tera_context(
     );
 
     // DNS configuration
-    let managed_dns_list = vec![kubernetes.dns_provider().name()];
-    let managed_dns_domains_helm_format = vec![kubernetes.dns_provider().domain().to_string()];
-    let managed_dns_domains_root_helm_format = vec![kubernetes.dns_provider().domain().root_domain().to_string()];
-    let managed_dns_domains_terraform_format =
-        terraform_list_format(vec![kubernetes.dns_provider().domain().to_string()]);
+    let managed_dns_list = vec![dns_provider.name()];
+    let managed_dns_domains_helm_format = vec![dns_provider.domain().to_string()];
+    let managed_dns_domains_root_helm_format = vec![dns_provider.domain().root_domain().to_string()];
+    let managed_dns_domains_terraform_format = terraform_list_format(vec![dns_provider.domain().to_string()]);
     let managed_dns_domains_root_terraform_format =
-        terraform_list_format(vec![kubernetes.dns_provider().domain().root_domain().to_string()]);
-    let managed_dns_resolvers_terraform_format = terraform_list_format(
-        kubernetes
-            .dns_provider()
-            .resolvers()
-            .iter()
-            .map(|x| x.clone().to_string())
-            .collect(),
-    );
+        terraform_list_format(vec![dns_provider.domain().root_domain().to_string()]);
+    let managed_dns_resolvers_terraform_format =
+        terraform_list_format(dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect());
 
     context.insert("managed_dns", &managed_dns_list);
     context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
@@ -411,7 +400,7 @@ fn tera_context(
     );
 
     // add specific DNS fields
-    kubernetes.dns_provider().insert_into_teracontext(&mut context);
+    dns_provider.insert_into_teracontext(&mut context);
 
     context.insert("dns_email_report", &options.tls_email_report);
 
@@ -426,13 +415,17 @@ fn tera_context(
     context.insert("enable_cluster_autoscaler", &true);
 
     // AWS
-    context.insert("aws_access_key", &kubernetes.cloud_provider().access_key_id());
-    context.insert("aws_secret_key", &kubernetes.cloud_provider().secret_access_key());
+    context.insert("aws_access_key", &cloud_provider.access_key_id());
+    context.insert("aws_secret_key", &cloud_provider.secret_access_key());
+
+    // Karpenter
+    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
+    context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
 
     // AWS S3 tfstate storage
     context.insert(
         "aws_access_key_tfstates_account",
-        match kubernetes.cloud_provider().terraform_state_credentials() {
+        match cloud_provider.terraform_state_credentials() {
             Some(x) => x.access_key_id.as_str(),
             None => "",
         },
@@ -440,14 +433,14 @@ fn tera_context(
 
     context.insert(
         "aws_secret_key_tfstates_account",
-        match kubernetes.cloud_provider().terraform_state_credentials() {
+        match cloud_provider.terraform_state_credentials() {
             Some(x) => x.secret_access_key.as_str(),
             None => "",
         },
     );
     context.insert(
         "aws_region_tfstates_account",
-        match kubernetes.cloud_provider().terraform_state_credentials() {
+        match cloud_provider.terraform_state_credentials() {
             Some(x) => x.region.as_str(),
             None => "",
         },
@@ -628,6 +621,14 @@ fn tera_context(
                 Some(overridden_version) => AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
             }),
         );
+        // COREDNS
+        context.insert(
+            "eks_addon_coredns",
+            &(match &options.aws_addon_coredns_version_override {
+                None => AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version()),
+                Some(overridden_version) => AwsCoreDnsAddon::new_with_overridden_version(overridden_version),
+            }),
+        );
     }
 
     Ok(context)
@@ -702,6 +703,9 @@ fn should_update_desired_nodes(
                 let current_nodes = get_autoscaling_config(node_group, eks_client)?;
                 select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Resume(current_nodes), node_group)
             }
+            KubernetesClusterAction::CleanKarpenterMigration => {
+                select_nodegroups_autoscaling_group_behavior(action, node_group)
+            }
         };
         node_groups_with_size.push(node_group_with_desired_state)
     }
@@ -713,8 +717,8 @@ fn should_update_desired_nodes(
 fn get_rusoto_eks_client(
     event_details: EventDetails,
     kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
 ) -> Result<EksClient, Box<EngineError>> {
-    let cloud_provider = kubernetes.cloud_provider();
     let region = match RusotoRegion::from_str(kubernetes.region()) {
         Ok(value) => value,
         Err(error) => {
@@ -762,7 +766,7 @@ fn get_nodegroup_autoscaling_config_from_aws(
                     Some("Error while trying to get node groups from eks".to_string()),
                     None,
                 ),
-            )))
+            )));
         }
     };
 
@@ -779,7 +783,7 @@ fn get_nodegroup_autoscaling_config_from_aws(
                     return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                         event_details,
                         eks_node_group_name,
-                    )))
+                    )));
                 }
                 Some(x) => x,
             },
@@ -849,9 +853,9 @@ fn define_cluster_upgrade_timeout(
         if !pod_names.is_empty() {
             cluster_upgrade_timeout = upgrade_time_in_minutes;
             message = Some(format!(
-                        "Kubernetes workers timeout will be adjusted to {} minutes, because some pods have a termination period greater than 15 min. Pods:\n{}",
-                        cluster_upgrade_timeout.num_minutes(), pod_names.join(", ")
-                    ));
+                "Kubernetes workers timeout will be adjusted to {} minutes, because some pods have a termination period greater than 15 min. Pods:\n{}",
+                cluster_upgrade_timeout.num_minutes(), pod_names.join(", ")
+            ));
         }
     };
     (cluster_upgrade_timeout, message)
@@ -859,6 +863,8 @@ fn define_cluster_upgrade_timeout(
 
 fn create(
     kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    dns_provider: &dyn DnsProvider,
     kubernetes_long_id: uuid::Uuid,
     template_directory: &str,
     aws_zones: &[AwsZone],
@@ -873,9 +879,9 @@ fn create(
     ));
 
     let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-        kubernetes.cloud_provider().access_key_id(),
+        cloud_provider.access_key_id(),
         kubernetes.region().to_string(),
-        kubernetes.cloud_provider().secret_access_key(),
+        cloud_provider.secret_access_key(),
         None,
         None,
         kubernetes.kind(),
@@ -883,36 +889,55 @@ fn create(
         kubernetes_long_id.to_string(),
         options.grafana_admin_user.clone(),
         options.grafana_admin_password.clone(),
-        kubernetes.cloud_provider().organization_long_id().to_string(),
+        cloud_provider.organization_long_id().to_string(),
         kubernetes.context().is_test_cluster(),
     ));
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+    let temp_dir = kubernetes.temp_dir();
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
     // old method with rusoto
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
         Ok(value) => Some(value),
         Err(_) => None,
     };
 
     // aws connection
-    let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
+    let aws_conn = match cloud_provider.aws_sdk_client() {
         Some(x) => x,
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
     let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
+        // don't create node groups if karpenter is enabled
+        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+            node_groups_when_karpenter_is_enabled(
+                kubernetes,
+                node_groups,
+                &event_details,
+                kubernetes_action,
+                cloud_provider,
+            )
+        } else {
+            node_groups
+        };
+
+        let bootstrap_on_fargate = if kubernetes.advanced_settings().aws_enable_karpenter {
+            bootstrap_on_fargate_when_karpenter_is_enabled(kubernetes, kubernetes_action)
+        } else {
+            false
+        };
+
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
             kubernetes_action,
-            node_groups,
+            applied_node_groups,
             aws_eks_client.clone(),
         )?;
 
         // in case error, this should no be a blocking error
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = kubernetes.q_kube_client() {
+        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or(Vec::with_capacity(0));
 
@@ -929,19 +954,20 @@ fn create(
         // generate terraform files and copy them into temp dir
         let context = tera_context(
             kubernetes,
+            cloud_provider,
+            dns_provider,
             aws_zones,
             &node_groups_with_desired_states,
             options,
             cluster_upgrade_timeout_in_min,
+            bootstrap_on_fargate,
         )?;
 
-        if let Err(e) =
-            crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-        {
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, context) {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details.clone(),
                 template_directory.to_string(),
-                temp_dir.clone(),
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -951,12 +977,12 @@ fn create(
             // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/aws/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -977,12 +1003,9 @@ fn create(
 
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
             match terraform_init_validate_plan_apply(
-                temp_dir.as_str(),
+                temp_dir.to_string_lossy().as_ref(),
                 kubernetes.context().is_dry_run_deploy(),
-                kubernetes
-                    .cloud_provider()
-                    .credentials_environment_variables()
-                    .as_slice(),
+                cloud_provider.credentials_environment_variables().as_slice(),
             ) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
@@ -994,20 +1017,17 @@ fn create(
                         } => {
                             // Try to import S3 bucket and relaunch Terraform apply
                             kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(
-                                format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
-                                Some(e.to_string()),
-                            ),
-                        ));
+                                event_details.clone(),
+                                EventMessage::new(
+                                    format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
+                                    Some(e.to_string()),
+                                ),
+                            ));
                             match terraform_import(
-                                temp_dir.as_str(),
+                                temp_dir.to_string_lossy().as_ref(),
                                 format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
                                 bucket_name,
-                                kubernetes
-                                    .cloud_provider()
-                                    .credentials_environment_variables()
-                                    .as_slice(),
+                                cloud_provider.credentials_environment_variables().as_slice(),
                             ) {
                                 Ok(_) => {
                                     kubernetes.logger().log(EngineEvent::Info(
@@ -1059,15 +1079,12 @@ fn create(
                             }
                             Kind::Ec2 => {
                                 if let Err(err) = force_terraform_ec2_instance_type_switch(
-                                    temp_dir.as_str(),
+                                    temp_dir.to_string_lossy().as_ref(),
                                     e.clone(),
                                     kubernetes.logger(),
                                     &event_details,
                                     kubernetes.context().is_dry_run_deploy(),
-                                    kubernetes
-                                        .cloud_provider()
-                                        .credentials_environment_variables()
-                                        .as_slice(),
+                                    cloud_provider.credentials_environment_variables().as_slice(),
                                 ) {
                                     return OperationResult::Err(Box::new(EngineError::new_terraform_error(
                                         event_details.clone(),
@@ -1099,15 +1116,16 @@ fn create(
     // upgrade cluster instead if required
     if kubernetes.context().is_first_cluster_deployment() {
         // terraform deployment dedicated to cloud resources
+
         terraform_apply(KubernetesClusterAction::Bootstrap)?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
             kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(
-                "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
-            )));
+                event_details.clone(),
+                EventMessage::new_from_safe(
+                    "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
+                )));
 
             if let Err(e) = block_on(delete_eks_nodegroups(
                 aws_conn.clone(),
@@ -1131,14 +1149,14 @@ fn create(
             Ok(path) => match is_kubernetes_upgrade_required(
                 path,
                 kubernetes.version(),
-                kubernetes.cloud_provider().credentials_environment_variables(),
+                cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 kubernetes.logger(),
             ) {
-                Ok(x) =>  {
+                Ok(x) => {
                     if x.required_upgrade_on.is_some() {
                         // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
-                        let res =  kubernetes.upgrade_with_status(x);
+                        let res = kubernetes.upgrade_with_status(x);
                         // push endpoint to Vault for EC2
                         if kubernetes.kind() == Kind::Ec2 {
                             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
@@ -1154,7 +1172,7 @@ fn create(
                             EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
                         ));
                     }
-                },
+                }
                 Err(e) => {
                     // Log a warning, this error is not blocking
                     kubernetes.logger().log(EngineEvent::Warning(
@@ -1173,8 +1191,8 @@ fn create(
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
-            let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
-            kubernetes.put_kubeconfig_file_to_object_storage(&current_kubeconfig_path)?;
+            let current_kubeconfig_path = kubernetes.get_kubeconfig_file()?;
+            put_kubeconfig_file_to_object_storage(kubernetes, &current_kubeconfig_path)?;
             current_kubeconfig_path
         }
         Kind::Ec2 => {
@@ -1192,7 +1210,7 @@ fn create(
                     "expected AWS provider here, while {} was found",
                     kubernetes.kind()
                 )),
-            )))
+            )));
         }
     };
 
@@ -1214,12 +1232,29 @@ fn create(
     // kubernetes helm deployments on the cluster
     let kubeconfig_path = Path::new(&kubeconfig_path);
 
-    let credentials_environment_variables: Vec<(String, String)> = kubernetes
-        .cloud_provider()
+    let credentials_environment_variables: Vec<(String, String)> = cloud_provider
         .credentials_environment_variables()
         .into_iter()
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
+
+    if kubernetes.advanced_settings().aws_enable_karpenter
+        && karpenter_is_deployed(kubernetes, cloud_provider, &event_details)
+        && !karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
+    {
+        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+
+            block_on(Karpenter::restart(
+                kubernetes,
+                cloud_provider,
+                kube_client,
+                kubernetes_long_id,
+                disk_size_in_gib,
+                &qovery_terraform_config_file,
+            ))?;
+        }
+    }
 
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
         kubernetes.logger().log(EngineEvent::Warning(
@@ -1237,7 +1272,7 @@ fn create(
     // https://github.com/kubernetes/cloud-provider-aws/issues/87
     if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
         info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
-        block_on(patch_kube_proxy_for_aws_user_network(kubernetes.kube_client()?)).map_err(|e| {
+        block_on(patch_kube_proxy_for_aws_user_network(kubernetes.kube_client(cloud_provider)?)).map_err(|e| {
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
@@ -1256,9 +1291,10 @@ fn create(
 
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
+            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
             let charts_prerequisites = EksChartsConfigPrerequisites {
-                organization_id: kubernetes.cloud_provider().organization_id().to_string(),
-                organization_long_id: kubernetes.cloud_provider().organization_long_id(),
+                organization_id: cloud_provider.organization_id().to_string(),
+                organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
@@ -1269,53 +1305,45 @@ fn create(
                 cpu_architectures,
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),
-                aws_access_key_id: kubernetes.cloud_provider().access_key_id(),
-                aws_secret_access_key: kubernetes.cloud_provider().secret_access_key(),
+                aws_access_key_id: cloud_provider.access_key_id(),
+                aws_secret_access_key: cloud_provider.secret_access_key(),
                 vpc_qovery_network_mode: options.vpc_qovery_network_mode.clone(),
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
                 ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
-                managed_domain: kubernetes.dns_provider().domain().clone(),
-                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
-                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_domain: dns_provider.domain().clone(),
+                managed_dns_name: dns_provider.domain().to_string(),
+                managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: terraform_list_format(
-                    kubernetes
-                        .dns_provider()
-                        .resolvers()
-                        .iter()
-                        .map(|x| x.clone().to_string())
-                        .collect(),
+                    dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect(),
                 ),
-                managed_dns_root_domain_helm_format: kubernetes
-                    .dns_provider()
-                    .domain()
-                    .root_domain()
-                    .to_helm_format_string(),
-                external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
+                managed_dns_root_domain_helm_format: dns_provider.domain().root_domain().to_helm_format_string(),
+                external_dns_provider: dns_provider.provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
                     kubernetes.context().is_test_cluster(),
                 ),
-                dns_provider_config: kubernetes.dns_provider().provider_configuration(),
+                dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
+                disk_size_in_gib,
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
                 &charts_prerequisites,
-                Some(&temp_dir),
+                Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
                 kubernetes.customer_helm_charts_override(),
-                kubernetes.dns_provider().domain(),
+                dns_provider.domain(),
             )
             .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
         Kind::Ec2 => {
             let charts_prerequisites = Ec2ChartsConfigPrerequisites {
-                organization_id: kubernetes.cloud_provider().organization_id().to_string(),
-                organization_long_id: kubernetes.cloud_provider().organization_long_id(),
+                organization_id: cloud_provider.organization_id().to_string(),
+                organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
@@ -1324,40 +1352,31 @@ fn create(
                 cpu_architectures: cpu_architectures[0],
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),
-                aws_access_key_id: kubernetes.cloud_provider().access_key_id(),
-                aws_secret_access_key: kubernetes.cloud_provider().secret_access_key(),
+                aws_access_key_id: cloud_provider.access_key_id(),
+                aws_secret_access_key: cloud_provider.secret_access_key(),
                 vpc_qovery_network_mode: options.vpc_qovery_network_mode.clone(),
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-                managed_domain: kubernetes.dns_provider().domain().clone(),
-                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
-                managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
-                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_domain: dns_provider.domain().clone(),
+                managed_dns_name: dns_provider.domain().to_string(),
+                managed_dns_name_wildcarded: dns_provider.domain().wildcarded().to_string(),
+                managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: terraform_list_format(
-                    kubernetes
-                        .dns_provider()
-                        .resolvers()
-                        .iter()
-                        .map(|x| x.clone().to_string())
-                        .collect(),
+                    dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect(),
                 ),
-                managed_dns_root_domain_helm_format: kubernetes
-                    .dns_provider()
-                    .domain()
-                    .root_domain()
-                    .to_helm_format_string(),
-                external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
+                managed_dns_root_domain_helm_format: dns_provider.domain().root_domain().to_helm_format_string(),
+                external_dns_provider: dns_provider.provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
                     kubernetes.context().is_test_cluster(),
                 ),
-                dns_provider_config: kubernetes.dns_provider().provider_configuration(),
+                dns_provider_config: dns_provider.provider_configuration(),
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
                 &charts_prerequisites,
-                Some(&temp_dir),
+                Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
                 &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
@@ -1376,7 +1395,7 @@ fn create(
     };
 
     if kubernetes.kind() == Kind::Ec2 {
-        let kube_client = &kubernetes.kube_client()?;
+        let kube_client = &kubernetes.kube_client(cloud_provider)?;
         let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
             match deploy_charts_levels(
                 kube_client,
@@ -1408,8 +1427,8 @@ fn create(
         }
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
-        return deploy_charts_levels(
-            &kubernetes.kube_client()?,
+        deploy_charts_levels(
+            &kubernetes.kube_client(cloud_provider)?,
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1419,14 +1438,133 @@ fn create(
             helm_charts_to_deploy,
             kubernetes.context().is_dry_run_deploy(),
         )
-        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)));
+        .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
+
+        if kubernetes.advanced_settings().aws_enable_karpenter {
+            let has_node_group_running = node_groups.iter().any(|ng| {
+                matches!(
+                    node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
+                    Ok(Some(_v))
+                )
+            });
+
+            // after Karpenter is deployed, we can remove the node groups
+            // after Karpenter is deployed, we can remove fargate profile for add-ons
+            if has_node_group_running || kubernetes.context().is_first_cluster_deployment() {
+                terraform_apply(KubernetesClusterAction::CleanKarpenterMigration)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
-fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
+fn bootstrap_on_fargate_when_karpenter_is_enabled(
+    kubernetes: &dyn Kubernetes,
+    kubernetes_action: KubernetesClusterAction,
+) -> bool {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap => true,
+        KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
+        KubernetesClusterAction::Update(_) => false,
+        KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => false,
+    }
+}
+
+fn node_groups_when_karpenter_is_enabled<'a>(
+    kubernetes: &dyn Kubernetes,
+    node_groups: &'a [NodeGroups],
+    event_details: &EventDetails,
+    kubernetes_action: KubernetesClusterAction,
+    cloud_provider: &dyn CloudProvider,
+) -> &'a [NodeGroups] {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap
+        | KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => &[],
+        KubernetesClusterAction::Update(_)
+            if karpenter_is_deployed(kubernetes, cloud_provider, event_details)
+                || kubernetes.context().is_first_cluster_deployment() =>
+        {
+            &[]
+        }
+        KubernetesClusterAction::Update(_) => node_groups,
+    }
+}
+
+fn karpenter_is_deployed(
+    kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    event_details: &EventDetails,
+) -> bool {
+    match kubernetes.q_kube_client(cloud_provider) {
+        Ok(kube_client) => {
+            let deployments = block_on(kube_client.get_deployments(
+                event_details.clone(),
+                Some(&HelmChartNamespaces::KubeSystem.to_string()),
+                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+            ))
+            .unwrap_or(Vec::with_capacity(0));
+
+            !deployments.is_empty()
+        }
+        _ => false,
+    }
+}
+
+fn karpenter_pods_is_running(
+    kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    event_details: &EventDetails,
+) -> bool {
+    match kubernetes.q_kube_client(cloud_provider) {
+        Ok(kube_client) => {
+            let nodes = block_on(kube_client.get_pods(
+                event_details.clone(),
+                Some(&HelmChartNamespaces::KubeSystem.to_string()),
+                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+            ))
+            .unwrap_or(Vec::with_capacity(0));
+
+            !nodes.is_empty()
+        }
+        _ => false,
+    }
+}
+
+fn node_group_is_running(
+    kubernetes: &dyn Kubernetes,
+    event_details: &EventDetails,
+    node_group: &NodeGroups,
+    eks_client: Option<EksClient>,
+) -> Result<Option<i32>, Box<EngineError>> {
+    let client = match eks_client {
+        Some(client) => client,
+        None => return Ok(None),
+    };
+
+    let current_nodes =
+        get_nodegroup_autoscaling_config_from_aws(event_details.clone(), kubernetes, node_group.clone(), client)?;
+    match current_nodes {
+        Some(config) => match config.desired_size {
+            Some(n) => Ok(Some(n as i32)),
+            None => Ok(None),
+        },
+        None => Ok(None),
+    }
+}
+
+fn create_error(kubernetes: &dyn Kubernetes, cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
     let kubeconfig_path = kubernetes.get_kubeconfig_file()?;
-    let environment_variables = kubernetes.cloud_provider().credentials_environment_variables();
+    let environment_variables = cloud_provider.credentials_environment_variables();
 
     kubernetes.logger().log(EngineEvent::Warning(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
@@ -1449,17 +1587,10 @@ fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
     Ok(())
 }
 
-fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
-        EventMessage::new_from_safe(format!("{}.upgrade_error() called.", kubernetes.kind())),
-    ));
-
-    Ok(())
-}
-
 fn pause(
     kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    dns_provider: &dyn DnsProvider,
     template_directory: &str,
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
@@ -1472,9 +1603,9 @@ fn pause(
         EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
     ));
 
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let temp_dir = kubernetes.temp_dir();
 
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
         Ok(value) => Some(value),
         Err(_) => None,
     };
@@ -1489,7 +1620,7 @@ fn pause(
 
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.q_kube_client() {
+    if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1506,23 +1637,28 @@ fn pause(
     // generate terraform files and copy them into temp dir
     let mut context = tera_context(
         kubernetes,
+        cloud_provider,
+        dns_provider,
         aws_zones,
         &node_groups_with_desired_states,
         options,
         cluster_upgrade_timeout_in_min,
+        false,
     )?;
 
     // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
     let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
     context.insert("eks_worker_nodes", &worker_nodes);
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-    {
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        template_directory,
+        temp_dir.to_string_lossy().as_ref(),
+        context,
+    ) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
-            temp_dir,
+            temp_dir.to_string_lossy().to_string(),
             e,
         )));
     }
@@ -1530,7 +1666,7 @@ fn pause(
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap-{type}/common/charts directory.
     // this is due to the required dependencies of lib/aws/bootstrap-{type}/*.tf files
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
@@ -1543,11 +1679,8 @@ fn pause(
     // pause: only select terraform workers elements to pause to avoid applying on the whole config
     // this to avoid failures because of helm deployments on removing workers nodes
     let tf_workers_resources = match terraform_init_validate_state_list(
-        temp_dir.as_str(),
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
+        temp_dir.to_string_lossy().as_ref(),
+        cloud_provider.credentials_environment_variables().as_slice(),
     ) {
         Ok(x) => {
             let mut tf_workers_resources_name = Vec::new();
@@ -1565,7 +1698,7 @@ fn pause(
         }
     };
 
-    if tf_workers_resources.is_empty() {
+    if tf_workers_resources.is_empty() && !kubernetes.advanced_settings().aws_enable_karpenter {
         kubernetes.logger().log(EngineEvent::Warning(
             event_details,
             EventMessage::new_from_safe(
@@ -1575,7 +1708,7 @@ fn pause(
         return Ok(());
     }
 
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file()?;
 
     // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
     if options.qovery_engine_location == EngineLocation::ClientSide {
@@ -1585,7 +1718,7 @@ fn pause(
                 let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
                     return match kubectl_exec_api_custom_metrics(
                         &kubernetes_config_file_path,
-                        kubernetes.cloud_provider().credentials_environment_variables(),
+                        cloud_provider.credentials_environment_variables(),
                         "qovery",
                         None,
                         metric_name,
@@ -1636,13 +1769,21 @@ fn pause(
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
+    if kubernetes.advanced_settings().aws_enable_karpenter {
+        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+            block_on(Karpenter::pause(
+                kubernetes,
+                cloud_provider,
+                kube_client,
+                kubernetes.advanced_settings().aws_karpenter_max_node_drain_in_sec,
+            ))?;
+        }
+    }
+
     match terraform_apply_with_tf_workers_resources(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         tf_workers_resources,
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
+        cloud_provider.credentials_environment_variables().as_slice(),
     ) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
@@ -1667,6 +1808,8 @@ fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
 
 fn delete(
     kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    dns_provider: &dyn DnsProvider,
     template_directory: &str,
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
@@ -1680,16 +1823,16 @@ fn delete(
         EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
     ));
 
-    let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
+    let aws_conn = match cloud_provider.aws_sdk_client() {
         Some(x) => x,
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
     };
 
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+    let temp_dir = kubernetes.temp_dir();
+    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
-            let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+            let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
                 Ok(value) => Some(value),
                 Err(_) => None,
             };
@@ -1716,14 +1859,14 @@ fn delete(
                 CommandError::new_from_safe_message(
                     "please contact Qovery, deletion can't happen on something else than AWS clsuter type".to_string(),
                 ),
-            )))
+            )));
         }
     };
 
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.q_kube_client() {
+    if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1738,20 +1881,21 @@ fn delete(
     };
     let mut context = tera_context(
         kubernetes,
+        cloud_provider,
+        dns_provider,
         aws_zones,
         &node_groups_with_desired_states,
         options,
         cluster_upgrade_timeout_in_min,
+        false,
     )?;
     context.insert("is_deletion_step", &true);
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
-    {
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, context) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             template_directory.to_string(),
-            temp_dir,
+            temp_dir.to_string_lossy().to_string(),
             e,
         )));
     }
@@ -1759,7 +1903,7 @@ fn delete(
     // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
     // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
@@ -1787,12 +1931,9 @@ fn delete(
     ));
 
     if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         false,
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
+        cloud_provider.credentials_environment_variables().as_slice(),
     ) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Warning(
@@ -1804,13 +1945,13 @@ fn delete(
         ));
     };
 
-    // // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
     if kubernetes.kind() != Kind::Ec2 {
-        let _ = kubernetes.delete_kubeconfig_from_object_storage();
+        let _ = delete_kubeconfig_from_object_storage(kubernetes);
     };
 
     let kubernetes_config_file_path = match kubernetes.kind() {
-        Kind::Eks => match kubernetes.get_kubeconfig_file_path() {
+        Kind::Eks => match kubernetes.get_kubeconfig_file() {
             Ok(x) => x,
             Err(e) => {
                 let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
@@ -1836,9 +1977,9 @@ fn delete(
                 Err(_) => None,
             };
             let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-                kubernetes.cloud_provider().access_key_id(),
+                cloud_provider.access_key_id(),
                 kubernetes.region().to_string(),
-                kubernetes.cloud_provider().secret_access_key(),
+                cloud_provider.secret_access_key(),
                 None,
                 None,
                 kubernetes.kind(),
@@ -1846,7 +1987,7 @@ fn delete(
                 kubernetes.long_id().to_string(),
                 options.grafana_admin_user.clone(),
                 options.grafana_admin_password.clone(),
-                kubernetes.cloud_provider().organization_id().to_string(),
+                cloud_provider.organization_id().to_string(),
                 kubernetes.context().is_test_cluster(),
             ));
             if let Some(vault) = vault_conn {
@@ -1864,7 +2005,7 @@ fn delete(
                             path: qovery_terraform_config_file,
                             raw_message: e,
                         },
-                    )))
+                    )));
                 }
             };
 
@@ -1951,7 +2092,7 @@ fn delete(
 
         let all_namespaces = kubectl_exec_get_all_namespaces(
             &kubernetes_config_file_path,
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            cloud_provider.credentials_environment_variables(),
         );
 
         match all_namespaces {
@@ -1968,7 +2109,7 @@ fn delete(
                     match cmd::kubectl::kubectl_exec_delete_namespace(
                         &kubernetes_config_file_path,
                         namespace_to_delete,
-                        kubernetes.cloud_provider().credentials_environment_variables(),
+                        cloud_provider.credentials_environment_variables(),
                     ) {
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
@@ -2014,7 +2155,7 @@ fn delete(
         // delete custom metrics api to avoid stale namespaces on deletion
         let helm = Helm::new(
             &kubernetes_config_file_path,
-            &kubernetes.cloud_provider().credentials_environment_variables(),
+            &cloud_provider.credentials_environment_variables(),
         )
         .map_err(|e| to_engine_error(&event_details, e))?;
         let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
@@ -2029,7 +2170,7 @@ fn delete(
         // required to avoid namespace stuck on deletion
         if let Err(e) = uninstall_cert_manager(
             &kubernetes_config_file_path,
-            kubernetes.cloud_provider().credentials_environment_variables(),
+            cloud_provider.credentials_environment_variables(),
             event_details.clone(),
             kubernetes.logger(),
         ) {
@@ -2078,7 +2219,7 @@ fn delete(
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path,
                 qovery_namespace,
-                kubernetes.cloud_provider().credentials_environment_variables(),
+                cloud_provider.credentials_environment_variables(),
             );
             match deletion {
                 Ok(_) => kubernetes.logger().log(EngineEvent::Info(
@@ -2156,7 +2297,7 @@ fn delete(
 
         for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
             match cmd::terraform::terraform_remove_resource_from_tf_state(
-                temp_dir.as_str(),
+                temp_dir.to_string_lossy().as_ref(),
                 resource_to_be_removed_from_tf_state.0,
             ) {
                 Ok(_) => {
@@ -2189,19 +2330,16 @@ fn delete(
     ));
 
     if kubernetes.kind() == Kind::Ec2 {
-        match kubernetes.cloud_provider().aws_sdk_client() {
+        match cloud_provider.aws_sdk_client() {
             None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
             Some(client) => block_on(client.detach_ec2_volumes(kubernetes.id(), &event_details))?,
         };
     }
 
     if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
-        temp_dir.as_str(),
+        temp_dir.to_string_lossy().as_ref(),
         false,
-        kubernetes
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
+        cloud_provider.credentials_environment_variables().as_slice(),
     ) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
     }
@@ -2268,6 +2406,29 @@ async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Res
     daemon_set
         .patch("kube-proxy", &patch_params, &Patch::Strategic(daemonset_patch))
         .await
+}
+
+fn put_kubeconfig_file_to_object_storage(kube: &dyn Kubernetes, file_path: &Path) -> Result<(), Box<EngineError>> {
+    if let Err(e) = kube.config_file_store().put_object(
+        kube.get_bucket_name().as_str(),
+        kube.get_kubeconfig_filename().as_str(),
+        file_path,
+    ) {
+        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+    };
+    Ok(())
+}
+
+fn delete_kubeconfig_from_object_storage(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
+    if let Err(e) = kube
+        .config_file_store()
+        .delete_object(kube.get_bucket_name().as_str(), kube.get_kubeconfig_filename().as_str())
+    {
+        let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
+    };
+    Ok(())
 }
 
 #[cfg(test)]

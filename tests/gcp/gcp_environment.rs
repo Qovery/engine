@@ -46,7 +46,7 @@ fn gcp_test_build_phase() {
         let (env, ret) = environment.build_environment(&env_action, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        // Check the the image exist in the registry
+        // Check the image exist in the registry
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);

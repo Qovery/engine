@@ -202,7 +202,6 @@ impl ScalewayCR {
                 let created_repository_id = res.id.unwrap_or_default();
                 Ok(Repository {
                     registry_id: created_repository_id.to_string(),
-                    id: created_repository_id.to_string(),
                     name: res.name.unwrap_or_default(),
                     uri: res.endpoint,
                     ttl: None,
@@ -325,7 +324,6 @@ impl ContainerRegistry for ScalewayCR {
                 let repository_id = registry.id.unwrap_or_default();
                 return Ok(Repository {
                     registry_id: repository_id.to_string(),
-                    id: repository_id.to_string(),
                     name: registry.name.unwrap_or_default(),
                     uri: registry.endpoint,
                     ttl: None,

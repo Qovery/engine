@@ -104,7 +104,6 @@ impl<T: CloudProvider> HelmChart<T> {
 
         let event_details = mk_event_details(Transmitter::Helm(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
-        let workspace_directory = PathBuf::from(workspace_directory);
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),

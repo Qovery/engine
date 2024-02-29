@@ -229,7 +229,7 @@ impl EnvironmentTask {
         env_logger: impl Fn(String),
         should_abort: &(dyn Fn() -> bool + Send + Sync),
         build_needs_builpacks: bool,
-        services: &Vec<&mut dyn Service>,
+        services: &[&mut dyn Service],
         first_service: &&mut dyn Service,
     ) -> Result<BuilderHandle, Box<EngineError>> {
         let builder_handle = {

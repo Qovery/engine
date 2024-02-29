@@ -75,4 +75,13 @@ data "aws_subnet" "documentdb_zone_c" {
 #  route_table_id = aws_route_table.eks_cluster.id
 #}
 
+
+resource "aws_docdb_subnet_group" "documentdb" {
+  description = "DocumentDB linked to ${var.kubernetes_cluster_id}"
+  name = "documentdb-${data.aws_vpc.eks.id}"
+  subnet_ids = flatten([data.aws_subnet.documentdb_zone_a.*.id, data.aws_subnet.documentdb_zone_b.*.id, data.aws_subnet.documentdb_zone_c.*.id])
+
+  tags = local.tags_documentdb
+}
+
 {%- endif -%}

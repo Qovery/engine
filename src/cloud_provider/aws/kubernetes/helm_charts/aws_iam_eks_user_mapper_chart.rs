@@ -1,4 +1,3 @@
-use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -6,7 +5,6 @@ use crate::cloud_provider::helm_charts::{
 };
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::errors::CommandError;
-use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
 use chrono::Duration;
 use itertools::Itertools;
@@ -31,14 +29,22 @@ pub enum SSOConfig {
     Enabled { sso_role_arn: String },
 }
 
+pub enum KarpenterConfig {
+    Disabled,
+    Enabled {
+        aws_account_id: String,
+        cluster_name: String,
+    },
+}
+
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
-    aws_region: AwsRegion,
     aws_service_account_name: String,
     aws_iam_eks_user_mapper_role_arn: String,
     aws_iam_group_config: GroupConfig,
     aws_iam_sso_config: SSOConfig,
+    aws_iam_enable_karpenter: KarpenterConfig,
     refresh_interval: Duration,
     chart_resources: HelmChartResources,
 }
@@ -46,16 +52,15 @@ pub struct AwsIamEksUserMapperChart {
 impl AwsIamEksUserMapperChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
-        aws_region: AwsRegion,
         aws_service_account_name: String,
         aws_iam_eks_user_mapper_role_arn: String,
         aws_iam_group_config: GroupConfig,
         aws_iam_sso_config: SSOConfig,
+        aws_iam_enable_karpenter: KarpenterConfig,
         refresh_interval: Duration,
         chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
         AwsIamEksUserMapperChart {
-            aws_region,
             aws_service_account_name,
             aws_iam_eks_user_mapper_role_arn,
             aws_iam_group_config,
@@ -71,6 +76,7 @@ impl AwsIamEksUserMapperChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsIamEksUserMapperChart::chart_name(),
             ),
+            aws_iam_enable_karpenter,
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
@@ -96,14 +102,6 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
-                    ChartSetValue {
-                        key: "aws.defaultRegion".to_string(),
-                        value: self.aws_region.to_cloud_provider_format().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "aws.roleArn".to_string(),
-                        value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
-                    },
                     ChartSetValue {
                         // we use string templating (r"...") to escape dot in annotation's key
                         key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
@@ -164,6 +162,33 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                 chart.chart_info.values.push(ChartSetValue {
                     key: "groupUsersSync.iamK8sGroups".to_string(),
                     value: "".to_string(),
+                });
+            }
+        }
+
+        // Enabling Karpenter
+        match &self.aws_iam_enable_karpenter {
+            KarpenterConfig::Disabled => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "karpenter.enabled".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+            KarpenterConfig::Enabled {
+                aws_account_id,
+                cluster_name,
+            } => {
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "karpenter.enabled".to_string(),
+                    value: "true".to_string(),
+                });
+                chart.chart_info.values.push(ChartSetValue {
+                    key: "karpenter.iamKarpenterRoleArn".to_string(),
+                    value: format!(
+                        "arn:aws:iam::{}:role/KarpenterNodeRole-{}",
+                        aws_account_id.clone(),
+                        cluster_name.clone()
+                    ),
                 });
             }
         }
@@ -267,9 +292,8 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::{
-        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
+        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
     };
-    use crate::cloud_provider::aws::regions::AwsRegion;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
@@ -284,7 +308,6 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
-            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -296,6 +319,7 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
+            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -326,7 +350,6 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
-            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -338,6 +361,7 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
+            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -369,7 +393,6 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
-            AwsRegion::EuWest3,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -381,6 +404,7 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
+            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );

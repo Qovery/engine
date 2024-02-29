@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use base64::engine::general_purpose;
@@ -7,11 +8,14 @@ use base64::Engine;
 use uuid::Uuid;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{self, Kubernetes, KubernetesVersion};
+use crate::cloud_provider::kubernetes::{
+    self, create_kubeconfig_from_kubernetes_connection, Kubernetes, KubernetesVersion,
+};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError};
+use crate::events::InfrastructureStep;
+use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
@@ -27,13 +31,13 @@ pub struct SelfManaged {
     version: KubernetesVersion,
     cloud_provider: Arc<dyn CloudProvider>,
     region: String,
-    dns_provider: Arc<dyn DnsProvider>,
     #[allow(dead_code)] //TODO(pmavro): not yet implemented
     options: SelfManagedOptions,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl SelfManaged {
@@ -44,14 +48,14 @@ impl SelfManaged {
         name: String,
         version: KubernetesVersion,
         cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
         options: SelfManagedOptions,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<SelfManaged, Box<EngineError>> {
-        let self_managed = SelfManaged {
+        let cluster = SelfManaged {
             context,
             id,
             long_id,
@@ -59,16 +63,23 @@ impl SelfManaged {
             version,
             cloud_provider: cloud_provider.clone(),
             region: cloud_provider.region(),
-            dns_provider,
             options,
             logger,
             metrics_registry,
             advanced_settings,
             kubeconfig,
+            temp_dir,
         };
-        // create kubeconfig file so it can be used later
-        self_managed.create_kubeconfig_from_kubernetes_connection()?;
-        Ok(self_managed)
+
+        if let Some(kubeconfig) = &cluster.kubeconfig {
+            create_kubeconfig_from_kubernetes_connection(
+                &cluster.kubeconfig_local_file_path(),
+                kubeconfig,
+                cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+            )?;
+        }
+
+        Ok(cluster)
     }
 }
 
@@ -115,14 +126,6 @@ impl Kubernetes for SelfManaged {
         None
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -143,12 +146,12 @@ impl Kubernetes for SelfManaged {
         true
     }
 
-    fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
-        vec![]
-    }
-
     fn is_self_managed(&self) -> bool {
         true
+    }
+
+    fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
+        vec![]
     }
 
     fn on_create(&self) -> Result<(), Box<EngineError>> {
@@ -166,14 +169,6 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn on_pause(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
@@ -188,6 +183,10 @@ impl Kubernetes for SelfManaged {
 
     fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
         Ok(())
+    }
+
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     fn update_vault_config(
@@ -227,7 +226,7 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn advanced_settings(&self) -> &crate::cloud_provider::io::ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 
@@ -240,9 +239,5 @@ impl Kubernetes for SelfManaged {
         >,
     > {
         None
-    }
-
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        self.kubeconfig.clone()
     }
 }

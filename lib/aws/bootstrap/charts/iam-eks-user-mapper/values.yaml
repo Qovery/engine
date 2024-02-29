@@ -16,10 +16,6 @@ karpenter:
   enabled: false
   iamKarpenterRoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/[ROLE_NAME]"
 
-aws:
-  defaultRegion: ""
-  roleArn: ""
-
 labels:
   app: iam-eks-user-mapper
 selectorLabels:

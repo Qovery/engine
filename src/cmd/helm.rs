@@ -251,16 +251,11 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(
-            &args,
-            &self.get_all_envs(envs),
-            stdout_output,
-            &mut |line| {
-                stderr.push_str(&line);
-                stderr_output(line)
-            },
-            cmd_killer,
-        ) {
+        let mut stderr_output = |line: String| {
+            stderr.push_str(&line);
+            stderr_output(line)
+        };
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), stdout_output, &mut stderr_output, cmd_killer) {
             Err(err) => {
                 stderr.push_str(&err.to_string());
                 Err(CmdError(chart.name.clone(), UNINSTALL, err.into()))

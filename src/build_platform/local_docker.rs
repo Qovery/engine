@@ -29,7 +29,7 @@ use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
 const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/builder-classic:22",
+    "heroku/builder:22",
     // removed because it does not support dynamic port binding
     //"gcr.io/buildpacks/builder:v1",
     //"paketobuildpacks/builder:base",
@@ -259,14 +259,19 @@ impl LocalDocker {
         ));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
-            let mut buildpacks_args = if !use_build_cache {
-                vec!["build", "--publish", name_with_tag.as_str(), "--clear-cache"]
-            } else {
-                vec!["build", "--publish", name_with_tag.as_str()]
-            };
-
             // always add 'latest' tag
-            buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
+            let mut buildpacks_args = vec![
+                "build",
+                name_with_latest_tag.as_str(),
+                "--publish",
+                "--tag",
+                name_with_tag.as_str(),
+            ];
+
+            if !use_build_cache {
+                buildpacks_args.push("--clear-cache");
+            }
+
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
             let mut args_buffer = Vec::with_capacity(build.environment_variables.len());
@@ -315,6 +320,16 @@ impl LocalDocker {
                 }
             }
 
+            // connect to docker registry
+            // buildpacks doesn't reuse the docker config file, so we need a plain docker login (don't store credentials inside file)
+            self.context
+                .docker
+                .login_without_config_file(&build.image.registry_url)
+                .map_err(move |err| BuildError::DockerError {
+                    application: build.image.service_id.clone(),
+                    raw_error: err,
+                })?;
+
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
             cmd.set_kill_grace_period(Duration::from_secs(0));
@@ -343,7 +358,7 @@ impl LocalDocker {
         }
     }
 
-    fn get_repository_build_root_path(&self, build: &Build) -> Result<String, BuildError> {
+    fn get_repository_build_root_path(&self, build: &Build) -> Result<PathBuf, BuildError> {
         workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
@@ -389,7 +404,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         // LOGGING
-        let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
+        let repository_root_path = self.get_repository_build_root_path(build)?;
         logger.send_progress(format!("📥 Cloning repository {}", build.git_repository.url));
 
         // Retrieve git credentials

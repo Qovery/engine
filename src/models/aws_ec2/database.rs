@@ -262,7 +262,7 @@ where
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        let kube_config_file_path = kubernetes.get_kubeconfig_file()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
         context.insert("namespace", environment.namespace());
 
@@ -300,7 +300,7 @@ where
             context.insert("database_elasticache_instances_number", &1);
         }
 
-        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+        for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
         }
 

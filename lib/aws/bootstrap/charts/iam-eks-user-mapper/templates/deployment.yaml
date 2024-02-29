@@ -30,14 +30,6 @@ spec:
           env:
             - name: "REFRESH_INTERVAL_SECONDS"
               value: "{{ .Values.refreshIntervalSeconds }}"
-            - name: "AWS_STS_REGIONAL_ENDPOINTS"
-              value: "regional"
-            - name: "AWS_REGION"
-              value: "{{ .Values.aws.defaultRegion }}"
-            - name: "AWS_DEFAULT_REGION"
-              value: "{{ .Values.aws.defaultRegion }}"
-            - name: "AWS_ROLE_ARN"
-              value: "{{ .Values.aws.roleArn }}"
             - name: "SERVICE_ACCOUNT_NAME"
               value: "{{ .Values.serviceAccount.name }}"
             - name: "ENABLE_GROUP_USER_SYNC"
@@ -46,8 +38,10 @@ spec:
               value: "{{ .Values.groupUsersSync.iamK8sGroups }}"
             - name: "ENABLE_SSO"
               value: "{{ .Values.sso.enabled }}"
+            {{ if .Values.sso.enabled }}
             - name: "IAM_SSO_ROLE_ARN"
               value: "{{ .Values.sso.iamSSORoleArn }}"
+            {{ end }}
             {{ if .Values.karpenter.enabled }}
             - name: "KARPENTER_ROLE_ARN"
               value: "{{ .Values.karpenter.iamKarpenterRoleArn }}"

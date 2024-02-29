@@ -263,12 +263,13 @@ impl Docker {
             "--name",
             "qovery-engine",
             "--buildkitd-flags",
-            "'--debug'",
+            "--debug --allow-insecure-entitlement security.insecure",
             "--driver-opt",
             "network=host",
             "--bootstrap",
             "--use",
         ];
+        println!("{:?}", args);
         let _ = docker_exec(
             &args,
             &docker.get_all_envs(&[]),
@@ -372,7 +373,8 @@ impl Docker {
                         &platform,
                         "--node",
                         node_name,
-                        "--buildkitd-flags=\"--debug\"",
+                        "--buildkitd-flags",
+                        "--debug --allow-insecure-entitlement security.insecure",
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
@@ -450,6 +452,43 @@ impl Docker {
         })?;
 
         self.login(registry)
+    }
+
+    // TODO(benjaminch): to be removed once buildpacks will be removed from the product
+    pub fn login_without_config_file(&self, registry: &Url) -> Result<(), DockerError> {
+        let username = match urlencoding::decode(registry.username()) {
+            Ok(decoded_username) => decoded_username,
+            Err(err) => {
+                return Err(DockerError::InvalidConfig {
+                    raw_error_message: format!("Cannot decode username due to: {}", err),
+                })
+            }
+        };
+        info!("Docker login {} as user {}", registry, username);
+
+        let password = registry
+            .password()
+            .and_then(|password| urlencoding::decode(password).ok())
+            .unwrap_or_default();
+        let args = vec![
+            "login",
+            registry.host_str().unwrap_or_default(),
+            "-u",
+            &username,
+            "-p",
+            &password,
+        ];
+
+        let _lock = LOGIN_LOCK.lock().unwrap();
+        docker_exec(
+            &args,
+            &self.get_all_envs(&[]),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
+        )?;
+
+        Ok(())
     }
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
@@ -636,6 +675,7 @@ impl Docker {
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
+            //"--allow=security.insecure".to_string(),
             "--cache-from".to_string(),
             format!("type=registry,ref={}", cache.image_name()),
             // Disabled for now, because private ECR does not support it ...

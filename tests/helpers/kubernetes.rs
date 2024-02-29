@@ -23,12 +23,14 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
+use qovery_engine::fs::workspace_directory;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
+
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -62,9 +64,16 @@ pub fn get_cluster_test_kubernetes<'a>(
     max_nodes: i32,
     cpu_archi: CpuArchitecture,
 ) -> Box<dyn Kubernetes + 'a> {
+    let temp_dir = workspace_directory(
+        context.workspace_root_dir(),
+        context.execution_id(),
+        format!("bootstrap/{}", cluster_id),
+    )
+    .unwrap();
+
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
         KubernetesKind::Eks => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
@@ -91,12 +100,14 @@ pub fn get_cluster_test_kubernetes<'a>(
                         ..Default::default()
                     },
                     None,
+                    secrets.AWS_TEST_KUBECONFIG,
+                    temp_dir,
                 )
                 .unwrap(),
             )
         }
         KubernetesKind::Ec2 => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
@@ -123,6 +134,8 @@ pub fn get_cluster_test_kubernetes<'a>(
                         ..Default::default()
                     },
                     None,
+                    secrets.AWS_EC2_KUBECONFIG,
+                    temp_dir,
                 )
                 .unwrap(),
             )
@@ -137,7 +150,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 cloud_provider,
                 dns_provider,
                 Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
+                Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
                 logger,
                 metrics_registry,
                 ClusterAdvancedSettings {
@@ -145,6 +158,8 @@ pub fn get_cluster_test_kubernetes<'a>(
                     ..Default::default()
                 },
                 None,
+                secrets.SCALEWAY_TEST_KUBECONFIG,
+                temp_dir,
             )
             .unwrap(),
         ),
@@ -158,7 +173,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 GcpRegion::from_str(localisation).expect("Unknown zone set for GKE"),
                 cloud_provider,
                 dns_provider,
-                Gke::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide),
+                Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide),
                 logger,
                 metrics_registry,
                 ClusterAdvancedSettings {
@@ -166,6 +181,8 @@ pub fn get_cluster_test_kubernetes<'a>(
                     ..Default::default()
                 },
                 None,
+                secrets.GCP_TEST_KUBECONFIG,
+                temp_dir,
             )
             .unwrap(),
         ),
@@ -475,10 +492,17 @@ pub fn get_environment_test_kubernetes(
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
+    let temp_dir = workspace_directory(
+        context.workspace_root_dir(),
+        context.execution_id(),
+        format!("bootstrap/{}", context.cluster_short_id()),
+    )
+    .unwrap();
+
     let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, engine_location);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -505,13 +529,15 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
+                    secrets.AWS_TEST_KUBECONFIG,
+                    temp_dir,
                 )
                 .unwrap(),
             )
         }
         KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -537,6 +563,8 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
+                    secrets.AWS_EC2_KUBECONFIG,
+                    temp_dir,
                 )
                 .expect("Cannot instantiate AWS EKS"),
             )
@@ -553,7 +581,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                    Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
+                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
@@ -561,6 +589,8 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
+                    secrets.SCALEWAY_TEST_KUBECONFIG,
+                    temp_dir,
                 )
                 .expect("Cannot instantiate SCW Kapsule"),
             )
@@ -577,7 +607,7 @@ pub fn get_environment_test_kubernetes(
                     region,
                     cloud_provider,
                     dns_provider,
-                    Gke::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
+                    Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
@@ -585,6 +615,8 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
+                    secrets.GCP_TEST_KUBECONFIG,
+                    temp_dir,
                 )
                 .expect("Cannot instantiate GKE"),
             )

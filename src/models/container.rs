@@ -1,5 +1,6 @@
 use crate::build_platform::Build;
 use crate::cloud_provider::io::RegistryMirroringMode;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
 };
@@ -16,6 +17,7 @@ use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
@@ -24,6 +26,7 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -59,7 +62,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) liveness_probe: Option<Probe>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
-    pub(super) workspace_directory: String,
+    pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
 }
 
@@ -219,20 +222,22 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
-        let environment = &target.environment;
-        let kubernetes = &target.kubernetes;
+        let environment = target.environment;
+        let kubernetes = target.kubernetes;
+        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+            &self.advanced_settings.deployment_affinity_node_required,
+            &target.kubernetes.cpu_architectures(),
+        );
+        let mut advanced_settings = self.advanced_settings.clone();
+        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+
         let registry_info = target.container_registry.registry_info();
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
-            cluster: ClusterTeraContext {
-                long_id: *kubernetes.long_id(),
-                name: kubernetes.name().to_string(),
-                region: kubernetes.region().to_string(),
-                zone: kubernetes.default_zone().to_string(),
-            },
+            cluster: ClusterTeraContext::from(kubernetes),
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
@@ -244,7 +249,7 @@ impl<T: CloudProvider> Container<T> {
                 image_full: format!(
                     "{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(&get_mirror_repository_name(
+                    registry_info.get_image_name(&get_mirror_repository_name(
                         self.long_id(),
                         kubernetes.long_id(),
                         &kubernetes.advanced_settings().registry_mirroring_mode,
@@ -277,7 +282,7 @@ impl<T: CloudProvider> Container<T> {
                 storages: vec![],
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
-                advanced_settings: self.advanced_settings.clone(),
+                advanced_settings,
                 legacy_deployment_matchlabels: false,
                 legacy_volumeclaim_template: false,
                 legacy_deployment_from_scaleway: false,
@@ -331,7 +336,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn workspace_directory(&self) -> &str {
-        &self.workspace_directory
+        self.workspace_directory.to_str().unwrap_or("")
     }
 
     fn service_version(&self) -> String {
@@ -469,6 +474,17 @@ pub(super) struct ClusterTeraContext {
     pub(super) name: String,
     pub(super) region: String,
     pub(super) zone: String,
+}
+
+impl From<&dyn Kubernetes> for ClusterTeraContext {
+    fn from(k: &dyn Kubernetes) -> Self {
+        Self {
+            long_id: *k.long_id(),
+            name: k.name().to_string(),
+            region: k.region().to_string(),
+            zone: k.default_zone().unwrap_or("").to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Debug, Clone)]

@@ -5,8 +5,8 @@ use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
+    create_kubeconfig_from_kubernetes_connection, is_kubernetes_upgrade_required, send_progress_on_long_task,
+    uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -55,7 +55,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, fs};
@@ -173,6 +173,8 @@ pub struct Gke {
     metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    kubeconfig: Option<String>,
+    temp_dir: PathBuf,
 }
 
 impl Gke {
@@ -190,6 +192,8 @@ impl Gke {
         metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        kubeconfig: Option<String>,
+        temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = EventDetails::new(
             Some(cloud_provider.kind()),
@@ -220,7 +224,7 @@ impl Gke {
                 )
                 .map_err(|e| {
                     Box::new(EngineError::new_object_storage_error(
-                        event_details,
+                        event_details.clone(),
                         ObjectStorageError::CannotInstantiateClient {
                             raw_error_message: e.to_string(),
                         },
@@ -229,7 +233,7 @@ impl Gke {
             ),
         );
 
-        Ok(Self {
+        let cluster = Self {
             context: context.clone(),
             id: id.to_string(),
             long_id,
@@ -245,7 +249,19 @@ impl Gke {
             metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
-        })
+            kubeconfig,
+            temp_dir,
+        };
+
+        if let Some(kubeconfig) = &cluster.kubeconfig {
+            create_kubeconfig_from_kubernetes_connection(
+                &cluster.kubeconfig_local_file_path(),
+                kubeconfig,
+                cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+            )?;
+        }
+
+        Ok(cluster)
     }
 
     fn kubeconfig_bucket_name(&self) -> String {
@@ -433,21 +449,21 @@ impl Gke {
         // AWS S3 tfstates storage
         context.insert(
             "aws_access_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.access_key_id.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.secret_access_key.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_region_tfstates_account",
-            match self.cloud_provider().terraform_state_credentials() {
+            match self.cloud_provider.terraform_state_credentials() {
                 Some(x) => x.region.as_str(),
                 None => "",
             },
@@ -463,7 +479,7 @@ impl Gke {
         let managed_dns_domains_root_terraform_format =
             terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
         let managed_dns_resolvers_terraform_format = terraform_list_format(
-            self.dns_provider()
+            self.dns_provider
                 .resolvers()
                 .iter()
                 .map(|x| x.clone().to_string())
@@ -484,7 +500,7 @@ impl Gke {
         );
 
         // add specific DNS fields
-        self.dns_provider().insert_into_teracontext(&mut context);
+        self.dns_provider.insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -574,21 +590,19 @@ impl Gke {
             };
         }
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
+        let temp_dir = self.temp_dir();
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -598,12 +612,12 @@ impl Gke {
             // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/gcp/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -651,9 +665,9 @@ impl Gke {
 
         // Terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
@@ -664,7 +678,7 @@ impl Gke {
             .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         // Push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put_object(
             self.kubeconfig_bucket_name().as_str(),
@@ -677,10 +691,10 @@ impl Gke {
         }
 
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create() {
+        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -708,7 +722,7 @@ impl Gke {
             Some(kubeconfig_b64),
             Some(qovery_terraform_config.gke_cluster_public_hostname),
             self.kind(),
-            self.cloud_provider().name().to_string(),
+            self.cloud_provider.name().to_string(),
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
@@ -754,7 +768,7 @@ impl Gke {
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             terraform_list_format(
-                self.dns_provider()
+                self.dns_provider
                     .resolvers()
                     .iter()
                     .map(|x| x.clone().to_string())
@@ -763,7 +777,7 @@ impl Gke {
             self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
-            self.dns_provider().provider_configuration(),
+            self.dns_provider.provider_configuration(),
             qovery_terraform_config.loki_logging_service_account_email,
             self.logs_bucket_name(),
             self.options.clone(),
@@ -771,9 +785,9 @@ impl Gke {
         );
 
         let helm_charts_to_deploy = helm_charts::gcp_helm_charts(
-            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+            format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
-            Some(&temp_dir),
+            Some(temp_dir.to_string_lossy().as_ref()),
             kubeconfig_path,
             &credentials_environment_variables,
             &*self.context.qovery_api,
@@ -783,7 +797,7 @@ impl Gke {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client()?,
+            &self.kube_client(self.cloud_provider.as_ref())?,
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -796,13 +810,13 @@ impl Gke {
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
-    fn configure_gcloud_for_cluster(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
+    fn configure_gcloud_for_cluster(&self) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
         // Get credentials file path
-        let temp_dir = self.get_temp_dir(event_details)?;
-        let gcp_credentials_file_path = format!("{}/gcp-credentials.json", &temp_dir);
+        let temp_dir = self.temp_dir();
+        let gcp_credentials_file_path = format!("{}/gcp-credentials.json", temp_dir.to_string_lossy());
 
         let _ = QoveryCommand::new(
             "gcloud",
@@ -868,20 +882,18 @@ impl Gke {
             EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -889,7 +901,7 @@ impl Gke {
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/gcp/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/gcp/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
         if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -916,9 +928,9 @@ impl Gke {
         ));
 
         if let Err(e) = terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
@@ -927,12 +939,12 @@ impl Gke {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = &self.get_kubeconfig_file()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
 
         if !skip_kubernetes_step {
             // Configure kubectl to be able to connect to cluster
-            let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+            let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
 
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -945,7 +957,7 @@ impl Gke {
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
             );
 
             match all_namespaces {
@@ -965,7 +977,7 @@ impl Gke {
                         match kubectl_exec_delete_namespace(
                             kubeconfig_path,
                             namespace_to_delete,
-                            self.cloud_provider().credentials_environment_variables(),
+                            self.cloud_provider.credentials_environment_variables(),
                         ) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
@@ -1015,7 +1027,7 @@ impl Gke {
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
                 kubeconfig_path,
-                self.cloud_provider().credentials_environment_variables(),
+                self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
@@ -1067,7 +1079,7 @@ impl Gke {
                 let deletion = kubectl_exec_delete_namespace(
                     kubeconfig_path,
                     qovery_namespace,
-                    self.cloud_provider().credentials_environment_variables(),
+                    self.cloud_provider.credentials_environment_variables(),
                 );
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
@@ -1129,9 +1141,9 @@ impl Gke {
         ));
 
         if let Err(err) = terraform_init_validate_destroy(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1188,10 +1200,8 @@ impl Gke {
     }
 
     fn pause(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
 
         // avoid clippy yelling about `get_engine_location` not used
         let _ = self.get_engine_location();
@@ -1286,14 +1296,6 @@ impl Kubernetes for Gke {
         None
     }
 
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.as_ref()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.as_ref()
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.as_ref()
     }
@@ -1357,8 +1359,7 @@ impl Kubernetes for Gke {
             event_details.clone(),
             EventMessage::new_from_safe("Start preparing GKE cluster upgrade process".to_string()),
         ));
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
+        let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
         context.insert(
@@ -1366,15 +1367,13 @@ impl Kubernetes for Gke {
             format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
         );
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
+        {
             return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
-                temp_dir,
+                temp_dir.to_string_lossy().to_string(),
                 e,
             )));
         }
@@ -1384,12 +1383,12 @@ impl Kubernetes for Gke {
             // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
             (
                 format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                format!("{}/common/charts", temp_dir.as_str()),
+                format!("{}/common/charts", temp_dir.to_string_lossy()),
             ),
             // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/gcp/bootstrap/common/chart_values directory.
             (
                 format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
-                format!("{}/common/chart_values", temp_dir.as_str()),
+                format!("{}/common/chart_values", temp_dir.to_string_lossy()),
             ),
         ];
         for (source_dir, target_dir) in dirs_to_be_copied_to {
@@ -1426,9 +1425,9 @@ impl Kubernetes for Gke {
             EventMessage::new_from_safe("Checking clusters content health".to_string()),
         ));
 
-        let _ = self.configure_gcloud_for_cluster(event_details.clone()); // TODO(benjaminch): properly handle this error
-                                                                          // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client()?;
+        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
+                                                     // disable all replicas with issues to avoid upgrade failures
+        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1501,7 +1500,7 @@ impl Kubernetes for Gke {
             None,
             None,
             Some(3),
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -1509,7 +1508,7 @@ impl Kubernetes for Gke {
         }
 
         if let Err(e) = self.delete_completed_jobs(
-            self.cloud_provider().credentials_environment_variables(),
+            self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             Some(GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES.to_vec()),
         ) {
@@ -1524,16 +1523,16 @@ impl Kubernetes for Gke {
                 return Err(Box::new(EngineError::new_cannot_determine_k8s_master_version(
                     event_details,
                     kubernetes_upgrade_status.requested_version.to_string(),
-                )))
+                )));
             }
         };
 
         match terraform_init_validate_plan_apply(
-            temp_dir.as_str(),
+            temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider().credentials_environment_variables().as_slice(),
+            self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
-            Ok(_) => match self.check_control_plane_on_upgrade(kubernetes_version) {
+            Ok(_) => match self.check_control_plane_on_upgrade(self.cloud_provider.as_ref(), kubernetes_version) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
                         event_details,
@@ -1556,14 +1555,6 @@ impl Kubernetes for Gke {
         }
 
         Ok(())
-    }
-
-    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(benjaminch): GKE integration
-    }
-
-    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(benjaminch): GKE integration
     }
 
     #[named]
@@ -1638,8 +1629,8 @@ impl Kubernetes for Gke {
         self.customer_helm_charts_override.clone()
     }
 
-    fn get_kubernetes_connection(&self) -> Option<String> {
-        None
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 }
 
