@@ -1082,6 +1082,10 @@ pub enum Tag {
     RouterBasicAuthEnvVarNotFound,
     /// CannotFetchScalewayPrivateNetworks: (only during migration VPC) We need to fetch the private networks to identify already existing clusters with no private network
     CannotFetchScalewayPrivateNetworks,
+    /// K8sCannotGetNodes: represents an error where we are not able to get nodes.
+    K8sCannotGetNodes,
+    /// K8sPatchNodeError: represents an error where we are not able to patch a node.
+    K8sPatchNodeError,
 }
 
 impl Tag {
@@ -4941,6 +4945,42 @@ impl EngineError {
                 Some("Make sure the environment variable set in `network.ingress.basic_auth_env_var` is set".to_string()),
             ),
         }
+    }
+
+    /// Creates new error for kubernetes not being able to get pods.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_get_nodes(event_details: EventDetails, raw_k8s_error: CommandError) -> EngineError {
+        let message = "Unable to get Kubernetes nodes.";
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotGetNodes,
+            message.to_string(),
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_patch_node_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sPatchNodeError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
     }
 }
 impl Display for EngineError {

@@ -25,7 +25,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -55,6 +55,7 @@ use crate::models::third_parties::LetsEncryptConfig;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
+use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
@@ -78,6 +79,7 @@ mod ec2_helm_charts;
 pub mod eks;
 pub mod eks_helm_charts;
 pub mod helm_charts;
+mod karpenter;
 pub mod node;
 
 static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: Lazy<ChronoDuration> = Lazy::new(|| ChronoDuration::hours(1));
@@ -1236,6 +1238,24 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
+    if kubernetes.advanced_settings().aws_enable_karpenter
+        && karpenter_is_deployed(kubernetes, cloud_provider, &event_details)
+        && !karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
+    {
+        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+
+            block_on(Karpenter::restart(
+                kubernetes,
+                cloud_provider,
+                kube_client,
+                kubernetes_long_id,
+                disk_size_in_gib,
+                &qovery_terraform_config_file,
+            ))?;
+        }
+    }
+
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
         kubernetes.logger().log(EngineEvent::Warning(
             event_details.clone(),
@@ -1470,12 +1490,32 @@ fn node_groups_when_karpenter_is_enabled<'a>(
         | KubernetesClusterAction::Delete
         | KubernetesClusterAction::CleanKarpenterMigration => &[],
         KubernetesClusterAction::Update(_)
-            if karpenter_pods_is_running(kubernetes, cloud_provider, event_details)
+            if karpenter_is_deployed(kubernetes, cloud_provider, event_details)
                 || kubernetes.context().is_first_cluster_deployment() =>
         {
             &[]
         }
         KubernetesClusterAction::Update(_) => node_groups,
+    }
+}
+
+fn karpenter_is_deployed(
+    kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    event_details: &EventDetails,
+) -> bool {
+    match kubernetes.q_kube_client(cloud_provider) {
+        Ok(kube_client) => {
+            let deployments = block_on(kube_client.get_deployments(
+                event_details.clone(),
+                Some(&HelmChartNamespaces::KubeSystem.to_string()),
+                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+            ))
+            .unwrap_or(Vec::with_capacity(0));
+
+            !deployments.is_empty()
+        }
+        _ => false,
     }
 }
 
@@ -1486,14 +1526,14 @@ fn karpenter_pods_is_running(
 ) -> bool {
     match kubernetes.q_kube_client(cloud_provider) {
         Ok(kube_client) => {
-            let pods_list = block_on(kube_client.get_pods(
+            let nodes = block_on(kube_client.get_pods(
                 event_details.clone(),
-                None,
+                Some(&HelmChartNamespaces::KubeSystem.to_string()),
                 SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
             ))
             .unwrap_or(Vec::with_capacity(0));
 
-            !pods_list.is_empty()
+            !nodes.is_empty()
         }
         _ => false,
     }
@@ -1658,7 +1698,7 @@ fn pause(
         }
     };
 
-    if tf_workers_resources.is_empty() {
+    if tf_workers_resources.is_empty() && !kubernetes.advanced_settings().aws_enable_karpenter {
         kubernetes.logger().log(EngineEvent::Warning(
             event_details,
             EventMessage::new_from_safe(
@@ -1728,6 +1768,17 @@ fn pause(
         event_details.clone(),
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
+
+    if kubernetes.advanced_settings().aws_enable_karpenter {
+        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+            block_on(Karpenter::pause(
+                kubernetes,
+                cloud_provider,
+                kube_client,
+                kubernetes.advanced_settings().aws_karpenter_max_node_drain_in_sec,
+            ))?;
+        }
+    }
 
     match terraform_apply_with_tf_workers_resources(
         temp_dir.to_string_lossy().as_ref(),

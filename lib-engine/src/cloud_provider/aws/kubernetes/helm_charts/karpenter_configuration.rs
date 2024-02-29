@@ -50,7 +50,7 @@ impl KarpenterConfigurationChart {
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "karpenter-configuration".to_string()
     }
 }
