@@ -95,12 +95,10 @@ impl DeploymentAction for HelmDeployment {
 
         let service_chart = ServiceChart::new(self.helm_chart.clone());
         let chart: Box<dyn HelmChart> = Box::new(service_chart);
-        let kubeconfig = target.kubernetes.get_kubeconfig_file()?;
-
         chart
             .run(
                 &target.kube,
-                &kubeconfig,
+                &target.kubernetes.kubeconfig_local_file_path(),
                 target.cloud_provider.credentials_environment_variables().as_slice(),
                 &CommandKiller::from_cancelable(target.should_abort),
             )

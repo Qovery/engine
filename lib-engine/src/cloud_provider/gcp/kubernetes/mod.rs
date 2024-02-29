@@ -4,9 +4,12 @@ pub mod io;
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubeconfig_helper::{
+    fetch_kubeconfig, put_kubeconfig_file_to_object_storage, write_kubeconfig_on_disk,
+};
 use crate::cloud_provider::kubernetes::{
-    create_kubeconfig_from_kubernetes_connection, is_kubernetes_upgrade_required, send_progress_on_long_task,
-    uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -16,7 +19,7 @@ use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::Helm;
-use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply, TerraformError};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -254,11 +257,13 @@ impl Gke {
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
-            create_kubeconfig_from_kubernetes_connection(
+            write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
+        } else {
+            fetch_kubeconfig(&cluster)?;
         }
 
         Ok(cluster)
@@ -559,34 +564,33 @@ impl Gke {
 
         if !self.context().is_first_cluster_deployment() {
             // upgrade cluster instead if required
-            match self.get_kubeconfig_file() {
-                Ok(path) => match is_kubernetes_upgrade_required(
-                    path,
-                    self.version.clone(),
-                    self.cloud_provider.credentials_environment_variables(),
-                    event_details.clone(),
-                    self.logger(),
-                ) {
-                    Ok(kubernetes_upgrade_status) => {
-                        if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                            self.upgrade_with_status(kubernetes_upgrade_status)?;
-                        } else {
-                            self.logger().log(EngineEvent::Info(
-                                event_details.clone(),
-                                EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                            ))
-                        }
-                    }
-                    Err(e) => {
-                        // Log a warning, this error is not blocking
-                        self.logger().log(EngineEvent::Warning(
+            match is_kubernetes_upgrade_required(
+                self.kubeconfig_local_file_path(),
+                self.version.clone(),
+                self.cloud_provider.credentials_environment_variables(),
+                event_details.clone(),
+                self.logger(),
+            ) {
+                Ok(kubernetes_upgrade_status) => {
+                    if kubernetes_upgrade_status.required_upgrade_on.is_some() {
+                        self.upgrade_with_status(kubernetes_upgrade_status)?;
+                    } else {
+                        self.logger().log(EngineEvent::Info(
                             event_details.clone(),
-                            EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                            )),
-                        );
+                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                        ))
                     }
-                },
-                Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+                }
+                Err(e) => {
+                    // Log a warning, this error is not blocking
+                    self.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                        ),
+                    ));
+                }
             };
         }
 
@@ -677,18 +681,7 @@ impl Gke {
             .get_gke_qovery_terraform_config(qovery_terraform_config_file.as_str())
             .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        // Push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
-        let kubeconfig_name = self.get_kubeconfig_filename();
-        if let Err(e) = self.object_storage.put_object(
-            self.kubeconfig_bucket_name().as_str(),
-            kubeconfig_name.as_str(),
-            kubeconfig_path,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
-        }
+        put_kubeconfig_file_to_object_storage(self)?;
 
         // Configure kubectl to be able to connect to cluster
         let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
@@ -705,7 +698,8 @@ impl Gke {
         };
 
         // Update cluster config to vault
-        let kubeconfig = fs::read_to_string(kubeconfig_path).map_err(|e| {
+        let kubeconfig_path = self.kubeconfig_local_file_path();
+        let kubeconfig = fs::read_to_string(&kubeconfig_path).map_err(|e| {
             Box::new(EngineError::new_cannot_retrieve_cluster_config_file(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
@@ -788,7 +782,7 @@ impl Gke {
             format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
             Some(temp_dir.to_string_lossy().as_ref()),
-            kubeconfig_path,
+            &kubeconfig_path,
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
@@ -798,7 +792,7 @@ impl Gke {
 
         deploy_charts_levels(
             &self.kube_client(self.cloud_provider.as_ref())?,
-            kubeconfig_path,
+            &kubeconfig_path,
             credentials_environment_variables
                 .iter()
                 .map(|(l, r)| (l.as_str(), r.as_str()))
@@ -848,27 +842,10 @@ impl Gke {
     }
 
     fn create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        let kubeconfig_path = self.get_kubeconfig_file()?;
-        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
-
         self.logger().log(EngineEvent::Warning(
             self.get_event_details(Infrastructure(InfrastructureStep::Create)),
             EventMessage::new_from_safe("GKE.create_error() called.".to_string()),
         ));
-
-        match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self
-                .logger()
-                .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(ok_line))),
-            Err(err) => self.logger().log(EngineEvent::Warning(
-                event_details,
-                EventMessage::new(
-                    "Error trying to get kubernetes events".to_string(),
-                    Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ),
-            )),
-        };
 
         Ok(())
     }
@@ -939,9 +916,7 @@ impl Gke {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
-        let kubeconfig_path = Path::new(kubeconfig_path);
-
+        let kubeconfig_path = self.kubeconfig_local_file_path();
         if !skip_kubernetes_step {
             // Configure kubectl to be able to connect to cluster
             let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
@@ -956,7 +931,7 @@ impl Gke {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
-                kubeconfig_path,
+                &kubeconfig_path,
                 self.cloud_provider.credentials_environment_variables(),
             );
 
@@ -975,7 +950,7 @@ impl Gke {
                         .filter(|ns| !(*GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES).contains(ns))
                     {
                         match kubectl_exec_delete_namespace(
-                            kubeconfig_path,
+                            &kubeconfig_path,
                             namespace_to_delete,
                             self.cloud_provider.credentials_environment_variables(),
                         ) {
@@ -1021,12 +996,12 @@ impl Gke {
             self.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-            let helm = Helm::new(kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
+            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
                 .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
 
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
-                kubeconfig_path,
+                &kubeconfig_path,
                 self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1077,7 +1052,7 @@ impl Gke {
 
             for qovery_namespace in qovery_namespaces.iter() {
                 let deletion = kubectl_exec_delete_namespace(
-                    kubeconfig_path,
+                    &kubeconfig_path,
                     qovery_namespace,
                     self.cloud_provider.credentials_environment_variables(),
                 );
@@ -1268,6 +1243,10 @@ impl Kubernetes for Gke {
         Kind::Gke
     }
 
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
+    }
+
     fn id(&self) -> &str {
         self.id.as_str()
     }
@@ -1316,13 +1295,13 @@ impl Kubernetes for Gke {
         false // TODO(benjaminch): GKE integration, to be checked
     }
 
+    fn is_self_managed(&self) -> bool {
+        false
+    }
+
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         // TODO(ENG-1643): GKE integration, add ARM support
         vec![CpuArchitecture::AMD64]
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
     }
 
     #[named]
@@ -1611,6 +1590,10 @@ impl Kubernetes for Gke {
         Ok(())
     }
 
+    fn temp_dir(&self) -> &Path {
+        &self.temp_dir
+    }
+
     fn update_vault_config(
         &self,
         event_details: EventDetails,
@@ -1627,10 +1610,6 @@ impl Kubernetes for Gke {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
-    }
-
-    fn temp_dir(&self) -> &Path {
-        &self.temp_dir
     }
 }
 

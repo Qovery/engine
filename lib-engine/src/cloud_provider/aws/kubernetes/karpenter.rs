@@ -90,7 +90,7 @@ impl Karpenter {
         event_details: EventDetails,
         nodes_drain_timeout_in_sec: Option<i32>,
     ) -> Result<(), Box<EngineError>> {
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file()?;
+        let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
 
         // 1 uninstall karpenter-configuration chart
         let helm = Helm::new(
@@ -142,7 +142,7 @@ impl Karpenter {
         disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
     ) -> Result<(), Box<EngineError>> {
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file()?;
+        let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
         let helm = Helm::new(kubernetes_config_file_path, &cloud_provider.credentials_environment_variables())
             .map_err(|e| to_engine_error(&event_details, e))?;
 

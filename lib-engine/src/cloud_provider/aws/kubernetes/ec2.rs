@@ -4,6 +4,7 @@ use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, force_fetch_kubeconfig};
 use crate::cloud_provider::kubernetes::{
     event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
     KubernetesVersion,
@@ -134,6 +135,8 @@ impl EC2 {
             temp_dir,
         };
 
+        fetch_kubeconfig(&cluster)?;
+
         Ok(cluster)
     }
 
@@ -204,13 +207,11 @@ impl EC2 {
         // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
         let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
             // force s3 kubeconfig retrieve
-            if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
-                return OperationResult::Err(e);
-            };
-            let current_kubeconfig_path = match kubernetes.get_kubeconfig_file() {
+            match force_fetch_kubeconfig(kubernetes) {
                 Ok(p) => p,
                 Err(e) => return OperationResult::Retry(e),
             };
+            let current_kubeconfig_path = kubernetes.kubeconfig_local_file_path();
             let mut kubeconfig_file = File::open(&current_kubeconfig_path).expect("Cannot open file");
 
             // ensure the kubeconfig content address match with the current instance dns
@@ -434,22 +435,20 @@ impl Kubernetes for EC2 {
         ));
 
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
-        if let Ok(k3s_kubeconfig) = self.get_kubeconfig_file() {
-            if let Err(e) = self.update_vault_config(
+        if let Err(e) = self.update_vault_config(
+            event_details.clone(),
+            qovery_terraform_config_file,
+            cluster_secrets,
+            Some(&self.kubeconfig_local_file_path()),
+        ) {
+            self.logger().log(EngineEvent::Warning(
                 event_details.clone(),
-                qovery_terraform_config_file,
-                cluster_secrets,
-                Some(&k3s_kubeconfig),
-            ) {
-                self.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(
-                        "Wasn't able to update Vault information for this EC2 instance".to_string(),
-                        Some(e.to_string()),
-                    ),
-                ));
-            };
-        }
+                EventMessage::new(
+                    "Wasn't able to update Vault information for this EC2 instance".to_string(),
+                    Some(e.to_string()),
+                ),
+            ));
+        };
 
         self.logger().log(EngineEvent::Info(
             event_details,
@@ -596,6 +595,10 @@ impl Kubernetes for EC2 {
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
+    }
+
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
     }
 }
 
