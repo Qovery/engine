@@ -2,9 +2,9 @@ use crate::helpers::aws_ec2::{ec2_kubernetes_instance, AWS_EC2_KUBERNETES_VERSIO
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
-use crate::helpers::aws::AWS_KUBERNETES_VERSION;
-use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
-use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
+use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS};
+use crate::helpers::gcp::{GCP_KUBERNETES_VERSION, GCP_RESOURCE_TTL};
+use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_RESOURCE_TTL_IN_SECONDS};
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
@@ -373,7 +373,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
+                        pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
                         aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
                         ..Default::default()
@@ -408,7 +408,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
-                        pleco_resources_ttl: 7200,
+                        pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: false,
                         ..Default::default()
                     },
@@ -435,7 +435,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
+                        pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
                         ..Default::default()
                     },
                     None,
@@ -461,7 +461,7 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     metrics_registry,
                     ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
+                        pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,
                         ..Default::default()
                     },
                     None,

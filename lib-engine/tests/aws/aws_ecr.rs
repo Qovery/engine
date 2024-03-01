@@ -1,3 +1,4 @@
+use crate::helpers::aws::AWS_QUICK_RESOURCE_TTL_IN_SECONDS;
 use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, logger, FuncTestsSecrets};
 use function_name::named;
 use qovery_engine::container_registry::ecr::ECR;
@@ -31,7 +32,7 @@ fn create_ecr_repository_with_tags() {
             &secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
             &secrets.AWS_DEFAULT_REGION.expect("Unable to get default region"),
             logger(),
-            hashmap! {"ttl".to_string() => 3600.to_string()},
+            hashmap! {"ttl".to_string() => AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string()},
         )
         .unwrap();
 
@@ -39,8 +40,11 @@ fn create_ecr_repository_with_tags() {
         assert!(cr.is_ok());
 
         let repo_name = format!("test-{}", Uuid::new_v4());
-        let repo_creation =
-            container_registry.create_repository(repo_name.as_str(), 3600, Some(Duration::from_secs(3600)));
+        let repo_creation = container_registry.create_repository(
+            repo_name.as_str(),
+            AWS_QUICK_RESOURCE_TTL_IN_SECONDS,
+            Some(Duration::from_secs(AWS_QUICK_RESOURCE_TTL_IN_SECONDS as u64)),
+        );
         assert!(repo_creation.is_ok());
 
         let result = block_on(
@@ -68,7 +72,7 @@ fn create_ecr_repository_with_tags() {
                         if let Some(tags) = response.tags {
                             assert!(tags.contains(&Tag {
                                 key: Some("ttl".to_string()),
-                                value: Some(3600.to_string())
+                                value: Some(AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string())
                             }))
                         }
                     }
