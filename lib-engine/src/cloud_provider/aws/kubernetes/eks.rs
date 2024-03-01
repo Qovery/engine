@@ -31,7 +31,6 @@ use aws_sdk_eks::error::{
 };
 use aws_types::SdkConfig;
 
-use crate::metrics_registry::MetricsRegistry;
 use aws_sdk_eks::output::{
     DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
 };
@@ -42,7 +41,6 @@ use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfi
 use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_completed_jobs, delete_crashlooping_pods};
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
-use crate::object_storage::ObjectStorage;
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
@@ -76,7 +74,6 @@ pub struct EKS {
     template_directory: String,
     options: Options,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
@@ -97,7 +94,6 @@ impl EKS {
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
@@ -132,7 +128,6 @@ impl EKS {
             nodes_groups,
             template_directory,
             logger,
-            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
@@ -146,7 +141,7 @@ impl EKS {
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
         } else {
-            fetch_kubeconfig(&cluster)?;
+            fetch_kubeconfig(&cluster, &cluster.s3)?;
         }
 
         Ok(cluster)
@@ -266,14 +261,6 @@ impl Kubernetes for EKS {
         self.logger.borrow()
     }
 
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.s3
-    }
-
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
@@ -306,6 +293,7 @@ impl Kubernetes for EKS {
                 self,
                 self.cloud_provider.as_ref(),
                 self.dns_provider.as_ref(),
+                &self.s3,
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -668,6 +656,7 @@ impl Kubernetes for EKS {
                 self,
                 self.cloud_provider.as_ref(),
                 self.dns_provider.as_ref(),
+                &self.s3,
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,

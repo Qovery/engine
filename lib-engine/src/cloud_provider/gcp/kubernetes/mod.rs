@@ -33,7 +33,7 @@ use crate::io_models::context::{Context, Features};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
+
 use crate::models::domain::ToHelmString;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -176,7 +176,6 @@ pub struct Gke {
     object_storage: GoogleOS,
     options: GkeOptions,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
@@ -195,7 +194,6 @@ impl Gke {
         dns_provider: Arc<dyn DnsProvider>,
         options: GkeOptions,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
@@ -252,7 +250,6 @@ impl Gke {
             object_storage: google_object_storage,
             options,
             logger,
-            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
@@ -266,7 +263,7 @@ impl Gke {
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
         } else {
-            fetch_kubeconfig(&cluster)?;
+            fetch_kubeconfig(&cluster, &cluster.object_storage)?;
         }
 
         Ok(cluster)
@@ -684,7 +681,7 @@ impl Gke {
             .get_gke_qovery_terraform_config(qovery_terraform_config_file.as_str())
             .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        put_kubeconfig_file_to_object_storage(self)?;
+        put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
         // Configure kubectl to be able to connect to cluster
         let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
@@ -1262,14 +1259,6 @@ impl Kubernetes for Gke {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.as_ref()
-    }
-
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.as_ref()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.object_storage
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {

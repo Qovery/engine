@@ -113,7 +113,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
-            metrics_registry(),
             ClusterAdvancedSettings {
                 load_balancer_size: "my_load_balancer_size".to_string(),
                 registry_image_retention_time_sec: 1,
