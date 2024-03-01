@@ -146,7 +146,6 @@ impl<'a> DeploymentTarget<'a> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
         let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
-        let kubeconfig_path_str = kubeconfig_path.to_str().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
@@ -154,14 +153,11 @@ impl<'a> DeploymentTarget<'a> {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
 
-        let kube_client = block_on(create_kube_client(kubeconfig_path_str, kube_credentials.as_slice()))
+        let kube_client = block_on(create_kube_client(&kubeconfig_path, kube_credentials.as_slice()))
             .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
-        let helm = Helm::new(
-            kubeconfig_path_str,
-            &infra_ctx.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| to_engine_error(event_details, e))?;
+        let helm = Helm::new(kubeconfig_path, &infra_ctx.cloud_provider().credentials_environment_variables())
+            .map_err(|e| to_engine_error(event_details, e))?;
 
         Ok(DeploymentTarget {
             kubernetes,

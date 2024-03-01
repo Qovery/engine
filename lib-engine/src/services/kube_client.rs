@@ -11,6 +11,7 @@ use kube::{
     Api,
 };
 use serde_json::json;
+use std::path::PathBuf;
 
 use crate::{
     errors::{CommandError, EngineError},
@@ -27,15 +28,17 @@ pub struct QubeClient {
 
 #[derive(Clone)]
 pub enum SelectK8sResourceBy {
-    All,                    // do not filter, select all resources
-    Name(String),           // select a named resource
+    All,
+    // do not filter, select all resources
+    Name(String),
+    // select a named resource
     LabelsSelector(String), // select resources by labels
 }
 
 impl QubeClient {
     pub fn new(
         event_details: EventDetails,
-        kubeconfig_path: String,
+        kubeconfig_path: PathBuf,
         kube_credentials: Vec<(String, String)>,
     ) -> Result<QubeClient, Box<EngineError>> {
         let kube_client = block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
@@ -409,11 +412,16 @@ impl QubeClient {
     fn is_error_code(e: &kube::Error, http_code_number: u16) -> bool {
         matches!(e, kube::Error::Api(x) if x.code == http_code_number)
     }
+
+    pub fn client(&self) -> &kube::Client {
+        &self.client
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::path::PathBuf;
 
     use uuid::Uuid;
 
@@ -438,7 +446,7 @@ mod tests {
             Stage::Environment(crate::events::EnvironmentStep::ValidateSystemRequirements),
             crate::events::Transmitter::Application(uuid, "".to_string()),
         );
-        let quke_client = QubeClient::new(event_details.clone(), kubeconfig, vec![]);
+        let quke_client = QubeClient::new(event_details.clone(), PathBuf::from(kubeconfig), vec![]);
         assert!(quke_client.is_ok());
         (quke_client.unwrap(), event_details)
     }

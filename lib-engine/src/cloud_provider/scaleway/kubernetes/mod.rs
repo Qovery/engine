@@ -1066,7 +1066,7 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client(self.cloud_provider.as_ref())?,
+            self.kube_client(self.cloud_provider.as_ref())?.client(),
             &kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1077,15 +1077,6 @@ impl Kapsule {
             self.context.is_dry_run_deploy(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
-    }
-
-    fn create_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Create)),
-            EventMessage::new_from_safe("SCW.create_error() called.".to_string()),
-        ));
-
-        Ok(())
     }
 
     fn pause(&self) -> Result<(), Box<EngineError>> {
@@ -1230,15 +1221,6 @@ impl Kapsule {
         let message = format!("Kubernetes cluster {} successfully paused", self.name());
         self.logger()
             .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
-        Ok(())
-    }
-
-    fn pause_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("SCW.pause_error() called.".to_string()),
-        ));
-
         Ok(())
     }
 
@@ -1531,15 +1513,6 @@ impl Kapsule {
         Ok(())
     }
 
-    fn delete_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
-            EventMessage::new_from_safe("SCW.delete_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn cloud_provider_name(&self) -> &str {
         "scaleway"
     }
@@ -1637,20 +1610,6 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
-    #[named]
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.create_error())
-    }
-
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
@@ -1710,7 +1669,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
+        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1845,20 +1804,6 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
-    }
-
-    #[named]
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
@@ -1870,20 +1815,6 @@ impl Kubernetes for Kapsule {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
-    }
-
-    #[named]
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
     fn temp_dir(&self) -> &Path {
