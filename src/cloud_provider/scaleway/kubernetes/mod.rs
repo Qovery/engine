@@ -3,10 +3,12 @@ pub mod node;
 
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubeconfig_helper::{
+    fetch_kubeconfig, put_kubeconfig_file_to_object_storage, write_kubeconfig_on_disk,
+};
 use crate::cloud_provider::kubernetes::{
-    self, create_kubeconfig_from_kubernetes_connection, is_kubernetes_upgrade_required, send_progress_on_long_task,
-    uninstall_cert_manager, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
-    ProviderOptions,
+    self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
+    Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -18,7 +20,7 @@ use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
@@ -260,11 +262,13 @@ impl Kapsule {
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
-            create_kubeconfig_from_kubernetes_connection(
+            write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
+        } else {
+            fetch_kubeconfig(&cluster)?;
         }
 
         Ok(cluster)
@@ -676,9 +680,9 @@ impl Kapsule {
         ));
 
         // upgrade cluster instead if required
-        match self.get_kubeconfig_file() {
-            Ok(path) => match is_kubernetes_upgrade_required(
-                path,
+        if !self.context().is_first_cluster_deployment() {
+            match is_kubernetes_upgrade_required(
+                self.kubeconfig_local_file_path(),
                 self.version.clone(),
                 self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
@@ -698,13 +702,14 @@ impl Kapsule {
                     // Log a warning, this error is not blocking
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                        )),
-                    );
+                        EventMessage::new(
+                            "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                        ),
+                    ));
                 }
-            },
-            Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
-        };
+            };
+        }
 
         let temp_dir = self.temp_dir();
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
@@ -789,17 +794,8 @@ impl Kapsule {
         }
 
         // push config file to object storage
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
-        let kubeconfig_name = self.get_kubeconfig_filename();
-        if let Err(e) = self.object_storage.put_object(
-            self.kubeconfig_bucket_name().as_str(),
-            kubeconfig_name.as_str(),
-            kubeconfig_path,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
-        }
+        let kubeconfig_path = self.kubeconfig_local_file_path();
+        put_kubeconfig_file_to_object_storage(self)?;
 
         let cluster_info = self.get_scw_cluster_info()?;
         if cluster_info.is_none() {
@@ -837,7 +833,7 @@ impl Kapsule {
             event_details.clone(),
             qovery_terraform_config_file,
             cluster_secrets,
-            Some(kubeconfig_path),
+            Some(&kubeconfig_path),
         );
 
         let current_nodegroups = match self
@@ -1013,7 +1009,7 @@ impl Kapsule {
             .map(|x| (x.0.to_string(), x.1.to_string()))
             .collect();
 
-        if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+        if let Err(e) = kubectl_are_qovery_infra_pods_executed(&kubeconfig_path, &credentials_environment_variables) {
             self.logger().log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
@@ -1061,7 +1057,7 @@ impl Kapsule {
             format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
             Some(temp_dir.to_string_lossy().as_ref()),
-            kubeconfig_path,
+            &kubeconfig_path,
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
@@ -1070,8 +1066,8 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client(self.cloud_provider.as_ref())?,
-            kubeconfig_path,
+            self.kube_client(self.cloud_provider.as_ref())?.client(),
+            &kubeconfig_path,
             credentials_environment_variables
                 .iter()
                 .map(|(l, r)| (l.as_str(), r.as_str()))
@@ -1081,32 +1077,6 @@ impl Kapsule {
             self.context.is_dry_run_deploy(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
-    }
-
-    fn create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        let kubeconfig_path = self.get_kubeconfig_file()?;
-        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
-
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Create)),
-            EventMessage::new_from_safe("SCW.create_error() called.".to_string()),
-        ));
-
-        match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self
-                .logger()
-                .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(ok_line))),
-            Err(err) => self.logger().log(EngineEvent::Warning(
-                event_details,
-                EventMessage::new(
-                    "Error trying to get kubernetes events".to_string(),
-                    Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ),
-            )),
-        };
-
-        Ok(())
     }
 
     fn pause(&self) -> Result<(), Box<EngineError>> {
@@ -1179,7 +1149,7 @@ impl Kapsule {
             return Ok(());
         }
 
-        let kubernetes_config_file_path = self.get_kubeconfig_file()?;
+        let kubernetes_config_file_path = self.kubeconfig_local_file_path();
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.get_engine_location() == EngineLocation::ClientSide {
@@ -1254,15 +1224,6 @@ impl Kapsule {
         Ok(())
     }
 
-    fn pause_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("SCW.pause_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let skip_kubernetes_step = false;
@@ -1324,9 +1285,7 @@ impl Kapsule {
             ));
         };
 
-        let kubeconfig_path = &self.get_kubeconfig_file()?;
-        let kubeconfig_path = Path::new(kubeconfig_path);
-
+        let kubeconfig_path = self.kubeconfig_local_file_path();
         if !skip_kubernetes_step {
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -1338,7 +1297,7 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
-                kubeconfig_path,
+                &kubeconfig_path,
                 self.cloud_provider.credentials_environment_variables(),
             );
 
@@ -1354,7 +1313,7 @@ impl Kapsule {
 
                     for namespace_to_delete in namespaces_to_delete.iter() {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
-                            kubeconfig_path,
+                            &kubeconfig_path,
                             namespace_to_delete,
                             self.cloud_provider.credentials_environment_variables(),
                         ) {
@@ -1401,7 +1360,7 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
+            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
                 .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
@@ -1415,7 +1374,7 @@ impl Kapsule {
 
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
-                kubeconfig_path,
+                &kubeconfig_path,
                 self.cloud_provider.credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1466,7 +1425,7 @@ impl Kapsule {
 
             for qovery_namespace in qovery_namespaces.iter() {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                    kubeconfig_path,
+                    &kubeconfig_path,
                     qovery_namespace,
                     self.cloud_provider.credentials_environment_variables(),
                 );
@@ -1554,15 +1513,6 @@ impl Kapsule {
         Ok(())
     }
 
-    fn delete_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
-            EventMessage::new_from_safe("SCW.delete_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn cloud_provider_name(&self) -> &str {
         "scaleway"
     }
@@ -1579,6 +1529,10 @@ impl Kubernetes for Kapsule {
 
     fn kind(&self) -> Kind {
         Kind::ScwKapsule
+    }
+
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
     }
 
     fn id(&self) -> &str {
@@ -1656,20 +1610,6 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
-    #[named]
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.create_error())
-    }
-
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
@@ -1729,7 +1669,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
+        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1864,20 +1804,6 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
-    }
-
-    #[named]
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
@@ -1889,20 +1815,6 @@ impl Kubernetes for Kapsule {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
-    }
-
-    #[named]
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
     fn temp_dir(&self) -> &Path {
@@ -1934,7 +1846,7 @@ impl Kubernetes for Kapsule {
                         )
                     })
                     .expect("kubeconfig was not found while it should be present"),
-                None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
+                None => "".to_string(),
             };
             let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
             let mut cluster_secrets_update = cluster_secrets;

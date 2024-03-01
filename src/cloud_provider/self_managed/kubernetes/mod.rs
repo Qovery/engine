@@ -8,9 +8,8 @@ use base64::Engine;
 use uuid::Uuid;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{
-    self, create_kubeconfig_from_kubernetes_connection, Kubernetes, KubernetesVersion,
-};
+use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
+use crate::cloud_provider::kubernetes::{self, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
 use crate::errors::{CommandError, EngineError};
@@ -72,7 +71,7 @@ impl SelfManaged {
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
-            create_kubeconfig_from_kubernetes_connection(
+            write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
@@ -100,6 +99,10 @@ impl Kubernetes for SelfManaged {
 
     fn kind(&self) -> kubernetes::Kind {
         self.cloud_provider.kubernetes_kind()
+    }
+
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
     }
 
     fn id(&self) -> &str {
@@ -158,10 +161,6 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn upgrade_with_status(
         &self,
         _kubernetes_upgrade_status: kubernetes::KubernetesUpgradeStatus,
@@ -173,18 +172,9 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
-
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -214,7 +204,7 @@ impl Kubernetes for SelfManaged {
                         )
                     })
                     .expect("kubeconfig was not found while it should be present"),
-                None => self.get_kubeconfig_file()?.to_str().unwrap_or_default().to_string(),
+                None => "".to_string(),
             };
             let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
             let mut cluster_secrets_update = cluster_secrets;

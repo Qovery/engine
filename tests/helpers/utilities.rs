@@ -109,7 +109,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
             }
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
-        is_first_cluster_deployment: Some(true),
+        is_first_cluster_deployment: Some(false),
     };
     let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
     if let Some(kkind) = kind {
@@ -143,7 +143,9 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
 }
 
 pub fn context_for_cluster(organization_id: Uuid, cluster_id: Uuid, kind: Option<KKind>) -> Context {
-    context(organization_id, cluster_id, 14400, kind)
+    let mut ctx = context(organization_id, cluster_id, 14400, kind);
+    ctx.update_is_first_cluster_deployment(true);
+    ctx
 }
 
 pub fn context_for_ec2(organization_id: Uuid, cluster_id: Uuid) -> Context {
@@ -646,26 +648,20 @@ pub fn is_pod_restarted_env(
     service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
-    assert!(kubeconfig.is_ok());
+    let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
 
-    match kubeconfig {
-        Ok(path) => {
-            let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
-                path,
-                environment_check.kube_name.as_str(),
-                service_id,
-                get_cloud_provider_credentials(provider_kind, &secrets),
-            );
-            match restarted_database {
-                Ok(count) => match count.trim().eq("0") {
-                    true => (true, "0".to_string()),
-                    false => (true, count.to_string()),
-                },
-                _ => (false, "".to_string()),
-            }
-        }
-        Err(_e) => (false, "".to_string()),
+    let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
+        kubeconfig,
+        environment_check.kube_name.as_str(),
+        service_id,
+        get_cloud_provider_credentials(provider_kind, &secrets),
+    );
+    match restarted_database {
+        Ok(count) => match count.trim().eq("0") {
+            true => (true, "0".to_string()),
+            false => (true, count.to_string()),
+        },
+        _ => (false, "".to_string()),
     }
 }
 
@@ -676,11 +672,8 @@ pub fn get_pods(
     service_id: &Uuid,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
-    assert!(kubeconfig.is_ok());
-
     cmd::kubectl::kubectl_exec_get_pods(
-        kubeconfig.unwrap(),
+        infra_ctx.kubernetes().kubeconfig_local_file_path(),
         Some(environment_check.kube_name.as_str()),
         Some(&format!("qovery.com/service-id={}", service_id)),
         get_cloud_provider_credentials(provider_kind, &secrets),
@@ -754,22 +747,11 @@ pub fn get_pvc(
     environment_check: &EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
-    assert!(kubeconfig.is_ok());
-
-    match kubeconfig {
-        Ok(path) => {
-            match kubectl_get_pvc(
-                path,
-                &environment_check.kube_name,
-                get_cloud_provider_credentials(provider_kind, &secrets),
-            ) {
-                Ok(pvc) => Ok(pvc),
-                Err(e) => Err(e),
-            }
-        }
-        Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
-    }
+    kubectl_get_pvc(
+        infra_ctx.kubernetes().kubeconfig_local_file_path(),
+        &environment_check.kube_name,
+        get_cloud_provider_credentials(provider_kind, &secrets),
+    )
 }
 
 pub fn get_svc(
@@ -778,22 +760,11 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file();
-    assert!(kubeconfig.is_ok());
-
-    match kubeconfig {
-        Ok(path) => {
-            match kubectl_get_svc(
-                path,
-                &environment_check.kube_name,
-                get_cloud_provider_credentials(provider_kind, &secrets),
-            ) {
-                Ok(svc) => Ok(svc),
-                Err(e) => Err(e),
-            }
-        }
-        Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
-    }
+    kubectl_get_svc(
+        infra_ctx.kubernetes().kubeconfig_local_file_path(),
+        &environment_check.kube_name,
+        get_cloud_provider_credentials(provider_kind, &secrets),
+    )
 }
 
 pub struct DBInfos {
@@ -859,7 +830,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "1dec771b8bfdeeb71df0d56ebea9d4f6c2be5705".to_string(),
+                app_commit: "b08d011853265f3c213b84469101e21f9712d3c9".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_db_name), is_secret:false},
                      "PG_HOST".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

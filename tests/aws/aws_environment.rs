@@ -773,7 +773,9 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
             infra_ctx
                 .kubernetes()
                 .kube_client(infra_ctx.cloud_provider())
-                .expect("kube client is not set"),
+                .expect("kube client is not set")
+                .client()
+                .clone(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -1133,10 +1135,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig file path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = environment
             .routers
             .first()
@@ -1241,10 +1240,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
             .routers
             .first()
@@ -1363,10 +1359,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let kubeconfig = infra_ctx
-            .kubernetes()
-            .get_kubeconfig_file()
-            .expect("Cannot get kubeconfig path");
+        let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
             .routers
             .first()
@@ -1548,7 +1541,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
 
         let kube_conn = infra_ctx
             .kubernetes()
-            .q_kube_client(infra_ctx.cloud_provider())
+            .kube_client(infra_ctx.cloud_provider())
             .expect("kube client is not set");
         // ensure default pod affinity is set to preferred
         let preferred = block_on(kube_conn.get_deployments_from_api(
@@ -2029,7 +2022,9 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             infra_ctx
                 .kubernetes()
                 .kube_client(infra_ctx.cloud_provider())
-                .expect("kube client is not set"),
+                .expect("kube client is not set")
+                .client()
+                .clone(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2480,7 +2475,9 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             infra_ctx
                 .kubernetes()
                 .kube_client(infra_ctx.cloud_provider())
-                .expect("should always contain kube_client"),
+                .expect("should always contain kube_client")
+                .client()
+                .clone(),
             &cronjob_namespace,
         );
         let result_list_cronjobs = block_on(k8s_cronjob_api.list(&ListParams::default().labels(&cronjob_label)));
@@ -2961,7 +2958,9 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             infra_ctx
                 .kubernetes()
                 .kube_client(infra_ctx.cloud_provider())
-                .expect("kube client is not set"),
+                .expect("kube client is not set")
+                .client()
+                .clone(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");

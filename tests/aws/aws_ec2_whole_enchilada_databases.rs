@@ -48,7 +48,8 @@ fn test_ec2_database(
                 .expect("AWS_EC2_TEST_CONTAINER_REGION is not set"),
         };
         let cluster_id = generate_cluster_id(&localisation);
-        let context = context_for_ec2(organization_id, cluster_id);
+        let mut context = context_for_ec2(organization_id, cluster_id);
+        context.update_is_first_cluster_deployment(true);
 
         // create dedicated EC2 cluster:
         let secrets = FuncTestsSecrets::new();
@@ -80,6 +81,7 @@ fn test_ec2_database(
         let mut deploy_tx = Transaction::new(&infra_ctx).unwrap();
         assert!(deploy_tx.create_kubernetes().is_ok());
         assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+        context.update_is_first_cluster_deployment(false);
         let environment = helpers::database::database_test_environment(&context);
 
         test_db(

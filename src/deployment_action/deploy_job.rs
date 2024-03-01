@@ -213,7 +213,6 @@ where
             helm.on_create(target)?;
 
             // Get kube config file
-            let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file()?;
             let job_pod_selector = format!("job-name={}", job.kube_name());
             let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
@@ -241,7 +240,7 @@ where
 
                 // Get JSON output from shared volume
                 let result_json_output = kubectl_get_job_pod_output(
-                    kubernetes_config_file_path.clone(),
+                    target.kubernetes.kubeconfig_local_file_path(),
                     target.cloud_provider.credentials_environment_variables(),
                     target.environment.namespace(),
                     &pod_name,

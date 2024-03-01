@@ -543,6 +543,34 @@ fn public_postgresql_v14_deploy_a_working_dev_environment() {
     test_postgresql_configuration("14", function_name!(), CONTAINER, true);
 }
 
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v15_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("15", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v15_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("15", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v16_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("16", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v16_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("16", function_name!(), CONTAINER, true);
+}
+
 /**
  **
  ** MongoDB tests

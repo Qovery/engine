@@ -376,8 +376,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         );
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = kubernetes.get_kubeconfig_file()?;
-        context.insert("kubeconfig_path", &kube_config_file_path);
+        context.insert("kubeconfig_path", &kubernetes.kubeconfig_local_file_path());
         context.insert("namespace", environment.namespace());
 
         let version = self.get_version(event_details)?.matched_version().to_string();

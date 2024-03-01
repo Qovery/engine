@@ -10,13 +10,6 @@ use strum_macros::EnumIter;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
 #[allow(non_camel_case_types)]
 pub enum ScwInstancesType {
-    AMP2_C12,
-    AMP2_C2,
-    AMP2_C24,
-    AMP2_C4,
-    AMP2_C48,
-    AMP2_C60,
-    AMP2_C8,
     COPARM1_16C_64G,
     COPARM1_2C_8G,
     COPARM1_32C_128G,
@@ -29,14 +22,21 @@ pub enum ScwInstancesType {
     ENT1_L,
     ENT1_M,
     ENT1_S,
+    ENT1_XL,
     ENT1_XS,
     ENT1_XXS,
     GP1_L,
     GP1_M,
     GP1_S,
     GP1_VIZ,
+    GP1_XL,
     GP1_XS,
     GPU_3070_S,
+    H100_1_80G,
+    H100_1_M,
+    L4_1_24G,
+    L4_2_24G,
+    L4_4_24G,
     PLAY2_MICRO,
     PLAY2_NANO,
     PLAY2_PICO,
@@ -44,6 +44,7 @@ pub enum ScwInstancesType {
     POP2_2C_8G,
     POP2_32C_128G,
     POP2_4C_16G,
+    POP2_64C_256G,
     POP2_8C_32G,
     POP2_HC_16C_32G,
     POP2_HC_2C_4G,
@@ -53,6 +54,7 @@ pub enum ScwInstancesType {
     POP2_HC_8C_16G,
     POP2_HM_16C_128G,
     POP2_HM_2C_16G,
+    POP2_HM_32C_256G,
     POP2_HM_4C_32G,
     POP2_HM_8C_64G,
     PRO2_L,
@@ -67,13 +69,6 @@ pub enum ScwInstancesType {
 impl InstanceType for ScwInstancesType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
-            ScwInstancesType::AMP2_C12 => "amp2-c12",
-            ScwInstancesType::AMP2_C2 => "amp2-c2",
-            ScwInstancesType::AMP2_C24 => "amp2-c24",
-            ScwInstancesType::AMP2_C4 => "amp2-c4",
-            ScwInstancesType::AMP2_C48 => "amp2-c48",
-            ScwInstancesType::AMP2_C60 => "amp2-c60",
-            ScwInstancesType::AMP2_C8 => "amp2-c8",
             ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
             ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
             ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -86,14 +81,21 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::ENT1_L => "ent1-l",
             ScwInstancesType::ENT1_M => "ent1-m",
             ScwInstancesType::ENT1_S => "ent1-s",
+            ScwInstancesType::ENT1_XL => "ent1-xl",
             ScwInstancesType::ENT1_XS => "ent1-xs",
             ScwInstancesType::ENT1_XXS => "ent1-xxs",
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
             ScwInstancesType::GP1_VIZ => "gp1-viz",
+            ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
+            ScwInstancesType::H100_1_80G => "h100-1-80g",
+            ScwInstancesType::H100_1_M => "h100-1-m",
+            ScwInstancesType::L4_1_24G => "l4-1-24g",
+            ScwInstancesType::L4_2_24G => "l4-2-24g",
+            ScwInstancesType::L4_4_24G => "l4-4-24g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -101,6 +103,7 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
             ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
             ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
             ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
             ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
             ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
@@ -110,6 +113,7 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
             ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
             ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+            ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
             ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
             ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
             ScwInstancesType::PRO2_L => "pro2-l",
@@ -126,14 +130,7 @@ impl InstanceType for ScwInstancesType {
     fn is_instance_allowed(&self) -> bool {
         matches!(
             self,
-            ScwInstancesType::AMP2_C12
-                | ScwInstancesType::AMP2_C2
-                | ScwInstancesType::AMP2_C24
-                | ScwInstancesType::AMP2_C4
-                | ScwInstancesType::AMP2_C48
-                | ScwInstancesType::AMP2_C60
-                | ScwInstancesType::AMP2_C8
-                | ScwInstancesType::COPARM1_16C_64G
+            ScwInstancesType::COPARM1_16C_64G
                 | ScwInstancesType::COPARM1_2C_8G
                 | ScwInstancesType::COPARM1_32C_128G
                 | ScwInstancesType::COPARM1_4C_16G
@@ -145,14 +142,21 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::ENT1_L
                 | ScwInstancesType::ENT1_M
                 | ScwInstancesType::ENT1_S
+                | ScwInstancesType::ENT1_XL
                 | ScwInstancesType::ENT1_XS
                 | ScwInstancesType::ENT1_XXS
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
                 | ScwInstancesType::GP1_VIZ
+                | ScwInstancesType::GP1_XL
                 | ScwInstancesType::GP1_XS
                 | ScwInstancesType::GPU_3070_S
+                | ScwInstancesType::H100_1_80G
+                | ScwInstancesType::H100_1_M
+                | ScwInstancesType::L4_1_24G
+                | ScwInstancesType::L4_2_24G
+                | ScwInstancesType::L4_4_24G
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::PLAY2_PICO
@@ -160,6 +164,7 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::POP2_2C_8G
                 | ScwInstancesType::POP2_32C_128G
                 | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_64C_256G
                 | ScwInstancesType::POP2_8C_32G
                 | ScwInstancesType::POP2_HC_16C_32G
                 | ScwInstancesType::POP2_HC_2C_4G
@@ -169,6 +174,7 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::POP2_HC_8C_16G
                 | ScwInstancesType::POP2_HM_16C_128G
                 | ScwInstancesType::POP2_HM_2C_16G
+                | ScwInstancesType::POP2_HM_32C_256G
                 | ScwInstancesType::POP2_HM_4C_32G
                 | ScwInstancesType::POP2_HM_8C_64G
                 | ScwInstancesType::PRO2_L
@@ -187,13 +193,7 @@ impl InstanceType for ScwInstancesType {
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,
-            ScwInstancesType::AMP2_C12
-                | ScwInstancesType::AMP2_C24
-                | ScwInstancesType::AMP2_C4
-                | ScwInstancesType::AMP2_C48
-                | ScwInstancesType::AMP2_C60
-                | ScwInstancesType::AMP2_C8
-                | ScwInstancesType::COPARM1_16C_64G
+            ScwInstancesType::COPARM1_16C_64G
                 | ScwInstancesType::COPARM1_2C_8G
                 | ScwInstancesType::COPARM1_32C_128G
                 | ScwInstancesType::COPARM1_4C_16G
@@ -204,20 +204,28 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::ENT1_L
                 | ScwInstancesType::ENT1_M
                 | ScwInstancesType::ENT1_S
+                | ScwInstancesType::ENT1_XL
                 | ScwInstancesType::ENT1_XS
                 | ScwInstancesType::ENT1_XXS
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
                 | ScwInstancesType::GP1_VIZ
+                | ScwInstancesType::GP1_XL
                 | ScwInstancesType::GP1_XS
                 | ScwInstancesType::GPU_3070_S
+                | ScwInstancesType::H100_1_80G
+                | ScwInstancesType::H100_1_M
+                | ScwInstancesType::L4_1_24G
+                | ScwInstancesType::L4_2_24G
+                | ScwInstancesType::L4_4_24G
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::POP2_16C_64G
                 | ScwInstancesType::POP2_2C_8G
                 | ScwInstancesType::POP2_32C_128G
                 | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_64C_256G
                 | ScwInstancesType::POP2_8C_32G
                 | ScwInstancesType::POP2_HC_16C_32G
                 | ScwInstancesType::POP2_HC_2C_4G
@@ -227,6 +235,7 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::POP2_HC_8C_16G
                 | ScwInstancesType::POP2_HM_16C_128G
                 | ScwInstancesType::POP2_HM_2C_16G
+                | ScwInstancesType::POP2_HM_32C_256G
                 | ScwInstancesType::POP2_HM_4C_32G
                 | ScwInstancesType::POP2_HM_8C_64G
                 | ScwInstancesType::PRO2_L
@@ -243,13 +252,6 @@ impl InstanceType for ScwInstancesType {
 impl ScwInstancesType {
     pub fn as_str(&self) -> &str {
         match self {
-            ScwInstancesType::AMP2_C12 => "amp2-c12",
-            ScwInstancesType::AMP2_C2 => "amp2-c2",
-            ScwInstancesType::AMP2_C24 => "amp2-c24",
-            ScwInstancesType::AMP2_C4 => "amp2-c4",
-            ScwInstancesType::AMP2_C48 => "amp2-c48",
-            ScwInstancesType::AMP2_C60 => "amp2-c60",
-            ScwInstancesType::AMP2_C8 => "amp2-c8",
             ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
             ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
             ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -262,14 +264,21 @@ impl ScwInstancesType {
             ScwInstancesType::ENT1_L => "ent1-l",
             ScwInstancesType::ENT1_M => "ent1-m",
             ScwInstancesType::ENT1_S => "ent1-s",
+            ScwInstancesType::ENT1_XL => "ent1-xl",
             ScwInstancesType::ENT1_XS => "ent1-xs",
             ScwInstancesType::ENT1_XXS => "ent1-xxs",
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
             ScwInstancesType::GP1_VIZ => "gp1-viz",
+            ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
+            ScwInstancesType::H100_1_80G => "h100-1-80g",
+            ScwInstancesType::H100_1_M => "h100-1-m",
+            ScwInstancesType::L4_1_24G => "l4-1-24g",
+            ScwInstancesType::L4_2_24G => "l4-2-24g",
+            ScwInstancesType::L4_4_24G => "l4-4-24g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -277,6 +286,7 @@ impl ScwInstancesType {
             ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
             ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
             ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
             ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
             ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
             ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
@@ -286,6 +296,7 @@ impl ScwInstancesType {
             ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
             ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
             ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+            ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
             ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
             ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
             ScwInstancesType::PRO2_L => "pro2-l",
@@ -302,13 +313,6 @@ impl ScwInstancesType {
 impl fmt::Display for ScwInstancesType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ScwInstancesType::AMP2_C12 => write!(f, "amp2-c12"),
-            ScwInstancesType::AMP2_C2 => write!(f, "amp2-c2"),
-            ScwInstancesType::AMP2_C24 => write!(f, "amp2-c24"),
-            ScwInstancesType::AMP2_C4 => write!(f, "amp2-c4"),
-            ScwInstancesType::AMP2_C48 => write!(f, "amp2-c48"),
-            ScwInstancesType::AMP2_C60 => write!(f, "amp2-c60"),
-            ScwInstancesType::AMP2_C8 => write!(f, "amp2-c8"),
             ScwInstancesType::COPARM1_16C_64G => write!(f, "coparm1-16c-64g"),
             ScwInstancesType::COPARM1_2C_8G => write!(f, "coparm1-2c-8g"),
             ScwInstancesType::COPARM1_32C_128G => write!(f, "coparm1-32c-128g"),
@@ -321,14 +325,21 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::ENT1_L => write!(f, "ent1-l"),
             ScwInstancesType::ENT1_M => write!(f, "ent1-m"),
             ScwInstancesType::ENT1_S => write!(f, "ent1-s"),
+            ScwInstancesType::ENT1_XL => write!(f, "ent1-xl"),
             ScwInstancesType::ENT1_XS => write!(f, "ent1-xs"),
             ScwInstancesType::ENT1_XXS => write!(f, "ent1-xxs"),
             ScwInstancesType::GP1_L => write!(f, "gp1-l"),
             ScwInstancesType::GP1_M => write!(f, "gp1-m"),
             ScwInstancesType::GP1_S => write!(f, "gp1-s"),
             ScwInstancesType::GP1_VIZ => write!(f, "gp1-viz"),
+            ScwInstancesType::GP1_XL => write!(f, "gp1-xl"),
             ScwInstancesType::GP1_XS => write!(f, "gp1-xs"),
             ScwInstancesType::GPU_3070_S => write!(f, "gpu-3070-s"),
+            ScwInstancesType::H100_1_80G => write!(f, "h100-1-80g"),
+            ScwInstancesType::H100_1_M => write!(f, "h100-1-m"),
+            ScwInstancesType::L4_1_24G => write!(f, "l4-1-24g"),
+            ScwInstancesType::L4_2_24G => write!(f, "l4-2-24g"),
+            ScwInstancesType::L4_4_24G => write!(f, "l4-4-24g"),
             ScwInstancesType::PLAY2_MICRO => write!(f, "play2-micro"),
             ScwInstancesType::PLAY2_NANO => write!(f, "play2-nano"),
             ScwInstancesType::PLAY2_PICO => write!(f, "play2-pico"),
@@ -336,6 +347,7 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::POP2_2C_8G => write!(f, "pop2-2c-8g"),
             ScwInstancesType::POP2_32C_128G => write!(f, "pop2-32c-128g"),
             ScwInstancesType::POP2_4C_16G => write!(f, "pop2-4c-16g"),
+            ScwInstancesType::POP2_64C_256G => write!(f, "pop2-64c-256g"),
             ScwInstancesType::POP2_8C_32G => write!(f, "pop2-8c-32g"),
             ScwInstancesType::POP2_HC_16C_32G => write!(f, "pop2-hc-16c-32g"),
             ScwInstancesType::POP2_HC_2C_4G => write!(f, "pop2-hc-2c-4g"),
@@ -345,6 +357,7 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::POP2_HC_8C_16G => write!(f, "pop2-hc-8c-16g"),
             ScwInstancesType::POP2_HM_16C_128G => write!(f, "pop2-hm-16c-128g"),
             ScwInstancesType::POP2_HM_2C_16G => write!(f, "pop2-hm-2c-16g"),
+            ScwInstancesType::POP2_HM_32C_256G => write!(f, "pop2-hm-32c-256g"),
             ScwInstancesType::POP2_HM_4C_32G => write!(f, "pop2-hm-4c-32g"),
             ScwInstancesType::POP2_HM_8C_64G => write!(f, "pop2-hm-8c-64g"),
             ScwInstancesType::PRO2_L => write!(f, "pro2-l"),
@@ -363,13 +376,6 @@ impl FromStr for ScwInstancesType {
 
     fn from_str(s: &str) -> Result<ScwInstancesType, CommandError> {
         match s {
-            "amp2-c12" => Ok(ScwInstancesType::AMP2_C12),
-            "amp2-c2" => Ok(ScwInstancesType::AMP2_C2),
-            "amp2-c24" => Ok(ScwInstancesType::AMP2_C24),
-            "amp2-c4" => Ok(ScwInstancesType::AMP2_C4),
-            "amp2-c48" => Ok(ScwInstancesType::AMP2_C48),
-            "amp2-c60" => Ok(ScwInstancesType::AMP2_C60),
-            "amp2-c8" => Ok(ScwInstancesType::AMP2_C8),
             "coparm1-16c-64g" => Ok(ScwInstancesType::COPARM1_16C_64G),
             "coparm1-2c-8g" => Ok(ScwInstancesType::COPARM1_2C_8G),
             "coparm1-32c-128g" => Ok(ScwInstancesType::COPARM1_32C_128G),
@@ -382,14 +388,21 @@ impl FromStr for ScwInstancesType {
             "ent1-l" => Ok(ScwInstancesType::ENT1_L),
             "ent1-m" => Ok(ScwInstancesType::ENT1_M),
             "ent1-s" => Ok(ScwInstancesType::ENT1_S),
+            "ent1-xl" => Ok(ScwInstancesType::ENT1_XL),
             "ent1-xs" => Ok(ScwInstancesType::ENT1_XS),
             "ent1-xxs" => Ok(ScwInstancesType::ENT1_XXS),
             "gp1-l" => Ok(ScwInstancesType::GP1_L),
             "gp1-m" => Ok(ScwInstancesType::GP1_M),
             "gp1-s" => Ok(ScwInstancesType::GP1_S),
             "gp1-viz" => Ok(ScwInstancesType::GP1_VIZ),
+            "gp1-xl" => Ok(ScwInstancesType::GP1_XL),
             "gp1-xs" => Ok(ScwInstancesType::GP1_XS),
             "gpu-3070-s" => Ok(ScwInstancesType::GPU_3070_S),
+            "h100-1-80g" => Ok(ScwInstancesType::H100_1_80G),
+            "h100-1-m" => Ok(ScwInstancesType::H100_1_M),
+            "l4-1-24g" => Ok(ScwInstancesType::L4_1_24G),
+            "l4-2-24g" => Ok(ScwInstancesType::L4_2_24G),
+            "l4-4-24g" => Ok(ScwInstancesType::L4_4_24G),
             "play2-micro" => Ok(ScwInstancesType::PLAY2_MICRO),
             "play2-nano" => Ok(ScwInstancesType::PLAY2_NANO),
             "play2-pico" => Ok(ScwInstancesType::PLAY2_PICO),
@@ -397,6 +410,7 @@ impl FromStr for ScwInstancesType {
             "pop2-2c-8g" => Ok(ScwInstancesType::POP2_2C_8G),
             "pop2-32c-128g" => Ok(ScwInstancesType::POP2_32C_128G),
             "pop2-4c-16g" => Ok(ScwInstancesType::POP2_4C_16G),
+            "pop2-64c-256g" => Ok(ScwInstancesType::POP2_64C_256G),
             "pop2-8c-32g" => Ok(ScwInstancesType::POP2_8C_32G),
             "pop2-hc-16c-32g" => Ok(ScwInstancesType::POP2_HC_16C_32G),
             "pop2-hc-2c-4g" => Ok(ScwInstancesType::POP2_HC_2C_4G),
@@ -406,6 +420,7 @@ impl FromStr for ScwInstancesType {
             "pop2-hc-8c-16g" => Ok(ScwInstancesType::POP2_HC_8C_16G),
             "pop2-hm-16c-128g" => Ok(ScwInstancesType::POP2_HM_16C_128G),
             "pop2-hm-2c-16g" => Ok(ScwInstancesType::POP2_HM_2C_16G),
+            "pop2-hm-32c-256g" => Ok(ScwInstancesType::POP2_HM_32C_256G),
             "pop2-hm-4c-32g" => Ok(ScwInstancesType::POP2_HM_4C_32G),
             "pop2-hm-8c-64g" => Ok(ScwInstancesType::POP2_HM_8C_64G),
             "pro2-l" => Ok(ScwInstancesType::PRO2_L),
@@ -479,13 +494,6 @@ mod tests {
             let result_to_string = instance_type.to_cloud_provider_format();
             assert_eq!(
                 match instance_type {
-                    ScwInstancesType::AMP2_C12 => "amp2-c12",
-                    ScwInstancesType::AMP2_C2 => "amp2-c2",
-                    ScwInstancesType::AMP2_C24 => "amp2-c24",
-                    ScwInstancesType::AMP2_C4 => "amp2-c4",
-                    ScwInstancesType::AMP2_C48 => "amp2-c48",
-                    ScwInstancesType::AMP2_C60 => "amp2-c60",
-                    ScwInstancesType::AMP2_C8 => "amp2-c8",
                     ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
                     ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
                     ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -498,14 +506,21 @@ mod tests {
                     ScwInstancesType::ENT1_L => "ent1-l",
                     ScwInstancesType::ENT1_M => "ent1-m",
                     ScwInstancesType::ENT1_S => "ent1-s",
+                    ScwInstancesType::ENT1_XL => "ent1-xl",
                     ScwInstancesType::ENT1_XS => "ent1-xs",
                     ScwInstancesType::ENT1_XXS => "ent1-xxs",
                     ScwInstancesType::GP1_L => "gp1-l",
                     ScwInstancesType::GP1_M => "gp1-m",
                     ScwInstancesType::GP1_S => "gp1-s",
                     ScwInstancesType::GP1_VIZ => "gp1-viz",
+                    ScwInstancesType::GP1_XL => "gp1-xl",
                     ScwInstancesType::GP1_XS => "gp1-xs",
                     ScwInstancesType::GPU_3070_S => "gpu-3070-s",
+                    ScwInstancesType::H100_1_80G => "h100-1-80g",
+                    ScwInstancesType::H100_1_M => "h100-1-m",
+                    ScwInstancesType::L4_1_24G => "l4-1-24g",
+                    ScwInstancesType::L4_2_24G => "l4-2-24g",
+                    ScwInstancesType::L4_4_24G => "l4-4-24g",
                     ScwInstancesType::PLAY2_MICRO => "play2-micro",
                     ScwInstancesType::PLAY2_NANO => "play2-nano",
                     ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -513,6 +528,7 @@ mod tests {
                     ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
                     ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
                     ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+                    ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
                     ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
                     ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
                     ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
@@ -522,6 +538,7 @@ mod tests {
                     ScwInstancesType::POP2_HC_8C_16G => "pop2-hc-8c-16g",
                     ScwInstancesType::POP2_HM_16C_128G => "pop2-hm-16c-128g",
                     ScwInstancesType::POP2_HM_2C_16G => "pop2-hm-2c-16g",
+                    ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
                     ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
                     ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
                     ScwInstancesType::PRO2_L => "pro2-l",

@@ -45,33 +45,6 @@ impl<'a> Transaction<'a> {
         )))
     }
 
-    pub fn rollback(&self) -> Result<(), RollbackError> {
-        for step in self.executed_steps.iter() {
-            match step {
-                Step::CreateKubernetes => {
-                    // revert kubernetes creation
-                    if let Err(err) = self.engine.kubernetes().on_create_error() {
-                        return Err(RollbackError::CommitError(err));
-                    };
-                }
-                Step::DeleteKubernetes => {
-                    // revert kubernetes deletion
-                    if let Err(err) = self.engine.kubernetes().on_delete_error() {
-                        return Err(RollbackError::CommitError(err));
-                    };
-                }
-                Step::PauseKubernetes => {
-                    // revert pause
-                    if let Err(err) = self.engine.kubernetes().on_pause_error() {
-                        return Err(RollbackError::CommitError(err));
-                    };
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn commit(mut self) -> TransactionResult {
         for step in self.steps.clone().into_iter() {
             // execution loop
@@ -118,17 +91,8 @@ impl<'a> Transaction<'a> {
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
-                match self.rollback() {
-                    Ok(_) => {
-                        // an error occurred on infrastructure deployment BUT rolledback is OK
-                        TransactionResult::Error(err)
-                    }
-                    Err(e) => {
-                        // an error occurred on infrastructure deployment AND rolledback is KO
-                        error!("infrastructure ROLLBACK FAILED! fatal error: {:?}", e);
-                        TransactionResult::Error(err)
-                    }
-                }
+                // an error occurred on infrastructure deployment BUT rolledback is OK
+                TransactionResult::Error(err)
             }
             _ => {
                 // infrastructure deployment OK

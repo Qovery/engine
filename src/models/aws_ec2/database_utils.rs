@@ -40,8 +40,8 @@ pub(super) fn is_allowed_managed_postgres_version(requested_version: &VersionsNu
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
     // aws rds describe-db-engine-versions --engine postgres --query "*[].{Engine:Engine,EngineVersion:EngineVersion}" --output text
 
-    // Allow only major from 11 to 15
-    if !&["11", "12", "13", "14", "15"].contains(&requested_version.major.as_str()) {
+    // Allow only major from 11 to 16
+    if !&["11", "12", "13", "14", "15", "16"].contains(&requested_version.major.as_str()) {
         return Err(DatabaseError::UnsupportedDatabaseVersion {
             database_type: DatabaseType::PostgreSQL,
             database_version: Arc::from(requested_version.to_string()),
@@ -257,6 +257,14 @@ mod tests {
             &VersionsNumberBuilder::new().major(15).minor(11).patch(6).build()
         )
         .is_ok());
+
+        // v16
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).minor(11).build()).is_ok());
+        assert!(is_allowed_managed_postgres_version(
+            &VersionsNumberBuilder::new().major(16).minor(12).patch(7).build()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -271,10 +279,10 @@ mod tests {
             }
         );
         assert_eq!(
-            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).build()).unwrap_err(),
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(17).build()).unwrap_err(),
             DatabaseError::UnsupportedDatabaseVersion {
                 database_type: DatabaseType::PostgreSQL,
-                database_version: Arc::from("16"),
+                database_version: Arc::from("17"),
             }
         );
     }

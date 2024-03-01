@@ -10,7 +10,7 @@ use core::option::Option::{None, Some};
 use core::result::Result::Err;
 use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
 use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
-use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZone};
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
@@ -34,7 +34,6 @@ use qovery_engine::transaction::{Transaction, TransactionResult};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
-use uuid::Uuid;
 
 pub const KUBERNETES_MIN_NODES: i32 = 5;
 pub const KUBERNETES_MAX_NODES: i32 = 10;
@@ -44,154 +43,6 @@ pub enum ClusterTestType {
     WithPause,
     WithUpgrade,
     WithNodesResize,
-}
-
-pub fn get_cluster_test_kubernetes<'a>(
-    secrets: FuncTestsSecrets,
-    context: &Context,
-    cluster_id: String,
-    cluster_name: String,
-    boot_version: KubernetesVersion,
-    localisation: &str,
-    aws_zones: Option<Vec<AwsZone>>,
-    cloud_provider: Arc<dyn CloudProvider>,
-    kubernetes_provider: KubernetesKind,
-    dns_provider: Arc<dyn DnsProvider>,
-    vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
-    min_nodes: i32,
-    max_nodes: i32,
-    cpu_archi: CpuArchitecture,
-) -> Box<dyn Kubernetes + 'a> {
-    let temp_dir = workspace_directory(
-        context.workspace_root_dir(),
-        context.execution_id(),
-        format!("bootstrap/{}", cluster_id),
-    )
-    .unwrap();
-
-    let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
-        KubernetesKind::Eks => {
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide);
-            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
-
-            Box::new(
-                EKS::new(
-                    context.clone(),
-                    cluster_id.as_str(),
-                    Uuid::new_v4(),
-                    cluster_name.as_str(),
-                    boot_version,
-                    aws_region,
-                    aws_zones,
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                    logger,
-                    metrics_registry,
-                    ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
-                        ..Default::default()
-                    },
-                    None,
-                    secrets.AWS_TEST_KUBECONFIG,
-                    temp_dir,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::Ec2 => {
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide);
-            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
-
-            Box::new(
-                EC2::new(
-                    context.clone(),
-                    cluster_id.as_str(),
-                    Uuid::new_v4(),
-                    cluster_name.as_str(),
-                    boot_version,
-                    aws_region,
-                    aws_zones,
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    ec2_kubernetes_instance(),
-                    logger,
-                    metrics_registry,
-                    ClusterAdvancedSettings {
-                        pleco_resources_ttl: 7200,
-                        ..Default::default()
-                    },
-                    None,
-                    secrets.AWS_EC2_KUBECONFIG,
-                    temp_dir,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::ScwKapsule => Box::new(
-            Kapsule::new(
-                context.clone(),
-                Uuid::new_v4(),
-                cluster_name,
-                boot_version,
-                ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
-                cloud_provider,
-                dns_provider,
-                Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
-                logger,
-                metrics_registry,
-                ClusterAdvancedSettings {
-                    pleco_resources_ttl: 14400,
-                    ..Default::default()
-                },
-                None,
-                secrets.SCALEWAY_TEST_KUBECONFIG,
-                temp_dir,
-            )
-            .unwrap(),
-        ),
-        KubernetesKind::Gke => Box::new(
-            Gke::new(
-                context.clone(),
-                cluster_id.as_str(),
-                Uuid::new_v4(),
-                &cluster_name,
-                boot_version,
-                GcpRegion::from_str(localisation).expect("Unknown zone set for GKE"),
-                cloud_provider,
-                dns_provider,
-                Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide),
-                logger,
-                metrics_registry,
-                ClusterAdvancedSettings {
-                    pleco_resources_ttl: 14400,
-                    ..Default::default()
-                },
-                None,
-                secrets.GCP_TEST_KUBECONFIG,
-                temp_dir,
-            )
-            .unwrap(),
-        ),
-        KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
-        KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
-        KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
-    };
-
-    kubernetes
 }
 
 pub fn cluster_test(
@@ -506,12 +357,11 @@ pub fn get_environment_test_kubernetes(
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
-
             Box::new(
                 EKS::new(
                     context.clone(),
                     context.cluster_short_id(),
-                    Uuid::new_v4(),
+                    *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
@@ -546,7 +396,7 @@ pub fn get_environment_test_kubernetes(
                 EC2::new(
                     context.clone(),
                     context.cluster_short_id(),
-                    Uuid::new_v4(),
+                    *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
@@ -601,7 +451,7 @@ pub fn get_environment_test_kubernetes(
                 Gke::new(
                     context.clone(),
                     context.cluster_short_id(),
-                    Uuid::new_v4(),
+                    *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region,
