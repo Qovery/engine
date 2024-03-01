@@ -6,6 +6,10 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{
     fetch_kubeconfig, put_kubeconfig_file_to_object_storage, write_kubeconfig_on_disk,
 };
+use crate::cloud_provider::kubectl_utils::{
+    check_workers_on_create, check_workers_on_pause, check_workers_on_upgrade, delete_completed_jobs,
+    delete_crashlooping_pods,
+};
 use crate::cloud_provider::kubernetes::{
     self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
     Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
@@ -991,7 +995,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
+        match check_workers_on_create(self, self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1214,7 +1218,7 @@ impl Kapsule {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = self.check_workers_on_pause(self.cloud_provider.as_ref()) {
+        if let Err(e) = check_workers_on_pause(self, self.cloud_provider.as_ref()) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1738,7 +1742,8 @@ impl Kubernetes for Kapsule {
             }
         }
 
-        if let Err(e) = self.delete_crashlooping_pods(
+        if let Err(e) = delete_crashlooping_pods(
+            self,
             None,
             None,
             Some(3),
@@ -1749,7 +1754,8 @@ impl Kubernetes for Kapsule {
             return Err(e);
         }
 
-        if let Err(e) = self.delete_completed_jobs(
+        if let Err(e) = delete_completed_jobs(
+            self,
             self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
@@ -1763,7 +1769,8 @@ impl Kubernetes for Kapsule {
             self.context.is_dry_run_deploy(),
             &[],
         ) {
-            Ok(_) => match self.check_workers_on_upgrade(
+            Ok(_) => match check_workers_on_upgrade(
+                self,
                 self.cloud_provider.as_ref(),
                 kubernetes_upgrade_status.requested_version.to_string(),
             ) {

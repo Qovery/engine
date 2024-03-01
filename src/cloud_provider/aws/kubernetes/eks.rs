@@ -39,6 +39,7 @@ use aws_smithy_client::SdkError;
 
 use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
+use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_completed_jobs, delete_crashlooping_pods};
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -577,7 +578,8 @@ impl Kubernetes for EKS {
             }
         }
 
-        if let Err(e) = self.delete_crashlooping_pods(
+        if let Err(e) = delete_crashlooping_pods(
+            self,
             None,
             None,
             Some(3),
@@ -588,7 +590,8 @@ impl Kubernetes for EKS {
             return Err(e);
         }
 
-        if let Err(e) = self.delete_completed_jobs(
+        if let Err(e) = delete_completed_jobs(
+            self,
             self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
@@ -610,7 +613,8 @@ impl Kubernetes for EKS {
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        self.check_workers_on_upgrade(
+        check_workers_on_upgrade(
+            self,
             self.cloud_provider.as_ref(),
             kubernetes_upgrade_status.requested_version.to_string(),
         )

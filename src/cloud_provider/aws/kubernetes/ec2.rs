@@ -400,15 +400,18 @@ impl Kubernetes for EC2 {
         // update Vault with new cluster information
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Ensuring the upgrade has successfuly been performed...".to_string()),
+            EventMessage::new_from_safe("Ensuring the upgrade has successfully been performed...".to_string()),
         ));
 
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
+        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
             self.cloud_provider.access_key_id(),
             self.region().to_string(),
             self.cloud_provider.secret_access_key(),
             None,
-            None,
+            Some(qovery_terraform_config.aws_ec2_public_hostname),
             self.kind(),
             self.cluster_name(),
             self.long_id().to_string(),
@@ -418,7 +421,6 @@ impl Kubernetes for EC2 {
             self.context().is_test_cluster(),
         ));
 
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
         if let Err(e) = self.update_vault_config(
             event_details.clone(),
             qovery_terraform_config_file,

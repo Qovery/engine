@@ -12,11 +12,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use uuid::Uuid;
 
-pub fn get_kubeconfig_filename(cluster_id: &Uuid) -> String {
+fn get_kubeconfig_filename(cluster_id: &Uuid) -> String {
     format!("{}.yaml", to_short_id(cluster_id))
 }
 
-pub fn get_bucket_name(cluster_id: &Uuid) -> String {
+fn get_bucket_name(cluster_id: &Uuid) -> String {
     format!("qovery-kubeconfigs-{}", to_short_id(cluster_id))
 }
 
