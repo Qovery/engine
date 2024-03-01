@@ -1206,6 +1206,7 @@ fn create(
             // no need to push it to object storage, it's already done by the EC2 instance itself
             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
                 .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+            cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
             EC2::get_and_check_if_kubeconfig_is_valid(kubernetes, event_details.clone(), qovery_terraform_config)?
         }
         _ => {

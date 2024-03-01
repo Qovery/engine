@@ -7,6 +7,9 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{
     fetch_kubeconfig, put_kubeconfig_file_to_object_storage, write_kubeconfig_on_disk,
 };
+use crate::cloud_provider::kubectl_utils::{
+    check_control_plane_on_upgrade, check_workers_on_create, delete_completed_jobs, delete_crashlooping_pods,
+};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
@@ -687,7 +690,7 @@ impl Gke {
         let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
+        match check_workers_on_create(self, self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1443,7 +1446,8 @@ impl Kubernetes for Gke {
             }
         }
 
-        if let Err(e) = self.delete_crashlooping_pods(
+        if let Err(e) = delete_crashlooping_pods(
+            self,
             None,
             None,
             Some(3),
@@ -1454,7 +1458,8 @@ impl Kubernetes for Gke {
             return Err(e);
         }
 
-        if let Err(e) = self.delete_completed_jobs(
+        if let Err(e) = delete_completed_jobs(
+            self,
             self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             Some(GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES.to_vec()),
@@ -1479,7 +1484,7 @@ impl Kubernetes for Gke {
             self.context.is_dry_run_deploy(),
             self.cloud_provider.credentials_environment_variables().as_slice(),
         ) {
-            Ok(_) => match self.check_control_plane_on_upgrade(self.cloud_provider.as_ref(), kubernetes_version) {
+            Ok(_) => match check_control_plane_on_upgrade(self, self.cloud_provider.as_ref(), kubernetes_version) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
                         event_details,
