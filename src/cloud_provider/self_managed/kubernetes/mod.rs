@@ -17,8 +17,7 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
-use crate::object_storage::ObjectStorage;
+
 use crate::secret_manager::vault::QVaultClient;
 use serde::{Deserialize, Serialize};
 
@@ -33,7 +32,6 @@ pub struct SelfManaged {
     #[allow(dead_code)] //TODO(pmavro): not yet implemented
     options: SelfManagedOptions,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
@@ -49,7 +47,6 @@ impl SelfManaged {
         cloud_provider: Arc<dyn CloudProvider>,
         options: SelfManagedOptions,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
@@ -64,7 +61,6 @@ impl SelfManaged {
             region: cloud_provider.region(),
             options,
             logger,
-            metrics_registry,
             advanced_settings,
             kubeconfig,
             temp_dir,
@@ -131,14 +127,6 @@ impl Kubernetes for SelfManaged {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
-    }
-
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        todo!()
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {

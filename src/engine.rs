@@ -9,6 +9,7 @@ use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::io_models::context::Context;
+use crate::metrics_registry::MetricsRegistry;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineConfigError {
@@ -40,6 +41,7 @@ pub struct InfrastructureContext {
     cloud_provider: Arc<dyn CloudProvider>,
     dns_provider: Arc<dyn DnsProvider>,
     kubernetes: Box<dyn Kubernetes>,
+    metrics_registry: Box<dyn MetricsRegistry>,
 }
 
 impl InfrastructureContext {
@@ -50,6 +52,7 @@ impl InfrastructureContext {
         cloud_provider: Arc<dyn CloudProvider>,
         dns_provider: Arc<dyn DnsProvider>,
         kubernetes: Box<dyn Kubernetes>,
+        metrics_registry: Box<dyn MetricsRegistry>,
     ) -> InfrastructureContext {
         InfrastructureContext {
             context,
@@ -58,6 +61,7 @@ impl InfrastructureContext {
             cloud_provider,
             dns_provider,
             kubernetes,
+            metrics_registry,
         }
     }
 
@@ -87,6 +91,10 @@ impl InfrastructureContext {
 
     pub fn dns_provider(&self) -> &dyn DnsProvider {
         (*self.dns_provider).borrow()
+    }
+
+    pub fn metrics_registry(&self) -> &dyn MetricsRegistry {
+        self.metrics_registry.borrow()
     }
 
     pub fn is_valid(&self) -> Result<(), Box<EngineConfigError>> {

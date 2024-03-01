@@ -38,7 +38,7 @@ use crate::io_models::context::{Context, Features};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
+
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -164,7 +164,6 @@ pub struct Kapsule {
     template_directory: String,
     options: KapsuleOptions,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
@@ -183,7 +182,6 @@ impl Kapsule {
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
@@ -258,7 +256,6 @@ impl Kapsule {
             template_directory,
             options,
             logger,
-            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
@@ -272,7 +269,7 @@ impl Kapsule {
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
         } else {
-            fetch_kubeconfig(&cluster)?;
+            fetch_kubeconfig(&cluster, &cluster.object_storage)?;
         }
 
         Ok(cluster)
@@ -799,7 +796,7 @@ impl Kapsule {
 
         // push config file to object storage
         let kubeconfig_path = self.kubeconfig_local_file_path();
-        put_kubeconfig_file_to_object_storage(self)?;
+        put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
         let cluster_info = self.get_scw_cluster_info()?;
         if cluster_info.is_none() {
@@ -1571,14 +1568,6 @@ impl Kubernetes for Kapsule {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
-    }
-
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.object_storage
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {

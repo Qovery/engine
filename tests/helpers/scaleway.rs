@@ -136,7 +136,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
             localisation,
             vpc_network_mode,
             min_nodes,
@@ -152,6 +151,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             cloud_provider,
             dns_provider,
             cluster,
+            metrics_registry,
         )
     }
 

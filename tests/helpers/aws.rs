@@ -127,7 +127,6 @@ impl Cluster<AWS, Options> for AWS {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
             region,
             vpc_network_mode,
             min_nodes,
@@ -143,6 +142,7 @@ impl Cluster<AWS, Options> for AWS {
             cloud_provider,
             dns_provider,
             kubernetes,
+            metrics_registry,
         )
     }
 

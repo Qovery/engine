@@ -333,7 +333,6 @@ pub fn get_environment_test_kubernetes(
     kubernetes_version: KubernetesVersion,
     dns_provider: Arc<dyn DnsProvider>,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     min_nodes: i32,
@@ -371,7 +370,6 @@ pub fn get_environment_test_kubernetes(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
-                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
@@ -406,7 +404,6 @@ pub fn get_environment_test_kubernetes(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
-                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: false,
@@ -433,7 +430,6 @@ pub fn get_environment_test_kubernetes(
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
                     logger,
-                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
                         ..Default::default()
@@ -459,7 +455,6 @@ pub fn get_environment_test_kubernetes(
                     dns_provider,
                     Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
                     logger,
-                    metrics_registry,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,
                         ..Default::default()

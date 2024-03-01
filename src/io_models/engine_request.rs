@@ -146,7 +146,6 @@ impl<T> EngineRequest<T> {
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
         ) {
             Ok(x) => x,
             Err(e) => {
@@ -162,6 +161,7 @@ impl<T> EngineRequest<T> {
             cloud_provider,
             dns_provider,
             kubernetes,
+            metrics_registry,
         ))
     }
 }
@@ -336,7 +336,6 @@ impl Kubernetes {
         cloud_provider: Arc<dyn cloud_provider::CloudProvider>,
         dns_provider: Arc<dyn dns_provider::DnsProvider>,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
         let event_details = event_details(&*cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
@@ -392,7 +391,6 @@ impl Kubernetes {
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
                 logger,
-                metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
                 self.kubeconfig.clone(),
@@ -419,7 +417,6 @@ impl Kubernetes {
                 serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
-                metrics_registry,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
                 self.kubeconfig.clone(),
@@ -454,7 +451,6 @@ impl Kubernetes {
                         .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
                     logger,
-                    metrics_registry,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
                     self.kubeconfig.clone(),
@@ -489,7 +485,6 @@ impl Kubernetes {
                     dns_provider,
                     options,
                     logger,
-                    metrics_registry,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
                     self.kubeconfig.clone(),
@@ -515,7 +510,6 @@ impl Kubernetes {
                     )
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     logger,
-                    metrics_registry,
                     ClusterAdvancedSettings::default(),
                     self.kubeconfig.clone(),
                     temp_dir,
