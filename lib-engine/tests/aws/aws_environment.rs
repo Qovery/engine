@@ -1456,7 +1456,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
-
+        let host_suffix = Uuid::new_v4();
         let service_id = Uuid::new_v4();
         environment.applications = vec![];
         environment.containers = vec![Container {
@@ -1495,7 +1495,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
-                    name: "p8080".to_string(),
+                    name: format!("p8080-{}", host_suffix),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -1505,7 +1505,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: "grpc".to_string(),
+                    name: format!("grpc-{}", host_suffix),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -2111,7 +2111,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
-                    name: "http".to_string(),
+                    name: format!("http-{}", suffix),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -2121,7 +2121,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: "grpc".to_string(),
+                    name: format!("grpc-{}", suffix),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
