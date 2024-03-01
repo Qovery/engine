@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 
 extern crate time;
 
+use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
 use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -149,11 +150,11 @@ pub fn context_for_cluster(organization_id: Uuid, cluster_id: Uuid, kind: Option
 }
 
 pub fn context_for_ec2(organization_id: Uuid, cluster_id: Uuid) -> Context {
-    context(organization_id, cluster_id, 7200, None)
+    context(organization_id, cluster_id, DEFAULT_RESOURCE_TTL_IN_SECONDS, None)
 }
 
 pub fn context_for_resource(organization_id: Uuid, cluster_id: Uuid) -> Context {
-    context(organization_id, cluster_id, 3600, None)
+    context(organization_id, cluster_id, DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, None)
 }
 
 pub fn logger() -> Box<dyn Logger> {
