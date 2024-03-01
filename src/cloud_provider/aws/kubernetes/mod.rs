@@ -939,7 +939,7 @@ fn create(
 
         // in case error, this should no be a blocking error
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or(Vec::with_capacity(0));
 
@@ -1248,7 +1248,7 @@ fn create(
         && karpenter_is_deployed(kubernetes, cloud_provider, &event_details)
         && !karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
     {
-        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
             let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
 
             block_on(Karpenter::restart(
@@ -1278,7 +1278,10 @@ fn create(
     // https://github.com/kubernetes/cloud-provider-aws/issues/87
     if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
         info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
-        block_on(patch_kube_proxy_for_aws_user_network(kubernetes.kube_client(cloud_provider)?)).map_err(|e| {
+        block_on(patch_kube_proxy_for_aws_user_network(
+            kubernetes.kube_client(cloud_provider)?.client().clone(),
+        ))
+        .map_err(|e| {
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
@@ -1401,10 +1404,10 @@ fn create(
     };
 
     if kubernetes.kind() == Kind::Ec2 {
-        let kube_client = &kubernetes.kube_client(cloud_provider)?;
+        let kube_client = kubernetes.kube_client(cloud_provider)?;
         let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
             match deploy_charts_levels(
-                kube_client,
+                kube_client.client(),
                 kubeconfig_path,
                 credentials_environment_variables
                     .iter()
@@ -1434,7 +1437,7 @@ fn create(
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
         deploy_charts_levels(
-            &kubernetes.kube_client(cloud_provider)?,
+            kubernetes.kube_client(cloud_provider)?.client(),
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1510,7 +1513,7 @@ fn karpenter_is_deployed(
     cloud_provider: &dyn CloudProvider,
     event_details: &EventDetails,
 ) -> bool {
-    match kubernetes.q_kube_client(cloud_provider) {
+    match kubernetes.kube_client(cloud_provider) {
         Ok(kube_client) => {
             let deployments = block_on(kube_client.get_deployments(
                 event_details.clone(),
@@ -1530,7 +1533,7 @@ fn karpenter_pods_is_running(
     cloud_provider: &dyn CloudProvider,
     event_details: &EventDetails,
 ) -> bool {
-    match kubernetes.q_kube_client(cloud_provider) {
+    match kubernetes.kube_client(cloud_provider) {
         Ok(kube_client) => {
             let nodes = block_on(kube_client.get_pods(
                 event_details.clone(),
@@ -1567,15 +1570,6 @@ fn node_group_is_running(
     }
 }
 
-fn create_error(kubernetes: &dyn Kubernetes, _cloud_provider: &dyn CloudProvider) -> Result<(), Box<EngineError>> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
-        EventMessage::new_from_safe(format!("{}.create_error() called.", kubernetes.kind())),
-    ));
-
-    Ok(())
-}
-
 fn pause(
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
@@ -1609,7 +1603,7 @@ fn pause(
 
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1759,7 +1753,7 @@ fn pause(
     ));
 
     if kubernetes.advanced_settings().aws_enable_karpenter {
-        if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
             block_on(Karpenter::pause(
                 kubernetes,
                 cloud_provider,
@@ -1784,15 +1778,6 @@ fn pause(
         }
         Err(e) => Err(Box::new(EngineError::new_terraform_error(event_details, e))),
     }
-}
-
-fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-        EventMessage::new_from_safe(format!("{}.pause_error() called.", kubernetes.kind())),
-    ));
-
-    Ok(())
 }
 
 fn delete(
@@ -1855,7 +1840,7 @@ fn delete(
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.q_kube_client(cloud_provider) {
+    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -2331,15 +2316,6 @@ fn delete(
         // ignore on failure
         let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.id());
     };
-
-    Ok(())
-}
-
-fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
-        EventMessage::new_from_safe(format!("{}.delete_error() called.", kubernetes.kind())),
-    ));
 
     Ok(())
 }

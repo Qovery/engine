@@ -34,7 +34,6 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::fs::delete_file_if_exists;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
@@ -42,9 +41,7 @@ use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
-use crate::runtime::block_on;
 use crate::services::kube_client::QubeClient;
-use crate::utilities::create_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
@@ -355,7 +352,7 @@ pub trait Kubernetes: Send + Sync {
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
     // this method should replace kube_client
-    fn q_kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
+    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.kubeconfig_local_file_path();
         let kube_credentials: Vec<(String, String)> = cloud_provider
@@ -366,27 +363,11 @@ pub trait Kubernetes: Send + Sync {
 
         QubeClient::new(
             self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-            kubeconfig_path.to_str().unwrap_or_default().to_string(),
+            kubeconfig_path,
             kube_credentials,
         )
     }
-    // AVOID USE: to be replaced by q_kube_client
-    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<kube::Client, Box<EngineError>> {
-        // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.kubeconfig_local_file_path();
-        let kube_credentials: Vec<(String, String)> = cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
 
-        block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
-            Box::new(EngineError::new_cannot_connect_to_k8s_cluster(
-                self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-                err,
-            ))
-        })
-    }
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -409,21 +390,7 @@ pub trait Kubernetes: Send + Sync {
         ))
     }
 
-    fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let file_path = self.kubeconfig_local_file_path();
-        delete_file_if_exists(&file_path).map_err(|e| {
-            Box::new(EngineError::new_delete_local_kubeconfig_file_error(
-                event_details,
-                file_path.to_string_lossy().as_ref(),
-                e,
-            ))
-        })
-    }
-
     fn on_create(&self) -> Result<(), Box<EngineError>>;
-    fn on_create_error(&self) -> Result<(), Box<EngineError>>;
-
     fn check_workers_on_upgrade(
         &self,
         cloud_provider: &dyn CloudProvider,
@@ -483,9 +450,7 @@ pub trait Kubernetes: Send + Sync {
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
     fn on_pause(&self) -> Result<(), Box<EngineError>>;
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>>;
     fn on_delete(&self) -> Result<(), Box<EngineError>>;
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
 
     fn delete_crashlooping_pods(

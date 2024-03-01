@@ -25,7 +25,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
@@ -791,7 +791,7 @@ impl Gke {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &self.kube_client(self.cloud_provider.as_ref())?,
+            self.kube_client(self.cloud_provider.as_ref())?.client(),
             &kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -837,15 +837,6 @@ impl Gke {
             self.cloud_provider.credentials_environment_variables().as_slice(),
         )
         .exec(); // TODO(benjaminch): introduce an EngineError for it and handle it properly
-
-        Ok(())
-    }
-
-    fn create_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Create)),
-            EventMessage::new_from_safe("GKE.create_error() called.".to_string()),
-        ));
 
         Ok(())
     }
@@ -1184,15 +1175,6 @@ impl Gke {
         Ok(())
     }
 
-    fn pause_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("GKE.pause_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn get_gke_qovery_terraform_config(
         &self,
         qovery_terraform_config_file: &str,
@@ -1318,20 +1300,6 @@ impl Kubernetes for Gke {
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
-    #[named]
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider.kind().to_string().to_lowercase().as_str(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.create_error())
-    }
-
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
@@ -1406,7 +1374,7 @@ impl Kubernetes for Gke {
 
         let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
                                                      // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.q_kube_client(self.cloud_provider.as_ref())?;
+        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1551,20 +1519,6 @@ impl Kubernetes for Gke {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider.kind().to_string().to_lowercase().as_str(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
-    }
-
-    #[named]
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
@@ -1576,18 +1530,6 @@ impl Kubernetes for Gke {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
-    }
-
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
-            EventMessage::new_from_safe(format!(
-                "{}.delete_error() called.",
-                self.cloud_provider.kind().to_string().to_lowercase().as_str(),
-            )),
-        ));
-
-        Ok(())
     }
 
     fn temp_dir(&self) -> &Path {

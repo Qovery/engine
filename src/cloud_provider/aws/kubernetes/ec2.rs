@@ -338,22 +338,6 @@ impl Kubernetes for EC2 {
         })
     }
 
-    #[named]
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || {
-            kubernetes::create_error(self, self.cloud_provider.as_ref())
-        })
-    }
-
     fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
 
@@ -483,20 +467,6 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || kubernetes::pause_error(self))
-    }
-
-    #[named]
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
@@ -522,20 +492,6 @@ impl Kubernetes for EC2 {
 
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
-    }
-
-    #[named]
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
     /// Update the vault with the new cluster information

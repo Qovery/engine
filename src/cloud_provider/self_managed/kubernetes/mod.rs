@@ -161,10 +161,6 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn upgrade_with_status(
         &self,
         _kubernetes_upgrade_status: kubernetes::KubernetesUpgradeStatus,
@@ -176,18 +172,9 @@ impl Kubernetes for SelfManaged {
         Ok(())
     }
 
-    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn on_delete(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
-
-    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
