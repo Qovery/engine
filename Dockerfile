@@ -23,7 +23,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM  public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.76.0-2024-02-27T15-16-23 as engine_ci
+FROM  public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.76.0-2024-03-04T13-33-27 as engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -166,7 +166,7 @@ RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-archit
   ./aws/install && \
   rm -rf awscliv2.zip aws
 
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin -y
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin -y
 
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip terraform.zip && \
