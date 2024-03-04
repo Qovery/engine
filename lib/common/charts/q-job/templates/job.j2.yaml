@@ -45,7 +45,7 @@ spec:
         {%- endif %}
       restartPolicy: Never
       shareProcessNamespace: true
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
       {%- if service.advanced_settings.security_service_account_name != "" %}
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
       {%- endif %}
