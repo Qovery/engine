@@ -30,6 +30,7 @@ pub mod helm;
 pub mod helm_charts;
 pub mod io;
 mod kubeconfig_helper;
+mod kubectl_utils;
 pub mod kubernetes;
 pub mod metrics;
 pub mod models;
@@ -172,7 +173,7 @@ impl<'a> DeploymentTarget<'a> {
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),
-            metrics_registry: Arc::from(infra_ctx.kubernetes().metrics_registry().clone_dyn()),
+            metrics_registry: Arc::from(infra_ctx.metrics_registry().clone_dyn()),
         })
     }
 

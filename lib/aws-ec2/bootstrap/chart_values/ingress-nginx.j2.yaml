@@ -1,4 +1,6 @@
 controller:
+  admissionWebhooks:
+    enabled: false
   replicaCount: 1
   useComponentLabel: true
   allowSnippetAnnotations: true

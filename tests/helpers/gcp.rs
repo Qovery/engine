@@ -35,7 +35,8 @@ use uuid::Uuid;
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
 pub const GCP_SELF_HOSTED_DATABASE_DISK_TYPE: GcpStorageType = GcpStorageType::Balanced;
-pub const GCP_MANAGED_DATABASE_DISK_TYPE: &str = ""; // TODO: once managed DB is implemented
+pub const GCP_MANAGED_DATABASE_DISK_TYPE: &str = "";
+// TODO: once managed DB is implemented
 pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed DB is implemented
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
@@ -181,7 +182,6 @@ impl Cluster<Google, GkeOptions> for Gke {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
             localisation,
             vpc_network_mode,
             min_nodes,
@@ -197,6 +197,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             cloud_provider,
             dns_provider,
             cluster,
+            metrics_registry,
         )
     }
 

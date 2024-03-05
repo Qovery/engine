@@ -2,6 +2,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
+use crate::object_storage::ObjectStorage;
 use crate::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
@@ -12,16 +13,19 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use uuid::Uuid;
 
-pub fn get_kubeconfig_filename(cluster_id: &Uuid) -> String {
+fn get_kubeconfig_filename(cluster_id: &Uuid) -> String {
     format!("{}.yaml", to_short_id(cluster_id))
 }
 
-pub fn get_bucket_name(cluster_id: &Uuid) -> String {
+fn get_bucket_name(cluster_id: &Uuid) -> String {
     format!("qovery-kubeconfigs-{}", to_short_id(cluster_id))
 }
 
-pub fn put_kubeconfig_file_to_object_storage(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    if let Err(e) = kube.config_file_store().put_object(
+pub fn put_kubeconfig_file_to_object_storage(
+    kube: &dyn Kubernetes,
+    object_store: &dyn ObjectStorage,
+) -> Result<(), Box<EngineError>> {
+    if let Err(e) = object_store.put_object(
         get_bucket_name(kube.long_id()).as_str(),
         get_kubeconfig_filename(kube.long_id()).as_str(),
         &kube.kubeconfig_local_file_path(),
@@ -45,8 +49,11 @@ pub fn put_kubeconfig_file_to_object_storage(kube: &dyn Kubernetes) -> Result<()
     Ok(())
 }
 
-pub fn delete_kubeconfig_from_object_storage(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
-    if let Err(e) = kube.config_file_store().delete_object(
+pub fn delete_kubeconfig_from_object_storage(
+    kube: &dyn Kubernetes,
+    object_store: &dyn ObjectStorage,
+) -> Result<(), Box<EngineError>> {
+    if let Err(e) = object_store.delete_object(
         get_bucket_name(kube.long_id()).as_str(),
         get_kubeconfig_filename(kube.long_id()).as_str(),
     ) {
@@ -107,17 +114,14 @@ pub fn write_kubeconfig_on_disk(
     Ok(())
 }
 
-pub fn force_fetch_kubeconfig(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
+pub fn force_fetch_kubeconfig(kube: &dyn Kubernetes, object_store: &dyn ObjectStorage) -> Result<(), Box<EngineError>> {
     let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
     let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
     let object_key = get_kubeconfig_filename(kube.long_id());
     let bucket_name = get_bucket_name(kube.long_id());
     match retry::retry(Fibonacci::from_millis(5000).take(5), || {
-        match kube
-            .config_file_store()
-            .get_object(bucket_name.as_str(), object_key.as_str())
-        {
+        match object_store.get_object(bucket_name.as_str(), object_key.as_str()) {
             Ok(bucket_object) => {
                 let file_path = kube.kubeconfig_local_file_path();
                 let kubeconfig = String::from_utf8_lossy(&bucket_object.value);
@@ -167,10 +171,10 @@ pub fn force_fetch_kubeconfig(kube: &dyn Kubernetes) -> Result<(), Box<EngineErr
     Ok(())
 }
 
-pub fn fetch_kubeconfig(kube: &dyn Kubernetes) -> Result<(), Box<EngineError>> {
+pub fn fetch_kubeconfig(kube: &dyn Kubernetes, object_store: &dyn ObjectStorage) -> Result<(), Box<EngineError>> {
     if kube.context().is_first_cluster_deployment() {
         return Ok(());
     }
 
-    force_fetch_kubeconfig(kube)
+    force_fetch_kubeconfig(kube, object_store)
 }

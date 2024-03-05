@@ -1,3 +1,4 @@
+use crate::helpers::aws::AWS_RESOURCE_TTL_IN_SECONDS;
 use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSecrets};
 use function_name::named;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
@@ -36,7 +37,11 @@ fn test_delete_hard_strategy_bucket() {
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
         aws_os
-            .create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false)
+            .create_bucket(
+                bucket_name.as_str(),
+                Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
+            )
             .unwrap_or_else(|_| {
                 panic!("error while creating S3 bucket in `{}`", aws_region.to_cloud_provider_format())
             });
@@ -89,7 +94,11 @@ fn test_delete_empty_strategy_bucket() {
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
         aws_os
-            .create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false)
+            .create_bucket(
+                bucket_name.as_str(),
+                Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
+            )
             .unwrap_or_else(|_| {
                 panic!("error while creating S3 bucket in `{}`", aws_region.to_cloud_provider_format())
             });
@@ -136,7 +145,11 @@ fn test_create_bucket() {
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
         // compute:
-        let result = aws_os.create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false);
+        let result = aws_os.create_bucket(
+            bucket_name.as_str(),
+            Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+            false,
+        );
 
         // validate:
         assert!(
@@ -184,7 +197,11 @@ fn test_get_bucket() {
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
         let created_bucket = aws_os
-            .create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false)
+            .create_bucket(
+                bucket_name.as_str(),
+                Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
+            )
             .expect("Cannot create bucket");
 
         // compute:
@@ -227,7 +244,11 @@ fn test_recreate_bucket() {
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
         // compute & validate:
-        let create_result = aws_os.create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false);
+        let create_result = aws_os.create_bucket(
+            bucket_name.as_str(),
+            Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+            false,
+        );
         assert!(create_result.is_ok());
         assert!(aws_os.bucket_exists(bucket_name.as_str()));
 
@@ -243,7 +264,11 @@ fn test_recreate_bucket() {
         })
         .expect("Bucket still exists"));
 
-        let recreate_result = aws_os.create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false);
+        let recreate_result = aws_os.create_bucket(
+            bucket_name.as_str(),
+            Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+            false,
+        );
         assert!(recreate_result.is_ok());
         // retry to check if bucket exists, there is a lag / cache after bucket deletion
         assert!(retry::retry(Fixed::from_millis(1000).take(20), || {
@@ -289,7 +314,11 @@ fn test_put_file() {
         let object_key = format!("test-object-{}", generate_id());
 
         aws_os
-            .create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false)
+            .create_bucket(
+                bucket_name.as_str(),
+                Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
+            )
             .expect("error while creating object-storage bucket");
 
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
@@ -336,7 +365,11 @@ fn test_get_file() {
         let object_key = format!("test-object-{}", generate_id());
 
         aws_os
-            .create_bucket(bucket_name.as_str(), Some(Duration::from_secs(7200)), false)
+            .create_bucket(
+                bucket_name.as_str(),
+                Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
+            )
             .expect("error while creating object-storage bucket");
 
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");

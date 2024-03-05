@@ -35,7 +35,8 @@ pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
 };
 pub const AWS_DATABASE_INSTANCE_TYPE: AwsDatabaseInstanceType = AwsDatabaseInstanceType::DB_T3_MICRO;
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
-pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 14400;
+pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const AWS_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
 
 pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -126,7 +127,6 @@ impl Cluster<AWS, Options> for AWS {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
             region,
             vpc_network_mode,
             min_nodes,
@@ -142,6 +142,7 @@ impl Cluster<AWS, Options> for AWS {
             cloud_provider,
             dns_provider,
             kubernetes,
+            metrics_registry,
         )
     }
 

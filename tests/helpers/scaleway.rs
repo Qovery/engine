@@ -39,6 +39,7 @@ pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: ScwDatabaseInstanceType = ScwDatab
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
 pub const SCW_BUCKET_TTL_IN_SECONDS: u64 = 3600;
+pub const SCW_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();
@@ -135,7 +136,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             kubernetes_version,
             dns_provider.clone(),
             logger.clone(),
-            metrics_registry.clone(),
             localisation,
             vpc_network_mode,
             min_nodes,
@@ -151,6 +151,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             cloud_provider,
             dns_provider,
             cluster,
+            metrics_registry,
         )
     }
 

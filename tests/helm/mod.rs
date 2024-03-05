@@ -113,7 +113,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
-            metrics_registry(),
             ClusterAdvancedSettings {
                 load_balancer_size: "my_load_balancer_size".to_string(),
                 registry_image_retention_time_sec: 1,
@@ -302,6 +301,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
@@ -425,6 +425,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             hpa_cpu_average_utilization_percent: 41,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -572,6 +573,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             build_ram_max_in_gib: 4,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
         },
         Some(Probe {
             r#type: ProbeType::Http {

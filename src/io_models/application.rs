@@ -86,6 +86,8 @@ pub struct ApplicationAdvancedSettings {
     pub security_service_account_name: String,
     #[serde(alias = "security.read_only_root_filesystem")]
     pub security_read_only_root_filesystem: bool,
+    #[serde(alias = "security.automount_service_account_token")]
+    pub security_automount_service_account_token: bool,
 
     // Deployment
     #[serde(alias = "deployment.termination_grace_period_seconds")]
@@ -166,6 +168,7 @@ impl Default for ApplicationAdvancedSettings {
         ApplicationAdvancedSettings {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
             deployment_termination_grace_period_seconds: 60,
             deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
@@ -207,6 +210,7 @@ impl ApplicationAdvancedSettings {
         ContainerAdvancedSettings {
             security_service_account_name: self.security_service_account_name.clone(),
             security_read_only_root_filesystem: self.security_read_only_root_filesystem,
+            security_automount_service_account_token: self.security_automount_service_account_token,
             deployment_custom_domain_check_enabled: self.deployment_custom_domain_check_enabled,
             deployment_termination_grace_period_seconds: self.deployment_termination_grace_period_seconds,
             deployment_update_strategy_type: self.deployment_update_strategy_type,

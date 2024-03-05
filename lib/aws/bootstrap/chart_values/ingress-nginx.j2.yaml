@@ -1,5 +1,7 @@
 controller:
   useComponentLabel: true
+  admissionWebhooks:
+    enabled: false
   allowSnippetAnnotations: true
   # enable if you want metrics scrapped by prometheus
   metrics:

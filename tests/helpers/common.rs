@@ -16,6 +16,9 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::transaction::TransactionResult;
 
+pub const DEFAULT_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
+
 pub enum RegionActivationStatus {
     Deactivated,
     Activated,

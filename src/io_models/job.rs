@@ -64,6 +64,8 @@ pub struct JobAdvancedSettings {
     pub security_service_account_name: String,
     #[serde(alias = "security.read_only_root_filesystem")]
     pub security_read_only_root_filesystem: bool,
+    #[serde(alias = "security.automount_service_account_token")]
+    pub security_automount_service_account_token: bool,
 }
 
 impl Default for JobAdvancedSettings {
@@ -80,6 +82,7 @@ impl Default for JobAdvancedSettings {
             build_ram_max_in_gib: 8,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
         }
     }
 }

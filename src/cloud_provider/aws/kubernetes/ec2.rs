@@ -21,7 +21,6 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -64,7 +63,6 @@ pub struct EC2 {
     options: Options,
     instance: InstanceEc2,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     _kubeconfig: Option<String>,
@@ -85,7 +83,6 @@ impl EC2 {
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
@@ -128,14 +125,13 @@ impl EC2 {
             instance,
             template_directory,
             logger,
-            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
             _kubeconfig: kubeconfig,
             temp_dir,
         };
 
-        fetch_kubeconfig(&cluster)?;
+        fetch_kubeconfig(&cluster, &cluster.s3)?;
 
         Ok(cluster)
     }
@@ -168,6 +164,7 @@ impl EC2 {
     // We need to be sure the content of the kubeconfig is the correct one (matching the EC2 instance FQDN)
     pub fn get_and_check_if_kubeconfig_is_valid(
         kubernetes: &dyn Kubernetes,
+        object_store: &dyn ObjectStorage,
         event_details: EventDetails,
         qovery_terraform_config: AwsEc2QoveryTerraformConfig,
     ) -> Result<PathBuf, Box<EngineError>> {
@@ -207,7 +204,7 @@ impl EC2 {
         // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
         let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
             // force s3 kubeconfig retrieve
-            match force_fetch_kubeconfig(kubernetes) {
+            match force_fetch_kubeconfig(kubernetes, object_store) {
                 Ok(p) => p,
                 Err(e) => return OperationResult::Retry(e),
             };
@@ -289,14 +286,6 @@ impl Kubernetes for EC2 {
         self.logger.borrow()
     }
 
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.s3
-    }
-
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
@@ -329,6 +318,7 @@ impl Kubernetes for EC2 {
                 self,
                 self.cloud_provider.as_ref(),
                 self.dns_provider.as_ref(),
+                &self.s3,
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -400,15 +390,18 @@ impl Kubernetes for EC2 {
         // update Vault with new cluster information
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Ensuring the upgrade has successfuly been performed...".to_string()),
+            EventMessage::new_from_safe("Ensuring the upgrade has successfully been performed...".to_string()),
         ));
 
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
+        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
             self.cloud_provider.access_key_id(),
             self.region().to_string(),
             self.cloud_provider.secret_access_key(),
             None,
-            None,
+            Some(qovery_terraform_config.aws_ec2_public_hostname),
             self.kind(),
             self.cluster_name(),
             self.long_id().to_string(),
@@ -418,7 +411,6 @@ impl Kubernetes for EC2 {
             self.context().is_test_cluster(),
         ));
 
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
         if let Err(e) = self.update_vault_config(
             event_details.clone(),
             qovery_terraform_config_file,
@@ -482,6 +474,7 @@ impl Kubernetes for EC2 {
                 self,
                 self.cloud_provider.as_ref(),
                 self.dns_provider.as_ref(),
+                &self.s3,
                 self.template_directory.as_str(),
                 &self.zones,
                 &[self.node_group_from_instance_type()],

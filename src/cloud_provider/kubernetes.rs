@@ -20,15 +20,14 @@ use tracing::Span;
 use uuid::Uuid;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{get_bucket_name, get_kubeconfig_filename};
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
-use crate::cmd::kubectl::{kubectl_delete_apiservice, kubectl_delete_completed_jobs};
+use crate::cmd::kubectl::kubectl_delete_apiservice;
 use crate::cmd::kubectl::{
-    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
-    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    kubectl_exec_version, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -38,9 +37,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
 use crate::models::types::VersionsNumber;
-use crate::object_storage::ObjectStorage;
 use crate::services::kube_client::QubeClient;
 
 use super::models::NodeGroupsWithDesiredState;
@@ -346,8 +343,6 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn logger(&self) -> &dyn Logger;
-    fn metrics_registry(&self) -> &dyn MetricsRegistry;
-    fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
@@ -382,132 +377,16 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn kubeconfig_local_file_path(&self) -> PathBuf {
-        PathBuf::from(format!(
-            "{}/{}/{}",
-            self.temp_dir().to_string_lossy(),
-            &get_bucket_name(self.long_id()),
-            &get_kubeconfig_filename(self.long_id())
-        ))
+        self.temp_dir()
+            .join(format!("qovery-kubeconfigs-{}", self.id()))
+            .join(format!("{}.yaml", self.id()))
     }
 
     fn on_create(&self) -> Result<(), Box<EngineError>>;
-    fn check_workers_on_upgrade(
-        &self,
-        cloud_provider: &dyn CloudProvider,
-        targeted_version: String,
-    ) -> Result<(), CommandError>
-    where
-        Self: Sized,
-    {
-        send_progress_on_long_task(self, Action::Create, || {
-            check_workers_upgrade_status(
-                self.kubeconfig_local_file_path(),
-                cloud_provider.credentials_environment_variables(),
-                targeted_version.clone(),
-            )
-        })
-    }
-
-    fn check_control_plane_on_upgrade(
-        &self,
-        cloud_provider: &dyn CloudProvider,
-        targeted_version: KubernetesVersion,
-    ) -> Result<(), CommandError>
-    where
-        Self: Sized,
-    {
-        send_progress_on_long_task(self, Action::Create, || {
-            check_master_version_status(
-                self.kubeconfig_local_file_path(),
-                cloud_provider.credentials_environment_variables(),
-                &targeted_version,
-            )
-        })
-    }
-
-    fn check_workers_on_create(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
-    where
-        Self: Sized,
-    {
-        send_progress_on_long_task(self, Action::Create, || {
-            check_workers_status(
-                self.kubeconfig_local_file_path(),
-                cloud_provider.credentials_environment_variables(),
-            )
-        })
-    }
-
-    fn check_workers_on_pause(&self, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError>
-    where
-        Self: Sized,
-    {
-        send_progress_on_long_task(self, Action::Create, || {
-            check_workers_pause(
-                self.kubeconfig_local_file_path(),
-                cloud_provider.credentials_environment_variables(),
-            )
-        })
-    }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
     fn on_pause(&self) -> Result<(), Box<EngineError>>;
     fn on_delete(&self) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
-
-    fn delete_crashlooping_pods(
-        &self,
-        namespace: Option<&str>,
-        selector: Option<&str>,
-        restarted_min_count: Option<usize>,
-        envs: Vec<(&str, &str)>,
-        stage: Stage,
-    ) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(stage);
-
-        match kubectl_get_crash_looping_pods(
-            self.kubeconfig_local_file_path(),
-            namespace,
-            selector,
-            restarted_min_count,
-            envs.clone(),
-        ) {
-            Ok(pods) => {
-                for pod in pods {
-                    if let Err(e) = kubectl_exec_delete_pod(
-                        &self.kubeconfig_local_file_path(),
-                        pod.metadata.namespace.as_str(),
-                        pod.metadata.name.as_str(),
-                        envs.clone(),
-                    ) {
-                        return Err(Box::new(EngineError::new_k8s_cannot_delete_pod(
-                            event_details,
-                            pod.metadata.name.to_string(),
-                            e,
-                        )));
-                    }
-                }
-            }
-            Err(e) => {
-                return Err(Box::new(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e)));
-            }
-        };
-
-        Ok(())
-    }
-
-    fn delete_completed_jobs(
-        &self,
-        envs: Vec<(&str, &str)>,
-        stage: Stage,
-        ignored_namespaces: Option<Vec<&str>>,
-    ) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(stage);
-
-        if let Err(e) = kubectl_delete_completed_jobs(self.kubeconfig_local_file_path(), envs, ignored_namespaces) {
-            return Err(Box::new(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e)));
-        };
-
-        Ok(())
-    }
 
     fn update_vault_config(
         &self,
@@ -1186,7 +1065,7 @@ impl InstanceEc2 {
 /// long blocking task is running.
 pub fn send_progress_on_long_task<K, R, F>(kubernetes: &K, action: Action, long_task: F) -> R
 where
-    K: Kubernetes,
+    K: Kubernetes + ?Sized,
     F: Fn() -> R,
 {
     let waiting_message = match action {
@@ -1218,7 +1097,7 @@ pub fn send_progress_on_long_task_with_message<K, R, F>(
     long_task: F,
 ) -> R
 where
-    K: Kubernetes,
+    K: Kubernetes + ?Sized,
     F: Fn() -> R,
 {
     let logger = kubernetes.logger().clone_dyn();

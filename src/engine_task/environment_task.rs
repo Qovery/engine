@@ -130,8 +130,7 @@ impl EnvironmentTask {
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_buildpacks = false;
-        let metrics_registry: Arc<dyn MetricsRegistry> =
-            Arc::from(infra_ctx.kubernetes().metrics_registry().clone_dyn());
+        let metrics_registry: Arc<dyn MetricsRegistry> = Arc::from(infra_ctx.metrics_registry().clone_dyn());
         let services = services
             .into_iter()
             .filter(|srv| {
@@ -596,7 +595,7 @@ impl Task for EnvironmentTask {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new(msg, None)));
         };
 
-        let metrics_registry = Arc::new(infra_context.kubernetes().metrics_registry().clone_dyn());
+        let metrics_registry = Arc::new(infra_context.metrics_registry().clone_dyn());
         let service_ids = std::iter::empty()
             .chain(environment.applications.iter().map(|x| x.as_service().long_id()))
             .chain(environment.containers.iter().map(|x| x.as_service().long_id()))
@@ -642,8 +641,8 @@ impl Task for EnvironmentTask {
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new(
                         "💣 Deployment aborted following a failure to deploy a service. This is a general/global message. Look at your services deployment status to know which one made the deployment fail"
-                        .trim()
-                        .to_string(),
+                            .trim()
+                            .to_string(),
                         Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                     ),
                 ));

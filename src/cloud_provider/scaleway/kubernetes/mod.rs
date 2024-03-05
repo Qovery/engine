@@ -6,6 +6,10 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{
     fetch_kubeconfig, put_kubeconfig_file_to_object_storage, write_kubeconfig_on_disk,
 };
+use crate::cloud_provider::kubectl_utils::{
+    check_workers_on_create, check_workers_on_pause, check_workers_on_upgrade, delete_completed_jobs,
+    delete_crashlooping_pods,
+};
 use crate::cloud_provider::kubernetes::{
     self, is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind,
     Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
@@ -34,7 +38,7 @@ use crate::io_models::context::{Context, Features};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
-use crate::metrics_registry::MetricsRegistry;
+
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -160,7 +164,6 @@ pub struct Kapsule {
     template_directory: String,
     options: KapsuleOptions,
     logger: Box<dyn Logger>,
-    metrics_registry: Box<dyn MetricsRegistry>,
     advanced_settings: ClusterAdvancedSettings,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
@@ -179,7 +182,6 @@ impl Kapsule {
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
@@ -254,7 +256,6 @@ impl Kapsule {
             template_directory,
             options,
             logger,
-            metrics_registry,
             advanced_settings,
             customer_helm_charts_override,
             kubeconfig,
@@ -268,7 +269,7 @@ impl Kapsule {
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
         } else {
-            fetch_kubeconfig(&cluster)?;
+            fetch_kubeconfig(&cluster, &cluster.object_storage)?;
         }
 
         Ok(cluster)
@@ -795,7 +796,7 @@ impl Kapsule {
 
         // push config file to object storage
         let kubeconfig_path = self.kubeconfig_local_file_path();
-        put_kubeconfig_file_to_object_storage(self)?;
+        put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
         let cluster_info = self.get_scw_cluster_info()?;
         if cluster_info.is_none() {
@@ -991,7 +992,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match self.check_workers_on_create(self.cloud_provider.as_ref()) {
+        match check_workers_on_create(self, self.cloud_provider.as_ref()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1214,7 +1215,7 @@ impl Kapsule {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = self.check_workers_on_pause(self.cloud_provider.as_ref()) {
+        if let Err(e) = check_workers_on_pause(self, self.cloud_provider.as_ref()) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1569,14 +1570,6 @@ impl Kubernetes for Kapsule {
         self.logger.borrow()
     }
 
-    fn metrics_registry(&self) -> &dyn MetricsRegistry {
-        self.metrics_registry.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.object_storage
-    }
-
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
@@ -1738,7 +1731,8 @@ impl Kubernetes for Kapsule {
             }
         }
 
-        if let Err(e) = self.delete_crashlooping_pods(
+        if let Err(e) = delete_crashlooping_pods(
+            self,
             None,
             None,
             Some(3),
@@ -1749,7 +1743,8 @@ impl Kubernetes for Kapsule {
             return Err(e);
         }
 
-        if let Err(e) = self.delete_completed_jobs(
+        if let Err(e) = delete_completed_jobs(
+            self,
             self.cloud_provider.credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
@@ -1763,7 +1758,8 @@ impl Kubernetes for Kapsule {
             self.context.is_dry_run_deploy(),
             &[],
         ) {
-            Ok(_) => match self.check_workers_on_upgrade(
+            Ok(_) => match check_workers_on_upgrade(
+                self,
                 self.cloud_provider.as_ref(),
                 kubernetes_upgrade_status.requested_version.to_string(),
             ) {

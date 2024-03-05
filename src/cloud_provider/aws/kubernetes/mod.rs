@@ -72,6 +72,7 @@ use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
 use crate::dns_provider::DnsProvider;
+use crate::object_storage::ObjectStorage;
 
 use super::models::QoveryAwsSdkConfigEks;
 
@@ -867,6 +868,7 @@ fn create(
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
+    object_store: &dyn ObjectStorage,
     kubernetes_long_id: uuid::Uuid,
     template_directory: &str,
     aws_zones: &[AwsZone],
@@ -1198,7 +1200,7 @@ fn create(
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
-            put_kubeconfig_file_to_object_storage(kubernetes)?;
+            put_kubeconfig_file_to_object_storage(kubernetes, object_store)?;
             kubernetes.kubeconfig_local_file_path()
         }
         Kind::Ec2 => {
@@ -1206,7 +1208,13 @@ fn create(
             // no need to push it to object storage, it's already done by the EC2 instance itself
             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
                 .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-            EC2::get_and_check_if_kubeconfig_is_valid(kubernetes, event_details.clone(), qovery_terraform_config)?
+            cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
+            EC2::get_and_check_if_kubeconfig_is_valid(
+                kubernetes,
+                object_store,
+                event_details.clone(),
+                qovery_terraform_config,
+            )?
         }
         _ => {
             return Err(Box::new(EngineError::new_unsupported_cluster_kind(
@@ -1784,6 +1792,7 @@ fn delete(
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
+    object_store: &dyn ObjectStorage,
     template_directory: &str,
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
@@ -1921,7 +1930,7 @@ fn delete(
 
     // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
     if kubernetes.kind() != Kind::Ec2 {
-        let _ = delete_kubeconfig_from_object_storage(kubernetes);
+        let _ = delete_kubeconfig_from_object_storage(kubernetes, object_store);
     };
 
     let kubernetes_config_file_path = match kubernetes.kind() {
@@ -1985,7 +1994,7 @@ fn delete(
             // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
             // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
             let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
-                match fetch_kubeconfig(kubernetes) {
+                match fetch_kubeconfig(kubernetes, object_store) {
                     Ok(_) => (),
                     Err(e) => return OperationResult::Retry(e),
                 };
