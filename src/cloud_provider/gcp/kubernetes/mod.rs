@@ -87,7 +87,7 @@ pub enum VpcMode {
         custom_cluster_ipv4_cidr_block: Option<IpNet>,
         custom_services_ipv4_cidr_block: Option<IpNet>,
     },
-    ExistingVpc {
+    UserNetworkConfig {
         vpc_project_id: Option<String>,
         vpc_name: String,
         subnetwork_name: Option<String>,
@@ -95,6 +95,36 @@ pub enum VpcMode {
         additional_ip_range_pods_names: Option<Vec<String>>,
         ip_range_services_name: Option<String>,
     },
+}
+
+impl VpcMode {
+    pub fn new_automatic(
+        custom_cluster_ipv4_cidr_block: Option<IpNet>,
+        custom_services_ipv4_cidr_block: Option<IpNet>,
+    ) -> Self {
+        VpcMode::Automatic {
+            custom_cluster_ipv4_cidr_block,
+            custom_services_ipv4_cidr_block,
+        }
+    }
+
+    pub fn new_user_network_config(
+        vpc_project_id: Option<String>,
+        vpc_name: String,
+        subnetwork_name: Option<String>,
+        ip_range_pods_name: Option<String>,
+        additional_ip_range_pods_names: Option<Vec<String>>,
+        ip_range_services_name: Option<String>,
+    ) -> Self {
+        VpcMode::UserNetworkConfig {
+            vpc_project_id,
+            vpc_name,
+            subnetwork_name,
+            ip_range_pods_name,
+            additional_ip_range_pods_names,
+            ip_range_services_name,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -390,8 +420,8 @@ impl Gke {
         // VPC
         match &self.options.vpc_mode {
             VpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: cluster_ipv4_cidr_block,
-                custom_services_ipv4_cidr_block: services_ipv4_cidr_block,
+                custom_cluster_ipv4_cidr_block,
+                custom_services_ipv4_cidr_block,
             } => {
                 // if automatic, Qovery to create a new VPC for the cluster
                 context.insert("vpc_use_existing", &false);
@@ -399,18 +429,22 @@ impl Gke {
                 context.insert("subnetwork", self.cluster_name().as_str());
                 context.insert(
                     "cluster_ipv4_cidr_block",
-                    &cluster_ipv4_cidr_block.map(|net| net.to_string()).unwrap_or_default(),
+                    &custom_cluster_ipv4_cidr_block
+                        .map(|net| net.to_string())
+                        .unwrap_or_default(),
                 );
                 context.insert(
                     "services_ipv4_cidr_block",
-                    &services_ipv4_cidr_block.map(|net| net.to_string()).unwrap_or_default(),
+                    &custom_services_ipv4_cidr_block
+                        .map(|net| net.to_string())
+                        .unwrap_or_default(),
                 );
                 context.insert("network_project_id", "");
                 context.insert("ip_range_pods", "");
                 context.insert("ip_range_services", "");
                 context.insert("additional_ip_range_pods", "");
             }
-            VpcMode::ExistingVpc {
+            VpcMode::UserNetworkConfig {
                 vpc_project_id,
                 vpc_name,
                 subnetwork_name,
