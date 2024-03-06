@@ -95,11 +95,19 @@ impl<T> EngineRequest<T> {
             })?;
         let cloud_provider: Arc<dyn cloud_provider::CloudProvider> = Arc::from(cloud_provider);
 
+        let qovery_tags = HashMap::from([
+            ("ClusterId".to_string(), context.cluster_short_id().to_string()),
+            ("ClusterLongId".to_string(), context.cluster_long_id().to_string()),
+            ("OrganizationId".to_string(), context.organization_short_id().to_string()),
+            ("OrganizationLongId".to_string(), context.organization_long_id().to_string()),
+            ("Region".to_string(), cloud_provider.region()),
+        ]);
         let mut tags = self
             .kubernetes
             .advanced_settings
             .cloud_provider_container_registry_tags
             .clone();
+        tags.extend(qovery_tags);
         if let Some(ttl) = self.kubernetes.advanced_settings.resource_ttl() {
             tags.insert("ttl".to_string(), ttl.as_secs().to_string());
         };
