@@ -770,15 +770,13 @@ impl TerraformError {
                             current_resource_count,
                             max_resource_count,
                         } => format!(
-                            "`{}` has reached its quotas of `{}/{}`.",
+                            "`{}` has reached its quotas{}.",
                             resource_type,
-                            match current_resource_count {
-                                None => "NA".to_string(),
-                                Some(count) => count.to_string(),
-                            },
-                            match max_resource_count {
-                                None => "NA".to_string(),
-                                Some(count) => count.to_string(),
+                            match (current_resource_count, max_resource_count) {
+                                (Some(current), Some(max)) => format!(": ({}/{})", current, max),
+                                (Some(current), None) => format!(", current count = {}", current),
+                                (None, Some(max)) => format!(" of {}", max),
+                                (None, None) => "".to_string(),
                             },
                         ),
                     },
