@@ -8,76 +8,22 @@ use std::str::FromStr;
 use time::macros::format_description;
 use time::Time;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-#[serde(tag = "type")]
-pub enum VpcMode {
-    #[serde(rename = "AUTOMATIC")]
-    Automatic {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        custom_cluster_ipv4_cidr_block: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        custom_services_ipv4_cidr_block: Option<String>,
-    },
-    #[serde(rename = "EXISTING_VPC")]
-    ExistingVpc {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        vpc_project_id: Option<String>,
-        vpc_name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        subnetwork_name: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        ip_range_pods_name: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        additional_ip_range_pods_names: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        ip_range_services_name: Option<String>,
-    },
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UserProvidedVPCNetwork {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vpc_project_id: Option<String>,
+    vpc_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subnetwork_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip_range_pods_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    additional_ip_range_pods_names: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip_range_services_name: Option<String>,
 }
 
-impl TryFrom<VpcMode> for GkeVpcMode {
-    type Error = String;
-
-    fn try_from(value: VpcMode) -> Result<Self, Self::Error> {
-        match value {
-            VpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: cluster_ipv4_cidr_block,
-                custom_services_ipv4_cidr_block: services_ipv4_cidr_block,
-            } => Ok(GkeVpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: match cluster_ipv4_cidr_block {
-                    Some(cidr) => Some(
-                        IpNet::from_str(cidr.as_str())
-                            .map_err(|e| format!("cannot parse cluster_ipv4_cidr_block to IP Net: `{e}`"))?,
-                    ),
-                    None => None,
-                },
-                custom_services_ipv4_cidr_block: match services_ipv4_cidr_block {
-                    Some(cidr) => Some(
-                        IpNet::from_str(cidr.as_str())
-                            .map_err(|e| format!("cannot parse services_ipv4_cidr_block to IP Net: `{e}`"))?,
-                    ),
-                    None => None,
-                },
-            }),
-            VpcMode::ExistingVpc {
-                vpc_project_id,
-                vpc_name,
-                subnetwork_name,
-                ip_range_pods_name,
-                additional_ip_range_pods_names: additional_ip_range_pods_name,
-                ip_range_services_name,
-            } => Ok(GkeVpcMode::ExistingVpc {
-                vpc_project_id,
-                vpc_name,
-                subnetwork_name,
-                ip_range_pods_name,
-                additional_ip_range_pods_names: additional_ip_range_pods_name,
-                ip_range_services_name,
-            }),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GkeOptions {
     // Qovery
     pub qovery_api_url: String,
@@ -100,7 +46,12 @@ pub struct GkeOptions {
 
     // Network
     // VPC
-    pub vpc_mode: VpcMode,
+    #[serde(default)]
+    pub cluster_ipv4_cidr_block: Option<String>,
+    #[serde(default)]
+    pub services_ipv4_cidr_block: Option<String>,
+    #[serde(default)]
+    pub user_provided_network: Option<UserProvidedVPCNetwork>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: String,
@@ -109,6 +60,39 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+}
+
+impl GkeOptions {
+    fn to_gke_vpc_mode(&self) -> Result<GkeVpcMode, String> {
+        let vpc_mode: GkeVpcMode = match &self.user_provided_network {
+            None => GkeVpcMode::new_automatic(
+                match &self.cluster_ipv4_cidr_block {
+                    Some(cidr) => Some(
+                        IpNet::from_str(cidr.as_str())
+                            .map_err(|e| format!("cannot parse cluster_ipv4_cidr_block to IP Net: `{e}`"))?,
+                    ),
+                    None => None,
+                },
+                match &self.services_ipv4_cidr_block {
+                    Some(cidr) => Some(
+                        IpNet::from_str(cidr.as_str())
+                            .map_err(|e| format!("cannot parse services_ipv4_cidr_block to IP Net: `{e}`"))?,
+                    ),
+                    None => None,
+                },
+            ),
+            Some(user_provided_network) => GkeVpcMode::new_user_network_config(
+                user_provided_network.vpc_project_id.clone(),
+                user_provided_network.vpc_name.to_string(),
+                user_provided_network.subnetwork_name.clone(),
+                user_provided_network.ip_range_pods_name.clone(),
+                user_provided_network.additional_ip_range_pods_names.clone(),
+                user_provided_network.ip_range_services_name.clone(),
+            ),
+        };
+
+        Ok(vpc_mode)
+    }
 }
 
 /// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
@@ -127,10 +111,10 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
     type Error = String;
 
     fn try_from(value: GkeOptions) -> Result<GkeOptionsModel, Self::Error> {
-        let vpc_mode: GkeVpcMode = value
-            .vpc_mode
-            .try_into()
+        let vpc_mode = value
+            .to_gke_vpc_mode()
             .map_err(|e| format!("cannot parse VPCMode: `{e}`"))?;
+
         Ok(GkeOptionsModel::new(
             value.qovery_api_url,
             value.qovery_grpc_url,
@@ -163,78 +147,106 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::gcp::kubernetes::io::VpcMode;
+    use crate::cloud_provider::gcp::kubernetes::io::{GkeOptions, UserProvidedVPCNetwork};
+    use crate::cloud_provider::gcp::kubernetes::VpcMode as GkeVpcMode;
+    use crate::cloud_provider::qovery::EngineLocation;
+    use ipnet::IpNet;
+    use std::str::FromStr;
+
+    const GKE_DEFAULT_GCP_JSON_CREDENTIALS_EXAMPLE: &str = r#"{
+  "type": "service_account",
+  "project_id": "gcp_project_id",
+  "private_key_id": "gcp_json_credentials_private_key_id",
+  "private_key": "gcp_json_credentials_private_key",
+  "client_email": "gcp_json_credentials_client_email",
+  "client_id": "gcp_json_credentials_client_id",
+  "auth_uri": "gcp_json_credentials_auth_uri",
+  "token_uri": "gcp_json_credentials_token_uri",
+  "auth_provider_x509_cert_url": "gcp_json_credentials_auth_provider_x509_cert_url",
+  "client_x509_cert_url": "gcp_json_credentials_client_x509_cert_url",
+  "universe_domain": "gcp_json_credentials_universe_domain"
+}"#;
 
     #[test]
-    fn test_vpc_mode_serialization() {
-        // execute & validate:
-        assert_eq!(
-            r#"{"type":"AUTOMATIC"}"#.to_string().parse::<serde_json::Value>().expect("Cannot parse string to JSON"),
-            serde_json::to_string(&VpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: None,
-                custom_services_ipv4_cidr_block: None
-            })
-            .expect("Cannot serialize VpcMode to string")
-            .parse::<serde_json::Value>()
-            .expect("Cannot parse string to JSON"),
-        );
-        assert_eq!(
-            r#"{"type":"AUTOMATIC","custom_cluster_ipv4_cidr_block":"10.0.0.0/16","custom_services_ipv4_cidr_block":"10.4.0.0/16"}"#
-                .parse::<serde_json::Value>()
-                .expect("Cannot parse string to JSON"),
-            serde_json::to_string(&VpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: Some("10.0.0.0/16".to_string()),
-                custom_services_ipv4_cidr_block: Some("10.4.0.0/16".to_string()),
-            })
-            .expect("Cannot serialize VpcMode to string")
-            .parse::<serde_json::Value>()
-            .expect("Cannot parse string to JSON"),
-        );
-        assert_eq!(
-            r#"{"type":"EXISTING_VPC","vpc_project_id":"custom_vpc_project_id","vpc_name":"custom_vpc","subnetwork_name":"custom_vpc_subnetwork","ip_range_pods_name":"10.1.1.1/24","ip_range_services_name":"10.2.2.2/24","additional_ip_range_pods_names":["10.3.3.3/24","10.4.4.4/24"]}"#.to_string().parse::<serde_json::Value>().expect("Cannot parse string to JSON"),
-            serde_json::to_string(&VpcMode::ExistingVpc {
-                vpc_project_id: Some("custom_vpc_project_id".to_string()),
-                vpc_name: "custom_vpc".to_string(),
-                subnetwork_name: Some("custom_vpc_subnetwork".to_string()),
-                ip_range_pods_name: Some("10.1.1.1/24".to_string()),
-                ip_range_services_name: Some("10.2.2.2/24".to_string()),
-                additional_ip_range_pods_names: Some(vec!["10.3.3.3/24".to_string(), "10.4.4.4/24".to_string()]),
-            })
-            .expect("Cannot serialize VpcMode to string")
-            .parse::<serde_json::Value>().expect("Cannot parse string to JSON"),
-        );
-    }
+    fn test_gke_options_to_gke_vpc_mode() {
+        // setup:
+        let basic_gke_options = GkeOptions {
+            qovery_api_url: "https://api.qovery.com".to_string(),
+            qovery_grpc_url: "https://grpc.qovery.com".to_string(),
+            qovery_engine_url: "https://engine.qovery.com".to_string(),
+            jwt_token: "jwt_token".to_string(),
+            qovery_ssh_key: "qovery_ssh_key".to_string(),
+            user_ssh_keys: vec!["user_ssh_key".to_string()],
+            grafana_admin_user: "grafana_admin_user".to_string(),
+            grafana_admin_password: "grafana_admin_password".to_string(),
+            qovery_engine_location: EngineLocation::QoverySide,
+            gcp_credentials: serde_json::from_str(GKE_DEFAULT_GCP_JSON_CREDENTIALS_EXAMPLE)
+                .expect("Cannot deserialize JSON credentials from string"),
+            cluster_maintenance_start_time: "06:00".to_string(),
+            cluster_maintenance_end_time: None,
+            tls_email_report: "".to_string(),
+            // VPC related fields
+            cluster_ipv4_cidr_block: None,
+            services_ipv4_cidr_block: None,
+            user_provided_network: None,
+        };
 
-    #[test]
-    fn test_vpc_mode_deserialization() {
         // execute & validate:
+
+        // case 1: Automatic VPC mode with default values (nothing specified)
+        let gke_options_to_test = basic_gke_options.clone();
         assert_eq!(
-            VpcMode::Automatic {
+            GkeVpcMode::Automatic {
                 custom_cluster_ipv4_cidr_block: None,
                 custom_services_ipv4_cidr_block: None,
             },
-            serde_json::from_str(r#"{"type":"AUTOMATIC"}"#).expect("Cannot deserialize from string")
+            gke_options_to_test
+                .to_gke_vpc_mode()
+                .expect("Cannot convert GkeOptions to GkeVpcMode")
         );
+
+        // case 2: Automatic VPC mode with non default valid values
+        let mut gke_options_to_test = basic_gke_options.clone();
+        gke_options_to_test.cluster_ipv4_cidr_block = Some("10.10.10.1/18".to_string());
+        gke_options_to_test.services_ipv4_cidr_block = Some("10.10.10.18/18".to_string());
         assert_eq!(
-            VpcMode::Automatic {
-                custom_cluster_ipv4_cidr_block: Some("10.0.0.0/16".to_string()),
-                custom_services_ipv4_cidr_block: Some("10.4.0.0/16".to_string()),
+            GkeVpcMode::Automatic {
+                custom_cluster_ipv4_cidr_block: Some(IpNet::from_str("10.10.10.1/18").expect("Cannot parse IP Net")),
+                custom_services_ipv4_cidr_block: Some(IpNet::from_str("10.10.10.18/18").expect("Cannot parse IP Net")),
             },
-            serde_json::from_str(r#"{"type":"AUTOMATIC","custom_cluster_ipv4_cidr_block": "10.0.0.0/16","custom_services_ipv4_cidr_block": "10.4.0.0/16"}"#).expect("Cannot deserialize from string"),
+            gke_options_to_test
+                .to_gke_vpc_mode()
+                .expect("Cannot convert GkeOptions to GkeVpcMode")
         );
+
+        // case 3: User VPC mode with default values (nothing specified)
+        let mut gke_options_to_test = basic_gke_options.clone();
+        gke_options_to_test.user_provided_network = Some(UserProvidedVPCNetwork {
+            vpc_project_id: Some("project_id".to_string()),
+            vpc_name: "vpc_name".to_string(),
+            subnetwork_name: Some("subnetwork_name".to_string()),
+            ip_range_pods_name: Some("ip_range_pods_name".to_string()),
+            additional_ip_range_pods_names: Some(vec![
+                "additional_ip_range_pods_name_1".to_string(),
+                "additional_ip_range_pods_name_2".to_string(),
+            ]),
+            ip_range_services_name: Some("ip_range_services_name".to_string()),
+        });
         assert_eq!(
-            VpcMode::ExistingVpc {
-                vpc_project_id: Some("custom_vpc_project_id".to_string()),
-                vpc_name: "custom_vpc".to_string(),
-                subnetwork_name: Some("custom_vpc_subnetwork".to_string()),
-                ip_range_pods_name: Some("10.1.1.1/24".to_string()),
-                ip_range_services_name: Some("10.2.2.2/24".to_string()),
-                additional_ip_range_pods_names: Some(vec!["10.3.3.3/24".to_string(), "10.4.4.4/24".to_string()]),
+            GkeVpcMode::UserNetworkConfig {
+                vpc_project_id: Some("project_id".to_string()),
+                vpc_name: "vpc_name".to_string(),
+                subnetwork_name: Some("subnetwork_name".to_string()),
+                ip_range_pods_name: Some("ip_range_pods_name".to_string()),
+                additional_ip_range_pods_names: Some(vec![
+                    "additional_ip_range_pods_name_1".to_string(),
+                    "additional_ip_range_pods_name_2".to_string(),
+                ]),
+                ip_range_services_name: Some("ip_range_services_name".to_string()),
             },
-            serde_json::from_str(
-                r#"{"type":"EXISTING_VPC","vpc_project_id":"custom_vpc_project_id","vpc_name":"custom_vpc","subnetwork_name":"custom_vpc_subnetwork","ip_range_pods_name":"10.1.1.1/24","ip_range_services_name":"10.2.2.2/24","additional_ip_range_pods_names":["10.3.3.3/24","10.4.4.4/24"]}"#
-            )
-            .expect("Cannot deserialize from string")
+            gke_options_to_test
+                .to_gke_vpc_mode()
+                .expect("Cannot convert GkeOptions to GkeVpcMode")
         );
     }
 }

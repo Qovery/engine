@@ -40,7 +40,7 @@ fn create_and_destroy_gke_cluster(region: GcpRegion, test_type: ClusterTestType,
 #[cfg(feature = "test-gcp-infra")]
 #[named]
 #[test]
-fn create_and_destroy_gke_cluster_without_nat_gw_in_europe_west_10() {
+fn create_and_destroy_gke_cluster_in_europe_west_10() {
     let region = GcpRegion::EuropeWest10;
     create_and_destroy_gke_cluster(region, ClusterTestType::Classic, function_name!());
 }
