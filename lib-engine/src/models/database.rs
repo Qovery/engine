@@ -379,8 +379,8 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("kubeconfig_path", &kubernetes.kubeconfig_local_file_path());
         context.insert("namespace", environment.namespace());
 
-        let version = self.get_version(event_details)?.matched_version().to_string();
-        context.insert("version", &version);
+        let version = self.get_version(event_details)?.matched_version();
+        context.insert("version", &version.to_string());
 
         for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
@@ -412,6 +412,20 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,
         );
+
+        // some Database/Version do not support arm arch
+        let (node_affinity_type, node_affinity_key, node_affinity_values) = match T::db_type() {
+            service::DatabaseType::PostgreSQL if version.major == "10" => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::Redis if version.major == "5" => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::MongoDB => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::PostgreSQL => ("", "", vec![]),
+            service::DatabaseType::Redis => ("", "", vec![]),
+            service::DatabaseType::MySQL => ("", "", vec![]),
+        };
+
+        context.insert("node_affinity_type", &node_affinity_type);
+        context.insert("node_affinity_key", &node_affinity_key);
+        context.insert("node_affinity_values", &node_affinity_values);
 
         Ok(context)
     }

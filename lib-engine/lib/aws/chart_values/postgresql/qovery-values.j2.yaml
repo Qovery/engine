@@ -42,6 +42,10 @@ auth:
   database: "{{ database_db_name }}"
 
 primary:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
   initdb:
     user: "{{ database_login }}"
     password: "{{ database_password }}"
@@ -81,3 +85,9 @@ primary:
     limits:
       memory: "{{ database_ram_size_in_mib }}Mi"
       cpu: "{{ database_total_cpus }}"
+
+readReplicas:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}

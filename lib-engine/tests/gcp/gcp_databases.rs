@@ -275,7 +275,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             name: database_db_name.clone(),
             kube_name: database_db_name.clone(),
             created_at: Utc::now(),
-            version: "11.8.0".to_string(),
+            version: "11.22.0".to_string(),
             fqdn_id: database_host.clone(),
             fqdn: database_host.clone(),
             port: database_port,
