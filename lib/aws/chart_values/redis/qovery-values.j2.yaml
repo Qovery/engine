@@ -24,6 +24,10 @@ auth:
   password: "{{ database_password }}"
 
 master:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
   resources:
     requests:
       memory: "{{ database_ram_size_in_mib }}Mi"
@@ -89,3 +93,9 @@ sysctlImage:
   enabled: true
   registry: {{ registry_name }}
   repository: {{ repository_name_bitnami_shell }}
+
+replica:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}

@@ -126,3 +126,20 @@ volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_minideb }}
+
+nodeAffinityPreset:
+  type: "{{ node_affinity_type }}"
+  key: "{{ node_affinity_key }}"
+  values: {{ node_affinity_values }}
+
+hidden:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
+
+arbiter:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}

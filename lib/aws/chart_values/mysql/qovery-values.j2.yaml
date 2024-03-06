@@ -27,6 +27,10 @@ auth:
   database: "{{ sanitized_name }}"
 
 primary:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
   podLabels:
     # app label required for legacy chart (installed before 15/06/23)
     app: "{{ sanitized_name }}" 
@@ -88,3 +92,9 @@ volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_bitnami_shell }}
+
+readReplicas:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
