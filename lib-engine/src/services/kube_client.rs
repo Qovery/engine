@@ -8,8 +8,9 @@ use k8s_openapi::api::{
 use kube::{
     api::{ListParams, Patch, PatchParams},
     core::{ListMeta, ObjectList},
-    Api,
+    Api, CustomResource,
 };
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -20,6 +21,7 @@ use crate::{
     runtime::block_on,
     utilities::create_kube_client,
 };
+use schemars::JsonSchema;
 
 #[derive(Clone)]
 pub struct QubeClient {
@@ -34,6 +36,10 @@ pub enum SelectK8sResourceBy {
     // select a named resource
     LabelsSelector(String), // select resources by labels
 }
+
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[kube(group = "karpenter.k8s.aws", version = "v1beta1", kind = "EC2NodeClass")]
+pub struct Ec2nodeclassesSpec {}
 
 impl QubeClient {
     pub fn new(
@@ -415,6 +421,22 @@ impl QubeClient {
 
     pub fn client(&self) -> &kube::Client {
         &self.client
+    }
+
+    pub async fn get_ec2_node_classes(
+        &self,
+        event_details: &EventDetails,
+    ) -> Result<Vec<EC2NodeClass>, Box<EngineError>> {
+        let client: Api<EC2NodeClass> = Api::all(self.client.clone());
+        let params = ListParams::default();
+
+        match client.list(&params).await {
+            Ok(x) => Ok(x.items),
+            Err(e) => Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!("Error while trying to get Ec2NodeClasses {e}")),
+            ))),
+        }
     }
 }
 

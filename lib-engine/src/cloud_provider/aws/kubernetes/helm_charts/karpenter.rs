@@ -98,3 +98,24 @@ impl ChartInstallationChecker for KarpenterChartChecker {
         Box::new(self.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+
+    #[test]
+    fn test_ec2_node_classes_custom_resource_is_aligned_with_definition() {
+        let filename = "./lib/aws/bootstrap/charts/karpenter/crds/karpenter.k8s.aws_ec2nodeclasses.yaml";
+        let file = File::open(filename).unwrap();
+        let yaml: serde_yaml::Value = serde_yaml::from_reader(file).unwrap();
+        let group = &yaml["spec"]["group"];
+        let version = &yaml["spec"]["versions"][0]["name"];
+        let kind = &yaml["spec"]["names"]["kind"];
+
+        // These values must be equal to the ones define in the CustomResource in the kube_client.rs file
+        // #[kube(group = "karpenter.k8s.aws", version = "v1beta1", kind = "EC2NodeClass")]
+        assert_eq!(group.as_str(), Some("karpenter.k8s.aws"));
+        assert_eq!(version.as_str(), Some("v1beta1"));
+        assert_eq!(kind.as_str(), Some("EC2NodeClass"));
+    }
+}

@@ -3334,6 +3334,7 @@ dependencies = [
  "rusoto_s3",
  "rusoto_sts",
  "scaleway_api_rs",
+ "schemars",
  "scopeguard",
  "semver",
  "serde",
