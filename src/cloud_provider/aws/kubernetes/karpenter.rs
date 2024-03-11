@@ -1,5 +1,6 @@
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terraform_config;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::karpenter_is_deployed;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
@@ -10,6 +11,7 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::models::ToCloudProviderFormat;
+use crate::runtime::block_on;
 use crate::services::kube_client::QubeClient;
 use std::str::FromStr;
 use std::string::ToString;
@@ -38,9 +40,34 @@ impl Karpenter {
         )
         .await?;
 
-        // wait for Ec2nodeclasses to be deleted
-        // TODO PG: find how to use kube client to list CRD
-        tokio::time::sleep(Duration::from_secs(30)).await;
+        // wait for Ec2NodeClasses to be deleted
+        let mut nb_retry = 0;
+        let ec2_node_classes = loop {
+            let result = client.get_ec2_node_classes(&event_details).await;
+            if nb_retry > 10 {
+                break result;
+            } else {
+                match result {
+                    Ok(items) if items.is_empty() => break Ok(items),
+                    Ok(items) => {
+                        info!("nb of EC2NodeClass {}", items.len());
+                    }
+                    Err(e) => {
+                        warn!("Error when trying to get EC2NodeClass {}", e)
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                nb_retry += 1;
+            }
+        }?;
+
+        if !ec2_node_classes.is_empty() {
+            return Err(Box::new(EngineError::new_nodegroup_delete_error(
+                event_details.clone(),
+                Some("Karpenter".to_string()),
+                "can't delete nodes spawned by Karpenter".to_string(),
+            )));
+        }
 
         // scale down the karpenter deployment
         client
@@ -83,6 +110,25 @@ impl Karpenter {
         )
     }
 
+    pub fn is_paused(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        client: &QubeClient,
+        event_details: &EventDetails,
+    ) -> bool {
+        if karpenter_is_deployed(kubernetes, cloud_provider, event_details) {
+            let nodes = block_on(client.get_nodes(
+                event_details.clone(),
+                crate::services::kube_client::SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
+            ));
+            return match nodes {
+                Ok(elements) => elements.is_empty(),
+                Err(_) => false,
+            };
+        }
+        false
+    }
+
     async fn delete_nodes_spawned_by_karpenter(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
@@ -92,7 +138,9 @@ impl Karpenter {
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
 
-        // 1 uninstall karpenter-configuration chart
+        // 1 uninstall karpenter-configuration chart.
+        // The Ec2nodeclasses has a finalizer that wait for the NodeClaims to be terminated
+        // The NodeClaims has a finalizer that wait for the Nodes to be terminated
         let helm = Helm::new(
             &kubernetes_config_file_path,
             &cloud_provider.credentials_environment_variables(),

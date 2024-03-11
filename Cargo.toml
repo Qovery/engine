@@ -76,6 +76,7 @@ serde = "1.0.188"
 serde_json = "1.0.105"
 serde_derive = "1.0.188"
 serde_yaml = "0.9.32"
+schemars = "0.8.16"
 
 # Secrets manager
 vaultrs = "0.7.0"

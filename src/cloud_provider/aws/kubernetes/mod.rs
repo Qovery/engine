@@ -1274,21 +1274,20 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    if kubernetes.advanced_settings().aws_enable_karpenter
-        && karpenter_is_deployed(kubernetes, cloud_provider, &event_details)
-        && !karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
-    {
+    if kubernetes.advanced_settings().aws_enable_karpenter {
         if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
-            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+            if Karpenter::is_paused(kubernetes, cloud_provider, &kube_client, &event_details) {
+                let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
 
-            block_on(Karpenter::restart(
-                kubernetes,
-                cloud_provider,
-                kube_client,
-                kubernetes_long_id,
-                disk_size_in_gib,
-                &qovery_terraform_config_file,
-            ))?;
+                block_on(Karpenter::restart(
+                    kubernetes,
+                    cloud_provider,
+                    kube_client,
+                    kubernetes_long_id,
+                    disk_size_in_gib,
+                    &qovery_terraform_config_file,
+                ))?;
+            }
         }
     }
 
@@ -1553,26 +1552,6 @@ fn karpenter_is_deployed(
             .unwrap_or(Vec::with_capacity(0));
 
             !deployments.is_empty()
-        }
-        _ => false,
-    }
-}
-
-fn karpenter_pods_is_running(
-    kubernetes: &dyn Kubernetes,
-    cloud_provider: &dyn CloudProvider,
-    event_details: &EventDetails,
-) -> bool {
-    match kubernetes.kube_client(cloud_provider) {
-        Ok(kube_client) => {
-            let nodes = block_on(kube_client.get_pods(
-                event_details.clone(),
-                Some(&HelmChartNamespaces::KubeSystem.to_string()),
-                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
-            ))
-            .unwrap_or(Vec::with_capacity(0));
-
-            !nodes.is_empty()
         }
         _ => false,
     }
