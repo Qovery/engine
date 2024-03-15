@@ -4,16 +4,11 @@ use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::runtime::block_on;
 use crate::template::generate_and_copy_all_files_into_dir;
-use k8s_openapi::api::core::v1::Pod;
-use kube::api::ListParams;
-use kube::Api;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tera::Context as TeraContext;
-use tokio::time::Instant;
 
 pub fn default_helm_timeout() -> Duration {
     match env::var("HELM_TIMEOUT_IN_SECS") {
@@ -117,32 +112,14 @@ impl DeploymentAction for HelmDeployment {
                 &self.helm_chart,
                 &[],
                 &CommandKiller::from_cancelable(&target.should_abort),
-                &mut |_| {},
-                &mut |_| {},
+                &mut |line| {
+                    info!("{}", line);
+                },
+                &mut |line| {
+                    info!("{}", line);
+                },
             )
             .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))?;
-
-        // helm does not wait for pod to terminate https://github.com/helm/helm/issues/10586
-        // So wait for
-        // FIXME (helm): Check this is still needed as helm uninstall has a --cascade=foreground flag now
-        if let Some(pod_selector) = &self.helm_chart.k8s_selector {
-            block_on(async {
-                let started = Instant::now();
-
-                let pods: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
-                while let Ok(pod) = pods.list(&ListParams::default().labels(pod_selector)).await {
-                    if pod.items.is_empty() {
-                        break;
-                    }
-
-                    if started.elapsed() > default_helm_timeout() {
-                        break;
-                    }
-
-                    tokio::time::sleep(Duration::from_secs(10)).await;
-                }
-            });
-        }
 
         Ok(())
     }

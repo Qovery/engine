@@ -1478,7 +1478,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
@@ -1809,7 +1809,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
@@ -2639,7 +2639,7 @@ fn test_restart_deployment() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
@@ -2648,8 +2648,8 @@ fn test_restart_deployment() {
             cpu_limit_in_mili: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
-            min_instances: 3,
-            max_instances: 3,
+            min_instances: 2,
+            max_instances: 2,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
@@ -2703,7 +2703,7 @@ fn test_restart_deployment() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(20));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
@@ -2762,7 +2762,7 @@ fn test_restart_statefulset() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
