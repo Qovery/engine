@@ -67,6 +67,7 @@ resource "aws_iam_role" "karpenter_controller_role" {
       ]
     }
   )
+  tags = local.tags_eks
 }
 
 resource "aws_iam_role_policy" "karpenter_controller" {
