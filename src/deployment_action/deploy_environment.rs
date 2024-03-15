@@ -5,16 +5,12 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::logger::Logger;
 use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::models::router::RouterService;
-use crate::runtime::block_on;
 use itertools::Itertools;
-use k8s_openapi::api::core::v1::Namespace;
-use kube::api::ListParams;
-use kube::Api;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroUsize;
@@ -243,35 +239,21 @@ impl<'a> EnvironmentDeployment<'a> {
 
     pub fn on_delete(&mut self) -> Result<(), Box<EngineError>> {
         let target = &self.deployment_target;
-        let environment = &target.environment;
         let event_details = self
             .deployment_target
             .environment
             .event_details_with_step(EnvironmentStep::Delete);
 
-        // check if environment is not already deleted
-        // speed up delete env because of terraform requiring apply + destroy
-        let api: Api<Namespace> = Api::all(target.kube.clone());
-        let envs = block_on(api.list(&ListParams::default())).map_err(|e| {
-            EngineError::new_k8s_describe(
-                event_details.clone(),
-                "list namespace".to_string(),
-                environment.namespace().to_string(),
-                CommandError::from(e),
-            )
-        })?;
-
-        if !envs
-            .items
-            .iter()
-            .any(|ns| ns.metadata.name.as_deref().unwrap_or("") == environment.namespace())
-        {
-            info!("no need to delete environment {}, already absent", environment.namespace());
-            Self::services_without_routers_iter(target.environment).for_each(|(id, _, _)| {
-                let _ = self.deployed_services.lock().map(|mut v| v.insert(id));
-            });
-            return Ok(());
-        }
+        // re-create namespace first, because job can have on-delete action, so ns need to exist for us to run them
+        let ns = NamespaceDeployment {
+            resource_expiration: target
+                .kubernetes
+                .context()
+                .resource_expiration_in_seconds()
+                .map(|ttl| Duration::from_secs(ttl as u64)),
+            event_details: event_details.clone(),
+        };
+        ns.on_create(target)?;
 
         let should_abort = Self::should_abort_wrapper(target, &event_details);
         should_abort()?;
