@@ -102,6 +102,7 @@ resource "aws_eks_fargate_profile" "karpenter" {
   fargate_profile_name   = "karpenter-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+  tags                   = local.tags_eks
 
   selector {
     namespace = "kube-system"
@@ -117,6 +118,7 @@ resource "aws_eks_fargate_profile" "ebs_csi" {
   fargate_profile_name   = "ebs_csi-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+  tags                   = local.tags_eks
 
   selector {
     namespace = "kube-system"
@@ -132,6 +134,7 @@ resource "aws_eks_fargate_profile" "user-mapper" {
   fargate_profile_name   = "user-mapper-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+  tags                   = local.tags_eks
 
   selector {
     namespace = "kube-system"
@@ -146,6 +149,7 @@ resource "aws_eks_fargate_profile" "core-dns" {
   fargate_profile_name   = "core-dns-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+  tags                   = local.tags_eks
 
   selector {
     namespace = "kube-system"
@@ -158,6 +162,7 @@ resource "aws_eks_fargate_profile" "core-dns" {
 
 resource "aws_iam_role" "karpenter-fargate" {
   name = "qovery-eks-fargate-profile-${var.kubernetes_cluster_id}"
+  tags = local.tags_eks
 
   assume_role_policy = jsonencode(
     {
