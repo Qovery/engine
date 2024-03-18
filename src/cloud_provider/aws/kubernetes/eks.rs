@@ -15,7 +15,6 @@ use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
 use crate::cmd::terraform::terraform_init_validate_plan_apply;
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
@@ -39,6 +38,7 @@ use aws_smithy_client::SdkError;
 use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
 use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_completed_jobs, delete_crashlooping_pods};
+use crate::engine::InfrastructureContext;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use base64::engine::general_purpose;
@@ -49,7 +49,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
+
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -67,8 +67,6 @@ pub struct EKS {
     version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZone>,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
@@ -89,8 +87,7 @@ impl EKS {
         version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
+        cloud_provider: &dyn CloudProvider,
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
@@ -99,7 +96,7 @@ impl EKS {
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
@@ -111,7 +108,7 @@ impl EKS {
         };
         advanced_settings.validate(event_details.clone())?;
 
-        let s3 = mk_s3(&region, &*cloud_provider);
+        let s3 = mk_s3(&region, cloud_provider);
 
         let cluster = EKS {
             context,
@@ -121,8 +118,6 @@ impl EKS {
             version,
             region,
             zones: aws_zones,
-            cloud_provider,
-            dns_provider,
             s3,
             options,
             nodes_groups,
@@ -183,6 +178,7 @@ impl EKS {
         &self,
         event_details: EventDetails,
         replicas_count: u32,
+        infra_ctx: &InfrastructureContext,
     ) -> Result<(), Box<EngineError>> {
         let autoscaler_new_state = match replicas_count {
             0 => "disable",
@@ -196,7 +192,7 @@ impl EKS {
         let namespace = "kube-system";
         kubectl_exec_scale_replicas(
             self.kubeconfig_local_file_path(),
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             namespace,
             ScalingKind::Deployment,
             selector,
@@ -215,10 +211,6 @@ impl EKS {
         Ok(())
     }
 
-    fn cloud_provider_name(&self) -> &str {
-        "aws"
-    }
-
     fn struct_name(&self) -> &str {
         "kubernetes"
     }
@@ -231,6 +223,10 @@ impl Kubernetes for EKS {
 
     fn kind(&self) -> Kind {
         Kind::Eks
+    }
+
+    fn as_kubernetes(&self) -> &dyn Kubernetes {
+        self
     }
 
     fn id(&self) -> &str {
@@ -278,10 +274,10 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -290,9 +286,10 @@ impl Kubernetes for EKS {
         );
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
+                infra_ctx,
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 &self.s3,
                 self.long_id,
                 self.template_directory.as_str(),
@@ -303,7 +300,11 @@ impl Kubernetes for EKS {
         })
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
         self.logger().log(EngineEvent::Info(
@@ -312,7 +313,7 @@ impl Kubernetes for EKS {
         ));
 
         let temp_dir = self.temp_dir();
-        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self, self.cloud_provider.as_ref()) {
+        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self, infra_ctx.cloud_provider()) {
             Ok(value) => Some(value),
             Err(_) => None,
         };
@@ -327,7 +328,7 @@ impl Kubernetes for EKS {
 
         // in case error, this should no be in the blocking process
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = self.kube_client(self.cloud_provider.as_ref()) {
+        if let Ok(kube_client) = self.kube_client(infra_ctx.cloud_provider()) {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or_else(|_| Vec::with_capacity(0));
 
@@ -343,8 +344,8 @@ impl Kubernetes for EKS {
         // generate terraform files and copy them into temp dir
         let mut context = kubernetes::tera_context(
             self,
-            self.cloud_provider.as_ref(),
-            self.dns_provider.as_ref(),
+            infra_ctx.cloud_provider(),
+            infra_ctx.dns_provider(),
             &self.zones,
             &node_groups_with_desired_states,
             &self.options,
@@ -409,7 +410,10 @@ impl Kubernetes for EKS {
                 match terraform_init_validate_plan_apply(
                     temp_dir.to_string_lossy().as_ref(),
                     self.context.is_dry_run_deploy(),
-                    self.cloud_provider.credentials_environment_variables().as_slice(),
+                    infra_ctx
+                        .cloud_provider()
+                        .credentials_environment_variables()
+                        .as_slice(),
                 ) {
                     Ok(_) => {
                         self.logger().log(EngineEvent::Info(
@@ -497,7 +501,7 @@ impl Kubernetes for EKS {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
+        let kube_client = self.kube_client(infra_ctx.cloud_provider())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -571,7 +575,7 @@ impl Kubernetes for EKS {
             None,
             None,
             Some(3),
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -580,7 +584,7 @@ impl Kubernetes for EKS {
 
         if let Err(e) = delete_completed_jobs(
             self,
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -590,20 +594,26 @@ impl Kubernetes for EKS {
 
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
         let ev = event_details.clone();
-        let _guard = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
-            let _ = self.set_cluster_autoscaler_replicas(ev, 1);
-        });
+        let _guard = scopeguard::guard(
+            self.set_cluster_autoscaler_replicas(event_details.clone(), 0, infra_ctx)?,
+            |_| {
+                let _ = self.set_cluster_autoscaler_replicas(ev, 1, infra_ctx);
+            },
+        );
 
         terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         check_workers_on_upgrade(
             self,
-            self.cloud_provider.as_ref(),
+            infra_ctx.cloud_provider(),
             kubernetes_upgrade_status.requested_version.to_string(),
         )
         .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
@@ -617,10 +627,10 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -630,8 +640,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
@@ -641,10 +651,10 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), Box<EngineError>> {
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -654,8 +664,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 &self.s3,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -714,10 +724,6 @@ impl Kubernetes for EKS {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
-    }
-
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
     }
 }
 

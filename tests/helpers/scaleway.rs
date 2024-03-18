@@ -126,15 +126,14 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider: Arc<dyn CloudProvider> =
-            Arc::from(Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>);
-        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider_qoverydns(context, cluster_domain));
+        let cloud_provider: Box<dyn CloudProvider> =
+            Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>;
+        let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
         let cluster = get_environment_test_kubernetes(
             context,
-            cloud_provider.clone(),
+            cloud_provider.as_ref(),
             kubernetes_version,
-            dns_provider.clone(),
             logger.clone(),
             localisation,
             vpc_network_mode,
