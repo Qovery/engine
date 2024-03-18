@@ -66,10 +66,6 @@ data "aws_iam_policy_document" "queue" {
 resource "aws_sqs_queue_policy" "qovery_sqs_queue_policy" {
   queue_url = aws_sqs_queue.qovery-eks-queue.url
   policy    = data.aws_iam_policy_document.queue.json
-
-  tags = merge(
-    local.tags_common,
-  )
 }
 
 resource "aws_cloudwatch_event_rule" "qovery_cloudwatch_event_rule" {
@@ -90,9 +86,5 @@ resource "aws_cloudwatch_event_target" "qovery_cloudwatch_event_target" {
   rule      = aws_cloudwatch_event_rule.qovery_cloudwatch_event_rule[each.key].name
   target_id = "KarpenterInterruptionQueueTarget"
   arn       = aws_sqs_queue.qovery-eks-queue.arn
-
-  tags = merge(
-    local.tags_common,
-  )
 }
 {% endif %}
