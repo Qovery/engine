@@ -16,6 +16,7 @@ pub struct KarpenterConfigurationChart {
     organization_id: String,
     organization_long_id: String,
     region: String,
+    spot_enabled: bool,
 }
 
 impl KarpenterConfigurationChart {
@@ -30,6 +31,7 @@ impl KarpenterConfigurationChart {
         organization_id: &str,
         organization_long_id: uuid::Uuid,
         region: &str,
+        spot_enabled: bool,
     ) -> Self {
         let disk_size_in_gib = disk_size_in_gib.expect("disk size should be defined");
         KarpenterConfigurationChart {
@@ -47,6 +49,7 @@ impl KarpenterConfigurationChart {
             organization_id: organization_id.to_string(),
             organization_long_id: organization_long_id.to_string(),
             region: region.to_string(),
+            spot_enabled,
         }
     }
 
@@ -98,6 +101,13 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     ChartSetValue {
                         key: "tags.region".to_string(),
                         value: self.region.clone(),
+                    },
+                    ChartSetValue {
+                        key: "capacity_type".to_string(),
+                        value: match self.spot_enabled {
+                            false => "{on-demand}".to_string(),
+                            true => "{spot,on-demand}".to_string(),
+                        },
                     },
                 ],
                 ..Default::default()

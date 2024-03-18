@@ -52,10 +52,6 @@ impl ToCommonHelmChart for KarpenterChart {
                         key: "logLevel".to_string(),
                         value: "debug".to_string(),
                     },
-                    // ChartSetValue {
-                    //     key: "settings.aws.defaultInstanceProfile".to_string(),
-                    //     value: format!("KarpenterNodeInstanceProfile-{}", self.cluster_name.clone()),
-                    // },
                     ChartSetValue {
                         key: "settings.clusterName".to_string(),
                         value: self.cluster_name.to_string(),
@@ -63,6 +59,10 @@ impl ToCommonHelmChart for KarpenterChart {
                     ChartSetValue {
                         key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                         value: self.aws_iam_karpenter_controller_role_arn.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "settings.interruptionQueue".to_string(),
+                        value: self.cluster_name.to_string(),
                     },
                 ],
                 ..Default::default()

@@ -261,6 +261,9 @@ pub fn eks_aws_helm_charts(
         &chart_config_prerequisites.organization_id,
         chart_config_prerequisites.organization_long_id,
         chart_config_prerequisites.region.to_cloud_provider_format(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_karpenter_enable_spot,
     )
     .to_common_helm_chart()?;
 
