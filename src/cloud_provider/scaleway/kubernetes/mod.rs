@@ -1070,7 +1070,7 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            self.kube_client(infra_ctx.cloud_provider())?.client(),
+            infra_ctx.mk_kube_client()?.client(),
             &kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1671,7 +1671,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.kube_client(infra_ctx.cloud_provider())?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {

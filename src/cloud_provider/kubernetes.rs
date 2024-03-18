@@ -39,7 +39,6 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
-use crate::services::kube_client::QubeClient;
 
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
@@ -347,23 +346,6 @@ pub trait Kubernetes: Send + Sync {
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
-    // this method should replace kube_client
-    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
-        // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.kubeconfig_local_file_path();
-        let kube_credentials: Vec<(String, String)> = cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-
-        QubeClient::new(
-            self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-            kubeconfig_path,
-            kube_credentials,
-        )
-    }
-
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();

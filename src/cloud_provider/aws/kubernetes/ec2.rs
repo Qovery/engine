@@ -446,6 +446,7 @@ impl Kubernetes for EC2 {
         );
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
+                infra_ctx,
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
@@ -470,6 +471,7 @@ impl Kubernetes for EC2 {
         );
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
+                infra_ctx,
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),

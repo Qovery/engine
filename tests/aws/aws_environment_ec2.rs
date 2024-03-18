@@ -85,8 +85,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -250,8 +249,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -390,8 +388,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),

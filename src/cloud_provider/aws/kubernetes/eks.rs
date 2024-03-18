@@ -328,7 +328,7 @@ impl Kubernetes for EKS {
 
         // in case error, this should no be in the blocking process
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = self.kube_client(infra_ctx.cloud_provider()) {
+        if let Ok(kube_client) = infra_ctx.mk_kube_client() {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or_else(|_| Vec::with_capacity(0));
 
@@ -501,7 +501,7 @@ impl Kubernetes for EKS {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.kube_client(infra_ctx.cloud_provider())?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -639,6 +639,7 @@ impl Kubernetes for EKS {
         );
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
+                infra_ctx,
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
@@ -663,6 +664,7 @@ impl Kubernetes for EKS {
         );
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
+                infra_ctx,
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
