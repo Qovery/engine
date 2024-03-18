@@ -84,7 +84,7 @@ impl CloudProvider for AWS {
     }
 
     fn kubernetes_kind(&self) -> KubernetesKind {
-        self.kubernetes_kind.clone()
+        self.kubernetes_kind
     }
 
     fn id(&self) -> &str {

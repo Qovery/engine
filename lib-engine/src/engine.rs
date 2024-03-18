@@ -1,5 +1,4 @@
 use std::borrow::Borrow;
-use std::sync::Arc;
 use thiserror::Error;
 
 use crate::build_platform::BuildPlatform;
@@ -38,8 +37,8 @@ pub struct InfrastructureContext {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
+    cloud_provider: Box<dyn CloudProvider>,
+    dns_provider: Box<dyn DnsProvider>,
     kubernetes: Box<dyn Kubernetes>,
     metrics_registry: Box<dyn MetricsRegistry>,
 }
@@ -49,8 +48,8 @@ impl InfrastructureContext {
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
+        cloud_provider: Box<dyn CloudProvider>,
+        dns_provider: Box<dyn DnsProvider>,
         kubernetes: Box<dyn Kubernetes>,
         metrics_registry: Box<dyn MetricsRegistry>,
     ) -> InfrastructureContext {

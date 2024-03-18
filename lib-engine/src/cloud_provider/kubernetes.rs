@@ -30,6 +30,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_version, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
@@ -382,10 +383,14 @@ pub trait Kubernetes: Send + Sync {
             .join(format!("{}.yaml", self.id()))
     }
 
-    fn on_create(&self) -> Result<(), Box<EngineError>>;
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
-    fn on_pause(&self) -> Result<(), Box<EngineError>>;
-    fn on_delete(&self) -> Result<(), Box<EngineError>>;
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>>;
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
 
     fn update_vault_config(
@@ -406,7 +411,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, EnumIter)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumIter)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,

@@ -506,7 +506,7 @@ pub fn test_postgresql_pause(
             version,
             test_name,
             DatabaseKind::Postgresql,
-            kubernetes_kind.clone(),
+            kubernetes_kind,
             database_mode.clone(),
             is_public,
             ClusterDomain::Default {

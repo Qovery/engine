@@ -74,6 +74,7 @@ use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
 use crate::dns_provider::DnsProvider;
+use crate::engine::InfrastructureContext;
 use crate::object_storage::ObjectStorage;
 
 use super::models::QoveryAwsSdkConfigEks;
@@ -889,6 +890,7 @@ fn define_cluster_upgrade_timeout(
 }
 
 fn create(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -1183,7 +1185,7 @@ fn create(
             Ok(x) => {
                 if x.required_upgrade_on.is_some() {
                     // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
-                    let res = kubernetes.upgrade_with_status(x);
+                    let res = kubernetes.upgrade_with_status(infra_ctx, x);
                     // push endpoint to Vault for EC2
                     if kubernetes.kind() == Kind::Ec2 {
                         let qovery_terraform_config =

@@ -1,5 +1,4 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -41,7 +40,6 @@ use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::string::ToString;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 use tera::Context as TeraContext;
@@ -103,13 +101,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 AwsZone::UsEast2B.to_string(),
                 AwsZone::UsEast2C.to_string(),
             ],
-            Arc::from(cloud_provider),
-            Arc::from(dns_provider_qoverydns(
-                &context,
-                &ClusterDomain::Default {
-                    cluster_id: cluster_id.to_string(),
-                },
-            )),
+            cloud_provider.as_ref(),
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),

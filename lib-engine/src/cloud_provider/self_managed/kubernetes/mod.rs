@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -18,16 +17,17 @@ use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 
+use crate::engine::InfrastructureContext;
 use crate::secret_manager::vault::QVaultClient;
 use serde::{Deserialize, Serialize};
 
 pub struct SelfManaged {
     context: Context,
     id: String,
+    kind: kubernetes::Kind,
     long_id: Uuid,
     name: String,
     version: KubernetesVersion,
-    cloud_provider: Arc<dyn CloudProvider>,
     region: String,
     #[allow(dead_code)] //TODO(pmavro): not yet implemented
     options: SelfManagedOptions,
@@ -44,7 +44,7 @@ impl SelfManaged {
         long_id: Uuid,
         name: String,
         version: KubernetesVersion,
-        cloud_provider: Arc<dyn CloudProvider>,
+        cloud_provider: &dyn CloudProvider,
         options: SelfManagedOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
@@ -54,10 +54,10 @@ impl SelfManaged {
         let cluster = SelfManaged {
             context,
             id,
+            kind: cloud_provider.kubernetes_kind(),
             long_id,
             name,
             version,
-            cloud_provider: cloud_provider.clone(),
             region: cloud_provider.region(),
             options,
             logger,
@@ -94,7 +94,7 @@ impl Kubernetes for SelfManaged {
     }
 
     fn kind(&self) -> kubernetes::Kind {
-        self.cloud_provider.kubernetes_kind()
+        self.kind
     }
 
     fn as_kubernetes(&self) -> &dyn Kubernetes {
@@ -145,22 +145,23 @@ impl Kubernetes for SelfManaged {
         vec![]
     }
 
-    fn on_create(&self) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
     fn upgrade_with_status(
         &self,
+        _infra_ctx: &InfrastructureContext,
         _kubernetes_upgrade_status: kubernetes::KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_pause(&self) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_delete(&self) -> Result<(), Box<EngineError>> {
+    fn on_delete(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Ok(())
     }
     fn temp_dir(&self) -> &Path {

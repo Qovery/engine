@@ -18,7 +18,6 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::ToCloudProviderFormat;
 use std::str::FromStr;
-use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
 
@@ -119,13 +118,10 @@ impl Cluster<AWS, Options> for AWS {
         let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(context, kubernetes_kind, region);
         let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
-        let cloud_provider: Arc<dyn CloudProvider> = Arc::from(cloud_provider);
-        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider);
         let kubernetes = get_environment_test_kubernetes(
             context,
-            cloud_provider.clone(),
+            cloud_provider.as_ref(),
             kubernetes_version,
-            dns_provider.clone(),
             logger.clone(),
             region,
             vpc_network_mode,

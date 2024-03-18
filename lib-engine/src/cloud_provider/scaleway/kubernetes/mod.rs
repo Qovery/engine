@@ -30,7 +30,6 @@ use crate::cmd::terraform::{
     terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
@@ -39,6 +38,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
+use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -66,7 +66,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -157,8 +156,6 @@ pub struct Kapsule {
     name: String,
     version: KubernetesVersion,
     zone: ScwZone,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
     object_storage: ScalewayOS,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
@@ -177,8 +174,7 @@ impl Kapsule {
         name: String,
         version: KubernetesVersion,
         zone: ScwZone,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
+        cloud_provider: &dyn CloudProvider,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
@@ -188,7 +184,7 @@ impl Kapsule {
         temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
-        let event_details = kubernetes::event_details(&*cloud_provider, long_id, name.to_string(), &context);
+        let event_details = kubernetes::event_details(cloud_provider, long_id, name.to_string(), &context);
 
         for node_group in &nodes_groups {
             match ScwInstancesType::from_str(node_group.instance_type.as_str()) {
@@ -249,8 +245,6 @@ impl Kapsule {
             name,
             version,
             zone,
-            cloud_provider,
-            dns_provider,
             object_storage,
             nodes_groups,
             template_directory,
@@ -481,7 +475,7 @@ impl Kapsule {
         format!("qovery-logs-{}", self.id)
     }
 
-    fn tera_context(&self) -> Result<TeraContext, Box<EngineError>> {
+    fn tera_context(&self, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
@@ -493,14 +487,16 @@ impl Kapsule {
         context.insert("scw_zone", &self.zone.as_str());
 
         // DNS
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
-        let managed_dns_domains_root_helm_format = vec![self.dns_provider.domain().root_domain().to_string()];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_list = vec![infra_ctx.dns_provider().name()];
+        let managed_dns_domains_helm_format = vec![infra_ctx.dns_provider().domain().to_string()];
+        let managed_dns_domains_root_helm_format = vec![infra_ctx.dns_provider().domain().root_domain().to_string()];
+        let managed_dns_domains_terraform_format =
+            terraform_list_format(vec![infra_ctx.dns_provider().domain().to_string()]);
         let managed_dns_domains_root_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
+            terraform_list_format(vec![infra_ctx.dns_provider().domain().root_domain().to_string()]);
         let managed_dns_resolvers_terraform_format = terraform_list_format(
-            self.dns_provider
+            infra_ctx
+                .dns_provider()
                 .resolvers()
                 .iter()
                 .map(|x| x.clone().to_string())
@@ -519,10 +515,13 @@ impl Kapsule {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
-        context.insert("wildcard_managed_dns", &self.dns_provider.domain().wildcarded().to_string());
+        context.insert(
+            "wildcard_managed_dns",
+            &infra_ctx.dns_provider().domain().wildcarded().to_string(),
+        );
 
         // add specific DNS fields
-        self.dns_provider.insert_into_teracontext(&mut context);
+        infra_ctx.dns_provider().insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -534,8 +533,11 @@ impl Kapsule {
         context.insert("kubernetes_cluster_version", &self.version.to_string());
 
         // Qovery
-        context.insert("organization_id", self.cloud_provider.organization_id());
-        context.insert("organization_long_id", &self.cloud_provider.organization_long_id().to_string());
+        context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
+        context.insert(
+            "organization_long_id",
+            &infra_ctx.cloud_provider().organization_long_id().to_string(),
+        );
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
 
@@ -551,21 +553,21 @@ impl Kapsule {
         // AWS S3 tfstates storage tfstates
         context.insert(
             "aws_access_key_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.access_key_id.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.secret_access_key.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_region_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.region.as_str(),
                 None => "",
             },
@@ -671,7 +673,7 @@ impl Kapsule {
         Ok(context)
     }
 
-    fn create(&self) -> Result<(), Box<EngineError>> {
+    fn create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
@@ -685,13 +687,13 @@ impl Kapsule {
             match is_kubernetes_upgrade_required(
                 self.kubeconfig_local_file_path(),
                 self.version.clone(),
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
                 Ok(x) => {
                     if x.required_upgrade_on.is_some() {
-                        self.upgrade_with_status(x)?;
+                        self.upgrade_with_status(infra_ctx, x)?;
                     } else {
                         self.logger().log(EngineEvent::Info(
                             event_details.clone(),
@@ -716,7 +718,7 @@ impl Kapsule {
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+        let context = self.tera_context(infra_ctx)?;
 
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
@@ -811,19 +813,19 @@ impl Kapsule {
             None => None,
         };
         let cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
-            self.cloud_provider.access_key_id(),
-            self.cloud_provider.secret_access_key(),
+            infra_ctx.cloud_provider().access_key_id(),
+            infra_ctx.cloud_provider().secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.region().to_string(),
             self.default_zone().unwrap_or("").to_string(),
             None,
             cluster_endpoint,
             self.kind(),
-            self.cloud_provider.name().to_string(),
+            infra_ctx.cloud_provider().name().to_string(),
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
-            self.cloud_provider.organization_long_id().to_string(),
+            infra_ctx.cloud_provider().organization_long_id().to_string(),
             self.context().is_test_cluster(),
         ));
 
@@ -992,7 +994,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match check_workers_on_create(self, self.cloud_provider.as_ref()) {
+        match check_workers_on_create(self, infra_ctx.cloud_provider()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1003,8 +1005,8 @@ impl Kapsule {
         };
 
         // kubernetes helm deployments on the cluster
-        let credentials_environment_variables: Vec<(String, String)> = self
-            .cloud_provider
+        let credentials_environment_variables: Vec<(String, String)> = infra_ctx
+            .cloud_provider()
             .credentials_environment_variables()
             .into_iter()
             .map(|x| (x.0.to_string(), x.1.to_string()))
@@ -1018,34 +1020,35 @@ impl Kapsule {
         }
 
         let charts_prerequisites = ChartsConfigPrerequisites::new(
-            self.cloud_provider.organization_id().to_string(),
-            self.cloud_provider.organization_long_id(),
+            infra_ctx.cloud_provider().organization_id().to_string(),
+            infra_ctx.cloud_provider().organization_long_id(),
             self.id().to_string(),
             self.long_id,
             self.zone,
             self.cluster_name(),
             "scw".to_string(),
             self.context.is_test_cluster(),
-            self.cloud_provider.access_key_id(),
-            self.cloud_provider.secret_access_key(),
+            infra_ctx.cloud_provider().access_key_id(),
+            infra_ctx.cloud_provider().secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.context.is_feature_enabled(&Features::Grafana),
-            self.dns_provider.domain().root_domain().to_string(),
-            self.dns_provider.domain().to_helm_format_string(),
+            infra_ctx.dns_provider().domain().root_domain().to_string(),
+            infra_ctx.dns_provider().domain().to_helm_format_string(),
             terraform_list_format(
-                self.dns_provider
+                infra_ctx
+                    .dns_provider()
                     .resolvers()
                     .iter()
                     .map(|x| x.clone().to_string())
                     .collect(),
             ),
-            self.dns_provider.domain().root_domain().to_helm_format_string(),
-            self.dns_provider.provider_name().to_string(),
+            infra_ctx.dns_provider().domain().root_domain().to_helm_format_string(),
+            infra_ctx.dns_provider().provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
-            self.dns_provider.provider_configuration(),
+            infra_ctx.dns_provider().provider_configuration(),
             self.options.clone(),
             self.advanced_settings().clone(),
         );
@@ -1062,12 +1065,12 @@ impl Kapsule {
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
-            self.dns_provider.domain(),
+            infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            self.kube_client(self.cloud_provider.as_ref())?.client(),
+            self.kube_client(infra_ctx.cloud_provider())?.client(),
             &kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1080,7 +1083,7 @@ impl Kapsule {
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
-    fn pause(&self) -> Result<(), Box<EngineError>> {
+    fn pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         self.logger().log(EngineEvent::Info(
             self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
@@ -1090,7 +1093,7 @@ impl Kapsule {
         let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context()?;
+        let mut context = self.tera_context(infra_ctx)?;
 
         // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
         let scw_ks_worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
@@ -1160,7 +1163,7 @@ impl Kapsule {
                     let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
                         return match kubectl_exec_api_custom_metrics(
                             &kubernetes_config_file_path,
-                            self.cloud_provider.credentials_environment_variables(),
+                            infra_ctx.cloud_provider().credentials_environment_variables(),
                             "qovery",
                             None,
                             metric_name,
@@ -1215,7 +1218,7 @@ impl Kapsule {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = check_workers_on_pause(self, self.cloud_provider.as_ref()) {
+        if let Err(e) = check_workers_on_pause(self, infra_ctx.cloud_provider()) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1225,7 +1228,7 @@ impl Kapsule {
         Ok(())
     }
 
-    fn delete(&self) -> Result<(), Box<EngineError>> {
+    fn delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let skip_kubernetes_step = false;
 
@@ -1236,7 +1239,7 @@ impl Kapsule {
 
         let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+        let context = self.tera_context(infra_ctx)?;
 
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
@@ -1299,7 +1302,7 @@ impl Kapsule {
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubeconfig_path,
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
             );
 
             match all_namespaces {
@@ -1316,7 +1319,7 @@ impl Kapsule {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
                             &kubeconfig_path,
                             namespace_to_delete,
-                            self.cloud_provider.credentials_environment_variables(),
+                            infra_ctx.cloud_provider().credentials_environment_variables(),
                         ) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
@@ -1361,8 +1364,11 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
-                .map_err(|e| to_engine_error(&event_details, e))?;
+            let helm = Helm::new(
+                &kubeconfig_path,
+                &infra_ctx.cloud_provider().credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
             if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
@@ -1376,7 +1382,7 @@ impl Kapsule {
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
                 &kubeconfig_path,
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
@@ -1428,7 +1434,7 @@ impl Kapsule {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                     &kubeconfig_path,
                     qovery_namespace,
-                    self.cloud_provider.credentials_environment_variables(),
+                    infra_ctx.cloud_provider().credentials_environment_variables(),
                 );
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
@@ -1492,7 +1498,10 @@ impl Kapsule {
         if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
             temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1512,10 +1521,6 @@ impl Kapsule {
         ));
 
         Ok(())
-    }
-
-    fn cloud_provider_name(&self) -> &str {
-        "scaleway"
     }
 
     fn struct_name(&self) -> &str {
@@ -1590,20 +1595,24 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || self.create())
+        send_progress_on_long_task(self, Action::Create, || self.create(infra_ctx))
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
@@ -1612,7 +1621,7 @@ impl Kubernetes for Kapsule {
 
         let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context()?;
+        let mut context = self.tera_context(infra_ctx)?;
 
         //
         // Upgrade nodes
@@ -1662,7 +1671,7 @@ impl Kubernetes for Kapsule {
         ));
 
         // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
+        let kube_client = self.kube_client(infra_ctx.cloud_provider())?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1736,7 +1745,7 @@ impl Kubernetes for Kapsule {
             None,
             None,
             Some(3),
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -1745,7 +1754,7 @@ impl Kubernetes for Kapsule {
 
         if let Err(e) = delete_completed_jobs(
             self,
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             None,
         ) {
@@ -1760,7 +1769,7 @@ impl Kubernetes for Kapsule {
         ) {
             Ok(_) => match check_workers_on_upgrade(
                 self,
-                self.cloud_provider.as_ref(),
+                infra_ctx.cloud_provider(),
                 kubernetes_upgrade_status.requested_version.to_string(),
             ) {
                 Ok(_) => {
@@ -1786,31 +1795,31 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Pause, || self.pause())
+        send_progress_on_long_task(self, Action::Pause, || self.pause(infra_ctx))
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), Box<EngineError>> {
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Delete, || self.delete())
+        send_progress_on_long_task(self, Action::Delete, || self.delete(infra_ctx))
     }
 
     fn temp_dir(&self) -> &Path {

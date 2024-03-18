@@ -82,7 +82,7 @@ impl<T> EngineRequest<T> {
         let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
+            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind)
             .ok_or_else(|| {
                 Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
@@ -93,7 +93,6 @@ impl<T> EngineRequest<T> {
                     ),
                 ))
             })?;
-        let cloud_provider: Arc<dyn cloud_provider::CloudProvider> = Arc::from(cloud_provider);
 
         let qovery_tags = HashMap::from([
             ("ClusterId".to_string(), context.cluster_short_id().to_string()),
@@ -147,14 +146,11 @@ impl<T> EngineRequest<T> {
                     ),
                 )
             })?;
-        let dns_provider: Arc<dyn dns_provider::DnsProvider> = Arc::from(dns_provider);
 
-        let kubernetes = match self.kubernetes.to_engine_kubernetes(
-            context,
-            cloud_provider.clone(),
-            dns_provider.clone(),
-            logger.clone(),
-        ) {
+        let kubernetes = match self
+            .kubernetes
+            .to_engine_kubernetes(context, cloud_provider.as_ref(), logger.clone())
+        {
             Ok(x) => x,
             Err(e) => {
                 error!("{:?}", e);
@@ -341,11 +337,10 @@ impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
-        cloud_provider: Arc<dyn cloud_provider::CloudProvider>,
-        dns_provider: Arc<dyn dns_provider::DnsProvider>,
+        cloud_provider: &dyn cloud_provider::CloudProvider,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
-        let event_details = event_details(&*cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
+        let event_details = event_details(cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
         let temp_dir = workspace_directory(
             context.workspace_root_dir(),
@@ -394,7 +389,6 @@ impl Kubernetes {
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 cloud_provider.zones().clone(),
                 cloud_provider,
-                dns_provider,
                 serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
@@ -420,7 +414,6 @@ impl Kubernetes {
                     )
                 }),
                 cloud_provider,
-                dns_provider,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
@@ -454,7 +447,6 @@ impl Kubernetes {
                     AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                     cloud_provider.zones().clone(),
                     cloud_provider,
-                    dns_provider,
                     serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                         .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
@@ -489,8 +481,6 @@ impl Kubernetes {
                             self.region.as_str()
                         )
                     }),
-                    cloud_provider,
-                    dns_provider,
                     options,
                     logger,
                     self.advanced_settings.clone(),
