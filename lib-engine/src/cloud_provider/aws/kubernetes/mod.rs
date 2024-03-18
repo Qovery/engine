@@ -61,7 +61,7 @@ use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
 };
-use crate::services::kube_client::SelectK8sResourceBy;
+use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use chrono::Duration as ChronoDuration;
@@ -942,10 +942,10 @@ fn create(
         let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
             node_groups_when_karpenter_is_enabled(
                 kubernetes,
+                &infra_ctx.mk_kube_client()?,
                 node_groups,
                 &event_details,
                 kubernetes_action,
-                cloud_provider,
             )
         } else {
             node_groups
@@ -967,7 +967,7 @@ fn create(
 
         // in case error, this should no be a blocking error
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+        if let Ok(kube_client) = infra_ctx.mk_kube_client() {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or(Vec::with_capacity(0));
 
@@ -1279,10 +1279,10 @@ fn create(
         .collect();
 
     if kubernetes.advanced_settings().aws_enable_karpenter
-        && Karpenter::is_paused(kubernetes, cloud_provider, &event_details)?
+        && Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)?
     {
         let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
-        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         block_on(Karpenter::restart(
             kubernetes,
             cloud_provider,
@@ -1310,7 +1310,7 @@ fn create(
     if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
         info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
         block_on(patch_kube_proxy_for_aws_user_network(
-            kubernetes.kube_client(cloud_provider)?.client().clone(),
+            infra_ctx.mk_kube_client()?.client().clone(),
         ))
         .map_err(|e| {
             EngineError::new_k8s_node_not_ready(
@@ -1435,7 +1435,7 @@ fn create(
     };
 
     if kubernetes.kind() == Kind::Ec2 {
-        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
             match deploy_charts_levels(
                 kube_client.client(),
@@ -1468,7 +1468,7 @@ fn create(
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
         deploy_charts_levels(
-            kubernetes.kube_client(cloud_provider)?.client(),
+            infra_ctx.mk_kube_client()?.client(),
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1517,10 +1517,10 @@ fn bootstrap_on_fargate_when_karpenter_is_enabled(
 
 fn node_groups_when_karpenter_is_enabled<'a>(
     kubernetes: &dyn Kubernetes,
+    kube_client: &QubeClient,
     node_groups: &'a [NodeGroups],
     event_details: &EventDetails,
     kubernetes_action: KubernetesClusterAction,
-    cloud_provider: &dyn CloudProvider,
 ) -> &'a [NodeGroups] {
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap
@@ -1530,7 +1530,7 @@ fn node_groups_when_karpenter_is_enabled<'a>(
         | KubernetesClusterAction::Delete
         | KubernetesClusterAction::CleanKarpenterMigration => &[],
         KubernetesClusterAction::Update(_)
-            if Karpenter::deployment_is_installed(kubernetes, cloud_provider, event_details)
+            if Karpenter::deployment_is_installed(kube_client, event_details)
                 || kubernetes.context().is_first_cluster_deployment() =>
         {
             &[]
@@ -1562,6 +1562,7 @@ fn node_group_is_running(
 }
 
 fn pause(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -1594,7 +1595,7 @@ fn pause(
 
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1744,7 +1745,7 @@ fn pause(
     ));
 
     if kubernetes.advanced_settings().aws_enable_karpenter {
-        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         block_on(Karpenter::pause(kubernetes, cloud_provider, &kube_client))?;
     }
 
@@ -1766,6 +1767,7 @@ fn pause(
 }
 
 fn delete(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -1795,10 +1797,10 @@ fn delete(
             let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
                 node_groups_when_karpenter_is_enabled(
                     kubernetes,
+                    &infra_ctx.mk_kube_client()?,
                     node_groups,
                     &event_details,
                     KubernetesClusterAction::Delete,
-                    cloud_provider,
                 )
             } else {
                 node_groups
@@ -1838,7 +1840,7 @@ fn delete(
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -2243,7 +2245,7 @@ fn delete(
         ))?;
 
         if kubernetes.advanced_settings().aws_enable_karpenter {
-            let kube_client = kubernetes.kube_client(cloud_provider)?;
+            let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
         }
 

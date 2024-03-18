@@ -1,6 +1,6 @@
 use base64::engine::general_purpose;
 use base64::{DecodeError, Engine};
-use kube::config::{KubeConfigOptions, Kubeconfig, KubeconfigError};
+use kube::config::{InClusterError, KubeConfigOptions, Kubeconfig, KubeconfigError};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
@@ -84,6 +84,20 @@ pub async fn create_kube_client<P: AsRef<Path>>(
     let kube_config = kube::Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
         .await
         .map_err(to_err)?;
+    let kube_client = kube::Client::try_from(kube_config)?;
+
+    // Try to contact the api to verify we are correctly connected
+    kube_client.apiserver_version().await?;
+    Ok(kube_client)
+}
+
+pub async fn create_kube_client_in_cluster() -> Result<kube::Client, kube::Error> {
+    let to_err = |err: InClusterError| -> kube::Error {
+        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
+    };
+
+    // build kube client: the kube config must have already the good context selected
+    let kube_config = kube::Config::incluster().map_err(to_err)?;
     let kube_client = kube::Client::try_from(kube_config)?;
 
     // Try to contact the api to verify we are correctly connected

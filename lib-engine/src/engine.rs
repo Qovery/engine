@@ -7,8 +7,11 @@ use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
+use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::metrics_registry::MetricsRegistry;
+use crate::services::kube_client::QubeClient;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineConfigError {
@@ -108,5 +111,23 @@ impl InfrastructureContext {
         }
 
         Ok(())
+    }
+
+    // The kubeconfig file may not exist yet on disk, so we create the client lazily
+    pub fn mk_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
+        let kubeconfig_path = self.kubernetes().kubeconfig_local_file_path();
+        let kube_credentials: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        QubeClient::new(
+            self.kubernetes()
+                .get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
+            kubeconfig_path,
+            kube_credentials,
+        )
     }
 }

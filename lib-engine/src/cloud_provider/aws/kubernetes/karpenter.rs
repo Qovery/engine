@@ -102,39 +102,24 @@ impl Karpenter {
         Ok(())
     }
 
-    pub fn is_paused(
-        kubernetes: &dyn Kubernetes,
-        cloud_provider: &dyn CloudProvider,
-        event_details: &EventDetails,
-    ) -> Result<bool, Box<EngineError>> {
-        let client = kubernetes.kube_client(cloud_provider)?;
-
-        if !Self::deployment_is_installed(kubernetes, cloud_provider, event_details) {
+    pub fn is_paused(kube_client: &QubeClient, event_details: &EventDetails) -> Result<bool, Box<EngineError>> {
+        if !Self::deployment_is_installed(kube_client, event_details) {
             return Ok(false);
         }
 
-        let nodes = block_on(Self::get_karpenter_nodes(&client, event_details))?;
+        let nodes = block_on(Self::get_karpenter_nodes(kube_client, event_details))?;
         Ok(nodes.is_empty())
     }
 
-    pub fn deployment_is_installed(
-        kubernetes: &dyn Kubernetes,
-        cloud_provider: &dyn CloudProvider,
-        event_details: &EventDetails,
-    ) -> bool {
-        match kubernetes.kube_client(cloud_provider) {
-            Ok(kube_client) => {
-                let deployments = block_on(kube_client.get_deployments(
-                    event_details.clone(),
-                    Some(&HelmChartNamespaces::KubeSystem.to_string()),
-                    SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
-                ))
-                .unwrap_or(Vec::with_capacity(0));
+    pub fn deployment_is_installed(kube_client: &QubeClient, event_details: &EventDetails) -> bool {
+        let deployments = block_on(kube_client.get_deployments(
+            event_details.clone(),
+            Some(&HelmChartNamespaces::KubeSystem.to_string()),
+            SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+        ))
+        .unwrap_or(Vec::with_capacity(0));
 
-                !deployments.is_empty()
-            }
-            _ => false,
-        }
+        !deployments.is_empty()
     }
 
     async fn get_karpenter_nodes(
