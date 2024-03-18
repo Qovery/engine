@@ -74,6 +74,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_enable_karpenter: bool,
     #[serde(alias = "aws.karpenter.max_node_drain_in_sec")]
     pub aws_karpenter_max_node_drain_in_sec: Option<i32>,
+    #[serde(alias = "aws.karpenter.enable_spot")]
+    pub aws_karpenter_enable_spot: bool,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
@@ -159,6 +161,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             aws_enable_karpenter: false,
             aws_karpenter_max_node_drain_in_sec: None,
+            aws_karpenter_enable_spot: false,
         }
     }
 }

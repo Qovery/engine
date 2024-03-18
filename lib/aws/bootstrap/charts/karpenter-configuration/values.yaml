@@ -8,6 +8,8 @@ securityGroupId: ""
 
 diskSizeInGib: 0
 
+capacity_type: []
+
 tags:
   clusterId: ""
   clusterLongId: ""

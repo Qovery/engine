@@ -310,6 +310,7 @@ impl Karpenter {
             &organization_id,
             organization_long_id,
             region.to_cloud_provider_format(),
+            kubernetes.advanced_settings().aws_karpenter_enable_spot,
         )
         .to_common_helm_chart()
         .map_err(|el| {
