@@ -25,7 +25,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartNamespaces};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -55,6 +55,8 @@ use crate::models::third_parties::LetsEncryptConfig;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
@@ -1274,21 +1276,19 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    if kubernetes.advanced_settings().aws_enable_karpenter {
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
-            if Karpenter::is_paused(kubernetes, cloud_provider, &kube_client, &event_details) {
-                let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
-
-                block_on(Karpenter::restart(
-                    kubernetes,
-                    cloud_provider,
-                    kube_client,
-                    kubernetes_long_id,
-                    disk_size_in_gib,
-                    &qovery_terraform_config_file,
-                ))?;
-            }
-        }
+    if kubernetes.advanced_settings().aws_enable_karpenter
+        && Karpenter::is_paused(kubernetes, cloud_provider, &event_details)?
+    {
+        let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        block_on(Karpenter::restart(
+            kubernetes,
+            cloud_provider,
+            &kube_client,
+            kubernetes_long_id,
+            disk_size_in_gib,
+            &qovery_terraform_config_file,
+        ))?;
     }
 
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
@@ -1528,32 +1528,12 @@ fn node_groups_when_karpenter_is_enabled<'a>(
         | KubernetesClusterAction::Delete
         | KubernetesClusterAction::CleanKarpenterMigration => &[],
         KubernetesClusterAction::Update(_)
-            if karpenter_is_deployed(kubernetes, cloud_provider, event_details)
+            if Karpenter::deployment_is_installed(kubernetes, cloud_provider, event_details)
                 || kubernetes.context().is_first_cluster_deployment() =>
         {
             &[]
         }
         KubernetesClusterAction::Update(_) => node_groups,
-    }
-}
-
-fn karpenter_is_deployed(
-    kubernetes: &dyn Kubernetes,
-    cloud_provider: &dyn CloudProvider,
-    event_details: &EventDetails,
-) -> bool {
-    match kubernetes.kube_client(cloud_provider) {
-        Ok(kube_client) => {
-            let deployments = block_on(kube_client.get_deployments(
-                event_details.clone(),
-                Some(&HelmChartNamespaces::KubeSystem.to_string()),
-                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
-            ))
-            .unwrap_or(Vec::with_capacity(0));
-
-            !deployments.is_empty()
-        }
-        _ => false,
     }
 }
 
@@ -1762,14 +1742,8 @@ fn pause(
     ));
 
     if kubernetes.advanced_settings().aws_enable_karpenter {
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
-            block_on(Karpenter::pause(
-                kubernetes,
-                cloud_provider,
-                kube_client,
-                kubernetes.advanced_settings().aws_karpenter_max_node_drain_in_sec,
-            ))?;
-        }
+        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        block_on(Karpenter::pause(kubernetes, cloud_provider, &kube_client))?;
     }
 
     match terraform_apply_with_tf_workers_resources(
@@ -1816,6 +1790,18 @@ fn delete(
     let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
+            let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+                node_groups_when_karpenter_is_enabled(
+                    kubernetes,
+                    node_groups,
+                    &event_details,
+                    KubernetesClusterAction::Delete,
+                    cloud_provider,
+                )
+            } else {
+                node_groups
+            };
+
             let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
                 Ok(value) => Some(value),
                 Err(_) => None,
@@ -1825,7 +1811,7 @@ fn delete(
                 event_details.clone(),
                 kubernetes,
                 KubernetesClusterAction::Delete,
-                node_groups,
+                applied_node_groups,
                 aws_eks_client,
             )?
         }
@@ -2212,9 +2198,13 @@ fn delete(
             EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
         ));
 
+        // Do not uninstall Karpenter to be able to delete the nodes properly .
         match helm.list_release(None, &[]) {
             Ok(helm_charts) => {
-                for chart in helm_charts {
+                for chart in helm_charts.into_iter().filter(|helm_chart| {
+                    helm_chart.name != KarpenterChart::chart_name()
+                        && helm_chart.name != KarpenterConfigurationChart::chart_name()
+                }) {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                     match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
@@ -2249,6 +2239,11 @@ fn delete(
             NodeGroupsDeletionType::All,
             event_details.clone(),
         ))?;
+
+        if kubernetes.advanced_settings().aws_enable_karpenter {
+            let kube_client = kubernetes.kube_client(cloud_provider)?;
+            block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+        }
 
         // remove S3 buckets from tf state
         kubernetes.logger().log(EngineEvent::Info(
