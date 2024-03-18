@@ -1088,6 +1088,8 @@ pub enum Tag {
     K8sPatchNodeError,
     /// K8sUninstallEc2NodeClassesError: represents an error where we are not able to uninstall Ec2NodeClasses.
     K8sUninstallEc2NodeClassesError,
+    /// K8sDeleteKarpenterNodesError: represents an error where we are not able to delete Karpenter nodes.
+    K8sDeleteKarpenterNodesError,
 }
 
 impl Tag {
@@ -4997,6 +4999,23 @@ impl EngineError {
             Tag::K8sUninstallEc2NodeClassesError,
             error.to_string(),
             Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_delete_karpenter_nodes_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sDeleteKarpenterNodesError,
+            error.to_string(),
+            None,
             None,
             None,
         )

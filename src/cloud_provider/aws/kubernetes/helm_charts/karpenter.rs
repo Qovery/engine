@@ -31,7 +31,7 @@ impl KarpenterChart {
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "karpenter".to_string()
     }
 }

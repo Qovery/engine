@@ -1,8 +1,8 @@
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terraform_config;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
-use crate::cloud_provider::aws::kubernetes::karpenter_is_deployed;
 use crate::cloud_provider::aws::regions::AwsRegion;
-use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
+use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
@@ -12,13 +12,15 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
-use crate::services::kube_client::QubeClient;
+use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
+use chrono::Duration as ChronoDuration;
+use k8s_openapi::api::core::v1::Node;
 use std::str::FromStr;
 use std::string::ToString;
 use std::time::Duration;
 
 const KARPENTER_DEPLOYMENT_NAME: &str = "karpenter";
-const KARPENTER_DEFAULT_NODES_DRAIN_TIMEOUT_IN_SEC: i32 = 60;
+const KARPENTER_MIN_NODES_DRAIN_TIMEOUT: ChronoDuration = ChronoDuration::seconds(60);
 
 pub struct Karpenter {}
 
@@ -26,24 +28,190 @@ impl Karpenter {
     pub async fn pause(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
-        client: QubeClient,
-        nodes_drain_timeout_in_sec: Option<i32>,
+        client: &QubeClient,
     ) -> Result<(), Box<EngineError>> {
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
-        Self::delete_nodes_spawned_by_karpenter(
+        Self::delete_nodes_spawned_by_karpenter(kubernetes, cloud_provider, client, &event_details).await?;
+
+        // scale down the karpenter deployment
+        client
+            .set_deployment_replicas_number(
+                event_details,
+                KARPENTER_DEPLOYMENT_NAME,
+                &HelmChartNamespaces::KubeSystem.to_string(),
+                0,
+            )
+            .await
+    }
+
+    pub async fn restart(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        client: &QubeClient,
+        kubernetes_long_id: uuid::Uuid,
+        disk_size_in_gib: Option<i32>,
+        qovery_terraform_config_file: &str,
+    ) -> Result<(), Box<EngineError>> {
+        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Restart));
+
+        // scale up the karpenter deployment
+        client
+            .set_deployment_replicas_number(
+                event_details.clone(),
+                KARPENTER_DEPLOYMENT_NAME,
+                &HelmChartNamespaces::KubeSystem.to_string(),
+                2,
+            )
+            .await?;
+
+        Self::install_karpenter_configuration(
             kubernetes,
             cloud_provider,
-            &client,
-            event_details.clone(),
-            nodes_drain_timeout_in_sec,
+            &event_details,
+            kubernetes_long_id,
+            disk_size_in_gib,
+            qovery_terraform_config_file,
         )
-        .await?;
+    }
+
+    pub async fn delete(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        client: &QubeClient,
+    ) -> Result<(), Box<EngineError>> {
+        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+
+        Self::delete_nodes_spawned_by_karpenter(kubernetes, cloud_provider, client, &event_details).await?;
+
+        // uninstall Karpenter
+        if let Err(e) = uninstall_chart(
+            kubernetes,
+            cloud_provider,
+            &event_details,
+            &KarpenterChart::chart_name(),
+            &HelmChartNamespaces::KubeSystem.to_string(),
+            None,
+        ) {
+            kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new_from_engine_error(*e),
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn is_paused(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        event_details: &EventDetails,
+    ) -> Result<bool, Box<EngineError>> {
+        let client = kubernetes.kube_client(cloud_provider)?;
+
+        if !Self::deployment_is_installed(kubernetes, cloud_provider, event_details) {
+            return Ok(false);
+        }
+
+        let nodes = block_on(Self::get_karpenter_nodes(&client, event_details))?;
+        Ok(nodes.is_empty())
+    }
+
+    pub fn deployment_is_installed(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        event_details: &EventDetails,
+    ) -> bool {
+        match kubernetes.kube_client(cloud_provider) {
+            Ok(kube_client) => {
+                let deployments = block_on(kube_client.get_deployments(
+                    event_details.clone(),
+                    Some(&HelmChartNamespaces::KubeSystem.to_string()),
+                    SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
+                ))
+                .unwrap_or(Vec::with_capacity(0));
+
+                !deployments.is_empty()
+            }
+            _ => false,
+        }
+    }
+
+    async fn get_karpenter_nodes(
+        client: &QubeClient,
+        event_details: &EventDetails,
+    ) -> Result<Vec<Node>, Box<EngineError>> {
+        client
+            .get_nodes(
+                event_details.clone(),
+                SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
+            )
+            .await
+    }
+
+    async fn delete_nodes_spawned_by_karpenter(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        client: &QubeClient,
+        event_details: &EventDetails,
+    ) -> Result<(), Box<EngineError>> {
+        let max_nodes_drain_in_sec = kubernetes
+            .advanced_settings()
+            .aws_karpenter_max_node_drain_in_sec
+            .map(|duration| ChronoDuration::seconds(duration as i64));
+        let nodes_drain_timeout = get_nodes_drain_timeout(client, event_details, max_nodes_drain_in_sec).await?;
+
+        // Check that karpenter is installed.
+        let nodes = Self::get_karpenter_nodes(client, event_details).await?;
+        if nodes.is_empty() {
+            return Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message(
+                    "Karpenter is not running. That prevents the deletion of the nodes".to_string(),
+                ),
+            )));
+        }
+
+        // Uninstall karpenter-configuration chart then Karpenter will delete the nodes
+        // The Ec2nodeclasses has a finalizer that wait for the NodeClaims to be terminated
+        // The NodeClaims has a finalizer that wait for the Nodes to be terminated
+        if let Err(e) = uninstall_chart(
+            kubernetes,
+            cloud_provider,
+            event_details,
+            &KarpenterConfigurationChart::chart_name(),
+            &HelmChartNamespaces::KubeSystem.to_string(),
+            Some(nodes_drain_timeout),
+        ) {
+            // this error is not blocking because it will be the case if some PDB prevent the nodes to be stopped
+            kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new_from_engine_error(*e),
+            ));
+        }
+
+        // remove finalizer of the remaining nodes
+        let nodes = client
+            .get_nodes(
+                event_details.clone(),
+                SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
+            )
+            .await?;
+
+        let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
+            path: "/metadata/finalizers".to_string(),
+        })];
+
+        for node in nodes {
+            client
+                .patch_node(event_details.clone(), node, &patch_operations)
+                .await?;
+        }
 
         // wait for Ec2NodeClasses to be deleted
         let mut nb_retry = 0;
         let ec2_node_classes = loop {
-            let result = client.get_ec2_node_classes(&event_details).await;
+            let result = client.get_ec2_node_classes(event_details).await;
             if nb_retry > 10 {
                 break result;
             } else {
@@ -69,130 +237,20 @@ impl Karpenter {
             )));
         }
 
-        // scale down the karpenter deployment
-        client
-            .set_deployment_replicas_number(
-                event_details,
-                KARPENTER_DEPLOYMENT_NAME,
-                &HelmChartNamespaces::KubeSystem.to_string(),
-                0,
-            )
-            .await
-    }
-
-    pub async fn restart(
-        kubernetes: &dyn Kubernetes,
-        cloud_provider: &dyn CloudProvider,
-        client: QubeClient,
-        kubernetes_long_id: uuid::Uuid,
-        disk_size_in_gib: Option<i32>,
-        qovery_terraform_config_file: &str,
-    ) -> Result<(), Box<EngineError>> {
-        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-
-        // scale up the karpenter deployment
-        client
-            .set_deployment_replicas_number(
-                event_details.clone(),
-                KARPENTER_DEPLOYMENT_NAME,
-                &HelmChartNamespaces::KubeSystem.to_string(),
-                2,
-            )
-            .await?;
-
-        Self::install_karpenter_configuration(
-            kubernetes,
-            cloud_provider,
-            event_details,
-            kubernetes_long_id,
-            disk_size_in_gib,
-            qovery_terraform_config_file,
-        )
-    }
-
-    pub fn is_paused(
-        kubernetes: &dyn Kubernetes,
-        cloud_provider: &dyn CloudProvider,
-        client: &QubeClient,
-        event_details: &EventDetails,
-    ) -> bool {
-        if karpenter_is_deployed(kubernetes, cloud_provider, event_details) {
-            let nodes = block_on(client.get_nodes(
-                event_details.clone(),
-                crate::services::kube_client::SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
-            ));
-            return match nodes {
-                Ok(elements) => elements.is_empty(),
-                Err(_) => false,
-            };
-        }
-        false
-    }
-
-    async fn delete_nodes_spawned_by_karpenter(
-        kubernetes: &dyn Kubernetes,
-        cloud_provider: &dyn CloudProvider,
-        client: &QubeClient,
-        event_details: EventDetails,
-        nodes_drain_timeout_in_sec: Option<i32>,
-    ) -> Result<(), Box<EngineError>> {
-        let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
-
-        // 1 uninstall karpenter-configuration chart.
-        // The Ec2nodeclasses has a finalizer that wait for the NodeClaims to be terminated
-        // The NodeClaims has a finalizer that wait for the Nodes to be terminated
-        let helm = Helm::new(
-            &kubernetes_config_file_path,
-            &cloud_provider.credentials_environment_variables(),
-        )
-        .map_err(|e| to_engine_error(&event_details, e))?;
-
-        let mut chart = ChartInfo::new_from_release_name(
-            &KarpenterConfigurationChart::chart_name(),
-            &HelmChartNamespaces::KubeSystem.to_string(),
-        );
-        chart.timeout_in_seconds =
-            nodes_drain_timeout_in_sec.unwrap_or(KARPENTER_DEFAULT_NODES_DRAIN_TIMEOUT_IN_SEC) as i64;
-
-        if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-            // this error is not blocking because it will be the case if some PDB prevent the nodes to be stopped
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(to_engine_error(&event_details, e)),
-            ));
-        }
-
-        // 2 remove finalizer of the remaining nodes
-        let nodes = client
-            .get_nodes(
-                event_details.clone(),
-                crate::services::kube_client::SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
-            )
-            .await?;
-
-        let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
-            path: "/metadata/finalizers".to_string(),
-        })];
-
-        for node in nodes {
-            client
-                .patch_node(event_details.clone(), node, &patch_operations)
-                .await?;
-        }
         Ok(())
     }
 
     fn install_karpenter_configuration(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
-        event_details: EventDetails,
+        event_details: &EventDetails,
         cluster_long_id: uuid::Uuid,
         disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
         let helm = Helm::new(kubernetes_config_file_path, &cloud_provider.credentials_environment_variables())
-            .map_err(|e| to_engine_error(&event_details, e))?;
+            .map_err(|e| to_engine_error(event_details, e))?;
 
         let karpenter_configuration_chart = Self::get_karpenter_configuration_chart(
             kubernetes,
@@ -200,6 +258,7 @@ impl Karpenter {
             cluster_long_id,
             disk_size_in_gib,
             qovery_terraform_config_file,
+            event_details,
         )?;
 
         Ok(helm
@@ -208,7 +267,7 @@ impl Karpenter {
                 EngineError::new_helm_charts_upgrade_error(
                     event_details.clone(),
                     CommandError::new(
-                        "can't helm upgrade karpenter-configuration".to_string(),
+                        "can't upgrade helm karpenter-configuration".to_string(),
                         Some(e.to_string()),
                         None,
                     ),
@@ -222,9 +281,8 @@ impl Karpenter {
         cluster_long_id: uuid::Uuid,
         disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
+        event_details: &EventDetails,
     ) -> Result<ChartInfo, Box<EngineError>> {
-        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-
         let qovery_terraform_config = get_qovery_terraform_config(qovery_terraform_config_file, &[]).map_err(|e| {
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
@@ -267,4 +325,60 @@ impl Karpenter {
 
         Ok(karpenter_configuration_chart.chart_info)
     }
+}
+
+async fn get_nodes_drain_timeout(
+    kube_client: &QubeClient,
+    event_details: &EventDetails,
+    max_nodes_drain_duration: Option<ChronoDuration>,
+) -> Result<ChronoDuration, Box<EngineError>> {
+    let pods_list = kube_client
+        .get_pods(event_details.clone(), None, SelectK8sResourceBy::All)
+        .await
+        .unwrap_or_else(|_| Vec::with_capacity(0));
+
+    let max_termination_grace_period_seconds = pods_list
+        .iter()
+        .map(|pod| {
+            pod.metadata
+                .termination_grace_period_seconds
+                .unwrap_or(ChronoDuration::seconds(0))
+        })
+        .max();
+    let timeout = match max_termination_grace_period_seconds {
+        None => KARPENTER_MIN_NODES_DRAIN_TIMEOUT,
+        Some(duration) => ChronoDuration::max(duration, KARPENTER_MIN_NODES_DRAIN_TIMEOUT),
+    };
+
+    match max_nodes_drain_duration {
+        None => Ok(timeout),
+        Some(max_duration) => Ok(ChronoDuration::min(timeout, max_duration)),
+    }
+}
+
+fn uninstall_chart(
+    kubernetes: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    event_details: &EventDetails,
+    chart_name: &str,
+    chart_namespace: &str,
+    uninstall_timeout: Option<ChronoDuration>,
+) -> Result<(), Box<EngineError>> {
+    let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
+
+    let helm = Helm::new(kubernetes_config_file_path, &cloud_provider.credentials_environment_variables())
+        .map_err(|e| to_engine_error(event_details, e))?;
+
+    let mut chart = ChartInfo::new_from_release_name(chart_name, chart_namespace);
+    if let Some(timeout) = uninstall_timeout {
+        chart.timeout_in_seconds = timeout.num_seconds();
+    }
+
+    helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})
+        .map_err(|err| {
+            Box::new(EngineError::new_helm_chart_error(
+                event_details.clone(),
+                HelmChartError::HelmError(err),
+            ))
+        })
 }
