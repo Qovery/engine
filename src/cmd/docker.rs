@@ -269,7 +269,6 @@ impl Docker {
             "--bootstrap",
             "--use",
         ];
-        println!("{:?}", args);
         let _ = docker_exec(
             &args,
             &docker.get_all_envs(&[]),
@@ -461,7 +460,7 @@ impl Docker {
             Err(err) => {
                 return Err(DockerError::InvalidConfig {
                     raw_error_message: format!("Cannot decode username due to: {}", err),
-                })
+                });
             }
         };
         info!("Docker login {} as user {}", registry, username);
@@ -497,7 +496,7 @@ impl Docker {
             Err(err) => {
                 return Err(DockerError::InvalidConfig {
                     raw_error_message: format!("Cannot decode username due to: {}", err),
-                })
+                });
             }
         };
         info!("Docker login {} as user {}", registry, username);

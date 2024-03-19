@@ -234,8 +234,11 @@ impl Karpenter {
         qovery_terraform_config_file: &str,
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
-        let helm = Helm::new(kubernetes_config_file_path, &cloud_provider.credentials_environment_variables())
-            .map_err(|e| to_engine_error(event_details, e))?;
+        let helm = Helm::new(
+            Some(kubernetes_config_file_path),
+            &cloud_provider.credentials_environment_variables(),
+        )
+        .map_err(|e| to_engine_error(event_details, e))?;
 
         let karpenter_configuration_chart = Self::get_karpenter_configuration_chart(
             kubernetes,
@@ -352,8 +355,11 @@ fn uninstall_chart(
 ) -> Result<(), Box<EngineError>> {
     let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
 
-    let helm = Helm::new(kubernetes_config_file_path, &cloud_provider.credentials_environment_variables())
-        .map_err(|e| to_engine_error(event_details, e))?;
+    let helm = Helm::new(
+        Some(kubernetes_config_file_path),
+        &cloud_provider.credentials_environment_variables(),
+    )
+    .map_err(|e| to_engine_error(event_details, e))?;
 
     let mut chart = ChartInfo::new_from_release_name(chart_name, chart_namespace);
     if let Some(timeout) = uninstall_timeout {

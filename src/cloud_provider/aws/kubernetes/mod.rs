@@ -2114,7 +2114,7 @@ fn delete(
 
         // delete custom metrics api to avoid stale namespaces on deletion
         let helm = Helm::new(
-            &kubernetes_config_file_path,
+            Some(&kubernetes_config_file_path),
             &cloud_provider.credentials_environment_variables(),
         )
         .map_err(|e| to_engine_error(&event_details, e))?;

@@ -1365,7 +1365,7 @@ impl Kapsule {
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let helm = Helm::new(
-                &kubeconfig_path,
+                Some(&kubeconfig_path),
                 &infra_ctx.cloud_provider().credentials_environment_variables(),
             )
             .map_err(|e| to_engine_error(&event_details, e))?;

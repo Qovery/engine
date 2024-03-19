@@ -1033,7 +1033,7 @@ impl Gke {
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let helm = Helm::new(
-                &kubeconfig_path,
+                Some(&kubeconfig_path),
                 &infra_ctx.cloud_provider().credentials_environment_variables(),
             )
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
