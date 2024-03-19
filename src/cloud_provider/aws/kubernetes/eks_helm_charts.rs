@@ -33,7 +33,6 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_c
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::prometheus_servicemonitor_crd::PrometheusServiceMonitorCrdChart;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -276,8 +275,8 @@ pub fn eks_aws_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let prometheus_service_monitor_crd =
-        PrometheusServiceMonitorCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
+    // let prometheus_service_monitor_crd =
+    //     PrometheusServiceMonitorCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // Cluster autoscaler
     let cluster_autoscaler = ClusterAutoscalerChart::new(
@@ -699,7 +698,7 @@ pub fn eks_aws_helm_charts(
 
     // chart deployment order matters!!!
     let level_0: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(prometheus_service_monitor_crd.clone()),
+        // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
         Box::new(q_priority_class_chart),
     ];
 
