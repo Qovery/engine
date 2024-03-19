@@ -197,6 +197,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             dns_provider,
             cluster,
             metrics_registry,
+            true,
         )
     }
 

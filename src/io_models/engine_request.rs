@@ -78,6 +78,7 @@ impl<T> EngineRequest<T> {
         event_details: EventDetails,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
+        is_infra_deployment: bool,
     ) -> Result<InfrastructureContext, Box<EngineError>> {
         let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
@@ -166,6 +167,7 @@ impl<T> EngineRequest<T> {
             dns_provider,
             kubernetes,
             metrics_registry,
+            is_infra_deployment,
         ))
     }
 }

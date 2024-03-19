@@ -175,6 +175,7 @@ impl Task for InfrastructureTask {
             self.request.event_details(),
             self.logger.clone(),
             self.metrics_registry.clone(),
+            true,
         ) {
             Ok(engine) => engine,
             Err(err) => {

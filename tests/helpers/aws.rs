@@ -139,6 +139,7 @@ impl Cluster<AWS, Options> for AWS {
             dns_provider,
             kubernetes,
             metrics_registry,
+            true,
         )
     }
 
