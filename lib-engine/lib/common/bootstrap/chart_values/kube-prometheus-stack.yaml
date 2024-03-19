@@ -83,3 +83,4 @@ prometheus-node-exporter:
   prometheus:
     monitor:
       enabled: false
+  priorityClassName: ""

@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, UpdateStrategy,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
@@ -39,6 +39,7 @@ use crate::cloud_provider::helm_charts::loki_chart::{
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -278,6 +279,9 @@ pub fn scw_helm_charts(
                 get_chart_override_fn.clone(),
                 true,
                 HelmChartResourcesConstraintType::ChartDefault,
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_enable_karpenter,
             )
             .to_common_helm_chart()?,
         ),
@@ -503,6 +507,14 @@ pub fn scw_helm_charts(
     )
     .to_common_helm_chart()?;
 
+    // Qovery priority class
+    let q_priority_class_chart = QoveryPriorityClassChart::new(
+        chart_prefix_path,
+        HashSet::from_iter(vec![QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
+        HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
+    )
+    .to_common_helm_chart()?;
+
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
@@ -596,7 +608,12 @@ pub fn scw_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config), Box::new(vpa)];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(q_storage_class),
+        Box::new(coredns_config),
+        Box::new(vpa),
+        Box::new(q_priority_class_chart),
+    ];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 

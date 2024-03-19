@@ -60,7 +60,7 @@ impl CoreDNSConfigChart {
                 force_upgrade: false,
                 recreate_pods: false,
                 reinstall_chart_if_installed_version_is_below_than: None,
-                timeout_in_seconds: 0,
+                timeout_in_seconds: 300,
                 dry_run: false,
                 wait: false,
                 values_files: vec![chart_values_path.to_string()],
