@@ -14,6 +14,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use crate::utilities::create_kube_client_in_cluster;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
@@ -44,11 +45,17 @@ pub struct Ec2nodeclassesSpec {}
 impl QubeClient {
     pub fn new(
         event_details: EventDetails,
-        kubeconfig_path: PathBuf,
+        kubeconfig_path: Option<PathBuf>,
         kube_credentials: Vec<(String, String)>,
     ) -> Result<QubeClient, Box<EngineError>> {
-        let kube_client = block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
-            .map_err(|err| Box::new(EngineError::new_cannot_connect_to_k8s_cluster(event_details, err)))?;
+        let kube_client = if let Some(kubeconfig_path) = &kubeconfig_path {
+            block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
+                .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?
+        } else {
+            block_on(create_kube_client_in_cluster())
+                .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?
+        };
+
         Ok(QubeClient { client: kube_client })
     }
 
@@ -468,7 +475,7 @@ mod tests {
             Stage::Environment(crate::events::EnvironmentStep::ValidateSystemRequirements),
             crate::events::Transmitter::Application(uuid, "".to_string()),
         );
-        let quke_client = QubeClient::new(event_details.clone(), PathBuf::from(kubeconfig), vec![]);
+        let quke_client = QubeClient::new(event_details.clone(), Some(PathBuf::from(kubeconfig)), vec![]);
         assert!(quke_client.is_ok());
         (quke_client.unwrap(), event_details)
     }

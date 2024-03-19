@@ -151,6 +151,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             dns_provider,
             cluster,
             metrics_registry,
+            true,
         )
     }
 

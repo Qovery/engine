@@ -99,14 +99,13 @@ impl EnvironmentTask {
         )
     }
 
-    // FIXME: Remove EngineConfig type, there is no use for it
-    // merge it with DeploymentTarget type
     fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
         self.request.engine(
             &self.info_context(),
             self.request.event_details(),
             self.logger.clone(),
             self.metrics_registry.clone(),
+            false,
         )
     }
 

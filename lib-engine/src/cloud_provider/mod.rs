@@ -20,8 +20,6 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::runtime::block_on;
-use crate::utilities::{create_kube_client, create_kube_client_in_cluster};
 
 pub mod aws;
 pub mod environment;
@@ -146,13 +144,6 @@ impl<'a> DeploymentTarget<'a> {
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
-        let kube_credentials: Vec<(String, String)> = infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-
         let kubeconfig_path = {
             let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
             if kubeconfig_path.exists() {
@@ -162,25 +153,16 @@ impl<'a> DeploymentTarget<'a> {
             }
         };
 
-        let (kube_client, helm) = if let Some(kubeconfig_path) = &kubeconfig_path {
-            let kube_client = block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice()))
-                .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
-            let helm = Helm::new(kubeconfig_path, &infra_ctx.cloud_provider().credentials_environment_variables())
-                .map_err(|e| to_engine_error(event_details, e))?;
-
-            (kube_client, helm)
+        let helm = if let Some(kubeconfig_path) = &kubeconfig_path {
+            Helm::new(kubeconfig_path, &infra_ctx.cloud_provider().credentials_environment_variables())
+                .map_err(|e| to_engine_error(event_details, e))?
         } else {
-            let kube_client = block_on(create_kube_client_in_cluster())
-                .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
-
             // FIXME: Remove the kubeconfig
-            let helm = Helm::new(
+            Helm::new(
                 kubernetes.kubeconfig_local_file_path(),
                 &infra_ctx.cloud_provider().credentials_environment_variables(),
             )
-            .map_err(|e| to_engine_error(event_details, e))?;
-
-            (kube_client, helm)
+            .map_err(|e| to_engine_error(event_details, e))?
         };
 
         Ok(DeploymentTarget {
@@ -190,7 +172,7 @@ impl<'a> DeploymentTarget<'a> {
             dns_provider: infra_ctx.dns_provider(),
             environment,
             docker: &infra_ctx.context().docker,
-            kube: kube_client,
+            kube: infra_ctx.mk_kube_client()?.client().clone(),
             helm,
             should_abort,
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
