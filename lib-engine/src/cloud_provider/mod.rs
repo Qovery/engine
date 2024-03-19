@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -154,15 +155,13 @@ impl<'a> DeploymentTarget<'a> {
         };
 
         let helm = if let Some(kubeconfig_path) = &kubeconfig_path {
-            Helm::new(kubeconfig_path, &infra_ctx.cloud_provider().credentials_environment_variables())
-                .map_err(|e| to_engine_error(event_details, e))?
-        } else {
-            // FIXME: Remove the kubeconfig
             Helm::new(
-                kubernetes.kubeconfig_local_file_path(),
+                Some(kubeconfig_path),
                 &infra_ctx.cloud_provider().credentials_environment_variables(),
             )
             .map_err(|e| to_engine_error(event_details, e))?
+        } else {
+            Helm::new(Option::<&Path>::None, &[]).map_err(|e| to_engine_error(event_details, e))?
         };
 
         Ok(DeploymentTarget {

@@ -198,7 +198,7 @@ mod tests {
 
         let mut kube_config = dirs::home_dir().unwrap();
         kube_config.push(".kube/config");
-        let helm = Helm::new(kube_config.to_str().unwrap(), &[])?;
+        let helm = Helm::new(Some(kube_config.to_str().unwrap()), &[])?;
 
         // Check that helm can validate our chart
         helm.template_validate(&chart, &[], None)?;

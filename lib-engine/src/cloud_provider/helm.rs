@@ -463,7 +463,7 @@ pub trait HelmChart: Send {
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config, envs)?;
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
 
         match chart_info.action {
             Deploy => {
@@ -681,7 +681,7 @@ pub fn deploy_charts_levels(
     dry_run: bool,
 ) -> Result<(), HelmChartError> {
     // first show diff
-    let helm = Helm::new(kubernetes_config, envs)?;
+    let helm = Helm::new(Some(kubernetes_config), envs)?;
 
     for level in charts {
         // Show diff for all chart in this state
@@ -829,7 +829,7 @@ impl HelmChart for CommonChart {
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
-        let helm = Helm::new(kubernetes_config, envs)?;
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
 
         // installation checker
         let chart_payload_res = match &self.chart_installation_checker {
@@ -884,7 +884,7 @@ impl HelmChart for ServiceChart {
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config, envs)?;
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
 
         match chart_info.action {
             Deploy => {
