@@ -55,6 +55,7 @@ pub struct LokiChart {
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     chart_resources: HelmChartResources,
+    additional_char_path: Option<HelmChartValuesFilePath>,
 }
 
 impl LokiChart {
@@ -67,6 +68,7 @@ impl LokiChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         chart_resources: HelmChartResourcesConstraintType,
+        karpenter_enabled: bool,
     ) -> Self {
         LokiChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -95,6 +97,14 @@ impl LokiChart {
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "loki_with_karpenter".to_string(),
+                )),
+                false => None,
+            },
         }
     }
 
@@ -118,6 +128,11 @@ impl ToCommonHelmChart for LokiChart {
             LokiObjectBucketConfiguration::GCS(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
         };
 
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: LokiChart::chart_name(),
@@ -125,7 +140,7 @@ impl ToCommonHelmChart for LokiChart {
                 namespace: self.chart_namespace,
                 timeout_in_seconds: 900,
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values: vec![
                     ChartSetValue {
                         key: "kubectlImage.registry".to_string(),
@@ -358,6 +373,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -390,6 +406,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -426,6 +443,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

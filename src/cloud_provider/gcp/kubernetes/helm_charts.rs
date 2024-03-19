@@ -225,6 +225,9 @@ pub fn gcp_helm_charts(
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
                 }),
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_enable_karpenter,
             )
             .to_common_helm_chart()?,
         )),

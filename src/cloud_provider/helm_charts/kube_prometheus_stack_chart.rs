@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
-    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    HelmChartNamespaces, QoveryPriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -117,6 +118,10 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     ChartSetValue {
                         key: "kubelet.serviceMonitor.resource".to_string(),
                         value: self.kubelet_service_monitor_resource_enabled.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "prometheus-node-exporter.priorityClassName".to_string(),
+                        value: QoveryPriorityClass::HighPriority.to_string(),
                     },
                 ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {

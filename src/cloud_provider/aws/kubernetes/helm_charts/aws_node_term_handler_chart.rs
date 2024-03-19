@@ -1,4 +1,6 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
+use crate::cloud_provider::helm::{
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError,
+};
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -8,10 +10,11 @@ use kube::Client;
 pub struct AwsNodeTermHandlerChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    replaced_by_karpenter: bool,
 }
 
 impl AwsNodeTermHandlerChart {
-    pub fn new(chart_prefix_path: Option<&str>) -> AwsNodeTermHandlerChart {
+    pub fn new(chart_prefix_path: Option<&str>, replaced_by_karpenter: bool) -> AwsNodeTermHandlerChart {
         AwsNodeTermHandlerChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -23,6 +26,7 @@ impl AwsNodeTermHandlerChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsNodeTermHandlerChart::chart_name(),
             ),
+            replaced_by_karpenter,
         }
     }
 
@@ -36,6 +40,10 @@ impl ToCommonHelmChart for AwsNodeTermHandlerChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: AwsNodeTermHandlerChart::chart_name(),
+                action: match self.replaced_by_karpenter {
+                    true => HelmAction::Destroy,
+                    false => HelmAction::Deploy,
+                },
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
@@ -96,7 +104,7 @@ mod tests {
     #[test]
     fn aws_node_term_handler_chart_directory_exists_test() {
         // setup:
-        let chart = AwsNodeTermHandlerChart::new(None);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -121,7 +129,7 @@ mod tests {
     #[test]
     fn aws_node_term_handler_chart_values_file_exists_test() {
         // setup:
-        let chart = AwsNodeTermHandlerChart::new(None);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -148,7 +156,7 @@ mod tests {
     #[test]
     fn aws_node_term_handler_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = AwsNodeTermHandlerChart::new(None);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
