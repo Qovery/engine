@@ -299,6 +299,14 @@ where
 
                 // wait for job to finish
                 let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+
+                // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
+                block_on(jobs.get(job.kube_name())).map_err(|err| {
+                    EngineError::new_job_error(
+                        event_details.clone(),
+                        format!("Cannot get job {}: {}", job.kube_name(), err),
+                    )
+                })?;
                 let ret = block_on(await_condition(jobs, job.kube_name(), is_job_terminated())).map_err(|_err| {
                     EngineError::new_job_error(
                         event_details.clone(),
