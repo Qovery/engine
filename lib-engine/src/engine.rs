@@ -130,18 +130,13 @@ impl InfrastructureContext {
             .get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources));
         let kubeconfig_path = {
             let kubeconfig_path = self.kubernetes().kubeconfig_local_file_path();
-            #[allow(clippy::if_same_then_else)]
             if kubeconfig_path.exists() {
                 Some(kubeconfig_path)
             } else if self.is_infra_deployment {
-                //FIXME(erebe): re-enable the check once karpenter initialize kube client at the right time
-
                 // Infra deployment must have a kubeconfig file, we cant upgrade infra within the cluster
-                //return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                //    event_details.clone(),
-                //)));
-
-                Some(kubeconfig_path)
+                return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                    event_details.clone(),
+                )));
             } else {
                 None
             }

@@ -61,7 +61,7 @@ use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
 };
-use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
+use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 use chrono::Duration as ChronoDuration;
@@ -942,11 +942,11 @@ fn create(
         let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
             node_groups_when_karpenter_is_enabled(
                 kubernetes,
-                &infra_ctx.mk_kube_client()?,
+                infra_ctx,
                 node_groups,
                 &event_details,
                 kubernetes_action,
-            )
+            )?
         } else {
             node_groups
         };
@@ -1517,25 +1517,25 @@ fn bootstrap_on_fargate_when_karpenter_is_enabled(
 
 fn node_groups_when_karpenter_is_enabled<'a>(
     kubernetes: &dyn Kubernetes,
-    kube_client: &QubeClient,
+    infra_context: &InfrastructureContext,
     node_groups: &'a [NodeGroups],
     event_details: &EventDetails,
     kubernetes_action: KubernetesClusterAction,
-) -> &'a [NodeGroups] {
+) -> Result<&'a [NodeGroups], Box<EngineError>> {
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap
         | KubernetesClusterAction::Upgrade(_)
         | KubernetesClusterAction::Pause
         | KubernetesClusterAction::Resume(_)
         | KubernetesClusterAction::Delete
-        | KubernetesClusterAction::CleanKarpenterMigration => &[],
+        | KubernetesClusterAction::CleanKarpenterMigration => Ok(&[]),
         KubernetesClusterAction::Update(_)
-            if Karpenter::deployment_is_installed(kube_client, event_details)
-                || kubernetes.context().is_first_cluster_deployment() =>
+            if kubernetes.context().is_first_cluster_deployment()
+                || Karpenter::deployment_is_installed(&infra_context.mk_kube_client()?, event_details) =>
         {
-            &[]
+            Ok(&[])
         }
-        KubernetesClusterAction::Update(_) => node_groups,
+        KubernetesClusterAction::Update(_) => Ok(node_groups),
     }
 }
 
@@ -1797,11 +1797,11 @@ fn delete(
             let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
                 node_groups_when_karpenter_is_enabled(
                     kubernetes,
-                    &infra_ctx.mk_kube_client()?,
+                    infra_ctx,
                     node_groups,
                     &event_details,
                     KubernetesClusterAction::Delete,
-                )
+                )?
             } else {
                 node_groups
             };
