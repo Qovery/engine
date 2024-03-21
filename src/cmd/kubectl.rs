@@ -74,7 +74,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
@@ -319,7 +322,10 @@ where
     }
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -341,7 +347,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -364,7 +373,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -387,7 +399,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -411,7 +426,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -466,7 +484,10 @@ where
     P: AsRef<Path>,
 {
     let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
-    environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        environment_variables.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
     kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| {
@@ -656,7 +677,10 @@ where
     P: AsRef<Path>,
 {
     let mut environment_variables = envs;
-    environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        environment_variables.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
 
     let arg_namespace = match namespace {
         Some(n) => format!("-n {n}"),
@@ -750,7 +774,10 @@ where
     let kind_with_name = format!("{kind_formatted}/{name}");
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -816,7 +843,10 @@ where
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs.clone());
 
     kubectl_exec_with_output(
@@ -869,7 +899,10 @@ where
     );
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
-    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        complete_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     complete_envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -1021,7 +1054,10 @@ where
         };
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
-    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        complete_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     complete_envs.extend(envs);
 
     match kubectl_exec_with_output(
@@ -1047,7 +1083,10 @@ where
     T: DeserializeOwned,
 {
     let mut extended_envs = Vec::with_capacity(envs.len() + 1);
-    extended_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        extended_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     extended_envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -1093,7 +1132,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);

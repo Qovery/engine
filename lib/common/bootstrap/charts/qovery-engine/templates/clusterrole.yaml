@@ -7,19 +7,13 @@ metadata:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 rules:
   - apiGroups:
-      - ""
-      - apps
+      - '*'
     resources:
-      - pods
-      - pods/log
-      - pods/exec
-      - deployments
+      - '*'
     verbs:
-      - create
-      - delete
-      - update
-      - patch
-      - get
-      - list
-      - watch
+      - '*'
+  - nonResourceURLs:
+      - '*'
+    verbs:
+      - '*'
 {{- end }}

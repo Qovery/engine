@@ -71,7 +71,7 @@ pub enum HelmError {
     InvalidRepositoryConfig(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Helm {
     common_envs: Vec<(String, String)>,
 }
