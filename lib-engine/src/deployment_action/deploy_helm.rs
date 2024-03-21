@@ -88,7 +88,7 @@ impl DeploymentAction for HelmDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_helm_chart()?;
 
-        let service_chart = ServiceChart::new(self.helm_chart.clone());
+        let service_chart = ServiceChart::new(target.helm.clone(), self.helm_chart.clone());
         let chart: Box<dyn HelmChart> = Box::new(service_chart);
         chart
             .run(
