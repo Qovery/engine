@@ -5,6 +5,7 @@ variable "eks_fargate_subnets_zone_a_private" {
   type        = list(string)
 }
 
+{% if enable_karpenter and  vpc_qovery_network_mode == "WithNatGateways" %}
 variable "eks_fargate_subnets_zone_b_private" {
   description = "EKS fargate private subnets Zone B"
   default     = {{ fargate_profile_zone_b_subnet_blocks }}
@@ -16,6 +17,7 @@ variable "eks_fargate_subnets_zone_c_private" {
   default     = {{ fargate_profile_zone_c_subnet_blocks }}
   type        = list(string)
 }
+{% endif %}
 
 # Private subnets
 resource "aws_subnet" "eks_fargate_zone_a" {
@@ -33,6 +35,7 @@ resource "aws_subnet" "eks_fargate_zone_a" {
   )
 }
 
+{% if enable_karpenter and  vpc_qovery_network_mode == "WithNatGateways" %}
 resource "aws_subnet" "eks_fargate_zone_b" {
   availability_zone       = var.aws_availability_zones[1]
   cidr_block              = var.eks_fargate_subnets_zone_b_private[0]
@@ -62,6 +65,7 @@ resource "aws_subnet" "eks_fargate_zone_c" {
     }
   )
 }
+{% endif %}
 
 # Use private route table for private subnets, Fargate doesn't allow public routes
 resource "aws_route_table_association" "eks_fargate_cluster_zone_a" {
@@ -75,6 +79,7 @@ resource "aws_route_table_association" "eks_fargate_cluster_zone_a" {
 {% endif %}
 }
 
+{% if enable_karpenter and  vpc_qovery_network_mode == "WithNatGateways" %}
 resource "aws_route_table_association" "eks_fargate_cluster_zone_b" {
   count = length(var.eks_fargate_subnets_zone_b_private)
 
@@ -96,13 +101,18 @@ resource "aws_route_table_association" "eks_fargate_cluster_zone_c" {
   route_table_id = aws_route_table.eks_cluster_zone_c_private[count.index].id
 {% endif %}
 }
+{% endif %}
 
 resource "aws_eks_fargate_profile" "karpenter" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "karpenter-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
+{% if vpc_qovery_network_mode == "WithNatGateways" %}
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
-  tags                   = local.tags_eks
+{% else %}
+  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id])
+{% endif %}
+ tags                   = local.tags_eks
 
   selector {
     namespace = "kube-system"
@@ -117,7 +127,11 @@ resource "aws_eks_fargate_profile" "ebs_csi" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "ebs_csi-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
+{% if vpc_qovery_network_mode == "WithNatGateways" %}
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+{% else %}
+  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id])
+{% endif %}
   tags                   = local.tags_eks
 
   selector {
@@ -133,7 +147,11 @@ resource "aws_eks_fargate_profile" "user-mapper" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "user-mapper-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
+{% if vpc_qovery_network_mode == "WithNatGateways" %}
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+{% else %}
+  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id])
+{% endif %}
   tags                   = local.tags_eks
 
   selector {
@@ -148,7 +166,11 @@ resource "aws_eks_fargate_profile" "core-dns" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "core-dns-${var.kubernetes_cluster_name}"
   pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
+{% if vpc_qovery_network_mode == "WithNatGateways" %}
   subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
+{% else %}
+  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id])
+{% endif %}
   tags                   = local.tags_eks
 
   selector {

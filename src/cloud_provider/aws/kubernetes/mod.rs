@@ -121,6 +121,8 @@ pub struct Options {
     pub fargate_profile_zone_b_subnet_blocks: Vec<String>,
     #[serde(default)] // TODO: remove default
     pub fargate_profile_zone_c_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: Vec<String>,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
@@ -367,6 +369,11 @@ fn tera_context(
         true => format_ips(&vec!["10.0.170.0/24".to_string()]),
         false => format_ips(&options.fargate_profile_zone_c_subnet_blocks),
     };
+    let eks_zone_a_nat_gw_for_fargate_subnet_blocks_public =
+        match options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public.is_empty() {
+            true => format_ips(&vec!["10.0.132.0/22".to_string()]),
+            false => format_ips(&options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public),
+        };
 
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
@@ -449,6 +456,10 @@ fn tera_context(
     context.insert("fargate_profile_zone_a_subnet_blocks", &fargate_profile_zone_a_subnet_blocks);
     context.insert("fargate_profile_zone_b_subnet_blocks", &fargate_profile_zone_b_subnet_blocks);
     context.insert("fargate_profile_zone_c_subnet_blocks", &fargate_profile_zone_c_subnet_blocks);
+    context.insert(
+        "eks_zone_a_nat_gw_for_fargate_subnet_blocks_public",
+        &eks_zone_a_nat_gw_for_fargate_subnet_blocks_public,
+    );
 
     // AWS S3 tfstate storage
     context.insert(
