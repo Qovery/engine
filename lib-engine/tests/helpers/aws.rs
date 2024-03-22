@@ -267,6 +267,7 @@ impl Cluster<AWS, Options> for AWS {
             fargate_profile_zone_a_subnet_blocks: vec!["10.0.166.0/24".to_string()],
             fargate_profile_zone_b_subnet_blocks: vec!["10.0.168.0/24".to_string()],
             fargate_profile_zone_c_subnet_blocks: vec!["10.0.170.0/24".to_string()],
+            eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: vec!["10.0.132.0/22".to_string()],
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
