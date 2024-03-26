@@ -9,7 +9,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
 use crate::cmd::docker::{BuilderHandle, Docker};
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{to_engine_error, ContainerRegistry};
+use crate::container_registry::{to_engine_error, ContainerRegistry, RegistryTags};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
 use crate::engine::InfrastructureContext;
@@ -119,6 +119,7 @@ impl EnvironmentTask {
 
     pub fn build_and_push_services(
         environment_id: Uuid,
+        project_id: Uuid,
         services: Vec<&mut dyn Service>,
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
@@ -207,7 +208,11 @@ impl EnvironmentTask {
                         cr_registry,
                         build_platform,
                         img_retention_time_sec,
-                        resource_ttl,
+                        RegistryTags {
+                            environment_id: environment_id.to_string(),
+                            project_id: project_id.to_string(),
+                            resource_ttl,
+                        },
                         cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
@@ -300,7 +305,7 @@ impl EnvironmentTask {
         cr_registry: &dyn ContainerRegistry,
         build_platform: &dyn BuildPlatform,
         image_retention_time_sec: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
@@ -327,7 +332,8 @@ impl EnvironmentTask {
             StepLabel::Service,
             StepName::RegistryCreateRepository,
         );
-        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec, resource_ttl) {
+
+        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec, registry_tags) {
             Err(err) => {
                 provision_registry_record.stop(StepStatus::Error);
                 return Err(Box::new(cr_to_engine_error(err)));
@@ -402,6 +408,7 @@ impl EnvironmentTask {
                 .collect();
             Self::build_and_push_services(
                 environment.long_id,
+                environment.project_long_id,
                 services_to_build,
                 &DeploymentOption {
                     force_build: false,

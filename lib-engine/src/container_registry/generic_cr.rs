@@ -1,6 +1,5 @@
 use base64::engine::general_purpose;
 use base64::Engine;
-use std::time::Duration;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
@@ -12,6 +11,8 @@ use crate::cmd::docker::ContainerImage;
 use crate::cmd::skopeo::Skopeo;
 use url::Url;
 use uuid::Uuid;
+
+use super::RegistryTags;
 
 pub struct GenericCr {
     context: Context,
@@ -137,7 +138,7 @@ impl ContainerRegistry for GenericCr {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
-        _resource_ttl: Option<Duration>,
+        _registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // Nothing to do, local registry create automatically new repositories
         Ok((

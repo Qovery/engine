@@ -81,6 +81,7 @@ impl Infrastructure for EnvironmentRequest {
 
         let ret = EnvironmentTask::build_and_push_services(
             environment.long_id,
+            environment.project_long_id,
             services_to_build,
             &deployment_option,
             infra_ctx,
