@@ -33,6 +33,12 @@ pub struct DockerImage {
     pub tag: String,
 }
 
+pub struct RegistryTags {
+    pub environment_id: String,
+    pub project_id: String,
+    pub resource_ttl: Option<Duration>,
+}
+
 pub trait ContainerRegistry: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
@@ -58,7 +64,7 @@ pub trait ContainerRegistry: Send + Sync {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError>;
 
     fn get_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError>;

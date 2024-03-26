@@ -13,9 +13,10 @@ use base64::Engine;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use std::collections::HashSet;
-use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
+
+use super::RegistryTags;
 
 pub struct ScalewayCR {
     context: Context,
@@ -283,7 +284,7 @@ impl ContainerRegistry for ScalewayCR {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
-        _resource_ttl: Option<Duration>,
+        _registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         self.get_or_create_registry_namespace(name)
     }

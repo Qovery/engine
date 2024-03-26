@@ -4,6 +4,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::RegistryTags;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -102,7 +103,19 @@ pub fn mirror_image_if_necessary(
         mirror_record.stop(StepStatus::Skip);
         Ok(())
     } else {
-        let result = mirror_image(service_id, source, &dest_image, target, logger, event_details.clone());
+        let result = mirror_image(
+            service_id,
+            source,
+            &dest_image,
+            target,
+            logger,
+            event_details.clone(),
+            RegistryTags {
+                environment_id: target.environment.id.clone(),
+                project_id: target.environment.project_id.clone(),
+                resource_ttl: target.kubernetes.advanced_settings().resource_ttl(),
+            },
+        );
         mirror_record.stop(if result.is_ok() {
             StepStatus::Success
         } else {
@@ -123,6 +136,7 @@ fn mirror_image(
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
+    tags: RegistryTags,
 ) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
     let url = source.registry.get_url_with_credentials();
@@ -164,7 +178,7 @@ fn mirror_image(
         .create_repository(
             mirror_repo_name.as_str(),
             target.kubernetes.advanced_settings().registry_image_retention_time_sec,
-            target.kubernetes.advanced_settings().resource_ttl(),
+            tags,
         )
         .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
