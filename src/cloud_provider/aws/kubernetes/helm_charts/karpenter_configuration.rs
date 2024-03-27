@@ -83,23 +83,23 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                         value: format!("{}Gi", self.disk_size_in_gib),
                     },
                     ChartSetValue {
-                        key: "tags.clusterId".to_string(),
+                        key: "tags.ClusterId".to_string(),
                         value: self.cluster_id.clone(),
                     },
                     ChartSetValue {
-                        key: "tags.clusterLongId".to_string(),
+                        key: "tags.ClusterLongId".to_string(),
                         value: self.cluster_long_id.clone(),
                     },
                     ChartSetValue {
-                        key: "tags.organizationId".to_string(),
+                        key: "tags.OrganizationId".to_string(),
                         value: self.organization_id.clone(),
                     },
                     ChartSetValue {
-                        key: "tags.organizationLongId".to_string(),
+                        key: "tags.OrganizationLongId".to_string(),
                         value: self.organization_long_id.clone(),
                     },
                     ChartSetValue {
-                        key: "tags.region".to_string(),
+                        key: "tags.Region".to_string(),
                         value: self.region.clone(),
                     },
                     ChartSetValue {
