@@ -459,6 +459,9 @@ pub fn scw_helm_charts(
                 .load_balancer_size
                 .clone(),
         ),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
     )
     .to_common_helm_chart()?;
 

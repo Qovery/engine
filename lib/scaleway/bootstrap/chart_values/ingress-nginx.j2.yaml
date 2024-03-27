@@ -15,6 +15,8 @@ controller:
     server-tokens: "false"
     # required for X-Forwarded-for to work
     use-proxy-protocol: "true"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-engine-code
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:

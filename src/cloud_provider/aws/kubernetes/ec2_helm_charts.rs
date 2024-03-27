@@ -21,6 +21,7 @@ use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
     VpcQoveryNetworkMode,
@@ -86,6 +87,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     // qovery options form json input
     pub infra_options: Options,
+    pub cluster_advanced_settings: ClusterAdvancedSettings,
 }
 
 pub fn get_aws_ec2_qovery_terraform_config(
@@ -341,6 +343,9 @@ pub fn ec2_aws_helm_charts(
         None,
         HelmChartNamespaces::NginxIngress,
         None,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
     )
     .to_common_helm_chart()?;
 

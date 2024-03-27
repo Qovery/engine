@@ -13,6 +13,8 @@ controller:
     proxy-body-size: 100m
     # hide Nginx version
     server-tokens: "false"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-engine-code
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:
@@ -23,7 +25,7 @@ controller:
       # set the minimum acceptable number of unavailable pods during a rolling update
       maxUnavailable: 1
 
-  # enable auoscaling if you want to scale the number of replicas based on CPU usage
+  # enable autoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
     enabled: false # set-by-engine-code
     minReplicas: 2 # set-by-engine-code

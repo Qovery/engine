@@ -1423,6 +1423,7 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
+                cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
