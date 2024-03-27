@@ -163,10 +163,10 @@ where
                     .container_registry
                     .delete_repository(self.build().image.repository_name())
                 {
-                    let user_msg = format!("❌ Failed to delete container registry of the application: {err}");
+                    let safe_user_msg = "❌ Failed to delete container registry of the application".to_string();
                     let user_error = EngineError::new_engine_error(
                         EngineError::new_container_registry_error(event_details.clone(), err),
-                        user_msg,
+                        safe_user_msg,
                         None,
                     );
                     return Err(Box::new(user_error));
