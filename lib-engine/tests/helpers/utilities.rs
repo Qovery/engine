@@ -638,7 +638,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Gcp => vec![],
-        Kind::SelfManaged => vec![],
+        Kind::OnPremise => vec![],
     }
 }
 
@@ -872,7 +872,7 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
             MANAGED => todo!(),
             DatabaseMode::CONTAINER => GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
         },
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     }
 }
 
@@ -893,7 +893,7 @@ pub fn db_instance_type(
             DatabaseMode::CONTAINER => None,
         },
         Kind::Gcp => None, // TODO: once managed DB is implemented
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     }
 }
 

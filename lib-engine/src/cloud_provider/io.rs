@@ -30,7 +30,7 @@ impl From<KindModel> for Kind {
             KindModel::Aws => Kind::Aws,
             KindModel::Scw => Kind::Scw,
             KindModel::Gcp => Kind::Gcp,
-            KindModel::SelfManaged => Kind::SelfManaged,
+            KindModel::OnPremise => Kind::SelfManaged,
         }
     }
 }

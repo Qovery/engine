@@ -25,8 +25,6 @@ pub enum HelmChartError {
     InvalidConfig(String),
 }
 
-// TODO (helm): Remove this when we will have a real implementation of helm chart services
-#[allow(dead_code)]
 pub struct HelmChart<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
@@ -48,7 +46,6 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) chart_workspace_directory: PathBuf,
-    pub(super) lib_root_directory: String,
     pub(super) ports: Vec<Port>,
 }
 
@@ -125,7 +122,6 @@ impl<T: CloudProvider> HelmChart<T> {
             _extra_settings: extra_settings,
             chart_workspace_directory: workspace_directory.join("chart"),
             workspace_directory,
-            lib_root_directory: context.lib_root_dir().to_string(),
             ports,
         })
     }

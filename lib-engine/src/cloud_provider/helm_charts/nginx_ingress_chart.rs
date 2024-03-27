@@ -246,7 +246,7 @@ defaultBackend:
                 });
             }
             Kind::Gcp => {}
-            Kind::SelfManaged => {}
+            Kind::OnPremise => {}
         }
         // external dns
         if self.kubernetes_kind != KubernetesKind::Ec2 {
@@ -448,6 +448,7 @@ mod tests {
                 && k != &KubernetesKind::EksSelfManaged
                 && k != &KubernetesKind::ScwSelfManaged
                 && k != &KubernetesKind::GkeSelfManaged
+                && k != &KubernetesKind::OnPremiseSelfManaged
         }) {
             let values_file_lib_path = format!(
                 "/lib/{}/bootstrap/chart_values/{}.j2.yaml",

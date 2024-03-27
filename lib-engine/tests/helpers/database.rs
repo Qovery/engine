@@ -40,6 +40,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
 
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
+use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
@@ -773,6 +774,7 @@ pub fn test_db(
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
+        KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -836,6 +838,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx
         }
@@ -972,6 +975,7 @@ pub fn test_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx_for_delete
         }
@@ -1107,7 +1111,7 @@ pub fn test_pause_managed_db(
             SCW_KUBERNETES_VERSION,
         ),
         Kind::Gcp => todo!(),
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -1161,6 +1165,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx
         }
@@ -1273,6 +1278,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx_for_delete
         }
@@ -1414,7 +1420,7 @@ pub fn test_db_on_upgrade(
             SCW_KUBERNETES_VERSION,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let infra_ctx = match provider_kind {
@@ -1451,7 +1457,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let ret = environment.deploy_environment(&ea, &infra_ctx);
@@ -1540,7 +1546,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);

@@ -7,5 +7,6 @@ pub mod dns;
 pub mod environment;
 pub mod gcp;
 pub mod kubernetes;
+mod on_premise;
 pub mod scaleway;
 pub mod utilities;
