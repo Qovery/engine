@@ -34,6 +34,7 @@ pub struct NginxIngressChart {
     nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
     namespace: HelmChartNamespaces,
     loadbalancer_size: Option<String>,
+    enable_real_ip: bool,
 }
 
 impl NginxIngressChart {
@@ -51,6 +52,7 @@ impl NginxIngressChart {
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
         namespace: HelmChartNamespaces,
         loadbalancer_size: Option<String>,
+        enable_real_ip: bool,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -91,6 +93,7 @@ impl NginxIngressChart {
             nginx_hpa_target_cpu_utilization_percentage,
             namespace,
             loadbalancer_size,
+            enable_real_ip,
         }
     }
 
@@ -178,7 +181,7 @@ defaultBackend:
                 key: "controller.allowSnippetAnnotations".to_string(),
                 value: true.to_string(),
             },
-            // enable metrics for customers who wants to manage it by their own
+            // enable metrics for customers who want to manage it by their own
             ChartSetValue {
                 key: "controller.metrics.enabled".to_string(),
                 value: true.to_string(),
@@ -187,11 +190,16 @@ defaultBackend:
                 key: "controller.metrics.serviceMonitor.enabled".to_string(),
                 value: self.ff_metrics_history_enabled.to_string(),
             },
+            ChartSetValue {
+                key: "controller.autoscaling.enabled".to_string(),
+                value: true.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.config.enable-real-ip".to_string(),
+                value: self.enable_real_ip.to_string(),
+            },
         ];
-        chart_set_values.push(ChartSetValue {
-            key: "controller.autoscaling.enabled".to_string(),
-            value: true.to_string(),
-        });
+
         if let Some(value) = self.nginx_hpa_minimum_replicas {
             chart_set_values.push(ChartSetValue {
                 key: "controller.autoscaling.minReplicas".to_string(),
@@ -348,6 +356,7 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -386,6 +395,7 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -427,6 +437,7 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -475,6 +486,7 @@ mod tests {
             None,
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

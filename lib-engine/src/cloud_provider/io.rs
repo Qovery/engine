@@ -118,6 +118,8 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_cpu_utilization_percentage_threshold: u32,
     #[serde(alias = "nginx.hpa.min_number_instances")]
     pub nginx_hpa_min_number_instances: u32,
+    #[serde(alias = "nginx.controller.enable_client_ip")]
+    pub nginx_controller_enable_client_ip: bool,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
@@ -157,6 +159,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_cpu_utilization_percentage_threshold: 50,
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
+            nginx_controller_enable_client_ip: false,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             aws_enable_karpenter: false,

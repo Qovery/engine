@@ -378,6 +378,9 @@ pub fn gcp_helm_charts(
         ),
         HelmChartNamespaces::Qovery,
         None,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
     )
     .to_common_helm_chart()?;
 

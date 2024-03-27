@@ -11,6 +11,8 @@ controller:
   config:
     proxy-body-size: 100m
     server-tokens: "false"
+    # enable real IP (client IP)
+    enable-real-ip: set-by-engine-code
   ingressClass: nginx-qovery
   # No load-balancer to reduce costs.
   # Hostport required so no rolling update strategy possible on a single node. (same port cannot be listened twice on same node)
