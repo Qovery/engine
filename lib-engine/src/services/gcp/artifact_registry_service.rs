@@ -13,6 +13,7 @@ use google_cloud_googleapis::devtools::artifact_registry::v1::{
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, RateLimiter};
+use reqwest::StatusCode;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -246,7 +247,7 @@ impl ArtifactRegistryService {
             repository_name
         );
 
-        block_on(
+        let delete_repository_result = block_on(
             self.client
                 .clone()
                 .blocking_lock_owned()
@@ -257,11 +258,20 @@ impl ArtifactRegistryService {
                     },
                     None,
                 ),
-        )
-        .map_err(|e| ArtifactRegistryServiceError::CannotDeleteRepository {
-            repository_name: repository_identifier,
-            raw_error_message: e.to_string(),
-        })
+        );
+        match delete_repository_result {
+            Ok(_) => {}
+            Err(status) => {
+                if status.clone().to_http().status() != StatusCode::NOT_FOUND {
+                    return Err(ArtifactRegistryServiceError::CannotDeleteRepository {
+                        repository_name: repository_identifier,
+                        raw_error_message: status.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_docker_image(
