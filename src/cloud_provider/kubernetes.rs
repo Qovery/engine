@@ -403,6 +403,7 @@ pub enum Kind {
     EksSelfManaged,
     GkeSelfManaged,
     ScwSelfManaged,
+    OnPremiseSelfManaged,
 }
 
 impl Kind {
@@ -411,6 +412,7 @@ impl Kind {
             Kind::Eks | Kind::EksSelfManaged | Kind::Ec2 => CloudProviderKind::Aws,
             Kind::ScwKapsule | Kind::ScwSelfManaged => CloudProviderKind::Scw,
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
+            Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
         }
     }
 }
@@ -425,6 +427,7 @@ impl Display for Kind {
             Kind::EksSelfManaged => "EKS Self Managed",
             Kind::GkeSelfManaged => "GKE Self Managed",
             Kind::ScwSelfManaged => "Scw Self Managed",
+            Kind::OnPremiseSelfManaged => "On Premise Self Managed",
         })
     }
 }

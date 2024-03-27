@@ -1,23 +1,23 @@
 use crate::cloud_provider::Kind;
 use crate::models::types::CloudProvider;
-use crate::models::types::SelfManaged;
+use crate::models::types::OnPremise;
 mod application;
 mod container;
 mod job;
 mod router;
 
-pub struct SelfManagedAppExtraSettings {}
-pub struct SelfManagedDbExtraSettings {}
-pub struct SelfManagedRouterExtraSettings {}
+pub struct OnPremiseAppExtraSettings {}
+pub struct OnPremiseDbExtraSettings {}
+pub struct OnPremiseRouterExtraSettings {}
 
-impl CloudProvider for SelfManaged {
-    type AppExtraSettings = SelfManagedAppExtraSettings;
-    type DbExtraSettings = SelfManagedDbExtraSettings;
-    type RouterExtraSettings = SelfManagedRouterExtraSettings;
-    type StorageTypes = SelfManagedStorageType;
+impl CloudProvider for OnPremise {
+    type AppExtraSettings = OnPremiseAppExtraSettings;
+    type DbExtraSettings = OnPremiseDbExtraSettings;
+    type RouterExtraSettings = OnPremiseRouterExtraSettings;
+    type StorageTypes = OnPremiseStorageType;
 
     fn cloud_provider() -> Kind {
-        Kind::SelfManaged
+        Kind::OnPremise
     }
 
     fn short_name() -> &'static str {
@@ -46,4 +46,4 @@ impl CloudProvider for SelfManaged {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum SelfManagedStorageType {}
+pub enum OnPremiseStorageType {}

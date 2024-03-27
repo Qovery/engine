@@ -258,7 +258,7 @@ mod tests {
             true,
             get_prometheus_chart_override(),
             false,
-            Kind::SelfManaged,
+            Kind::OnPremise,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");

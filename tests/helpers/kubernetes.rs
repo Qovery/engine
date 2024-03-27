@@ -30,6 +30,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
+use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use std::str::FromStr;
 use tracing::{span, Level};
 
@@ -68,6 +69,7 @@ pub fn cluster_test(
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
+        KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
 
     let mut engine = match provider_kind {
@@ -113,7 +115,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
     // Bootstrap
     let mut bootstrap_tx = Transaction::new(&engine).unwrap();
@@ -214,7 +216,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
-                Kind::SelfManaged => todo!(),
+                Kind::OnPremise => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -279,7 +281,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
-                Kind::SelfManaged => todo!(),
+                Kind::OnPremise => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -461,6 +463,7 @@ pub fn get_environment_test_kubernetes(
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
     };
 
     kubernetes

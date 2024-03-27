@@ -295,7 +295,7 @@ impl CloudProvider {
                     terraform_state_credentials,
                 )))
             }
-            cloud_provider::Kind::SelfManaged => Some(Box::new(SelfManaged::new(
+            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(
                 context,
                 self.clone().long_id,
                 self.name.clone(),
@@ -494,7 +494,8 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
-            cloud_provider::kubernetes::Kind::EksSelfManaged
+            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged
+            | cloud_provider::kubernetes::Kind::EksSelfManaged
             | cloud_provider::kubernetes::Kind::GkeSelfManaged
             | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
                 match cloud_provider::self_managed::kubernetes::SelfManaged::new(
@@ -609,7 +610,7 @@ impl ContainerRegistry {
                     options.url.clone(),
                     options.skip_tls_verify,
                     options.repository_name.clone(),
-                    options.login.and_then(|l| options.password.map(|p| (l, p))),
+                    options.username.and_then(|l| options.password.map(|p| (l, p))),
                 )?))
             }
         }
@@ -717,7 +718,7 @@ pub struct ScwCrOptions {
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GenericCrOptions {
     pub url: Url,
-    pub login: Option<String>,
+    pub username: Option<String>,
     #[derivative(Debug = "ignore")]
     pub password: Option<String>,
     pub skip_tls_verify: bool,

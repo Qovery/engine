@@ -8,8 +8,8 @@ use crate::models::aws_ec2::AwsEc2RouterExtraSettings;
 use crate::models::gcp::GcpRouterExtraSettings;
 use crate::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::models::scaleway::ScwRouterExtraSettings;
-use crate::models::selfmanaged::SelfManagedRouterExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseRouterExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -133,8 +133,8 @@ impl Router {
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
             )?)),
-            CPKind::SelfManaged => {
-                let router = Box::new(models::router::Router::<SelfManaged>::new(
+            CPKind::OnPremise => {
+                let router = Box::new(models::router::Router::<OnPremise>::new(
                     context,
                     self.long_id,
                     self.name.as_str(),
@@ -143,7 +143,7 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
-                    SelfManagedRouterExtraSettings {},
+                    OnPremiseRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
                 )?);

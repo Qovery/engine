@@ -20,8 +20,8 @@ use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::job::{ImageSource, JobError, JobService};
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::SelfManagedAppExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -426,7 +426,7 @@ impl Job {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
-            Kind::SelfManaged => Box::new(models::job::Job::<SelfManaged>::new(
+            Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,
                 self.name,
@@ -452,7 +452,7 @@ impl Job {
                 self.advanced_settings,
                 self.readiness_probe.map(|p| p.to_domain()),
                 self.liveness_probe.map(|p| p.to_domain()),
-                SelfManagedAppExtraSettings {},
+                OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
         };

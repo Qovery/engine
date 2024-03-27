@@ -74,7 +74,7 @@ pub enum Kind {
     Aws,
     Scw,
     Gcp,
-    SelfManaged,
+    OnPremise,
 }
 
 impl FromStr for Kind {
@@ -85,7 +85,7 @@ impl FromStr for Kind {
             "aws" | "amazon" => Ok(Kind::Aws),
             "scw" | "scaleway" => Ok(Kind::Scw),
             "gcp" | "google" => Ok(Kind::Gcp),
-            "self_managed" | "selfmanaged" => Ok(Kind::SelfManaged),
+            "on-premise" | "onpremise" => Ok(Kind::OnPremise),
             _ => Err(()),
         }
     }
@@ -97,7 +97,7 @@ impl Display for Kind {
             Kind::Aws => "AWS",
             Kind::Scw => "Scaleway",
             Kind::Gcp => "GCP",
-            Kind::SelfManaged => "SelfManaged",
+            Kind::OnPremise => "OnPremise",
         })
     }
 }

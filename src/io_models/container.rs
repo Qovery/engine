@@ -14,8 +14,8 @@ use crate::models::container::{ContainerError, ContainerService};
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::SelfManagedAppExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -495,7 +495,7 @@ impl Container {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
-            CPKind::SelfManaged => Box::new(models::container::Container::<SelfManaged>::new(
+            CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
                 self.long_id,
                 self.name,
@@ -521,7 +521,7 @@ impl Container {
                 self.readiness_probe.map(|p| p.to_domain()),
                 self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
-                SelfManagedAppExtraSettings {},
+                OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
         };
