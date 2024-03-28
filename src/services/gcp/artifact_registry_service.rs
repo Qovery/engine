@@ -13,13 +13,13 @@ use google_cloud_googleapis::devtools::artifact_registry::v1::{
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, RateLimiter};
-use reqwest::StatusCode;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::Mutex;
+use tonic::Code;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ArtifactRegistryServiceError {
@@ -262,7 +262,8 @@ impl ArtifactRegistryService {
         match delete_repository_result {
             Ok(_) => {}
             Err(status) => {
-                if status.clone().to_http().status() != StatusCode::NOT_FOUND {
+                let code = status.code();
+                if code != Code::NotFound {
                     return Err(ArtifactRegistryServiceError::CannotDeleteRepository {
                         repository_name: repository_identifier,
                         raw_error_message: status.to_string(),
