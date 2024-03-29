@@ -343,7 +343,7 @@ impl Docker {
                 };
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
-                for arch in requested_architectures {
+                for (ix, arch) in requested_architectures.iter().enumerate() {
                     let mut node_name = format!("{builder_prefix}{exec_id}-{arch}");
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
@@ -365,7 +365,7 @@ impl Docker {
                         self.config_path.path().to_str().unwrap_or(""),
                         "buildx",
                         "create",
-                        "--append",
+                        if ix == 0 { "" } else { "--append" },
                         "--name",
                         builder_name,
                         "--platform",
