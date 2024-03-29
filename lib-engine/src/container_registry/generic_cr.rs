@@ -77,8 +77,12 @@ impl GenericCr {
             context,
             long_id,
             name: name.to_string(),
+            skip_tls_verification: if url.scheme() == "http" {
+                true
+            } else {
+                skip_tls_verification
+            },
             url,
-            skip_tls_verification,
             _repository_name: repository_name,
             skopeo,
             cr_info: container_registry_info,
