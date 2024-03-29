@@ -212,47 +212,47 @@ engineResources.requests.cpu="300m",\
 engineResources.requests.memory="2Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 
-  # New cluster
-  tag=$(generate_image_tag)
-  AWS_ACCESS_KEY_ID="$AWS_PROD_ENGINE_ENV_ACCESS_KEY" \
-  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENGINE_ENV_SECRET_KEY" \
-  AWS_DEFAULT_REGION="$AWS_PROD_ENGINE_ENV_REGION" \
-  helm upgrade --kubeconfig="$AWS_PROD_ENGINE_ENV_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
-  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
-  --set-string \
-image.tag="$tag",\
-buildContainer.enabled="true",\
-buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
-buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
-environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
-environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
-environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
-environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
-environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
-environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
-environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
-environmentVariables.CLUSTER_ID="4ceb7649-ed84-4c52-a27b-e7fca06afaa5",\
-environmentVariables.CLUSTER_JWT_TOKEN="$ENV_CLUSTER_JWT_TOKEN",\
-metrics.enabled="true",\
-rbac.clusterPermission="deployer",\
-autoscaler.enabled="true",\
-autoscaler.minReplicas="2",\
-autoscaler.maxReplicas="50",\
-autoscaler.averageValue="0.9",\
-overprovisionning.enabled="true",\
-overprovisionning.replicas="5",\
-overprovisionning.resources.requests.cpu="1",\
-overprovisionning.resources.limits.cpu="1",\
-overprovisionning.resources.requests.memory="6Gi",\
-overprovisionning.resources.limits.memory="6Gi",\
-engineResources.limits.cpu="1",\
-engineResources.limits.memory="2Gi",\
-engineResources.limits.ephemeral-storage="20Gi",\
-engineResources.requests.cpu="300m",\
-engineResources.requests.memory="2Gi",\
-engineResources.requests.ephemeral-storage="20Gi"
+#  # New cluster
+#  tag=$(generate_image_tag)
+#  AWS_ACCESS_KEY_ID="$AWS_PROD_ENGINE_ENV_ACCESS_KEY" \
+#  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENGINE_ENV_SECRET_KEY" \
+#  AWS_DEFAULT_REGION="$AWS_PROD_ENGINE_ENV_REGION" \
+#  helm upgrade --kubeconfig="$AWS_PROD_ENGINE_ENV_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
+#  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+#  --set-string \
+#image.tag="$tag",\
+#buildContainer.enabled="true",\
+#buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
+#buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
+#environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+#environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+#environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+#environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
+#environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
+#environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
+#environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
+#environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+#environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+#environmentVariables.CLUSTER_ID="4ceb7649-ed84-4c52-a27b-e7fca06afaa5",\
+#environmentVariables.CLUSTER_JWT_TOKEN="$ENV_CLUSTER_JWT_TOKEN",\
+#metrics.enabled="true",\
+#rbac.clusterPermission="deployer",\
+#autoscaler.enabled="true",\
+#autoscaler.minReplicas="2",\
+#autoscaler.maxReplicas="50",\
+#autoscaler.averageValue="0.9",\
+#overprovisionning.enabled="true",\
+#overprovisionning.replicas="5",\
+#overprovisionning.resources.requests.cpu="1",\
+#overprovisionning.resources.limits.cpu="1",\
+#overprovisionning.resources.requests.memory="6Gi",\
+#overprovisionning.resources.limits.memory="6Gi",\
+#engineResources.limits.cpu="1",\
+#engineResources.limits.memory="2Gi",\
+#engineResources.limits.ephemeral-storage="20Gi",\
+#engineResources.requests.cpu="300m",\
+#engineResources.requests.memory="2Gi",\
+#engineResources.requests.ephemeral-storage="20Gi"
 }
 
 ## Tests
