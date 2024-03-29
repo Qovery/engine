@@ -62,6 +62,7 @@ impl ScalewayCR {
                 &secret_token,
                 zone.region().as_str(),
             )),
+            insecure_registry: false,
             get_image_name: Box::new(move |img_name| format!("{img_name}/{img_name}")),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };

@@ -309,6 +309,8 @@ impl Docker {
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
         (memory_request_gib, memory_limit_gib): (u32, u32),
         should_abort: &CommandKiller,
+        http_registries: &[&str],
+        tls_invalid_registries: &[&str],
     ) -> Result<BuilderHandle, DockerError> {
         match &self.builder_location {
             // For local builder, we have at max 1 builder available
@@ -340,6 +342,21 @@ impl Docker {
                     config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
                     builder_name: Some(builder_name.to_string()),
+                };
+
+                info!("docker spawn builder {:?} {:?}", builder_name, requested_architectures);
+                let buildkitd_cfg_arg = {
+                    let cfg_path = self.config_path.path().join("buildkitd.toml");
+                    let mut cfg_file = String::new();
+                    for http in http_registries {
+                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  http = true\n", http));
+                    }
+                    for tls in tls_invalid_registries {
+                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  insecure = true\n", tls));
+                    }
+                    let _ = std::fs::write(&cfg_path, cfg_file);
+
+                    format!("--buildkitd-config={}", cfg_path.to_string_lossy())
                 };
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
@@ -374,6 +391,7 @@ impl Docker {
                         node_name,
                         "--buildkitd-flags",
                         "--debug --allow-insecure-entitlement security.insecure",
+                        &buildkitd_cfg_arg,
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
@@ -1142,6 +1160,8 @@ mod tests {
                 (0, 1000),
                 (0, 1),
                 &CommandKiller::never(),
+                &[],
+                &[],
             )
             .unwrap();
 

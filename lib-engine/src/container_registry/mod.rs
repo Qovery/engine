@@ -100,6 +100,7 @@ pub struct ContainerRegistryInfo {
     // Contains username and password if necessary
     pub registry_name: String,
     pub registry_docker_json_config: Option<String>,
+    pub insecure_registry: bool,
     // give it the name of your image, and it returns the full name with prefix if needed
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name

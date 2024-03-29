@@ -62,6 +62,7 @@ impl GenericCr {
             endpoint: url.clone(),
             registry_name: name.to_string(),
             registry_docker_json_config,
+            insecure_registry: skip_tls_verification,
             get_image_name: Box::new({
                 let repository = repository_name.clone();
                 move |name| format!("{}/{}", repository, name)
