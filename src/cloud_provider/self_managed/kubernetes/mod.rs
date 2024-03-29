@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -8,18 +8,21 @@ use uuid::Uuid;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
-use crate::cloud_provider::kubernetes::{self, Kubernetes, KubernetesVersion};
+use crate::cloud_provider::kubernetes::{self, Kind, Kubernetes, KubernetesVersion};
+use crate::cloud_provider::models::CpuArchitecture;
+use crate::cloud_provider::models::CpuArchitecture::AMD64;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
+use crate::cmd::docker;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
-
-use crate::engine::InfrastructureContext;
 use crate::secret_manager::vault::QVaultClient;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 pub struct SelfManaged {
     context: Context,
@@ -142,7 +145,33 @@ impl Kubernetes for SelfManaged {
     }
 
     fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
-        vec![]
+        match self.kind {
+            Kind::Eks
+            | Kind::Ec2
+            | Kind::ScwKapsule
+            | Kind::Gke
+            | Kind::EksSelfManaged
+            | Kind::GkeSelfManaged
+            | Kind::ScwSelfManaged => vec![AMD64], // we cant know for now so we fall back to amd64
+            Kind::OnPremiseSelfManaged => {
+                // We take what is configured by the engine, if nothing is configured we default to amd64
+                let archs: Vec<CpuArchitecture> = env::var("BUILDER_CPU_ARCHITECTURES")
+                    .unwrap_or_default()
+                    .split(',')
+                    .filter_map(|x| docker::Architecture::from_str(x).ok())
+                    .map(|x| match x {
+                        docker::Architecture::AMD64 => AMD64,
+                        docker::Architecture::ARM64 => CpuArchitecture::ARM64,
+                    })
+                    .collect();
+
+                if archs.is_empty() {
+                    vec![AMD64]
+                } else {
+                    archs
+                }
+            }
+        }
     }
 
     fn on_create(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
