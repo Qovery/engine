@@ -83,6 +83,7 @@ impl ECR {
             endpoint: registry_url,
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
+            insecure_registry: false,
             get_image_name: Box::new(|img_name| img_name.to_string()),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };

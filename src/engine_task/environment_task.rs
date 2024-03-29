@@ -260,6 +260,28 @@ impl EnvironmentTask {
             // it may be too short for us, so retry until we reach our deadline
             // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
             let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
+
+            // We need to do special handling for insecure registries or http ones.
+            let cr = &infra_ctx.container_registry().registry_info();
+            let http_registries = if cr.endpoint.scheme() == "http" {
+                vec![format!(
+                    "{}:{}",
+                    cr.endpoint.host_str().unwrap_or(""),
+                    cr.endpoint.port_or_known_default().unwrap_or(80)
+                )]
+            } else {
+                vec![]
+            };
+            let insecure_registries = if cr.insecure_registry {
+                vec![format!(
+                    "{}:{}",
+                    cr.endpoint.host_str().unwrap_or(""),
+                    cr.endpoint.port_or_known_default().unwrap_or(443)
+                )]
+            } else {
+                vec![]
+            };
+
             let builder_handle = loop {
                 match infra_ctx.context().docker.spawn_builder(
                     infra_ctx.context().execution_id(),
@@ -274,6 +296,16 @@ impl EnvironmentTask {
                     (max_cpu - 1000, max_cpu),
                     (max_ram - 1, max_ram),
                     &CommandKiller::from_cancelable(should_abort),
+                    http_registries
+                        .iter()
+                        .map(String::as_ref)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    insecure_registries
+                        .iter()
+                        .map(String::as_ref)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
                 ) {
                     Ok(build_handle) => break build_handle,
                     Err(err) => {

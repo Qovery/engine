@@ -66,6 +66,7 @@ impl GoogleArtifactRegistry {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
+            insecure_registry: false,
             get_image_name: Box::new(move |img_name| {
                 format!(
                     "{}/{}/{img_name}",
