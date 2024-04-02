@@ -26,6 +26,7 @@ rules:
       - pods/log
       - pods/exec
       - deployments
+      - configmaps
     verbs:
       - create
       - delete
