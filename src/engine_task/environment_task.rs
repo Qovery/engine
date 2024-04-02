@@ -322,6 +322,7 @@ impl EnvironmentTask {
                         }
 
                         env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
+                        thread::sleep(Duration::from_secs(1));
                     }
                 }
             };
