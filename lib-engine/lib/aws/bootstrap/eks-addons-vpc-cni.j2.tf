@@ -9,7 +9,9 @@ resource "aws_eks_addon" "vpc_cni" {
   # Get configuration fields: `aws eks describe-addon-configuration --addon-name vpc-cni --addon-version`
   # jq .configurationSchema --raw-output | jq .definitions
   # Note: it seems to miss some ENV VARs presents / supported on the plugin: CF https://github.com/aws/amazon-vpc-cni-k8s
-  # configuration_values = jsonencode({})
+  configuration_values = jsonencode({
+    "enableNetworkPolicy": "true"
+  })
 
   tags = local.tags_eks
 }
