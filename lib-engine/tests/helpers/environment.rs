@@ -14,7 +14,7 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
 use url::Url;
 use uuid::Uuid;
@@ -101,12 +101,14 @@ pub fn working_environment(
             advanced_settings: settings,
             public_domain: format!("{}.{}", application_id.to_uuid(), test_domain),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     };
 
     if with_router {
@@ -324,6 +326,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 }),
                 public_domain: format!("{}.{}", application_id1, test_domain),
                 container_registries: Vec::new(),
+                annotations_group_ids: btreeset! {},
             },
             Application {
                 long_id: application_id2,
@@ -387,6 +390,7 @@ pub fn environment_2_app_2_routers_1_psql(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
             },
         ],
         containers: vec![],
@@ -422,6 +426,7 @@ pub fn environment_2_app_2_routers_1_psql(
         max_parallel_build: 1,
         max_parallel_deploy: 1,
         helms: vec![],
+        annotations_groups: btreemap! {},
     }
 }
 
@@ -516,6 +521,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
                 failure_threshold: 5,
             }),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
@@ -534,6 +540,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         }],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     }
 }
 
@@ -623,12 +630,14 @@ pub fn environment_only_http_server(
                 failure_threshold: 5,
             }),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     };
 
     if with_router {

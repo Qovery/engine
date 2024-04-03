@@ -47,7 +47,7 @@ use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -309,6 +309,7 @@ pub fn environment_3_apps_3_databases(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -372,6 +373,7 @@ pub fn environment_3_apps_3_databases(
                 }),
                 public_domain: format!("{}.example.com", app_id),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -437,6 +439,7 @@ pub fn environment_3_apps_3_databases(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
             },
         ],
         containers: vec![],
@@ -517,6 +520,7 @@ pub fn environment_3_apps_3_databases(
             },
         ],
         helms: vec![],
+        annotations_groups: btreemap! {},
     }
 }
 
@@ -563,12 +567,14 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             liveness_probe: None,
             public_domain: format!("{}.example.com", Uuid::new_v4()),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     }
 }
 
@@ -615,12 +621,14 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             readiness_probe: None,
             liveness_probe: None,
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     }
 }
 

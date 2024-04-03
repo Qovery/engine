@@ -13,6 +13,9 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
+    {%- for key, value in annotations_group.deployment %}
+    {{ key }}: {{ value }}
+    {%- endfor %}
 spec:
   {%- if service.min_instances == service.max_instances %}
   replicas: {{ service.min_instances }}
@@ -60,6 +63,9 @@ spec:
         appCommitId: {{ service.version }}
         {%- endif %}
         qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.pods %}
+        {{ key }}: {{ value }}
+        {%- endfor %}
     spec:
       affinity:
         {%- if service.advanced_settings.deployment_affinity_node_required %}

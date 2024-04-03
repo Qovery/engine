@@ -15,6 +15,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType
 
 use base64::engine::general_purpose;
 use base64::Engine;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
@@ -27,7 +28,7 @@ use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -1092,6 +1093,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
             )
             .unwrap();
         let environment_domain = environment
@@ -1212,6 +1214,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1344,6 +1347,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1513,6 +1517,7 @@ fn deploy_container_with_no_router_on_scw() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: BTreeSet::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1644,6 +1649,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            annotations_group_ids: BTreeSet::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1730,6 +1736,7 @@ fn deploy_container_with_router_on_scw() {
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
+        let annotations_group_id = Uuid::new_v4();
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
@@ -1795,7 +1802,22 @@ fn deploy_container_with_router_on_scw() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            annotations_group_ids: btreeset! { annotations_group_id },
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
 
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
@@ -1853,6 +1875,7 @@ fn deploy_job_on_scw_kapsule() {
         let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
+        let annotations_group_id = Uuid::new_v4();
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(), //Uuid::default(),
@@ -1905,7 +1928,22 @@ fn deploy_job_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -2000,6 +2038,7 @@ fn deploy_cronjob_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2095,6 +2134,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2189,6 +2229,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2294,6 +2335,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2460,6 +2502,7 @@ fn deploy_container_with_tcp_public_port() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: BTreeSet::new(),
         }];
 
         let mut environment_for_delete = environment.clone();

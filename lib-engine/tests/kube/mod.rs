@@ -15,7 +15,7 @@ use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSo
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use url::Url;
 use uuid::Uuid;
 
@@ -66,6 +66,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
     };
 
     match options {
@@ -186,6 +187,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 environment_vars_with_infos: BTreeMap::default(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
+                annotations_group_ids: BTreeSet::new(),
             };
             environment.containers = vec![container];
         }
@@ -269,6 +271,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
             };
             environment.applications = vec![app];
         }
@@ -313,6 +316,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 readiness_probe: None,
                 liveness_probe: None,
                 container_registries: ContainerRegistries { registries: vec![] },
+                annotations_group_ids: btreeset! {},
             };
             environment.jobs = vec![job];
         }

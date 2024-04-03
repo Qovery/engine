@@ -99,6 +99,7 @@ fn should_increase_app_storage_size() {
             resized_app.advanced_settings.clone(),
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
+            vec![],
         )
         .expect("Unable to create application");
 

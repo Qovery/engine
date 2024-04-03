@@ -5,6 +5,7 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
@@ -25,6 +26,7 @@ use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -157,6 +159,8 @@ pub struct Job {
     #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
     pub container_registries: ContainerRegistries,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -264,6 +268,7 @@ impl Job {
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
@@ -303,6 +308,12 @@ impl Job {
         };
 
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
 
         let service: Box<dyn JobService> = match cloud_provider.kind() {
             Kind::Aws => {
@@ -335,6 +346,7 @@ impl Job {
                         self.liveness_probe.map(|p| p.to_domain()),
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?)
                 } else {
                     Box::new(models::job::Job::<AWSEc2>::new(
@@ -365,6 +377,7 @@ impl Job {
                         self.liveness_probe.map(|p| p.to_domain()),
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?)
                 }
             }
@@ -396,6 +409,7 @@ impl Job {
                 self.liveness_probe.map(|p| p.to_domain()),
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -425,6 +439,7 @@ impl Job {
                 self.liveness_probe.map(|p| p.to_domain()),
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -454,6 +469,7 @@ impl Job {
                 self.liveness_probe.map(|p| p.to_domain()),
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
         };
 

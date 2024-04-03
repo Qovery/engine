@@ -1,5 +1,6 @@
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::Action;
 use crate::models;
@@ -49,6 +50,7 @@ impl Router {
         context: &Context,
         advanced_settings: RouterAdvancedSettings,
         cloud_provider: &dyn CloudProvider,
+        annotations_groups: Vec<AnnotationsGroup>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
@@ -87,6 +89,7 @@ impl Router {
                         AwsRouterExtraSettings {},
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::router::Router::<AWSEc2>::new(
@@ -101,6 +104,7 @@ impl Router {
                         AwsEc2RouterExtraSettings {},
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -117,6 +121,7 @@ impl Router {
                     ScwRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?);
                 Ok(router)
             }
@@ -132,6 +137,7 @@ impl Router {
                 GcpRouterExtraSettings {},
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?)),
             CPKind::OnPremise => {
                 let router = Box::new(models::router::Router::<OnPremise>::new(
@@ -146,6 +152,7 @@ impl Router {
                     OnPremiseRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?);
                 Ok(router)
             }

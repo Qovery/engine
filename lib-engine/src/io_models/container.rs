@@ -2,6 +2,7 @@ use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ecr::ECR;
 use crate::container_registry::ContainerRegistry;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
@@ -16,6 +17,7 @@ use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
+use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -348,6 +350,8 @@ pub struct Container {
     pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: ContainerAdvancedSettings,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
 }
 
 impl Container {
@@ -357,6 +361,7 @@ impl Container {
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
@@ -373,6 +378,13 @@ impl Container {
             tag: self.tag,
             registry_mirroring_mode: cluster.advanced_settings().registry_mirroring_mode.clone(),
         };
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
             CPKind::Aws => {
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
@@ -404,6 +416,7 @@ impl Container {
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?)
                 } else {
                     Box::new(models::container::Container::<AWSEc2>::new(
@@ -434,6 +447,7 @@ impl Container {
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?)
                 }
             }
@@ -465,6 +479,7 @@ impl Container {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -494,6 +509,7 @@ impl Container {
                 self.advanced_settings,
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
             CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
@@ -523,6 +539,7 @@ impl Container {
                 self.advanced_settings,
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?),
         };
 

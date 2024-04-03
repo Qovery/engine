@@ -22,6 +22,7 @@ use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::fs::workspace_directory;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
@@ -329,6 +330,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
     )
     .unwrap()
 }
@@ -421,8 +423,41 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
     )
     .unwrap()
+}
+
+fn get_annotations_group_for_app() -> Vec<AnnotationsGroup> {
+    vec![AnnotationsGroup {
+        annotations: vec![Annotation {
+            key: "annotation_key".to_string(),
+            value: "annotation_value".to_string(),
+        }],
+        scopes: vec![
+            AnnotationsGroupScope::Deployments,
+            AnnotationsGroupScope::StatefulSets,
+            AnnotationsGroupScope::Services,
+            AnnotationsGroupScope::Hpa,
+            AnnotationsGroupScope::Secrets,
+            AnnotationsGroupScope::Pods,
+        ],
+    }]
+}
+
+fn get_annotations_group_for_job() -> Vec<AnnotationsGroup> {
+    vec![AnnotationsGroup {
+        annotations: vec![Annotation {
+            key: "annotation_key".to_string(),
+            value: "annotation_value".to_string(),
+        }],
+        scopes: vec![
+            AnnotationsGroupScope::Jobs,
+            AnnotationsGroupScope::CronJobs,
+            AnnotationsGroupScope::Secrets,
+            AnnotationsGroupScope::Pods,
+        ],
+    }]
 }
 
 pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Managed, PostgresSQL> {
@@ -514,6 +549,7 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
             basic_auth: None,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
     )
     .unwrap()
 }
@@ -590,6 +626,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         }),
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_job(),
     )
     .unwrap()
 }

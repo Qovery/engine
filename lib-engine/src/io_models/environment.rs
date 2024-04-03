@@ -1,6 +1,7 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Application;
 use crate::io_models::container::Container;
 use crate::io_models::context::Context;
@@ -17,7 +18,9 @@ use crate::models::job::{JobError, JobService};
 use crate::models::router::RouterError;
 use crate::utilities::base64_replace_comma_to_new_line;
 use crate::{cloud_provider::environment::Environment, models::router::RouterAdvancedSettings};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -40,6 +43,8 @@ pub struct EnvironmentRequest {
     pub databases: Vec<Database>,
     #[serde(default)]
     pub helms: Vec<HelmChart>,
+    #[serde(default = "default_annotations_groups")]
+    pub annotations_groups: BTreeMap<Uuid, AnnotationsGroup>,
 }
 
 fn default_max_parallel_build() -> u32 {
@@ -48,6 +53,10 @@ fn default_max_parallel_build() -> u32 {
 
 fn default_max_parallel_deploy() -> u32 {
     1u32
+}
+
+fn default_annotations_groups() -> BTreeMap<Uuid, AnnotationsGroup> {
+    BTreeMap::new()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -84,7 +93,7 @@ impl EnvironmentRequest {
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
                 );
-                srv.to_application_domain(context, build, cloud_provider)
+                srv.to_application_domain(context, build, cloud_provider, &self.annotations_groups)
             })
             .collect();
         let applications = applications?;
@@ -93,17 +102,22 @@ impl EnvironmentRequest {
             .containers
             .iter()
             .cloned()
-            .map(|srv| srv.to_container_domain(context, cloud_provider, container_registry, cluster))
+            .map(|srv| {
+                srv.to_container_domain(context, cloud_provider, container_registry, cluster, &self.annotations_groups)
+            })
             .collect();
         let containers = containers?;
 
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
             let mut router_advanced_settings = RouterAdvancedSettings::default();
+            let mut annotations_groups_ids = BTreeSet::new();
 
             for app in &self.applications {
                 for route in &router.routes {
                     if route.service_long_id == app.long_id {
+                        annotations_groups_ids = app.annotations_group_ids.clone();
+
                         // disable custom domain check for this router
                         if !app.advanced_settings.deployment_custom_domain_check_enabled {
                             router_advanced_settings.custom_domain_check_enabled = false;
@@ -156,6 +170,8 @@ impl EnvironmentRequest {
             for container in &self.containers {
                 for route in &router.routes {
                     if route.service_long_id == container.long_id {
+                        annotations_groups_ids = container.annotations_group_ids.clone();
+
                         // disable custom domain check for this router
                         if !container.advanced_settings.deployment_custom_domain_check_enabled {
                             router_advanced_settings.custom_domain_check_enabled = false;
@@ -266,7 +282,13 @@ impl EnvironmentRequest {
                 }
             }
 
-            match router.to_router_domain(context, router_advanced_settings, cloud_provider) {
+            let annotations_groups = annotations_groups_ids
+                .iter()
+                .flat_map(|annotations_group_id| self.annotations_groups.get(annotations_group_id))
+                .cloned()
+                .collect_vec();
+
+            match router.to_router_domain(context, router_advanced_settings, cloud_provider, annotations_groups) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     return Err(DomainError::RouterError(err));
@@ -286,7 +308,9 @@ impl EnvironmentRequest {
             .jobs
             .iter()
             .cloned()
-            .map(|srv| srv.to_job_domain(context, cloud_provider, container_registry, cluster))
+            .map(|srv| {
+                srv.to_job_domain(context, cloud_provider, container_registry, cluster, &self.annotations_groups)
+            })
             .collect();
         let jobs = jobs?;
 

@@ -7,8 +7,10 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::context::Context;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
 use crate::utilities::to_short_id;
@@ -87,6 +89,7 @@ pub struct Router<T: CloudProvider> {
     pub(crate) advanced_settings: RouterAdvancedSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }
 
 impl<T: CloudProvider> Router<T> {
@@ -102,6 +105,7 @@ impl<T: CloudProvider> Router<T> {
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
     ) -> Result<Self, RouterError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -127,6 +131,7 @@ impl<T: CloudProvider> Router<T> {
             advanced_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
         })
     }
 
@@ -231,6 +236,8 @@ impl<T: CloudProvider> Router<T> {
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
+
+        context.insert("annotations_group", &self.annotations_group);
 
         let lets_encrypt_url = match target.is_test_cluster {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",

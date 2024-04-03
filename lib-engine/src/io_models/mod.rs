@@ -13,6 +13,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+pub mod annotations_group;
 pub mod application;
 pub mod container;
 pub mod context;
