@@ -69,6 +69,8 @@ pub enum Tag {
     CannotRetrieveClusterConfigFile,
     CannotUninstallHelmChart,
     CannotWriteToFile,
+    CannotCreateHelmAdmissionControllerConfigMap,
+    CannotPatchHelmAdmissionControllerConfigMap,
     ClientServiceFailedToDeployBeforeStart,
     ClientServiceFailedToStart,
     CloudProviderApiMissingInfo,
@@ -485,6 +487,12 @@ impl From<errors::Tag> for Tag {
             errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
             errors::Tag::CannotFetchScalewayPrivateNetworks => Tag::CannotFetchScalewayPrivateNetworks,
             errors::Tag::CannotWriteToFile => Tag::CannotWriteToFile,
+            errors::Tag::CannotCreateHelmAdmissionControllerConfigMap => {
+                Tag::CannotCreateHelmAdmissionControllerConfigMap
+            }
+            errors::Tag::CannotPatchHelmAdmissionControllerConfigMap => {
+                Tag::CannotPatchHelmAdmissionControllerConfigMap
+            }
         }
     }
 }

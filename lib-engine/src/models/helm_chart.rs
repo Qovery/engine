@@ -244,6 +244,10 @@ impl<T: CloudProvider> HelmChart<T> {
             ])
             .chain(self.command_args.iter().map(|v| Cow::from(v.as_str())))
     }
+
+    pub fn admission_controller_config_map_name(&self) -> String {
+        format!("{}-admission-controller-config-map", self.id())
+    }
 }
 
 impl<T: CloudProvider> Service for HelmChart<T> {
