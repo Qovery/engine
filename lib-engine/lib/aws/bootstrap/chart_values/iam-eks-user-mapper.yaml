@@ -18,7 +18,7 @@ aws:
 image:
   repository: public.ecr.aws/r3m4q3r9/iam-eks-user-mapper-rs
   pullPolicy: IfNotPresent
-  tag: 767d1229
+  tag: 861f577b
 
 serviceAccount:
   name: set-by-engine-code
