@@ -1,3 +1,4 @@
+mod annotations_group;
 pub mod application;
 pub mod aws;
 pub mod aws_ec2;

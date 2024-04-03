@@ -10,6 +10,10 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+  annotations:
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: {{ value }}
+    {%- endfor %}
 spec:
   type: ClusterIP
   ports:
@@ -41,6 +45,9 @@ metadata:
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- for annotation in loadbalancer_l4_annotations %}
     {{ annotation | first }}: "{{ annotation | last }}"
+    {%- endfor %}
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: {{ value }}
     {%- endfor %}
 spec:
   type: LoadBalancer

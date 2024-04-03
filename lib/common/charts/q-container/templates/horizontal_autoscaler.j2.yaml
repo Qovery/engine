@@ -10,6 +10,10 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+  annotations:
+    {%- for key, value in annotations_group.hpa %}
+    {{ key }}: {{ value }}
+    {%- endfor %}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

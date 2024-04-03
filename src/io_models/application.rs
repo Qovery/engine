@@ -5,6 +5,7 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::probe::Probe;
@@ -24,6 +25,7 @@ use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::str;
@@ -281,6 +283,8 @@ pub struct Application {
     #[serde(default)]
     pub advanced_settings: ApplicationAdvancedSettings,
     pub container_registries: Vec<Registry>,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
 }
 
 fn default_root_path_value() -> String {
@@ -293,8 +297,15 @@ impl Application {
         context: &Context,
         build: Build,
         cloud_provider: &dyn CloudProvider,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -329,6 +340,7 @@ impl Application {
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -358,6 +370,7 @@ impl Application {
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -388,6 +401,7 @@ impl Application {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -416,6 +430,7 @@ impl Application {
                 self.advanced_settings,
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -444,6 +459,7 @@ impl Application {
                 self.advanced_settings,
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
             )?)),
         }
     }

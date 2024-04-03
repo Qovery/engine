@@ -4,9 +4,11 @@ use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::models;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
@@ -55,6 +57,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) lib_root_directory: String,
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -84,6 +87,7 @@ impl<T: CloudProvider> Job<T> {
         liveness_probe: Option<Probe>,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
     ) -> Result<Self, JobError> {
         if cpu_request_in_milli > cpu_limit_in_milli {
             return Err(JobError::InvalidConfig(
@@ -144,6 +148,7 @@ impl<T: CloudProvider> Job<T> {
             liveness_probe,
             lib_root_directory: context.lib_root_dir().to_string(),
             default_port,
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
         })
     }
 
@@ -248,6 +253,7 @@ impl<T: CloudProvider> Job<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
+            annotations_group: self.annotations_group.clone(),
         };
 
         ctx
@@ -511,4 +517,5 @@ pub(super) struct JobTeraContext {
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }

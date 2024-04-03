@@ -103,6 +103,7 @@ fn should_increase_container_storage_size() {
             resized_container.advanced_settings.clone(),
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
+            vec![],
         )
         .expect("Unable to create container");
 

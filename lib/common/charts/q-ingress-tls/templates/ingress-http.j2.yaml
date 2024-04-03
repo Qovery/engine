@@ -67,6 +67,10 @@ metadata:
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}
       {%- endif %}
+    {%- for key, value in annotations_group.ingress %}
+    {{ key }}: {{ value }}
+    {%- endfor %}
+
 spec:
   tls:
     {%- if certificate_alternative_names|length > 0 %}

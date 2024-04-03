@@ -1,19 +1,28 @@
+use std::collections::BTreeSet;
+use std::marker::PhantomData;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use uuid::Uuid;
+
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
-use crate::deployment_action::DeploymentAction;
-use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::{ApplicationAdvancedSettings, Port};
-use crate::io_models::context::Context;
-use std::collections::BTreeSet;
-
 use crate::cloud_provider::DeploymentTarget;
 use crate::cloud_provider::Kind::Scw;
+use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
+use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
+use crate::io_models::application::{ApplicationAdvancedSettings, Port};
+use crate::io_models::context::Context;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{
     to_public_l4_ports, ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext,
 };
@@ -23,12 +32,6 @@ use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
-use itertools::Itertools;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::time::Duration;
-use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ApplicationError {
@@ -63,6 +66,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -91,6 +95,7 @@ impl<T: CloudProvider> Application<T> {
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
@@ -130,6 +135,7 @@ impl<T: CloudProvider> Application<T> {
             _extra_settings: extra_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
         })
     }
 
@@ -211,6 +217,7 @@ impl<T: CloudProvider> Application<T> {
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
+            annotations_group: self.annotations_group.clone(),
         };
 
         ctx

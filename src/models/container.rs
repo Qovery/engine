@@ -1,3 +1,13 @@
+use std::collections::BTreeSet;
+use std::marker::PhantomData;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use serde::Serialize;
+use uuid::Uuid;
+
 use crate::build_platform::Build;
 use crate::cloud_provider::io::RegistryMirroringMode;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -9,11 +19,13 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -21,14 +33,6 @@ use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
-use itertools::Itertools;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use serde::Serialize;
-use std::collections::BTreeSet;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::time::Duration;
-use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ContainerError {
@@ -64,6 +68,7 @@ pub struct Container<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }
 
 pub fn get_mirror_repository_name(
@@ -124,6 +129,7 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -198,6 +204,7 @@ impl<T: CloudProvider> Container<T> {
             _extra_settings: extra_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
         })
     }
 
@@ -298,6 +305,7 @@ impl<T: CloudProvider> Container<T> {
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
+            annotations_group: self.annotations_group.clone(),
         };
 
         ctx
@@ -545,6 +553,7 @@ pub(super) struct ContainerTeraContext {
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
     pub(super) loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
 }
 
 pub fn get_container_with_invalid_storage_size<T: CloudProvider>(

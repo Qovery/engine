@@ -229,6 +229,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value:  general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -368,6 +369,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
