@@ -98,7 +98,7 @@ spec:
             - name: "{{ $key }}"
               valueFrom:
                 secretKeyRef:
-                  name: qovery-engine
+                  name: {{ $kubefullname }}
                   key: {{ $key }}
             {{ end }}
           livenessProbe:
