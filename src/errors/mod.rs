@@ -1090,6 +1090,10 @@ pub enum Tag {
     K8sUninstallEc2NodeClassesError,
     /// K8sDeleteKarpenterNodesError: represents an error where we are not able to delete Karpenter nodes.
     K8sDeleteKarpenterNodesError,
+    /// CannotCreateHelmAdmissionControllerConfigMap: cannot create K8S config map for admission controller
+    CannotCreateHelmAdmissionControllerConfigMap,
+    /// CannotPatchHelmAdmissionControllerConfigMap: cannot patch K8S config map for admission controller
+    CannotPatchHelmAdmissionControllerConfigMap,
 }
 
 impl Tag {
@@ -5016,6 +5020,46 @@ impl EngineError {
             Tag::K8sDeleteKarpenterNodesError,
             error.to_string(),
             None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when attempting to create config map needed for admission controller
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_create_helm_config_map_for_admission_controller(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateHelmAdmissionControllerConfigMap,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when attempting to patch config map needed for admission controller
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_patch_helm_config_map_for_admission_controller(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotPatchHelmAdmissionControllerConfigMap,
+            error.to_string(),
+            Some(error),
             None,
             None,
         )
