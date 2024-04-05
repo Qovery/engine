@@ -3454,7 +3454,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
             .clone();
         let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, &environment.kube_name);
         let short_id = to_short_id(&service_id);
-        let config_map_name = format!("z{short_id}-admission-controller-config-map");
+        let config_map_name = format!("{short_id}-admission-controller-config-map");
 
         let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
         let config_map_data = config_map.data.unwrap();
