@@ -18,6 +18,7 @@ rules:
       - events
       - nodes/stats
       - nodes/proxy
+      - configmaps
     verbs:
       - get
       - list
