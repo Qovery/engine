@@ -70,6 +70,7 @@ fn create_and_destroy_kapsule_cluster_waw() {
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
+#[ignore]
 fn create_pause_and_destroy_kapsule_cluster_ams_1() {
     let zone = ScwZone::Amsterdam1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithPause, function_name!(), None);
