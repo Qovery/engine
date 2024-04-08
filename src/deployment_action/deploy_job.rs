@@ -235,10 +235,10 @@ where
                 let _ = block_on(await_condition(
                     kube_pod_api.clone(),
                     &pod_name,
-                    is_job_pod_container_terminated(job.kube_name(), logger),
+                    is_job_pod_container_terminated(job.kube_name()),
                 ));
 
-                logger.info("Get JSON output from shared volume".to_string());
+                info!("Get JSON output from shared volume");
                 // Get JSON output from shared volume
                 let result_json_output = kubectl_get_job_pod_output(
                     target.kubernetes.kubeconfig_local_file_path(),
@@ -285,7 +285,7 @@ where
                     }
                 };
 
-                logger.info("Write file in shared volume to let the waiting container terminate".to_string());
+                info!("Write file in shared volume to let the waiting container terminate");
                 // Write file in shared volume to let the waiting container terminate
                 block_on(kube_pod_api.clone().exec(
                     &pod_name,
@@ -303,14 +303,14 @@ where
                 let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
                 // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
-                logger.info("Get Jobs".to_string());
+                info!("Get Jobs");
                 block_on(jobs.get(job.kube_name())).map_err(|err| {
                     EngineError::new_job_error(
                         event_details.clone(),
                         format!("Cannot get job {}: {}", job.kube_name(), err),
                     )
                 })?;
-                logger.info("Wait for job to finish".to_string());
+                info!("Wait for job to finish");
                 let ret = block_on(await_condition(jobs, job.kube_name(), is_job_terminated())).map_err(|_err| {
                     EngineError::new_job_error(
                         event_details.clone(),
@@ -663,16 +663,12 @@ fn get_active_job_pod_by_selector(
     }
 }
 
-fn job_pod_container_status_is_terminated(
-    job_pod: &Option<&Pod>,
-    job_container_name: &str,
-    logger: &EnvProgressLogger,
-) -> bool {
+fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
     if let Some(pod) = job_pod {
         if let Some(pod_status) = &pod.status {
-            logger.info(format!("Job pod: {}  status {:?}", job_container_name, pod_status));
+            info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
             if let Some(pod_container_statuses) = &pod_status.container_statuses {
-                logger.info(format!("Job pod {} container status", job_container_name));
+                info!("{}", format!("Job pod {} container status", job_container_name));
                 let job_container_terminated = &pod_container_statuses
                     .iter()
                     .filter(|container_status| container_status.name == job_container_name)
@@ -682,15 +678,12 @@ fn job_pod_container_status_is_terminated(
             }
         }
     }
-    logger.info(format!("Job pod container: {} is not terminated", job_container_name));
+    info!("{}", format!("Job pod container: {} is not terminated", job_container_name));
     false
 }
 
-fn is_job_pod_container_terminated<'a>(
-    job_container_name: &'a str,
-    logger: &'a EnvProgressLogger<'a>,
-) -> impl Condition<Pod> + 'a {
-    move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name, logger)
+fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
+    move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
 }
 
 // Used to validate the job json output format with serde
