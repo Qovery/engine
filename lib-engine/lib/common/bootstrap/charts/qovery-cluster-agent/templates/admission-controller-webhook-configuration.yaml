@@ -1,0 +1,28 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "qovery-cluster-agent.fullname" . }}-webhook
+  namespace: qovery
+  annotations:
+    cert-manager.io/inject-ca-from: qovery/{{ include "qovery-cluster-agent.fullname" . }}-tls
+
+webhooks:
+  - name: {{ include "qovery-cluster-agent.fullname" . }}-service.qovery.svc
+    clientConfig:
+      service:
+        name: {{ include "qovery-cluster-agent.fullname" . }}-service
+        namespace: qovery
+        path: "/mutate"
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: ["*"]
+        apiVersions: ["v1"]
+        resources: ["services", "deployments", "statefulsets"]
+    # Set failurePolicy to 'Ignore':
+    # * to prevent blocking everything in the clusters in case of bugs
+    # * to let us install this webhook in cluster-agent chart as we have no control on the order of yaml file installation during chart install
+    #   (if MutatingWebhookConfiguration is installed before updating the cluster-agent deployment, the endpoint won't be available and could cause errors)
+    failurePolicy: Ignore
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5

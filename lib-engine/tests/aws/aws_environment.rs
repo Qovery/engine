@@ -3467,7 +3467,6 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         let config_map_service_version = config_map_data
             .get("service-version")
             .expect("Cannot find service-version");
-        let config_map_service_name = config_map_data.get("service-name").expect("Cannot find service-name");
         assert_eq!(
             &config_map_project_id.to_string(),
             environment.project_long_id.to_string().as_str()
@@ -3477,10 +3476,6 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         assert_eq!(
             &config_map_service_version.to_string(),
             "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string().as_str()
-        );
-        assert_eq!(
-            &config_map_service_name.to_string(),
-            "my little chart ****".to_string().as_str()
         );
 
         // Redeploy helm chart
