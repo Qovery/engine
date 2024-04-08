@@ -1,12 +1,15 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+};
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct KarpenterChart {
     chart_path: HelmChartPath,
+    chart_values_path: HelmChartValuesFilePath,
     cluster_name: String,
     aws_iam_karpenter_controller_role_arn: String,
     replace_cluster_autoscaler: bool,
@@ -23,6 +26,11 @@ impl KarpenterChart {
     ) -> Self {
         KarpenterChart {
             chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                KarpenterChart::chart_name(),
+            ),
+            chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 KarpenterChart::chart_name(),
@@ -50,11 +58,8 @@ impl ToCommonHelmChart for KarpenterChart {
                 },
                 namespace: HelmChartNamespaces::KubeSystem,
                 path: self.chart_path.to_string(),
+                values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
-                    ChartSetValue {
-                        key: "logLevel".to_string(),
-                        value: "debug".to_string(),
-                    },
                     ChartSetValue {
                         key: "settings.clusterName".to_string(),
                         value: self.cluster_name.to_string(),
@@ -108,6 +113,13 @@ impl ChartInstallationChecker for KarpenterChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+        HelmChartType, ToCommonHelmChart,
+    };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use std::env;
     use std::fs::File;
 
     #[test]
@@ -124,5 +136,82 @@ mod tests {
         assert_eq!(group.as_str(), Some("karpenter.k8s.aws"));
         assert_eq!(version.as_str(), Some("v1beta1"));
         assert_eq!(kind.as_str(), Some("EC2NodeClass"));
+    }
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn karpenter_chart_directory_exists_test() {
+        // setup:
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/{}/bootstrap/charts/{}/Chart.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
+            KarpenterChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart directory should exist: `{chart_path}`");
+    }
+
+    /// Makes sure chart values file exists.
+    #[test]
+    fn karpenter_chart_values_file_exists_test() {
+        // setup:
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/{}/bootstrap/chart_values/{}.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
+            KarpenterChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
+    }
+
+    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn karpenter_rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            common_chart,
+            format!(
+                "/lib/{}/bootstrap/chart_values/{}.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+                ),
+                KarpenterChart::chart_name()
+            ),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }
