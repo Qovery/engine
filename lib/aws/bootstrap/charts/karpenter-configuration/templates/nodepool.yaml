@@ -26,8 +26,6 @@ spec:
           values: ["2"]
       nodeClassRef:
         name: default
-  limits:
-    cpu: 100
   disruption:
     consolidationPolicy: WhenUnderutilized
     expireAfter: 720h # 30 * 24h = 720h
