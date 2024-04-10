@@ -139,7 +139,7 @@ function deploy_engines_infra() { ## Release GA to prod
   AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_DEFAULT_REGION" \
-  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-prod qovery-engine \
+  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-engine-infra qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.CLOUD_PROVIDER="aws",\
