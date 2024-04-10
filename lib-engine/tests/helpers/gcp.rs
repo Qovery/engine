@@ -239,6 +239,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> GkeOptions {
         let credentials = try_parse_json_credentials_from_str(
             secrets
@@ -270,6 +271,7 @@ impl Cluster<Google, GkeOptions> for Gke {
                 custom_cluster_ipv4_cidr_block: None,
                 custom_services_ipv4_cidr_block: None,
             },
+            vpc_network_mode,
             secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),

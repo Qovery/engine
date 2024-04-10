@@ -9,7 +9,8 @@ use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAge
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
+    ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -279,6 +280,7 @@ pub fn scw_helm_charts(
                 get_chart_override_fn.clone(),
                 true,
                 HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartTimeout::ChartDefault,
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .aws_enable_karpenter,

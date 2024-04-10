@@ -351,7 +351,7 @@ pub fn get_environment_test_kubernetes(
     let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -383,7 +383,7 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -424,7 +424,7 @@ pub fn get_environment_test_kubernetes(
                     zone,
                     cloud_provider,
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
+                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
@@ -447,7 +447,12 @@ pub fn get_environment_test_kubernetes(
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region,
-                    Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
+                    Gke::kubernetes_cluster_options(
+                        secrets.clone(),
+                        None,
+                        EngineLocation::ClientSide,
+                        vpc_network_mode,
+                    ),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,

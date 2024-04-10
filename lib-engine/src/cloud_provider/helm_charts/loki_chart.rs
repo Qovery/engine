@@ -5,7 +5,7 @@ use crate::cloud_provider::helm::{
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::cloud_provider::models::{
@@ -56,6 +56,7 @@ pub struct LokiChart {
     enable_vpa: bool,
     chart_resources: HelmChartResources,
     additional_char_path: Option<HelmChartValuesFilePath>,
+    chart_timeout: HelmChartTimeout,
 }
 
 impl LokiChart {
@@ -68,6 +69,7 @@ impl LokiChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         chart_resources: HelmChartResourcesConstraintType,
+        chart_timeout: HelmChartTimeout,
         karpenter_enabled: bool,
     ) -> Self {
         LokiChart {
@@ -105,6 +107,7 @@ impl LokiChart {
                 )),
                 false => None,
             },
+            chart_timeout,
         }
     }
 
@@ -138,7 +141,10 @@ impl ToCommonHelmChart for LokiChart {
                 name: LokiChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: self.chart_namespace,
-                timeout_in_seconds: 900,
+                timeout_in_seconds: match self.chart_timeout {
+                    HelmChartTimeout::ChartDefault => 900,
+                    HelmChartTimeout::Custom(t) => t.whole_seconds(),
+                },
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
                 values_files,
                 values: vec![
@@ -345,7 +351,7 @@ mod tests {
     };
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
+        HelmChartResourcesConstraintType, HelmChartTimeout, HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
@@ -373,6 +379,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
             false,
         );
 
@@ -406,6 +413,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
             true,
         );
 
@@ -443,6 +451,7 @@ mod tests {
             get_loki_chart_override(),
             false,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();

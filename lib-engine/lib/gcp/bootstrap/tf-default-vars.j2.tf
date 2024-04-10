@@ -63,6 +63,12 @@ variable "vpc_name" {
   type        = string
 }
 
+variable "vpc_network_mode" {
+  description = "Qovery network mode"
+  default     = "{{ vpc_network_mode }}"
+  type        = string
+}
+
 variable "description" {
   # TODO(benjaminch): check if we should pass the one from the Core
   default     = "Qovery managed cluster {{ kubernetes_cluster_name }}"
@@ -114,8 +120,13 @@ variable "kubernetes_version" {
   type        = string
 }
 
+variable "cluster_is_private" {
+  type        = bool
+  description = "Whether the cluster will be private or not"
+  default     = {{ cluster_is_private }}
+}
+
 variable "master_authorized_networks" {
-  # TODO(benjaminch): to be discussed
   type        = list(object({ cidr_block = string, display_name = string }))
   description = "List of master authorized networks. If none are provided, disallow external access (except the cluster node IPs, which GKE automatically whitelists)."
   default     = []

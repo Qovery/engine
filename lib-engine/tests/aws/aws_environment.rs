@@ -2229,13 +2229,14 @@ fn deploy_job_on_aws_eks() {
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let job_id = QoveryIdentifier::new_random();
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
         environment.jobs = vec![Job {
-            long_id: Uuid::new_v4(), //Uuid::default(),
-            name: "job test #####".to_string(),
-            kube_name: "job-test".to_string(),
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
             action: Action::Create,
             schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {

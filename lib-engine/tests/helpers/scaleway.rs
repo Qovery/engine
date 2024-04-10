@@ -210,6 +210,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> KapsuleOptions {
         KapsuleOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
