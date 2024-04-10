@@ -83,7 +83,7 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VpcQoveryNetworkMode {
     WithNatGateways,
     WithoutNatGateways,

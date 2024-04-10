@@ -14,7 +14,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
-use crate::cloud_provider::models::CpuArchitecture;
+use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
@@ -145,6 +145,7 @@ pub struct GkeOptions {
     // Network
     // VPC
     pub vpc_mode: VpcMode,
+    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: Time,
@@ -167,6 +168,7 @@ impl GkeOptions {
         qovery_engine_location: EngineLocation,
         gcp_json_credentials: JsonCredentials,
         vpc_mode: VpcMode,
+        vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
         tls_email_report: String,
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
@@ -183,6 +185,7 @@ impl GkeOptions {
             qovery_engine_location,
             gcp_json_credentials,
             vpc_mode,
+            vpc_qovery_network_mode,
             tls_email_report,
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,
@@ -414,6 +417,20 @@ impl Gke {
 
         // Network
         // VPC
+        match &self.options.vpc_qovery_network_mode {
+            Some(mode) => {
+                context.insert("cluster_is_private", &true); // cluster is made private when requires static IP
+                context.insert("vpc_network_mode", &mode.to_string());
+            }
+            None => {
+                context.insert("cluster_is_private", &false); // cluster is public unless requires static IP
+                context.insert(
+                    "vpc_network_mode",
+                    VpcQoveryNetworkMode::WithoutNatGateways.to_string().as_str(),
+                );
+            }
+        }
+
         match &self.options.vpc_mode {
             VpcMode::Automatic {
                 custom_cluster_ipv4_cidr_block,

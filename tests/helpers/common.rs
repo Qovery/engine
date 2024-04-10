@@ -52,6 +52,7 @@ pub trait Cluster<T, U> {
         secrets: FuncTestsSecrets,
         cluster_id: Option<String>,
         engine_location: EngineLocation,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> U;
 }
 

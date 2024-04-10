@@ -103,7 +103,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 AwsZone::UsEast2C.to_string(),
             ],
             cloud_provider.as_ref(),
-            AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
+            AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide, None),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
             ClusterAdvancedSettings {

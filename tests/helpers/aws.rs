@@ -214,6 +214,7 @@ impl Cluster<AWS, Options> for AWS {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> Options {
         Options {
             ec2_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],

@@ -256,7 +256,7 @@ impl EnvironmentTask {
                 "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
             ));
 
-            // Docker has an hardcoded timeout of 1 minute for the builder creation
+            // Docker has a hardcoded timeout of 1 minute for the builder creation
             // it may be too short for us, so retry until we reach our deadline
             // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
             let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min

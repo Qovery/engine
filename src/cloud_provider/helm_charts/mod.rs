@@ -5,6 +5,7 @@ use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
+use time::Duration;
 
 use super::helm::HelmChartError;
 
@@ -27,6 +28,13 @@ pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
 pub mod vertical_pod_autoscaler;
+
+pub enum HelmChartTimeout {
+    /// Let helm chart defines what it wants
+    ChartDefault,
+    /// Let user define what they want
+    Custom(Duration),
+}
 
 pub enum HelmChartResourcesConstraintType {
     /// Let helm chart defines what it wants
