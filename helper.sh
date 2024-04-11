@@ -212,6 +212,10 @@ engineResources.requests.memory="2Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 
 
+  tag=$(generate_image_tag)
+  AWS_ACCESS_KEY_ID="$AWS_PROD_ENGINE_ENV_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENGINE_ENV_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_ENGINE_ENV_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_ENGINE_ENV_KUBECONFIG_NEO" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
