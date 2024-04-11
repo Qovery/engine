@@ -49,11 +49,11 @@ impl ToCommonHelmChart for K8sEventLoggerChart {
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: KubernetesCpuResourceUnit::MilliCpu(100).to_string(),
+                        value: KubernetesCpuResourceUnit::MilliCpu(500).to_string(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: KubernetesMemoryResourceUnit::MebiByte(32).to_string(),
+                        value: KubernetesMemoryResourceUnit::MebiByte(384).to_string(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),

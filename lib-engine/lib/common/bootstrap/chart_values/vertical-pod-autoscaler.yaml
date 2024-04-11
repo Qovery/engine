@@ -15,6 +15,9 @@ recommender:
     requests:
       cpu: set-by-engine-code
       memory: set-by-engine-code
+  # avoid OOMKilled and CPU throttling when too many pods are created at once
+  livenessProbe:
+    initialDelaySeconds: 45
 
 updater:
   extraArgs:
