@@ -17,7 +17,7 @@ webhooks:
       - operations: ["CREATE"]
         apiGroups: ["*"]
         apiVersions: ["v1"]
-        resources: ["services", "deployments", "statefulsets"]
+        resources: ["services", "deployments", "statefulsets", "jobs", "cronjobs", "daemonsets"]
     # Set failurePolicy to 'Ignore':
     # * to prevent blocking everything in the clusters in case of bugs
     # * to let us install this webhook in cluster-agent chart as we have no control on the order of yaml file installation during chart install
