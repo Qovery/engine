@@ -1,5 +1,7 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, MountedFile};
+use crate::cloud_provider::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile,
+};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
@@ -45,10 +47,10 @@ pub struct Job<T: CloudProvider> {
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) force_trigger: bool,
-    pub(super) cpu_request_in_milli: u32,
-    pub(super) cpu_limit_in_milli: u32,
-    pub(super) ram_request_in_mib: u32,
-    pub(super) ram_limit_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: JobAdvancedSettings,
@@ -91,13 +93,13 @@ impl<T: CloudProvider> Job<T> {
     ) -> Result<Self, JobError> {
         if cpu_request_in_milli > cpu_limit_in_milli {
             return Err(JobError::InvalidConfig(
-                "cpu_request_in_mili must be less or equal to cpu_limit_in_mili".to_string(),
+                "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
             ));
         }
 
         if cpu_request_in_milli == 0 {
             return Err(JobError::InvalidConfig(
-                "cpu_request_in_mili must be greater than 0".to_string(),
+                "cpu_request_in_milli must be greater than 0".to_string(),
             ));
         }
 
@@ -135,10 +137,10 @@ impl<T: CloudProvider> Job<T> {
             command_args,
             entrypoint,
             force_trigger,
-            cpu_request_in_milli,
-            cpu_limit_in_milli,
-            ram_request_in_mib,
-            ram_limit_in_mib,
+            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
+            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
+            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
+            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
             environment_variables,
             mounted_files,
             advanced_settings,
@@ -224,10 +226,10 @@ impl<T: CloudProvider> Job<T> {
                 image_tag,
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_milli: format!("{}m", self.cpu_request_in_milli),
-                cpu_limit_in_milli: format!("{}m", self.cpu_limit_in_milli),
-                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration.as_secs(),

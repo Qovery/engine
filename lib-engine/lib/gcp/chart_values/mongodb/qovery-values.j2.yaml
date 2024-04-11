@@ -27,11 +27,11 @@ auth:
 
 resources:
   requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
   limits:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
 
 # on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
 # otherwise customize the default probes timers, because with minimal resources it takes time to start

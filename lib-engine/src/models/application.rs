@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage,
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    KubernetesMemoryResourceUnit, MountedFile, Storage,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -49,9 +50,10 @@ pub struct Application<T: CloudProvider> {
     pub(super) kube_name: String,
     pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
-    pub(super) total_cpus: String,
-    pub(super) cpu_burst: String,
-    pub(super) total_ram_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) build: Build,
@@ -79,9 +81,6 @@ impl<T: CloudProvider> Application<T> {
         kube_name: String,
         public_domain: String,
         ports: Vec<Port>,
-        total_cpus: String,
-        cpu_burst: String,
-        total_ram_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
         build: Build,
@@ -96,8 +95,37 @@ impl<T: CloudProvider> Application<T> {
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
+        ram_request_in_mib: u32,
+        ram_limit_in_mib: u32,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
+
+        // Check memory settings
+        if cpu_request_in_milli > cpu_limit_in_milli {
+            return Err(ApplicationError::InvalidConfig(
+                "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
+            ));
+        }
+
+        if cpu_request_in_milli == 0 {
+            return Err(ApplicationError::InvalidConfig(
+                "cpu_request_in_milli must be greater than 0".to_string(),
+            ));
+        }
+
+        if ram_request_in_mib > ram_limit_in_mib {
+            return Err(ApplicationError::InvalidConfig(
+                "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
+            ));
+        }
+
+        if ram_request_in_mib == 0 {
+            return Err(ApplicationError::InvalidConfig(
+                "ram_request_in_mib must be greater than 0".to_string(),
+            ));
+        }
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -118,9 +146,10 @@ impl<T: CloudProvider> Application<T> {
             kube_name,
             public_domain,
             ports,
-            total_cpus,
-            cpu_burst,
-            total_ram_in_mib,
+            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
+            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
+            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
+            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
             min_instances,
             max_instances,
             build,
@@ -179,10 +208,10 @@ impl<T: CloudProvider> Application<T> {
                 version: self.version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_mili: self.total_cpus.clone(),
-                cpu_limit_in_mili: self.total_cpus.clone(),
-                ram_request_in_mib: format!("{}Mi", self.total_ram_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.total_ram_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -245,18 +274,6 @@ impl<T: CloudProvider> Application<T> {
 
     pub fn action(&self) -> &Action {
         &self.action
-    }
-
-    pub fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    pub fn cpu_burst(&self) -> String {
-        self.cpu_burst.to_string()
-    }
-
-    pub fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
     }
 
     pub fn min_instances(&self) -> u32 {

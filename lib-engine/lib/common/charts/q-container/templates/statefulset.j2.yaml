@@ -187,10 +187,10 @@ spec:
             readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
-              cpu: {{ service.cpu_limit_in_mili }}
+              cpu: {{ service.cpu_limit_in_milli }}
               memory: {{ service.ram_limit_in_mib }}
             requests:
-              cpu: {{ service.cpu_request_in_mili }}
+              cpu: {{ service.cpu_request_in_milli }}
               memory: {{ service.ram_request_in_mib }}
           volumeMounts:
 {%- for s in service.storages %}

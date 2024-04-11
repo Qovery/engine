@@ -281,8 +281,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
-            total_cpus: "500m".to_string(),
-            total_ram_in_mib: 512,
+            cpu_request_in_milli: 500,
+            cpu_limit_in_milli: 500,
+            ram_request_in_mib: 512,
+            ram_limit_in_mib: 512,
             disk_size_in_gib: 10,
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {

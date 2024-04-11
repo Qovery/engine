@@ -41,11 +41,11 @@ primary:
     qovery.com/project-id: "{{ project_long_id }}"
   resources:
     requests:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
     limits:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"
   persistence:
     storageClass: "{{ database_disk_type }}"
     size: "{{ database_disk_size_in_gib }}Gi"

@@ -79,9 +79,6 @@ fn should_increase_app_storage_size() {
             resized_app.name.clone(),
             resized_app.public_domain.clone(),
             resized_app.ports.clone(),
-            resized_app.total_cpus.to_string(),
-            resized_app.cpu_burst.to_string(),
-            resized_app.total_ram_in_mib,
             resized_app.min_instances,
             resized_app.max_instances,
             resized_app.to_build(
@@ -100,6 +97,10 @@ fn should_increase_app_storage_size() {
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
+            resized_app.cpu_request_in_milli,
+            resized_app.cpu_limit_in_milli,
+            resized_app.ram_request_in_mib,
+            resized_app.ram_limit_in_mib,
         )
         .expect("Unable to create application");
 
