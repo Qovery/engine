@@ -12,7 +12,8 @@ use crate::build_platform::Build;
 use crate::cloud_provider::io::RegistryMirroringMode;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -51,10 +52,10 @@ pub struct Container<T: CloudProvider> {
     pub source: RegistryImageSource,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request_in_mili: u32,
-    pub(super) cpu_limit_in_mili: u32,
-    pub(super) ram_request_in_mib: u32,
-    pub(super) ram_limit_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) public_domain: String,
@@ -113,8 +114,8 @@ impl<T: CloudProvider> Container<T> {
         registry_image_source: RegistryImageSource,
         command_args: Vec<String>,
         entrypoint: Option<String>,
-        cpu_request_in_mili: u32,
-        cpu_limit_in_mili: u32,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
         ram_request_in_mib: u32,
         ram_limit_in_mib: u32,
         min_instances: u32,
@@ -143,15 +144,15 @@ impl<T: CloudProvider> Container<T> {
             ));
         }
 
-        if cpu_request_in_mili > cpu_limit_in_mili {
+        if cpu_request_in_milli > cpu_limit_in_milli {
             return Err(ContainerError::InvalidConfig(
-                "cpu_request_in_mili must be less or equal to cpu_limit_in_mili".to_string(),
+                "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
             ));
         }
 
-        if cpu_request_in_mili == 0 {
+        if cpu_request_in_milli == 0 {
             return Err(ContainerError::InvalidConfig(
-                "cpu_request_in_mili must be greater than 0".to_string(),
+                "cpu_request_in_milli must be greater than 0".to_string(),
             ));
         }
 
@@ -187,10 +188,10 @@ impl<T: CloudProvider> Container<T> {
             source: registry_image_source,
             command_args,
             entrypoint,
-            cpu_request_in_mili,
-            cpu_limit_in_mili,
-            ram_request_in_mib,
-            ram_limit_in_mib,
+            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
+            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
+            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
+            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
             min_instances,
             max_instances,
             public_domain,
@@ -267,10 +268,10 @@ impl<T: CloudProvider> Container<T> {
                 version: self.service_version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
-                cpu_limit_in_mili: format!("{}m", self.cpu_limit_in_mili),
-                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -514,8 +515,8 @@ pub(super) struct ServiceTeraContext {
     pub(super) version: String,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request_in_mili: String,
-    pub(super) cpu_limit_in_mili: String,
+    pub(super) cpu_request_in_milli: String,
+    pub(super) cpu_limit_in_milli: String,
     pub(super) ram_request_in_mib: String,
     pub(super) ram_limit_in_mib: String,
     pub(super) min_instances: u32,
