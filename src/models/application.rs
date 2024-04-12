@@ -28,6 +28,7 @@ use crate::models::container::{
     to_public_l4_ports, ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext,
 };
 use crate::models::probe::Probe;
+use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::runtime::block_on;
@@ -99,33 +100,20 @@ impl<T: CloudProvider> Application<T> {
         cpu_limit_in_milli: u32,
         ram_request_in_mib: u32,
         ram_limit_in_mib: u32,
+        allow_service_resource_overcommit: bool,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
-        // Check memory settings
-        if cpu_request_in_milli > cpu_limit_in_milli {
-            return Err(ApplicationError::InvalidConfig(
-                "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
-            ));
-        }
-
-        if cpu_request_in_milli == 0 {
-            return Err(ApplicationError::InvalidConfig(
-                "cpu_request_in_milli must be greater than 0".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib > ram_limit_in_mib {
-            return Err(ApplicationError::InvalidConfig(
-                "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib == 0 {
-            return Err(ApplicationError::InvalidConfig(
-                "ram_request_in_mib must be greater than 0".to_string(),
-            ));
-        }
+        let service_resources = compute_service_requests_and_limits(
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            ram_request_in_mib,
+            ram_limit_in_mib,
+            advanced_settings.resources_override_limit_cpu_in_milli,
+            advanced_settings.resources_override_limit_ram_in_mib,
+            allow_service_resource_overcommit,
+        )
+        .map_err(ApplicationError::InvalidConfig)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -146,10 +134,10 @@ impl<T: CloudProvider> Application<T> {
             kube_name,
             public_domain,
             ports,
-            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
-            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
-            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
-            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
+            cpu_request_in_milli: service_resources.cpu_request_in_milli,
+            cpu_limit_in_milli: service_resources.cpu_limit_in_milli,
+            ram_request_in_mib: service_resources.ram_request_in_mib,
+            ram_limit_in_mib: service_resources.ram_limit_in_mib,
             min_instances,
             max_instances,
             build,
