@@ -419,7 +419,13 @@ impl Gke {
         // VPC
         match &self.options.vpc_qovery_network_mode {
             Some(mode) => {
-                context.insert("cluster_is_private", &true); // cluster is made private when requires static IP
+                context.insert(
+                    "cluster_is_private",
+                    &match mode {
+                        VpcQoveryNetworkMode::WithNatGateways => true,
+                        VpcQoveryNetworkMode::WithoutNatGateways => false,
+                    },
+                ); // cluster is made private when requires static IP
                 context.insert("vpc_network_mode", &mode.to_string());
             }
             None => {
