@@ -124,6 +124,8 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
+    #[serde(alias = "infra.pdb.enabled", default)]
+    pub infra_pdb_enabled: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -165,6 +167,7 @@ impl Default for ClusterAdvancedSettings {
             aws_enable_karpenter: false,
             aws_karpenter_max_node_drain_in_sec: None,
             aws_karpenter_enable_spot: false,
+            infra_pdb_enabled: false,
         }
     }
 }
