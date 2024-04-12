@@ -16,7 +16,7 @@ metadata:
     {{ key }}: {{ value }}
     {%- endfor %}
 spec:
-  maxUnavailable: 0
+  minAvailable: 1
   selector:
     matchLabels:
       qovery.com/service-id: {{ service.long_id }}
