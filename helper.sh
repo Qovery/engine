@@ -409,10 +409,6 @@ function update_engine_protobuf() {
   rm -rf /tmp/rust-backend
 }
 
-function deploy_all_clusters() {
-  curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $CI_ADMIN_TOKEN" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
-}
-
 function install_hook() { ## install git hook
   echo "$(pwd)/helper.sh lint" > .git/hooks/pre-commit
   chmod 755 $(pwd)/.git/hooks/pre-commit
@@ -553,9 +549,6 @@ install_hook)
   ;;
 test_local_stack)
   test_local_stack "$2"
-  ;;
-deploy_all_clusters)
-  deploy_all_clusters
   ;;
 update_engine_protobuf)
   update_engine_protobuf

@@ -765,21 +765,7 @@ quarantine:
       - main
   when: manual
 
-3-deploy-client-infra-clusters:
-  stage: deploy
-  retry: 0
-  dependencies:
-    - release-engine-image
-  script:
-    - ./helper.sh deploy_all_clusters
-  tags:
-    - vm-250mcpu-1gmem-0g
-  only:
-    refs:
-      - main
-  when: manual
-
-4-deploy-qovery-env-engines:
+3-deploy-qovery-env-engines:
   stage: deploy
   retry: 0
   dependencies:
