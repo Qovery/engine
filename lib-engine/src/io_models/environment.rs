@@ -93,7 +93,13 @@ impl EnvironmentRequest {
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
                 );
-                srv.to_application_domain(context, build, cloud_provider, &self.annotations_groups)
+                srv.to_application_domain(
+                    context,
+                    build,
+                    cloud_provider,
+                    &self.annotations_groups,
+                    cluster.advanced_settings().allow_service_resource_overcommit,
+                )
             })
             .collect();
         let applications = applications?;
@@ -103,7 +109,14 @@ impl EnvironmentRequest {
             .iter()
             .cloned()
             .map(|srv| {
-                srv.to_container_domain(context, cloud_provider, container_registry, cluster, &self.annotations_groups)
+                srv.to_container_domain(
+                    context,
+                    cloud_provider,
+                    container_registry,
+                    cluster,
+                    &self.annotations_groups,
+                    cluster.advanced_settings().allow_service_resource_overcommit,
+                )
             })
             .collect();
         let containers = containers?;
@@ -309,7 +322,14 @@ impl EnvironmentRequest {
             .iter()
             .cloned()
             .map(|srv| {
-                srv.to_job_domain(context, cloud_provider, container_registry, cluster, &self.annotations_groups)
+                srv.to_job_domain(
+                    context,
+                    cloud_provider,
+                    container_registry,
+                    cluster,
+                    &self.annotations_groups,
+                    cluster.advanced_settings().allow_service_resource_overcommit,
+                )
             })
             .collect();
         let jobs = jobs?;

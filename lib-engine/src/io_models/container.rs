@@ -279,6 +279,11 @@ pub struct ContainerAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+
+    #[serde(alias = "resources.override.limit.cpu_in_milli")]
+    pub resources_override_limit_cpu_in_milli: Option<u32>,
+    #[serde(alias = "resources.override.limit.ram_in_mib")]
+    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for ContainerAdvancedSettings {
@@ -316,6 +321,8 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -362,6 +369,7 @@ impl Container {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        allow_service_resource_overcommit: bool,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
@@ -417,6 +425,7 @@ impl Container {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        allow_service_resource_overcommit,
                     )?)
                 } else {
                     Box::new(models::container::Container::<AWSEc2>::new(
@@ -448,6 +457,7 @@ impl Container {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        allow_service_resource_overcommit,
                     )?)
                 }
             }
@@ -480,6 +490,7 @@ impl Container {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                allow_service_resource_overcommit,
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -510,6 +521,7 @@ impl Container {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                allow_service_resource_overcommit,
             )?),
             CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
@@ -540,6 +552,7 @@ impl Container {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                allow_service_resource_overcommit,
             )?),
         };
 

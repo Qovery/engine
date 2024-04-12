@@ -163,6 +163,11 @@ pub struct ApplicationAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+
+    #[serde(alias = "resources.override.limit.cpu_in_milli")]
+    pub resources_override_limit_cpu_in_milli: Option<u32>,
+    #[serde(alias = "resources.override.limit.ram_in_mib")]
+    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -203,6 +208,8 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -244,6 +251,8 @@ impl ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
+            resources_override_limit_cpu_in_milli: self.resources_override_limit_cpu_in_milli,
+            resources_override_limit_ram_in_mib: self.resources_override_limit_ram_in_mib,
         }
     }
 }
@@ -299,6 +308,7 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        allow_service_resource_overcommit: bool,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
         let annotations_groups = self
@@ -343,6 +353,7 @@ impl Application {
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
+                        allow_service_resource_overcommit,
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -374,6 +385,7 @@ impl Application {
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
+                        allow_service_resource_overcommit,
                     )?))
                 }
             }
@@ -406,6 +418,7 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
+                allow_service_resource_overcommit,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -436,6 +449,7 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
+                allow_service_resource_overcommit,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -466,6 +480,7 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
+                allow_service_resource_overcommit,
             )?)),
         }
     }

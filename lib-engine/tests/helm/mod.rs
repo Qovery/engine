@@ -325,6 +325,8 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             hpa_cpu_average_utilization_percent: 31,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -333,6 +335,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         2,
         3,
         3,
+        false,
     )
     .unwrap()
 }
@@ -422,10 +425,13 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
+        false,
     )
     .unwrap()
 }
@@ -608,6 +614,8 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         Some(Probe {
             r#type: ProbeType::Http {
@@ -633,6 +641,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_job(),
+        false,
     )
     .unwrap()
 }
