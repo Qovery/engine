@@ -150,19 +150,6 @@ impl ContainerImage {
     pub fn repository_with_host(&self) -> String {
         format!("{}/{}", self.host_with_port(), self.name)
     }
-
-    // TODO(ENG-1725): SCW x buildx has a bug with cache, needs to be able to detect SCW registry
-    // Needs to be removed ASAP once bug has been fixed.
-    // More info: https://github.com/docker/buildx/issues/2364
-    pub fn is_scw_repository(&self) -> bool {
-        self.registry
-            .host_str()
-            .unwrap_or_default()
-            .to_string()
-            .trim()
-            .to_lowercase()
-            .ends_with("scw.cloud")
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -580,13 +567,6 @@ impl Docker {
     }
 
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
-        // TODO(ENG-1725): SCW x buildx has a bug with cache, prune before any docker buildx command
-        // Needs to be removed ASAP once bug has been fixed.
-        // More info: https://github.com/docker/buildx/issues/2364
-        if image.is_scw_repository() {
-            self.prune_images()?;
-        }
-
         info!("Docker check remotely image exist {:?}", image);
 
         let ret = docker_exec(
@@ -701,13 +681,6 @@ impl Docker {
     {
         info!("Docker buildkit build {:?}", image_to_build.image_name());
 
-        // TODO(ENG-1725): SCW x buildx has a bug with cache, needs to prune before building
-        // Needs to be removed ASAP once bug has been fixed.
-        // More info: https://github.com/docker/buildx/issues/2364
-        if image_to_build.is_scw_repository() || cache.is_scw_repository() {
-            self.prune_images()?;
-        }
-
         let mut args_string: Vec<String> = vec![
             "--config".to_string(),
             self.config_path.path().to_str().unwrap_or("").to_string(),
@@ -720,6 +693,8 @@ impl Docker {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
             //"--allow=security.insecure".to_string(),
+            "--cache-from".to_string(),
+            format!("type=registry,ref={}", cache.image_name()),
             // Disabled for now, because private ECR does not support it ...
             // https://github.com/aws/containers-roadmap/issues/876
             // "--cache-to".to_string(),
@@ -735,17 +710,6 @@ impl Docker {
                 architectures.iter().map(|arch| arch.to_platform()).join(",")
             ));
         };
-
-        // Cache
-        if image_to_build.is_scw_repository() || cache.is_scw_repository() {
-            // TODO(ENG-1725): SCW x buildx has a bug with cache, do not cache anything in case of SCW registry
-            // Needs to be removed ASAP once bug has been fixed.
-            // More info: https://github.com/docker/buildx/issues/2364
-            args_string.push("--no-cache".to_string());
-        } else {
-            args_string.push("--cache-from".to_string());
-            args_string.push(format!("type=registry,ref={}", cache.image_name()));
-        }
 
         for image_name in image_to_build.image_names() {
             args_string.push("--tag".to_string());
@@ -827,12 +791,6 @@ impl Docker {
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
-        // TODO(ENG-1725): SCW x buildx has a bug with cache, needs to prune before mirroring
-        // Needs to be removed ASAP once bug has been fixed.
-        // More info: https://github.com/docker/buildx/issues/2364
-        if source_image.is_scw_repository() || dest_image.is_scw_repository() {
-            self.prune_images()?;
-        }
         info!("Docker mirror {:?} {:?}", source_image, dest_image);
         self.create_manifest(
             dest_image,
@@ -1233,62 +1191,5 @@ mod tests {
         );
 
         assert!(ret.is_ok());
-    }
-
-    #[test]
-    fn test_is_scw_repository() {
-        // setup:
-        struct TestCase {
-            image: ContainerImage,
-            expected: bool,
-        }
-
-        let test_cases = vec![
-            TestCase {
-                image: ContainerImage::new(
-                    Url::parse("https://public.ecr.aws").unwrap(),
-                    "r3m4q3r9/pub-mirror-debian".to_string(),
-                    vec!["11.6-ci".to_string()],
-                ),
-                expected: false,
-            },
-            TestCase {
-                image: ContainerImage::new(
-                    Url::parse("https://registry.socle.io").unwrap(),
-                    "r3m4q3r9/pub-mirror-debian".to_string(),
-                    vec!["11.6-ci".to_string()],
-                ),
-                expected: false,
-            },
-            TestCase {
-                image: ContainerImage::new(
-                    Url::parse("https://registry.scw.cloud").unwrap(),
-                    "r3m4q3r9/pub-mirror-debian".to_string(),
-                    vec!["11.6-ci".to_string()],
-                ),
-                expected: true,
-            },
-            TestCase {
-                image: ContainerImage::new(
-                    Url::parse("https://scw.cloud").unwrap(),
-                    "r3m4q3r9/pub-mirror-debian".to_string(),
-                    vec!["11.6-ci".to_string()],
-                ),
-                expected: true,
-            },
-            TestCase {
-                image: ContainerImage::new(
-                    Url::parse("https://registry.scw.cloud.com").unwrap(),
-                    "r3m4q3r9/pub-mirror-debian".to_string(),
-                    vec!["11.6-ci".to_string()],
-                ),
-                expected: false,
-            },
-        ];
-
-        // execute & verify:
-        for tc in test_cases {
-            assert_eq!(tc.expected, tc.image.is_scw_repository());
-        }
     }
 }
