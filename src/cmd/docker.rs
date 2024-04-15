@@ -412,7 +412,7 @@ impl Docker {
                 debug!(
                     "Builder ready but waiting 5sec due to https://github.com/aws/aws-network-policy-agent/issues/245"
                 );
-                std::thread::sleep(Duration::from_secs(5));
+                std::thread::sleep(Duration::from_secs(10));
 
                 Ok(build_handle)
             }
