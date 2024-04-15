@@ -810,6 +810,7 @@ fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
 }
@@ -817,8 +818,39 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("5.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn public_mongodb_v5_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("5.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("6.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("6.0", function_name!(), CONTAINER, true);
 }
 
 /**
