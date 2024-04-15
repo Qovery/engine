@@ -406,14 +406,6 @@ impl Docker {
                     )?;
                 }
 
-                // HACK: https://github.com/aws/aws-network-policy-agent/issues/245
-                // There is a race condition in the network policy agent that can can cause timeout if we start too early to send traffic
-                // Delay a bit to allow bpf probe to be attached to the pod, before starting build that send traffic
-                debug!(
-                    "Builder ready but waiting 15sec due to https://github.com/aws/aws-network-policy-agent/issues/245"
-                );
-                std::thread::sleep(Duration::from_secs(15));
-
                 Ok(build_handle)
             }
         }
