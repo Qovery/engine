@@ -100,3 +100,6 @@ rbac:
   clusterRole: true
   clusterPermission: "admin"
   apiVersion: v1
+
+networkPolicies:
+  enabled: false

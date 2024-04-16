@@ -192,6 +192,7 @@ environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="e0480eca-91b0-4cfb-afa6-22583c14361c",\
 environmentVariables.CLUSTER_JWT_TOKEN="$ENV_PROD_CLUSTER_JWT_TOKEN",\
+networkPolicies.enabled="true",\
 metrics.enabled="true",\
 rbac.clusterPermission="deployer",\
 autoscaler.enabled="true",\
