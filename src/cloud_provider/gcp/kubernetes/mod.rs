@@ -701,25 +701,33 @@ impl Gke {
             event_details.clone(),
             EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
         ));
-        if let Err(e) = self.object_storage.create_bucket(
-            self.kubeconfig_bucket_name().as_str(),
-            self.advanced_settings.resource_ttl(),
-            false,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
-        }
-
-        // Logs bucket
-        if let Err(e) = self.object_storage.create_bucket(
-            self.logs_bucket_name().as_str(),
-            self.advanced_settings.resource_ttl(),
-            false,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
+        for bucket_name in [self.kubeconfig_bucket_name().as_str(), self.logs_bucket_name().as_str()] {
+            match self
+                .object_storage
+                .create_bucket(bucket_name, self.advanced_settings.resource_ttl(), true)
+            {
+                Ok(existing_bucket) => {
+                    self.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!("Object storage bucket {bucket_name} created")),
+                    ));
+                    // Update set versioning to true if not activated on the bucket (bucket created before this option was enabled)
+                    // This can be removed at some point in the future, just here to handle legacy GCP buckets
+                    // TODO(ENG-1736): remove this update once all existing buckets have versioning activated
+                    if !existing_bucket.versioning_activated {
+                        self.object_storage.update_bucket(bucket_name, true).map_err(|e| {
+                            let error = EngineError::new_object_storage_error(event_details.clone(), e);
+                            self.logger().log(EngineEvent::Error(error.clone(), None));
+                            error
+                        })?;
+                    }
+                }
+                Err(e) => {
+                    let error = EngineError::new_object_storage_error(event_details, e);
+                    self.logger().log(EngineEvent::Error(error.clone(), None));
+                    return Err(Box::new(error));
+                }
+            }
         }
 
         // Terraform deployment dedicated to cloud resources

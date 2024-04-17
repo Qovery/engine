@@ -238,6 +238,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotUpdateBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot update bucket: `{bucket_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::CannotDeleteBucket {
                 bucket_name,
                 raw_error_message,
@@ -1020,6 +1028,8 @@ pub enum Tag {
     ObjectStorageCannotInstantiateClient,
     /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
     ObjectStorageCannotCreateBucket,
+    /// ObjectStorageCannotUpdateBucket: represents an error while trying to update an object storage bucket.
+    ObjectStorageCannotUpdateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
     ObjectStorageCannotPutFileIntoBucket,
     /// ObjectStorageCannotDeleteFileIntoBucket: represents an error while trying to delete a file into an object storage bucket.
@@ -4427,6 +4437,14 @@ impl EngineError {
                 event_details,
                 Tag::ObjectStorageCannotCreateBucket,
                 format!("Error, cannot create object storage bucket `{bucket_name}`.",),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotUpdateBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotUpdateBucket,
+                format!("Error, cannot update object storage bucket `{bucket_name}`.",),
                 Some(object_storage_error.into()),
                 None,
                 None,

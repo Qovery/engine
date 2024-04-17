@@ -210,6 +210,15 @@ impl ObjectStorage for S3 {
         self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
     }
 
+    fn update_bucket(
+        &self,
+        _bucket_name: &str,
+        _bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError> {
+        // TODO(benjaminch): to be implemented
+        todo!("update_bucket for S3 is not implemented")
+    }
+
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
         // if bucket doesn't exist, then return an error
         if !self.bucket_exists(bucket_name) {
@@ -262,6 +271,7 @@ impl ObjectStorage for S3 {
             name: bucket_name.to_string(),
             ttl,
             versioning_activated,
+
             location: BucketRegion::AwsRegion(self.region.clone()),
             labels,
         })
