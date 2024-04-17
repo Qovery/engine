@@ -19,6 +19,11 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot update bucket error for `{bucket_name:?}`: {raw_error_message:?}.")]
+    CannotUpdateBucket {
+        bucket_name: String,
+        raw_error_message: String,
+    },
     #[error("Cannot get bucket error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotGetBucket {
         bucket_name: String,

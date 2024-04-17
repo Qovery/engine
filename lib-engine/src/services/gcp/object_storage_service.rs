@@ -11,6 +11,7 @@ use google_cloud_storage::http::buckets::insert::{BucketCreationConfig, InsertBu
 use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, Condition};
 use google_cloud_storage::http::buckets::lifecycle::Rule;
 use google_cloud_storage::http::buckets::list::ListBucketsRequest;
+use google_cloud_storage::http::buckets::patch::{BucketPatchConfig, PatchBucketRequest};
 use google_cloud_storage::http::buckets::Lifecycle;
 use google_cloud_storage::http::buckets::{Bucket as GcpBucket, Versioning};
 use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
@@ -35,6 +36,11 @@ pub enum ObjectStorageServiceError {
     CannotCreateService { raw_error_message: String },
     #[error("Cannot create bucket `{bucket_name}`: {raw_error_message:?}")]
     CannotCreateBucket {
+        bucket_name: String,
+        raw_error_message: String,
+    },
+    #[error("Cannot update bucket `{bucket_name}`: {raw_error_message:?}")]
+    CannotUpdateBucket {
         bucket_name: String,
         raw_error_message: String,
     },
@@ -116,7 +122,7 @@ impl ObjectStorageService {
 
     fn wait_for_a_slot_in_admission_control(
         &self,
-        timeout: std::time::Duration,
+        timeout: Duration,
         resource_kind: StorageResourceKind,
     ) -> Result<(), ObjectStorageServiceError> {
         if let Some(rate_limiter) = match resource_kind {
@@ -131,7 +137,7 @@ impl ObjectStorageService {
                 }
 
                 if rate_limiter.check().is_err() {
-                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    std::thread::sleep(Duration::from_secs(3));
                     continue;
                 }
 
@@ -174,7 +180,7 @@ impl ObjectStorageService {
         bucket_versioning_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageServiceError> {
-        // Minimal TTL is 1 day for google storage
+        // Minimal TTL is 1 day for Google storage
         let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::from_secs(60 * 60 * 24)));
 
         let mut create_bucket_request = InsertBucketRequest {
@@ -218,10 +224,7 @@ impl ObjectStorageService {
             });
         }
 
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Bucket,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
         match block_on(self.client.insert_bucket(&create_bucket_request)) {
             Ok(created_bucket) => {
                 Bucket::try_from(created_bucket).map_err(|e| ObjectStorageServiceError::CannotCreateBucket {
@@ -230,6 +233,37 @@ impl ObjectStorageService {
                 })
             }
             Err(e) => Err(ObjectStorageServiceError::CannotCreateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
+    }
+
+    pub fn update_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageServiceError> {
+        let patch_bucket_request = PatchBucketRequest {
+            bucket: bucket_name.to_string(),
+            metadata: Some(BucketPatchConfig {
+                versioning: Some(Versioning {
+                    enabled: bucket_versioning_activated,
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
+        match block_on(self.client.patch_bucket(&patch_bucket_request)) {
+            Ok(updated_bucket) => {
+                Bucket::try_from(updated_bucket).map_err(|e| ObjectStorageServiceError::CannotUpdateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
+            }
+            Err(e) => Err(ObjectStorageServiceError::CannotUpdateBucket {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
             }),
@@ -245,10 +279,7 @@ impl ObjectStorageService {
             self.empty_bucket(bucket_name)?;
         }
 
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Bucket,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
         block_on(self.client.delete_bucket(&DeleteBucketRequest {
             bucket: bucket_name.to_string(),
             param: Default::default(),
@@ -260,10 +291,7 @@ impl ObjectStorageService {
     }
 
     pub fn delete_object(&self, bucket_name: &str, object_id: &str) -> Result<(), ObjectStorageServiceError> {
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Object,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
         block_on(self.client.delete_object(&DeleteObjectRequest {
             bucket: bucket_name.to_string(),
             object: object_id.to_string(),
@@ -279,10 +307,7 @@ impl ObjectStorageService {
     pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageServiceError> {
         let objects: Vec<BucketObject> = self.list_objects(bucket_name, None)?;
         for object in objects {
-            self.wait_for_a_slot_in_admission_control(
-                std::time::Duration::from_secs(10 * 60),
-                StorageResourceKind::Object,
-            )?;
+            self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
             self.delete_object(bucket_name, object.key.as_str())?;
         }
 
@@ -337,10 +362,7 @@ impl ObjectStorageService {
         object_key: &str,
         content: Vec<u8>,
     ) -> Result<BucketObject, ObjectStorageServiceError> {
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Object,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
         match block_on(self.client.upload_object(
             &UploadObjectRequest {
                 bucket: bucket_name.to_string(),

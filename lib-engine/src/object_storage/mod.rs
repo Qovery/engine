@@ -50,6 +50,8 @@ pub trait ObjectStorage {
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
     ) -> Result<Bucket, ObjectStorageError>;
+    fn update_bucket(&self, bucket_name: &str, bucket_versioning_activated: bool)
+        -> Result<Bucket, ObjectStorageError>;
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError>;
     fn delete_bucket(
         &self,
