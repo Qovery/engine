@@ -25,6 +25,10 @@ spec:
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
         {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
+      initContainers:
+        - name: buildkit
+          image: moby/buildkit:buildx-stable-1
+          command: [ '--version']
 ---
 apiVersion: apps/v1
 kind: Deployment
