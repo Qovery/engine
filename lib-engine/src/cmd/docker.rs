@@ -725,26 +725,29 @@ impl Docker {
         // Hack
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
         let mut transient_error = false;
-        let mut stderr = |line: String| {
-            if line.contains("ERROR: listing workers for Build")
-                || line.contains("use of closed network connection")
-                || line.contains("i/o timeout")
-            {
-                transient_error = true;
-            }
+        let ret = {
+            let mut stderr_output = |line: String| {
+                if line.contains("ERROR: listing workers for Build")
+                    || line.contains("use of closed network connection")
+                    || line.contains("i/o timeout")
+                {
+                    transient_error = true;
+                }
 
-            stderr_output(line);
+                stderr_output(line);
+            };
+
+            docker_exec(
+                &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+                &self.get_all_envs(&[]),
+                stdout_output,
+                &mut stderr_output,
+                should_abort,
+            )
         };
 
-        let ret = docker_exec(
-            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&[]),
-            stdout_output,
-            &mut stderr,
-            should_abort,
-        );
-
-        drop(stderr);
+        // Hack
+        // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
         if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
             info!("Docker buildkit build failed with a transient error, retrying ...");
             docker_exec(
