@@ -293,8 +293,8 @@ impl EnvironmentTask {
                         .map(docker::Architecture::from)
                         .collect_vec()
                         .as_slice(),
-                    (max_cpu - 1000, max_cpu),
-                    (max_ram - 1, max_ram),
+                    (max_cpu, max_cpu),
+                    (max_ram, max_ram),
                     &CommandKiller::from_cancelable(should_abort),
                     http_registries
                         .iter()
