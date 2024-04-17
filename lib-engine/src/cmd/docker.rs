@@ -720,16 +720,43 @@ impl Docker {
             args_string.push("--build-arg".to_string());
             args_string.push(format!("{k}={v}"));
         }
-
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        docker_exec(
+        // Hack
+        // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
+        let mut transient_error = false;
+        let mut stderr = |line: String| {
+            if line.contains("ERROR: listing workers for Build")
+                || line.contains("use of closed network connection")
+                || line.contains("i/o timeout")
+            {
+                transient_error = true;
+            }
+            
+            stderr_output(line);
+        };
+
+        let ret = docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&[]),
             stdout_output,
-            stderr_output,
+            &mut stderr,
             should_abort,
-        )
+        );
+
+        drop(stderr);
+        if ret.is_err() && transient_error {
+            info!("Docker buildkit build failed with a transient error, retrying ...");
+            docker_exec(
+                &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+                &self.get_all_envs(&[]),
+                stdout_output,
+                stderr_output,
+                should_abort,
+            )
+        } else {
+            ret
+        }
     }
 
     pub fn push<Stdout, Stderr>(
