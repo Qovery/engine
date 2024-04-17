@@ -48,6 +48,8 @@ spec:
       nodeSelector:
         kubernetes.io/arch: arm64
       containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
