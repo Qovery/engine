@@ -19,16 +19,14 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         command: ["/bin/sh", "-c", "tail -f /dev/null"]
         resources:
         {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
-      initContainers:
-        - name: buildkit
-          image: moby/buildkit:buildx-stable-1
-          command: [ '--version']
 ---
 apiVersion: apps/v1
 kind: Deployment
