@@ -369,6 +369,7 @@ impl Docker {
                     "--driver-opt=",
                     "\"namespace={}\",",
                     "\"replicas={}\",",
+                    "\"loadbalance=random\",",
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
                     "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
