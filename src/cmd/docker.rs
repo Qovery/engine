@@ -732,7 +732,7 @@ impl Docker {
             {
                 transient_error = true;
             }
-            
+
             stderr_output(line);
         };
 
@@ -745,7 +745,7 @@ impl Docker {
         );
 
         drop(stderr);
-        if ret.is_err() && transient_error {
+        if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
             info!("Docker buildkit build failed with a transient error, retrying ...");
             docker_exec(
                 &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
