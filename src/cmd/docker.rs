@@ -390,7 +390,7 @@ impl Docker {
                         "--node",
                         node_name,
                         "--buildkitd-flags",
-                        "--debug --allow-insecure-entitlement security.insecure",
+                        "--debug",
                         &buildkitd_cfg_arg,
                         "--driver=kubernetes",
                         &driver_opt,
