@@ -167,7 +167,7 @@ impl LocalDocker {
         );
 
         let image_cache =
-            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["latest".to_string()]);
+            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["cache".to_string()]);
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
