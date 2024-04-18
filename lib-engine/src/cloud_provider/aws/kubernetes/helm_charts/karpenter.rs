@@ -22,7 +22,7 @@ impl KarpenterChart {
         cluster_name: String,
         aws_iam_karpenter_controller_role_arn: String,
         replace_cluster_autoscaler: bool,
-        _enable_monitoring: bool,
+        enable_monitoring: bool,
     ) -> Self {
         KarpenterChart {
             chart_path: HelmChartPath::new(
@@ -38,7 +38,7 @@ impl KarpenterChart {
             cluster_name,
             aws_iam_karpenter_controller_role_arn,
             replace_cluster_autoscaler,
-            enable_monitoring: false, // disable until the crd installation is fixed
+            enable_monitoring,
         }
     }
 

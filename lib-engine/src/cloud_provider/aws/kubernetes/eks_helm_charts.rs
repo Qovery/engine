@@ -249,11 +249,22 @@ pub fn eks_aws_helm_charts(
     let karpenter = KarpenterChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
+        qovery_terraform_config.karpenter_controller_aws_role_arn.clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_enable_karpenter,
+        false,
+    )
+    .to_common_helm_chart()?;
+
+    let karpenter_with_monitoring = KarpenterChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cluster_name.to_string(),
         qovery_terraform_config.karpenter_controller_aws_role_arn,
         chart_config_prerequisites
             .cluster_advanced_settings
             .aws_enable_karpenter,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -737,7 +748,7 @@ pub fn eks_aws_helm_charts(
     {
         level_3.push(Box::new(coredns_config));
     }
-    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
@@ -779,6 +790,13 @@ pub fn eks_aws_helm_charts(
     }
     if let Some(grafana_chart) = grafana {
         level_3.push(Box::new(grafana_chart))
+    }
+    if chart_config_prerequisites.ff_metrics_history_enabled
+        && chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_enable_karpenter
+    {
+        level_4.push(Box::new(karpenter_with_monitoring))
     }
 
     // pdb infra
