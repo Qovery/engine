@@ -252,6 +252,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 registry_name: "my_image_registry_name".to_string(),
                 registry_docker_json_config: Some("my_image_registry_docker_json_config".to_string()),
                 registry_url: Url::parse("https://my_image_registry_url.com").unwrap(),
+                registry_insecure: false,
                 repository_name: "my_image_repository_name".to_string(),
             },
             environment_variables: BTreeMap::new(),

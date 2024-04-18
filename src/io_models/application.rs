@@ -480,6 +480,7 @@ impl Application {
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
+            registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
             repository_name: cr_info.get_repository_name(&self.name),
         }
