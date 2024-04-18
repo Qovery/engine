@@ -4,7 +4,7 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
-use std::fs;
+use std::{fs, thread};
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -734,42 +734,45 @@ impl Docker {
 
         // Hack
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
-        let mut transient_error = false;
-        let ret = {
-            let mut stderr_output = |line: String| {
-                if line.contains("ERROR: listing workers for Build")
-                    || line.contains("use of closed network connection")
-                    || line.contains("i/o timeout")
-                {
-                    transient_error = true;
-                }
+        let started_at = std::time::Instant::now();
+        let ret = loop {
+            let mut transient_error = false;
+            let ret = {
+                let mut stderr_output = |line: String| {
+                    if line.contains("ERROR: listing workers for Build")
+                        || line.contains("use of closed network connection")
+                        || line.contains("i/o timeout")
+                    {
+                        transient_error = true;
+                    }
 
-                stderr_output(line);
+                    stderr_output(line);
+                };
+                docker_exec(
+                    &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+                    &self.get_all_envs(&[]),
+                    stdout_output,
+                    &mut stderr_output,
+                    should_abort,
+                )
             };
 
-            docker_exec(
-                &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-                &self.get_all_envs(&[]),
-                stdout_output,
-                &mut stderr_output,
-                should_abort,
-            )
+            if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
+                if started_at.elapsed() > Duration::from_secs(60 * 3) {
+                    info!("Docker buildkit build failed with a transient error, but we already retried for too long, aborting ...");
+                    break ret;
+                }
+
+                info!("Docker buildkit build failed with a transient error, retrying ...");
+                thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+
+
+            break ret;
         };
 
-        // Hack
-        // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
-        if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
-            info!("Docker buildkit build failed with a transient error, retrying ...");
-            docker_exec(
-                &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-                &self.get_all_envs(&[]),
-                stdout_output,
-                stderr_output,
-                should_abort,
-            )
-        } else {
-            ret
-        }
+        ret
     }
 
     pub fn push<Stdout, Stderr>(
