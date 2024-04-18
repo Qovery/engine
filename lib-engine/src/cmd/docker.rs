@@ -704,8 +704,11 @@ impl Docker {
             format!("type=registry,ref={}", cache.image_name()),
             // Disabled for now, because private ECR does not support it ...
             // https://github.com/aws/containers-roadmap/issues/876
-            // "--cache-to".to_string(),
-            // format!("type=registry,ref={}", cache.image_name()),
+            "--cache-to".to_string(),
+            format!(
+                "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
+                cache.image_name()
+            ),
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
