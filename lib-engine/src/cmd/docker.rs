@@ -4,7 +4,6 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
-use std::{fs, thread};
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -12,6 +11,7 @@ use std::process::ExitStatus;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
+use std::{fs, thread};
 use tempfile::TempDir;
 use url::Url;
 
@@ -767,7 +767,6 @@ impl Docker {
                 thread::sleep(Duration::from_secs(1));
                 continue;
             }
-
 
             break ret;
         };
