@@ -169,6 +169,7 @@ pub struct Image {
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
+    pub registry_insecure: bool,
     pub repository_name: String,
 }
 
@@ -239,6 +240,7 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
+            registry_insecure: false,
             repository_name: "".to_string(),
         }
     }

@@ -80,7 +80,9 @@ impl<T> EngineRequest<T> {
         metrics_registry: Box<dyn MetricsRegistry>,
         is_infra_deployment: bool,
     ) -> Result<InfrastructureContext, Box<EngineError>> {
-        let build_platform = self.build_platform.to_engine_build_platform(context);
+        let build_platform = self
+            .build_platform
+            .to_engine_build_platform(context, metrics_registry.clone_dyn());
         let cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind)
@@ -218,11 +220,15 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(
+        &self,
+        context: &Context,
+        metrics_registry: Box<dyn MetricsRegistry>,
+    ) -> Box<dyn build_platform::BuildPlatform> {
         Box::new(match self.kind {
             build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
-                LocalDocker::new(context.clone(), self.long_id, self.name.as_str()).unwrap()
+                LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), metrics_registry).unwrap()
             }
         })
     }

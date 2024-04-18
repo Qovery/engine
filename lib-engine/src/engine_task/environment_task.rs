@@ -1,13 +1,11 @@
 use super::Task;
 use crate::build_platform;
-use crate::build_platform::{to_build_error, BuildError, BuildPlatform};
+use crate::build_platform::{BuildError, BuildPlatform};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
-use crate::cmd::command::CommandKiller;
-use crate::cmd::docker;
-use crate::cmd::docker::{BuilderHandle, Docker};
+use crate::cmd::docker::Docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{to_engine_error, ContainerRegistry, RegistryTags};
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
@@ -30,7 +28,7 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::ScopedJoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{env, fs, thread};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -144,30 +142,17 @@ impl EnvironmentTask {
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        let first_service = match services.first() {
-            None => return Ok(()),
-            Some(srv) => srv,
+        if services.first().is_none() {
+            return Ok(());
         };
 
-        let provision_builder =
-            metrics_registry.start_record(environment_id, StepLabel::Environment, StepName::ProvisionBuilder);
-        let builder_handle = match Self::provision_builder(
-            infra_ctx,
-            max_build_in_parallel,
-            env_logger,
-            &should_abort,
-            build_needs_buildpacks,
-            &services,
-            first_service,
-        ) {
-            Ok(handle) => {
-                provision_builder.stop(StepStatus::Success);
-                handle
-            }
-            Err(engine_error) => {
-                provision_builder.stop(StepStatus::Error);
-                return Err(engine_error);
-            }
+        let max_build_in_parallel = if build_needs_buildpacks {
+            env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+            env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
+            env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
+            1
+        } else {
+            max(min(max_build_in_parallel, services.len()), 1)
         };
 
         // To convert ContainerError to EngineError
@@ -223,113 +208,12 @@ impl EnvironmentTask {
             .collect_vec();
 
         let builder_threadpool = BuilderThreadPool::new();
-        builder_threadpool.run(build_tasks, builder_handle.nb_builder, &should_abort_flag, should_abort)
-    }
-
-    fn provision_builder(
-        infra_ctx: &InfrastructureContext,
-        max_build_in_parallel: usize,
-        env_logger: impl Fn(String),
-        should_abort: &(dyn Fn() -> bool + Send + Sync),
-        build_needs_builpacks: bool,
-        services: &[&mut dyn Service],
-        first_service: &&mut dyn Service,
-    ) -> Result<BuilderHandle, Box<EngineError>> {
-        let builder_handle = {
-            let nb_builder = if build_needs_builpacks {
-                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-                env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
-                env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-                NonZeroUsize::new(1).unwrap()
-            } else {
-                NonZeroUsize::new(max(min(max_build_in_parallel, services.len()), 1)).unwrap()
-            };
-
-            // Compute max resources needed for the builders
-            let (max_cpu, max_ram) = services.iter().fold((2000u32, 2u32), |(cpu, ram), s| {
-                s.build()
-                    .map(|b| (max(cpu, b.max_cpu_in_milli), max(ram, b.max_ram_in_gib)))
-                    .unwrap_or((cpu, ram))
-            });
-
-            env_logger(format!(
-                "🧑‍🏭 Provisioning {nb_builder} docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
-            ));
-
-            // Docker has a hardcoded timeout of 1 minute for the builder creation
-            // it may be too short for us, so retry until we reach our deadline
-            // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
-            let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
-
-            // We need to do special handling for insecure registries or http ones.
-            let cr = &infra_ctx.container_registry().registry_info();
-            let http_registries = if cr.endpoint.scheme() == "http" {
-                vec![format!(
-                    "{}:{}",
-                    cr.endpoint.host_str().unwrap_or(""),
-                    cr.endpoint.port_or_known_default().unwrap_or(80)
-                )]
-            } else {
-                vec![]
-            };
-            let insecure_registries = if cr.insecure_registry {
-                vec![format!(
-                    "{}:{}",
-                    cr.endpoint.host_str().unwrap_or(""),
-                    cr.endpoint.port_or_known_default().unwrap_or(443)
-                )]
-            } else {
-                vec![]
-            };
-
-            let builder_handle = loop {
-                match infra_ctx.context().docker.spawn_builder(
-                    infra_ctx.context().execution_id(),
-                    nb_builder,
-                    infra_ctx
-                        .kubernetes()
-                        .cpu_architectures()
-                        .iter()
-                        .map(docker::Architecture::from)
-                        .collect_vec()
-                        .as_slice(),
-                    (max_cpu, max_cpu),
-                    (max_ram, max_ram),
-                    &CommandKiller::from_cancelable(should_abort),
-                    http_registries
-                        .iter()
-                        .map(String::as_ref)
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    insecure_registries
-                        .iter()
-                        .map(String::as_ref)
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                ) {
-                    Ok(build_handle) => break build_handle,
-                    Err(err) => {
-                        error!("cannot provision docker builder: {}", err);
-                        if err.is_aborted() || Instant::now() >= deadline {
-                            env_logger("❌ Cannot provision docker builder. Aborting".to_string());
-                            let build_error = to_build_error(first_service.long_id().to_string(), err);
-                            let engine_error = build_platform::to_engine_error(
-                                first_service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError)),
-                                build_error,
-                                "Cannot provision docker builder. Please retry later.".to_string(),
-                            );
-                            return Err(Box::new(engine_error));
-                        }
-
-                        env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
-                        thread::sleep(Duration::from_secs(1));
-                    }
-                }
-            };
-
-            builder_handle
-        };
-        Ok(builder_handle)
+        builder_threadpool.run(
+            build_tasks,
+            NonZeroUsize::new(max_build_in_parallel).unwrap(),
+            &should_abort_flag,
+            should_abort,
+        )
     }
 
     fn build_and_push_service(
@@ -820,7 +704,7 @@ impl BuilderThreadPool {
                 let terminated_thread_ix = loop {
                     match active_threads.iter().position(|th| th.is_finished()) {
                         // timeout is needed because we call unpark within the thread
-                        // So it can happens that we got unparked but the thread is not marked as finished yet
+                        // So it can happen that we got unparked but the thread is not marked as finished yet
                         None => thread::park_timeout(Duration::from_secs(10)),
                         Some(position) => break position,
                     }

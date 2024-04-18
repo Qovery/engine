@@ -1,21 +1,24 @@
 #![allow(clippy::redundant_closure)]
 
 use std::io::{Error, ErrorKind};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{env, fs};
+use std::{env, fs, thread};
 
 use git2::{Cred, CredentialType};
 use retry::delay::Fibonacci;
 use sysinfo::{DiskExt, RefreshKind, SystemExt};
+use time::Instant;
 use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::docker::{Architecture, ContainerImage};
+use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
@@ -36,24 +39,32 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 ];
 
 /// use Docker in local
-#[derive(Clone)]
 pub struct LocalDocker {
     context: Context,
     id: String,
     long_id: Uuid,
     name: String,
+    builder_counter: AtomicUsize,
+    metrics_registry: Box<dyn MetricsRegistry>,
 }
 
 const MAX_GIT_LFS_SIZE_GB: u64 = 5;
 const MAX_GIT_LFS_SIZE_KB: u64 = MAX_GIT_LFS_SIZE_GB * 1024 * 1024; // 5GB
 
 impl LocalDocker {
-    pub fn new(context: Context, long_id: Uuid, name: &str) -> Result<Self, BuildError> {
+    pub fn new(
+        context: Context,
+        long_id: Uuid,
+        name: &str,
+        metrics_registry: Box<dyn MetricsRegistry>,
+    ) -> Result<Self, BuildError> {
         Ok(LocalDocker {
             context,
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
+            builder_counter: AtomicUsize::new(0),
+            metrics_registry,
         })
     }
 
@@ -222,7 +233,15 @@ impl LocalDocker {
             .iter()
             .map(|arch| docker::Architecture::from(arch))
             .collect();
+
+        let builder_handle = self.provision_builder(
+            build,
+            |line| logger.send_progress(line),
+            &CommandKiller::from_cancelable(is_task_canceled),
+        )?;
+
         let exit_status = self.context.docker.build(
+            &builder_handle.builder_name.as_deref(),
             Path::new(dockerfile_complete_path),
             Path::new(into_dir_docker_style),
             &image_to_build,
@@ -241,6 +260,102 @@ impl LocalDocker {
         }
         build_record.stop(StepStatus::Success);
         Ok(())
+    }
+
+    fn provision_builder(
+        &self,
+        build: &Build,
+        env_logger: impl Fn(String),
+        should_abort: &CommandKiller,
+    ) -> Result<BuilderHandle, BuildError> {
+        let (max_cpu, max_ram) = (build.max_cpu_in_milli, build.max_ram_in_gib);
+
+        env_logger(format!(
+            "🧑‍🏭 Provisioning docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
+        ));
+        // Docker has a hardcoded timeout of 1 minute for the builder creation
+        // it may be too short for us, so retry until we reach our deadline
+        // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
+        let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
+
+        // We need to do special handling for insecure registries or http ones.
+        let cr = &build.image.registry_url;
+        let http_registries = if cr.scheme() == "http" {
+            vec![format!(
+                "{}:{}",
+                cr.host_str().unwrap_or(""),
+                cr.port_or_known_default().unwrap_or(80)
+            )]
+        } else {
+            vec![]
+        };
+        let insecure_registries = if build.image.registry_insecure {
+            vec![format!(
+                "{}:{}",
+                cr.host_str().unwrap_or(""),
+                cr.port_or_known_default().unwrap_or(443)
+            )]
+        } else {
+            vec![]
+        };
+
+        let arch: Vec<Architecture> = build
+            .architectures
+            .iter()
+            .map(|arch| docker::Architecture::from(arch))
+            .collect();
+
+        let provision_builder = self.metrics_registry.start_record(
+            build.image.service_long_id,
+            StepLabel::Service,
+            StepName::ProvisionBuilder,
+        );
+
+        let exec_id = self
+            .context
+            .execution_id()
+            .rsplit_once('-')
+            .unwrap_or((self.context.execution_id(), ""))
+            .0;
+        let builder_handle = loop {
+            match self.context.docker.spawn_builder(
+                &format!("{}-{}", exec_id, self.builder_counter.fetch_add(1, Ordering::Relaxed)),
+                build.image.service_long_id.to_string().as_str(),
+                NonZeroUsize::new(1).unwrap(),
+                &arch,
+                (max_cpu, max_cpu),
+                (max_ram, max_ram),
+                should_abort,
+                http_registries
+                    .iter()
+                    .map(String::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                insecure_registries
+                    .iter()
+                    .map(String::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ) {
+                Ok(build_handle) => break build_handle,
+                Err(err) => {
+                    error!("cannot provision docker builder: {}", err);
+                    if err.is_aborted() || Instant::now() >= deadline {
+                        provision_builder.stop(StepStatus::Error);
+                        return Err(BuildError::DockerError {
+                            application: build.image.service_id.clone(),
+                            raw_error: err,
+                        });
+                    }
+
+                    env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        };
+        provision_builder.stop(StepStatus::Success);
+
+        Ok(builder_handle)
     }
 
     fn build_image_with_buildpacks(

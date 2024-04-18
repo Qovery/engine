@@ -43,6 +43,7 @@ impl DockerError {
 // We use a mutex that will force serialization of logins in order to avoid that
 // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
 static LOGIN_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static DEFAULT_BUILDER_NAME: &str = "qovery-engine";
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Architecture {
@@ -158,7 +159,6 @@ enum BuilderLocation {
     Kubernetes {
         namespace: String,
         builder_prefix: String,
-        builder_name: String,
         supported_architectures: BTreeSet<Architecture>,
     },
 }
@@ -174,7 +174,7 @@ pub struct Docker {
 pub struct BuilderHandle {
     config_path: PathBuf,
     pub nb_builder: NonZeroUsize,
-    builder_name: Option<String>,
+    pub builder_name: Option<String>,
 }
 
 impl Drop for BuilderHandle {
@@ -261,9 +261,9 @@ impl Docker {
             "buildx",
             "create",
             "--name",
-            "qovery-engine",
+            DEFAULT_BUILDER_NAME,
             "--buildkitd-flags",
-            "--debug --allow-insecure-entitlement security.insecure",
+            "--debug",
             "--driver-opt",
             "network=host",
             "--bootstrap",
@@ -289,11 +289,9 @@ impl Docker {
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
-        let builder_name = "engine-builder";
         docker.builder_location = BuilderLocation::Kubernetes {
             namespace,
             builder_prefix,
-            builder_name: builder_name.to_string(),
             supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
         };
         docker.common_envs.extend(args);
@@ -304,6 +302,7 @@ impl Docker {
     pub fn spawn_builder(
         &self,
         exec_id: &str,
+        builder_name: &str,
         nb_builder: NonZeroUsize,
         requested_architectures: &[Architecture],
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
@@ -321,7 +320,6 @@ impl Docker {
             }),
             BuilderLocation::Kubernetes {
                 namespace,
-                builder_name,
                 builder_prefix,
                 supported_architectures,
             } => {
@@ -338,10 +336,11 @@ impl Docker {
                 }
 
                 // We create build handle here to force the drop to run if some operation fail
+                let builder_name = format!("qovery-{}", builder_name);
                 let build_handle = BuilderHandle {
                     config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
-                    builder_name: Some(builder_name.to_string()),
+                    builder_name: Some(builder_name.clone()),
                 };
 
                 info!("docker spawn builder {:?} {:?}", builder_name, requested_architectures);
@@ -385,7 +384,7 @@ impl Docker {
                         "create",
                         if ix == 0 { "" } else { "--append" },
                         "--name",
-                        builder_name,
+                        &builder_name,
                         "--platform",
                         &platform,
                         "--node",
@@ -396,7 +395,6 @@ impl Docker {
                         "--driver=kubernetes",
                         &driver_opt,
                         "--bootstrap",
-                        "--use",
                     ];
                     docker_exec(
                         &args,
@@ -621,6 +619,7 @@ impl Docker {
 
     pub fn build<Stdout, Stderr>(
         &self,
+        builder_name: &Option<&str>,
         dockerfile: &Path,
         context: &Path,
         image_to_build: &ContainerImage,
@@ -650,6 +649,7 @@ impl Docker {
         }
 
         self.build_with_buildkit(
+            builder_name,
             dockerfile,
             context,
             image_to_build,
@@ -665,6 +665,7 @@ impl Docker {
 
     fn build_with_buildkit<Stdout, Stderr>(
         &self,
+        builder_name: &Option<&str>,
         dockerfile: &Path,
         context: &Path,
         image_to_build: &ContainerImage,
@@ -687,6 +688,11 @@ impl Docker {
             self.config_path.path().to_str().unwrap_or("").to_string(),
             "buildx".to_string(),
             "build".to_string(),
+            if let Some(builder_name) = builder_name {
+                format!("--builder={}", builder_name)
+            } else {
+                format!("--builder={}", DEFAULT_BUILDER_NAME)
+            },
             "--progress=plain".to_string(),
             if push_after_build {
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
@@ -1035,6 +1041,7 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
@@ -1050,6 +1057,7 @@ mod tests {
         assert!(ret.is_ok());
 
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
@@ -1083,6 +1091,7 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
@@ -1183,9 +1192,10 @@ mod tests {
             args,
         )
         .unwrap();
-        let _builder = docker
+        let builder = docker
             .spawn_builder(
                 Uuid::new_v4().to_string().as_str(),
+                "builder",
                 NonZeroUsize::new(1).unwrap(),
                 &[Architecture::AMD64],
                 (0, 1000),
@@ -1209,6 +1219,7 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &builder.builder_name.as_deref(),
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
