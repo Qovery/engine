@@ -699,19 +699,19 @@ impl Docker {
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
-            //"--allow=security.insecure".to_string(),
             "--cache-from".to_string(),
             format!("type=registry,ref={}", cache.image_name()),
-            // Disabled for now, because private ECR does not support it ...
-            // https://github.com/aws/containers-roadmap/issues/876
-            "--cache-to".to_string(),
-            format!(
-                "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
-                cache.image_name()
-            ),
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        if push_after_build {
+            args_string.push("--cache-to".to_string());
+            args_string.push(format!(
+                "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
+                cache.image_name()
+            ));
+        }
 
         // Build for all requested architectures, if empty build for the current architecture the engine is running on
         if !architectures.is_empty() {
