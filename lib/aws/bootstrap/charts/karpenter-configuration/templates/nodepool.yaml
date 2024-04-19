@@ -20,7 +20,7 @@ spec:
             {{ end }}
         - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: [ "c", "m", "r", "t" ]
+          values: [ "c", "d", "h", "i", "im", "inf", "is", "m", "r", "t", "trn", "x", "z" ]
         - key: karpenter.k8s.aws/instance-generation
           operator: Gt
           values: ["2"]
