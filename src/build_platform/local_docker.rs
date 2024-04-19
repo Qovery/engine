@@ -340,6 +340,13 @@ impl LocalDocker {
                 Ok(build_handle) => break build_handle,
                 Err(err) => {
                     error!("cannot provision docker builder: {}", err);
+                    if should_abort.should_abort().is_some() {
+                        provision_builder.stop(StepStatus::Cancel);
+                        return Err(BuildError::Aborted {
+                            application: build.image.service_id.clone(),
+                        });
+                    }
+
                     if err.is_aborted() || Instant::now() >= deadline {
                         provision_builder.stop(StepStatus::Error);
                         return Err(BuildError::DockerError {
