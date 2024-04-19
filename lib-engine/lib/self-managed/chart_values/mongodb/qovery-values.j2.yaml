@@ -1,0 +1,108 @@
+
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  envId: "{{ environment_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
+image:
+  registry: {{ registry_name}}
+  repository: {{ repository_name}}
+  tag: "{{ version }}"
+
+useStatefulSet: true
+
+auth:
+  rootPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
+
+resources:
+  requests:
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
+  limits:
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
+
+# on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
+# otherwise customize the default probes timers, because with minimal resources it takes time to start
+# https://github.com/bitnami/charts/issues/10264
+{% set version_number = version | int -%}
+{% if version_number >= 6 -%}
+customLivenessProbe:
+  exec:
+    command:
+      - mongosh
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
+customReadinessProbe:
+  exec:
+    command:
+      - mongosh
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
+{% else -%}
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+{% endif %}
+
+service:
+  nameOverride: {{ service_name }}
+  ports:
+    mongodb: "{{ database_port }}"
+  type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+  {% if publicly_accessible -%}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
+
+persistence:
+  storageClass: "{{ database_disk_type }}"
+  size: "{{ database_disk_size_in_gib }}Gi"
+  labels:
+    envId: "{{ environment_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  annotations: {}
+
+serviceAccount:
+  create: true
+  name: "{{ sanitized_name }}"
+
+rbac:
+  create: true
+
+volumePermissions:
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}

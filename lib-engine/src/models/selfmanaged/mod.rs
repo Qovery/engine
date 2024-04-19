@@ -3,6 +3,7 @@ use crate::models::types::CloudProvider;
 use crate::models::types::OnPremise;
 mod application;
 mod container;
+mod database;
 mod job;
 mod router;
 
@@ -37,7 +38,7 @@ impl CloudProvider for OnPremise {
     }
 
     fn lib_directory_name() -> &'static str {
-        "selfmanaged"
+        "self-managed"
     }
 
     fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {

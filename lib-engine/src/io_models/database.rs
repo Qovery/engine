@@ -8,7 +8,7 @@ use crate::models;
 use crate::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
+use crate::models::types::{AWSEc2, OnPremise, VersionsNumber, AWS, SCW};
 use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use chrono::{DateTime, Utc};
 use core::result::Result;
@@ -655,31 +655,124 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
-            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
-            ),
-            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
-            ),
+            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                Err(DatabaseError::UnsupportedManagedMode(
+                    service::DatabaseType::PostgreSQL,
+                    OnPremise::full_name().to_string(),
+                ))
+            }
+            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
 
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, OnPremise::full_name().to_string()),
+            ),
+            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                Err(DatabaseError::UnsupportedManagedMode(
+                    service::DatabaseType::MongoDB,
+                    OnPremise::full_name().to_string(),
+                ))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, OnPremise::full_name().to_string()),
+            ),
+            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                )?;
+
+                Ok(Box::new(db))
+            }
             (CPKind::Gcp, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<GCP, Container, PostgresSQL>::new(
                     context,
