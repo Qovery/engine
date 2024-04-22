@@ -35,6 +35,8 @@ pub struct ValuesFile {
     pub qovery_cluster_agent: QoveryAgents,
     #[serde(rename = "qovery-shell-agent")]
     pub qovery_shell_agent: QoveryAgents,
+    #[serde(rename = "qovery-engine", default, skip_serializing_if = "Option::is_none")]
+    pub qovery_engine: Option<QoveryEngine>,
     #[serde(rename = "ingress-nginx")]
     pub ingress_nginx: ChartConfig,
     #[serde(rename = "external-dns")]
@@ -94,6 +96,12 @@ pub struct QoveryGlobalConfig {
     #[serde(rename = "externalDnsPrefix")]
     pub external_dns_prefix: String,
     pub architectures: String,
+    #[serde(rename = "engineVersion")]
+    pub engine_version: String,
+    #[serde(rename = "shellAgentVersion")]
+    pub shell_agent_version: String,
+    #[serde(rename = "clusterAgentVersion")]
+    pub cluster_agent_version: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -101,6 +109,28 @@ pub struct QoveryGlobalConfig {
 pub struct QoveryAgents {
     pub full_name_override: String,
     pub image: ImageTag,
+    pub environment_variables: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QoveryEngine {
+    pub image: ImageTag,
+    pub engine_resources: Option<EngineResources>,
+    pub build_container: BuildContainer,
+    pub environment_variables: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineResources {
+    pub cpu: String,
+    pub memory: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildContainer {
     pub environment_variables: BTreeMap<String, String>,
 }
 

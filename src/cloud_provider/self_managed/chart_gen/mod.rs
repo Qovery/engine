@@ -796,6 +796,71 @@ mod tests {
             prefix.clone(),
         );
 
+        // Local demo
+        let mut local_demo_charts = minimal_qovery_chart.clone();
+        local_demo_charts.charts_source_path = vec![
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::DNS,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+        ];
+        generate_config_file(
+            ValuesFile::new_local(),
+            "values-demo-local.yaml".to_string(),
+            local_demo_charts.clone(),
+            prefix.clone(),
+        );
+
         // generate values.yaml
         let values = ValuesFile::new_minimal();
         values
