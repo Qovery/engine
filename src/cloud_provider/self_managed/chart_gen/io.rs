@@ -173,9 +173,16 @@ impl ValuesFile {
                 observability: ObservabilityServices {
                     metrics_server: Some(ServiceEnabled { enabled: false }),
                 },
-                aws: None,
-                gcp: None,
-                scaleway: None,
+                scaleway: ScalewayServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                },
+                aws: AwsServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                    aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+                },
+                gcp: GcpServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                },
             },
             qovery: QoveryGlobalConfig {
                 cluster_id: "&clusterId set-by-customer".to_string(),
@@ -257,10 +264,18 @@ impl ValuesFile {
             override_chart: Some(SupportedCharts::MetricsServer.to_string()),
         });
 
-        value.services.aws = Some(AwsServices {
+        value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
-        });
+        };
+
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
 
         value
     }
@@ -291,9 +306,18 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.services.gcp = Some(GcpServices {
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+        };
+
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
-        });
+        };
 
         value
     }
@@ -324,9 +348,17 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.services.scaleway = Some(ScalewayServices {
+        value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
-        });
+        };
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
 
         value
     }

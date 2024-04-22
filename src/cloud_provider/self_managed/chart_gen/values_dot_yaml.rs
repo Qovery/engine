@@ -117,12 +117,9 @@ pub struct ServicesEnabler {
     pub logging: LoggingServices,
     pub certificates: CertificateServices,
     pub observability: ObservabilityServices,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aws: Option<AwsServices>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gcp: Option<GcpServices>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scaleway: Option<ScalewayServices>,
+    pub aws: AwsServices,
+    pub gcp: GcpServices,
+    pub scaleway: ScalewayServices,
 }
 
 #[derive(Serialize, Deserialize)]
