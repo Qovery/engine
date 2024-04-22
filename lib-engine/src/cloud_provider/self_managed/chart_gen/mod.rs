@@ -284,6 +284,7 @@ mod tests {
         use std::{fs, path::Path, process::Command};
 
         // create chart directories
+        dotenv::dotenv().ok();
         let prefix = std::env::var("WORKSPACE_ROOT_DIR").unwrap();
         let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", &prefix);
         fs::create_dir_all(&qovery_chart_path).unwrap();
@@ -646,7 +647,7 @@ mod tests {
         scaleway_qovery_chart.charts_source_path = vec![
             ChartMeta {
                 name: SupportedCharts::QoveryScalewayStorageClass,
-                category: ChartCategory::Gcp,
+                category: ChartCategory::Scaleway,
                 source_path: ChartSourcePath::ScalewayBootstrapCharts,
                 values_source_path: None,
             },
@@ -723,7 +724,7 @@ mod tests {
         scaleway_qovery_chart_demo.charts_source_path = vec![
             ChartMeta {
                 name: SupportedCharts::QoveryScalewayStorageClass,
-                category: ChartCategory::Gcp,
+                category: ChartCategory::Scaleway,
                 source_path: ChartSourcePath::ScalewayBootstrapCharts,
                 values_source_path: None,
             },
