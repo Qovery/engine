@@ -149,6 +149,10 @@ struct Cli {
     #[arg(long, default_value_t = false, env = "BUILDER_KUBE_ENABLED")]
     builder_kube_enabled: bool,
 
+    /// If the builder should be started in rootless mode. Only if kube builder is enabled
+    #[arg(long, default_value_t = false, env = "BUILDER_ROOTLESS_ENABLED")]
+    builder_rootless_enabled: bool,
+
     /// Supported architectures for the image builder.
     #[arg(long, default_value = "AMD64", num_args = 1.., value_delimiter = ',', env = "BUILDER_CPU_ARCHITECTURES")]
     builder_cpu_architectures: Vec<docker::Architecture>,
@@ -327,6 +331,7 @@ pub fn main() -> io::Result<()> {
             cli.builder_namespace.clone(),
             builder_prefix,
             vec![],
+            cli.builder_rootless_enabled,
         )
         .expect("Can't init docker builder")
     } else {

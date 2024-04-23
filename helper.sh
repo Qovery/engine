@@ -181,6 +181,7 @@ image.tag="$tag",\
 buildContainer.enabled="true",\
 buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
 buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
+buildContainer.environmentVariables.BUILDER_ROOTLESS_ENABLED="false",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
