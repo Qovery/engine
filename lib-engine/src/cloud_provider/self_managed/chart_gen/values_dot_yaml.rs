@@ -160,6 +160,8 @@ pub struct QoveryServices {
     pub qovery_shell_agent: ServiceEnabled,
     #[serde(rename = "qovery-engine")]
     pub qovery_engine: ServiceEnabled,
+    #[serde(rename = "qovery-priority-class")]
+    pub priority_class: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]
