@@ -50,6 +50,7 @@ buildContainer:
   environmentVariables:
     BUILDER_KUBE_ENABLED: "true"
     BUILDER_CPU_ARCHITECTURES: "ARM64"
+    BUILDER_ROOTLESS_ENABLED: "true"
 
 serviceAccount:
   # Specifies whether a service account should be created

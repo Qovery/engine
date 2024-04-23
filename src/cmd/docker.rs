@@ -160,6 +160,7 @@ enum BuilderLocation {
         namespace: String,
         builder_prefix: String,
         supported_architectures: BTreeSet<Architecture>,
+        enable_rootless: bool,
     },
 }
 
@@ -286,6 +287,7 @@ impl Docker {
         namespace: String,
         builder_prefix: String,
         args: Vec<(String, String)>,
+        enable_rootless: bool,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
@@ -293,6 +295,7 @@ impl Docker {
             namespace,
             builder_prefix,
             supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
+            enable_rootless,
         };
         docker.common_envs.extend(args);
 
@@ -322,6 +325,7 @@ impl Docker {
                 namespace,
                 builder_prefix,
                 supported_architectures,
+                enable_rootless,
             } => {
                 let available_architectures = requested_architectures
                     .iter()
@@ -372,11 +376,12 @@ impl Docker {
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
                     "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                    "\"rootless={}\",",
                     "\"requests.cpu={}m\",",
                     "\"limits.cpu={}m\",",
                     "\"requests.memory={}Gi\",",
                     "\"limits.memory={}Gi\""
-                    ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
+                    ), namespace, nb_builder, arch, enable_rootless, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
                     let args = vec![
                         "--config",
                         self.config_path.path().to_str().unwrap_or(""),
@@ -1195,6 +1200,7 @@ mod tests {
             "default".to_string(),
             "builder-".to_string(),
             args,
+            true,
         )
         .unwrap();
         let builder = docker
