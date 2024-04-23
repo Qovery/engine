@@ -138,6 +138,8 @@ pub enum SupportedCharts {
     QoveryShellAgent,
     #[display("qovery-engine")]
     QoveryEngine,
+    #[display("qovery-priority-class")]
+    PriorityClass,
 }
 
 #[cfg(test)]
@@ -384,6 +386,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
             //     category: ChartCategory::Qovery,
@@ -474,6 +482,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
             //     category: ChartCategory::Qovery,
@@ -547,6 +561,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -627,6 +647,12 @@ mod tests {
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
             },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
@@ -711,6 +737,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_scaleway(),
@@ -782,6 +814,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
             //     category: ChartCategory::Qovery,
@@ -849,6 +887,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,

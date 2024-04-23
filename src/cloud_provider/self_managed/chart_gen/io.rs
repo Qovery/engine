@@ -155,6 +155,7 @@ impl ValuesFile {
                     qovery_cluster_agent: ServiceEnabled { enabled: true },
                     qovery_shell_agent: ServiceEnabled { enabled: true },
                     qovery_engine: ServiceEnabled { enabled: false },
+                    priority_class: ServiceEnabled { enabled: true },
                 },
                 ingress: IngressServices {
                     ingress_nginx: ServiceEnabled { enabled: false },
