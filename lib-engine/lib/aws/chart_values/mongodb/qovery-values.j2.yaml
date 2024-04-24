@@ -137,9 +137,20 @@ hidden:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  podAnnotations:
+    karpenter.sh/do-not-disrupt: "true"
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 
 arbiter:
   nodeAffinityPreset:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  podAnnotations:
+    karpenter.sh/do-not-disrupt: "true"
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+
+
+podAnnotations:
+  karpenter.sh/do-not-disrupt: "true"
+  cluster-autoscaler.kubernetes.io/safe-to-evict: "false"

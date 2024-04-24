@@ -83,6 +83,8 @@ primary:
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
     {% endif %}
+  pdb:
+    create: true
 
 rbac:
   create: true
