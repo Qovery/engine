@@ -147,23 +147,62 @@ impl ScalewayCR {
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
-        let image_to_delete = self.get_image(image);
-        if image_to_delete.is_none() {
-            return Err(ContainerRegistryError::ImageDoesntExistInRegistry {
+        let image_to_delete = match self.get_image(image) {
+            Some(image_to_delete) => image_to_delete,
+            None => {
+                return Err(ContainerRegistryError::ImageDoesntExistInRegistry {
+                    registry_name: self.name.to_string(),
+                    repository_name: image.registry_name.to_string(),
+                    image_name: image.name.to_string(),
+                })
+            }
+        };
+
+        let tags = match block_on_with_timeout(scaleway_api_rs::apis::tags_api::list_tags(
+            &self.get_configuration(),
+            self.zone.region().to_string().as_str(),
+            image_to_delete.id.as_deref().unwrap_or_default(),
+            None,
+            None,
+            None,
+            None,
+        )) {
+            Ok(Ok(tags)) => Ok(tags),
+            Ok(Err(e)) => Err(ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
                 repository_name: image.registry_name.to_string(),
                 image_name: image.name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+            Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }?;
+
+        let Some(tag_to_delete) = tags
+            .tags
+            .unwrap_or_default()
+            .into_iter()
+            .find(|t| t.name.as_deref().unwrap_or_default() == image.tag)
+        else {
+            return Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+                raw_error_message: "Tag not found".to_string(),
             });
-        }
+        };
 
-        let image_to_delete = image_to_delete.unwrap();
-
-        match block_on_with_timeout(scaleway_api_rs::apis::images_api::delete_image(
+        match block_on_with_timeout(scaleway_api_rs::apis::tags_api::delete_tag(
             &self.get_configuration(),
             self.zone.region().to_string().as_str(),
-            image_to_delete.id.unwrap().as_str(),
+            tag_to_delete.id.as_deref().unwrap_or_default(),
+            Some(true),
         )) {
-            Ok(Ok(res)) => Ok(res),
+            Ok(Ok(_)) => Ok(image_to_delete),
             Ok(Err(e)) => Err(ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
                 repository_name: image.registry_name.to_string(),
