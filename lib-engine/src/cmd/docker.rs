@@ -2,6 +2,7 @@ use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use std::cmp::max;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -739,6 +740,7 @@ impl Docker {
 
         // Hack
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
+        let mut nb_retry = 3;
         let started_at = std::time::Instant::now();
         let ret = loop {
             let mut transient_error = false;
@@ -763,11 +765,12 @@ impl Docker {
             };
 
             if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
-                if started_at.elapsed() > Duration::from_secs(60 * 3) {
+                if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
                     info!("Docker buildkit build failed with a transient error, but we already retried for too long, aborting ...");
                     break ret;
                 }
 
+                nb_retry = max(nb_retry - 1, 0);
                 info!("Docker buildkit build failed with a transient error, retrying ...");
                 thread::sleep(Duration::from_secs(1));
                 continue;
