@@ -23,6 +23,9 @@ auth:
   enabled: true
   password: "{{ database_password }}"
 
+pdb:
+  create: true
+
 master:
   nodeAffinityPreset:
     type: "{{ node_affinity_type }}"

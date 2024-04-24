@@ -85,9 +85,15 @@ primary:
     limits:
       memory: "{{ ram_limit_in_mib }}"
       cpu: "{{ cpu_limit_in_milli }}"
+  podAnnotations:
+    karpenter.sh/do-not-disrupt: "true"
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 
 readReplicas:
   nodeAffinityPreset:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  podAnnotations:
+    karpenter.sh/do-not-disrupt: "true"
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
