@@ -499,7 +499,7 @@ where
                     job.long_id(),
                     mirrored_image_tag,
                     state.last_deployed_image,
-                    false,
+                    true,
                     target,
                     logger,
                 ) {
