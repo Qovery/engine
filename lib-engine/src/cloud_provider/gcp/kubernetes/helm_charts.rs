@@ -5,10 +5,13 @@ use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
+use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
@@ -34,7 +37,7 @@ use crate::errors::CommandError;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
-use crate::models::gcp::JsonCredentials;
+use crate::models::gcp::{GcpStorageType, JsonCredentials};
 use crate::models::third_parties::LetsEncryptConfig;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -161,8 +164,8 @@ pub fn gcp_helm_charts(
             ));
         }
     };
-    let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let _prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
+    let prometheus_namespace = HelmChartNamespaces::Qovery;
+    let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Qovery;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
@@ -192,12 +195,13 @@ pub fn gcp_helm_charts(
             .to_string(),
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
-        false,
+        true,
         HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
     // Metrics server is built-in GCP cluster, no need to manage it
+    // VPA is built-in GCP cluster, no need to manage it
 
     let loki: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
@@ -217,14 +221,10 @@ pub fn gcp_helm_charts(
                     bucketname: Some(chart_config_prerequisites.logs_bucket_name.to_string()),
                 }),
                 get_chart_override_fn.clone(),
-                false,
+                true,
                 HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-                    // TODO(ENG-1706): should be 500m CPU once support to k8s 1.19 is out
-                    // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(1000), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
-                    // TODO(ENG-1706): should be 1Go CPU once support to k8s 1.19 is out
-                    // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(2),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
+                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
                 }),
@@ -245,7 +245,7 @@ pub fn gcp_helm_charts(
                 HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
-                false,
+                true,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
             )
@@ -253,43 +253,63 @@ pub fn gcp_helm_charts(
         )),
     };
 
-    // TODO(benjaminch): VPA
-    // TODO(benjaminch): Kube prometheus stack
-    // TODO(benjaminch): Prometheus adapter
-    // TODO(benjaminch): Kube state metrics
-    // TODO(benjaminch): Grafana
+    // Kube prometheus stack
+    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled
+    {
+        false => None,
+        true => Some(Box::new(
+            KubePrometheusStackChart::new(
+                chart_prefix_path,
+                GcpStorageType::Standard.to_k8s_storage_class(),
+                prometheus_internal_url.to_string(),
+                prometheus_namespace,
+                true,
+                get_chart_override_fn.clone(),
+                true,
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
+
+    // Prometheus adapter
+    let prometheus_adapter: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(Box::new(
+            PrometheusAdapterChart::new(
+                chart_prefix_path,
+                prometheus_internal_url.clone(),
+                prometheus_namespace,
+                get_chart_override_fn.clone(),
+                true,
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
+
+    // Kube state metrics
+    let kube_state_metrics: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(Box::new(
+            KubeStateMetricsChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Qovery,
+                true,
+                get_chart_override_fn.clone(),
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
 
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(ENG-1706): should be activated once prometheus will be installed
-        // TODO(benjaminch): should HelmChartResourcesConstraintType::Default Chart once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-            request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-            limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-        }),
-        // TODO(ENG-1706): should HelmChartResourcesConstraintType::Default Chart once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(128),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(128),
-        }),
-        // TODO(ENG-1706): should HelmChartResourcesConstraintType::Default Chart once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-            request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-            limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-        }),
+        chart_config_prerequisites.ff_metrics_history_enabled,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         get_chart_override_fn.clone(),
-        false,
+        true,
         HelmChartNamespaces::Qovery,
         HelmChartNamespaces::Qovery, // Leader election defaults to kube-system which is not permitted on GKE autopilot
     )
@@ -328,18 +348,12 @@ pub fn gcp_helm_charts(
             request_cpu: KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_vcpu_limit_in_milli_cpu,
-                // TODO(ENG-1706): should be nginx_vcpu_request_in_milli_cpu once support to k8s 1.19 is out
-                // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-                // .nginx_vcpu_request_in_milli_cpu,
+                    .nginx_vcpu_request_in_milli_cpu,
             ),
             request_memory: KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_memory_limit_in_mib,
-                // TODO(ENG-1706): should be nginx_vcpu_request_in_milli_cpu once support to k8s 1.19 is out
-                // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-                // .nginx_memory_request_in_mib,
+                    .nginx_memory_request_in_mib,
             ),
             limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
@@ -352,15 +366,8 @@ pub fn gcp_helm_charts(
                     .nginx_memory_limit_in_mib,
             ),
         }),
-        // TODO(ENG-1706): should be HelmChartResourcesConstraintType::ChartDefault once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(20),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(20),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
-        }),
-        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(benjaminch): should be activated once prometheus will be installed
+        HelmChartResourcesConstraintType::ChartDefault,
+        chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Gcp,
@@ -390,7 +397,7 @@ pub fn gcp_helm_charts(
 
     // K8s Event Logger
     let k8s_event_logger =
-        K8sEventLoggerChart::new(chart_prefix_path, false, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
     // Qovery cluster agent
     let qovery_cluster_agent = QoveryClusterAgentChart::new(
@@ -415,16 +422,9 @@ pub fn gcp_helm_charts(
         &chart_config_prerequisites.infra_options.jwt_token,
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
-        // TODO(ENG-1706): should be HelmChartResourcesConstraintType::ChartDefault once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(500),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(500),
-        }),
+        HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
-        false,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -439,14 +439,7 @@ pub fn gcp_helm_charts(
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
-        // TODO(ENG-1706): should be HelmChartResourcesConstraintType::ChartDefault once support to k8s 1.19 is out
-        // GKE autopilot cluster pre 1.29 don't support resource burst and will set limit = request, so we force request to be the same as limit
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(100),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(100),
-        }),
+        HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
     )
     .to_common_helm_chart()?;
@@ -457,8 +450,9 @@ pub fn gcp_helm_charts(
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         promtail,
+        kube_prometheus_stack,
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, prometheus_adapter, kube_state_metrics];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];

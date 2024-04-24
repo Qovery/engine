@@ -17,6 +17,15 @@ defaultRules:
 alertmanager:
   enabled: false
 
+nodeExporter:
+  enabled: false # Handling GKE autopilot: https://github.com/SumoLogic/sumologic-kubernetes-collection/issues/1468#issuecomment-1005800179
+
+coreDns:
+  enabled: false # Handling GKE autopilot: https://github.com/SumoLogic/sumologic-kubernetes-collection/issues/1468#issuecomment-1005800179
+
+kubeDns:
+  enabled: false # Handling GKE autopilot: https://github.com/SumoLogic/sumologic-kubernetes-collection/issues/1468#issuecomment-1005800179
+
 grafana:
   enabled: false
   serviceMonitor:
@@ -73,6 +82,7 @@ prometheusOperator:
     enabled: false
 
 prometheus-node-exporter:
+  priorityClassName: set-by-engine-code
   resources:
     limits:
       cpu: "20m"
@@ -83,4 +93,3 @@ prometheus-node-exporter:
   prometheus:
     monitor:
       enabled: false
-  priorityClassName: ""

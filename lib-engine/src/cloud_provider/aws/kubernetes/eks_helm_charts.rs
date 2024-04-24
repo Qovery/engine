@@ -405,7 +405,6 @@ pub fn eks_aws_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
-                Kind::Aws,
             )
             .to_common_helm_chart()?,
         ),
@@ -454,8 +453,13 @@ pub fn eks_aws_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_override_fn.clone())
-                .to_common_helm_chart()?,
+            KubeStateMetricsChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Prometheus,
+                true,
+                get_chart_override_fn.clone(),
+            )
+            .to_common_helm_chart()?,
         ),
     };
 
