@@ -227,7 +227,26 @@ impl ValuesFile {
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                 ]),
             },
-            qovery_engine: None,
+            qovery_engine: Some(QoveryEngine {
+                image: ImageTag {
+                    tag: "*engineVersion".to_string(),
+                },
+                engine_resources: None,
+                build_container: BuildContainer {
+                    environment_variables: BTreeMap::from([
+                        ("BUILDER_CPU_ARCHITECTURES".to_string(), "*architectures".to_string()),
+                        ("BUILDER_ROOTLESS_ENABLED".to_string(), "true".to_string()),
+                    ]),
+                },
+                environment_variables: BTreeMap::from([
+                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                    ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
+                    ("GRPC_SERVER".to_string(), "engine.qovery.com:443".to_string()),
+                    ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
+                ]),
+            }),
             ingress_nginx: ChartConfig { override_chart: None },
             external_dns: ChartConfig { override_chart: None },
             promtail: ChartConfig { override_chart: None },
@@ -419,10 +438,10 @@ impl ValuesFile {
             },
             engine_resources: None,
             build_container: BuildContainer {
-                environment_variables: BTreeMap::from([(
-                    "BUILDER_CPU_ARCHITECTURES".to_string(),
-                    "*architectures".to_string(),
-                )]),
+                environment_variables: BTreeMap::from([
+                    ("BUILDER_CPU_ARCHITECTURES".to_string(), "*architectures".to_string()),
+                    ("BUILDER_ROOTLESS_ENABLED".to_string(), "false".to_string()),
+                ]),
             },
             environment_variables: BTreeMap::from([
                 ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
@@ -431,7 +450,6 @@ impl ValuesFile {
                 ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
                 ("GRPC_SERVER".to_string(), "engine.qovery.com:443".to_string()),
                 ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
-                ("REGION".to_string(), "local".to_string()),
             ]),
         });
 

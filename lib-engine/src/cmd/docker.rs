@@ -358,7 +358,7 @@ impl Docker {
                     for tls in tls_invalid_registries {
                         cfg_file.push_str(&format!("[registry.\"{}\"]\n  insecure = true\n", tls));
                     }
-                    let _ = std::fs::write(&cfg_path, cfg_file);
+                    let _ = fs::write(&cfg_path, cfg_file);
 
                     format!("--buildkitd-config={}", cfg_path.to_string_lossy())
                 };
@@ -369,7 +369,7 @@ impl Docker {
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
-                    let driver_opt = format!(concat!(
+                    let mut driver_opt = format!(concat!(
                     "--driver-opt=",
                     "\"namespace={}\",",
                     "\"replicas={}\",",
@@ -377,12 +377,15 @@ impl Docker {
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
                     "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
-                    "\"rootless={}\",",
                     "\"requests.cpu={}m\",",
                     "\"limits.cpu={}m\",",
                     "\"requests.memory={}Gi\",",
                     "\"limits.memory={}Gi\""
-                    ), namespace, nb_builder, arch, enable_rootless, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
+                    ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
+                    if *enable_rootless {
+                        driver_opt.push_str(",\"rootless=true\"");
+                    }
+
                     let args = vec![
                         "--config",
                         self.config_path.path().to_str().unwrap_or(""),
