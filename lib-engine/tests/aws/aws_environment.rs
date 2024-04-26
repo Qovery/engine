@@ -2164,6 +2164,10 @@ fn deploy_container_with_router_on_aws_eks() {
             annotations: vec![Annotation {
                 key: "annot_key".to_string(),
                 value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "false".to_string(),
             }],
             scopes: vec![
                 AnnotationsGroupScope::Deployments,
@@ -2619,6 +2623,10 @@ fn build_and_deploy_job_on_aws_eks() {
             annotations: vec![Annotation {
                 key: "annot_key".to_string(),
                 value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
             }],
             scopes: vec![
                 AnnotationsGroupScope::Jobs,

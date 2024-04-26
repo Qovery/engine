@@ -65,7 +65,7 @@ metadata:
       {%- endfor %}
     {%- endif %}
     {%- for key, value in annotations_group.ingress %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 
 spec:

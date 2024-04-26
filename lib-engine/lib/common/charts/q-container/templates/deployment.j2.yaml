@@ -14,7 +14,7 @@ metadata:
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
     {%- for key, value in annotations_group.deployment %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   {%- if service.min_instances == service.max_instances %}
@@ -64,7 +64,7 @@ spec:
         {%- endif %}
         qovery.com/service-version: {{ service.version }}
         {%- for key, value in annotations_group.pods %}
-        {{ key }}: {{ value }}
+        {{ key }}: "{{ value }}"
         {%- endfor %}
     spec:
       affinity:
