@@ -45,14 +45,6 @@ impl CloudProvider for SelfManaged {
         self.long_id.as_str()
     }
 
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn region(&self) -> String {
-        self.region.clone()
-    }
-
     fn organization_id(&self) -> &str {
         self.context.organization_short_id()
     }
@@ -61,12 +53,20 @@ impl CloudProvider for SelfManaged {
         *self.context.organization_long_id()
     }
 
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
     fn access_key_id(&self) -> String {
         "".to_string()
     }
 
     fn secret_access_key(&self) -> String {
         "".to_string()
+    }
+
+    fn region(&self) -> String {
+        self.region.clone()
     }
 
     fn aws_sdk_client(&self) -> Option<aws_types::SdkConfig> {
