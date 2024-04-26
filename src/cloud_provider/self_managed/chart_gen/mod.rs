@@ -841,7 +841,7 @@ mod tests {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
