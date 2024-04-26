@@ -38,7 +38,7 @@ impl CloudProvider for SelfManaged {
     }
 
     fn kubernetes_kind(&self) -> KubernetesKind {
-        KubernetesKind::EksSelfManaged
+        KubernetesKind::OnPremiseSelfManaged
     }
 
     fn id(&self) -> &str {
