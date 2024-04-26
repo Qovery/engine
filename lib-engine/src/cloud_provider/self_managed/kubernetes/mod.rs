@@ -46,6 +46,7 @@ impl SelfManaged {
         id: String,
         long_id: Uuid,
         name: String,
+        kind: Kind,
         version: KubernetesVersion,
         cloud_provider: &dyn CloudProvider,
         options: SelfManagedOptions,
@@ -57,7 +58,7 @@ impl SelfManaged {
         let cluster = SelfManaged {
             context,
             id,
-            kind: cloud_provider.kubernetes_kind(),
+            kind,
             long_id,
             name,
             version,
@@ -144,7 +145,7 @@ impl Kubernetes for SelfManaged {
         true
     }
 
-    fn cpu_architectures(&self) -> Vec<crate::cloud_provider::models::CpuArchitecture> {
+    fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
         match self.kind {
             Kind::Eks
             | Kind::Ec2
@@ -155,6 +156,7 @@ impl Kubernetes for SelfManaged {
             | Kind::ScwSelfManaged => vec![AMD64], // we cant know for now so we fall back to amd64
             Kind::OnPremiseSelfManaged => {
                 // We take what is configured by the engine, if nothing is configured we default to amd64
+                info!("BUILDER_CPU_ARCHITECTURES: {:?}", env::var("BUILDER_CPU_ARCHITECTURES"));
                 let archs: Vec<CpuArchitecture> = env::var("BUILDER_CPU_ARCHITECTURES")
                     .unwrap_or_default()
                     .split(',')
@@ -164,6 +166,7 @@ impl Kubernetes for SelfManaged {
                         docker::Architecture::ARM64 => CpuArchitecture::ARM64,
                     })
                     .collect();
+                info!("BUILDER_CPU_ARCHITECTURES: {:?}", archs);
 
                 if archs.is_empty() {
                     vec![AMD64]

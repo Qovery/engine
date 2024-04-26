@@ -509,6 +509,7 @@ impl Kubernetes {
                     self.id.to_string(),
                     self.long_id,
                     self.name.to_string(),
+                    self.kind,
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     cloud_provider,

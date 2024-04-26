@@ -6,11 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{env, fs, thread};
+use std::{fs, thread};
 
 use git2::{Cred, CredentialType};
 use retry::delay::Fibonacci;
-use sysinfo::{DiskExt, RefreshKind, SystemExt};
 use time::Instant;
 use uuid::Uuid;
 
@@ -73,55 +72,6 @@ impl LocalDocker {
             vec![("DOCKER_HOST", socket_path.as_str())]
         } else {
             vec![]
-        }
-    }
-
-    fn reclaim_space_if_needed(&self) {
-        // ensure there is enough disk space left before building a new image
-        // For CI, we should skip this job
-        if env::var_os("CI").is_some() {
-            info!("CI environment detected, skipping reclaim space job (docker prune)");
-            return;
-        }
-
-        // arbitrary percentage that should make the job anytime
-        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 40;
-        let mount_points_to_check = [Path::new("/var/lib/docker"), Path::new("/")];
-        let mut disk_free_space_percent: u64 = 100;
-
-        let sys_info = sysinfo::System::new_with_specifics(RefreshKind::new().with_disks().with_disks_list());
-        let should_reclaim_space = sys_info.disks().iter().any(|disk| {
-            // Check disk own the mount point we are interested in
-            if !mount_points_to_check.contains(&disk.mount_point()) {
-                return false;
-            }
-
-            // Check if we have hit our threshold regarding remaining disk space
-            disk_free_space_percent = disk.available_space() * 100 / disk.total_space();
-            if disk_free_space_percent <= DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE {
-                return true;
-            }
-
-            false
-        });
-
-        if !should_reclaim_space {
-            debug!(
-                "Docker skipping image purge, still {} % disk free space",
-                disk_free_space_percent
-            );
-            return;
-        }
-
-        let msg = format!(
-            "Purging docker images to reclaim disk space. Only {disk_free_space_percent} % disk free space, This may take some time"
-        );
-        info!("{}", msg);
-
-        // Request a purge if a disk is being low on space
-        if let Err(err) = self.context.docker.prune_images() {
-            let msg = format!("Error while purging docker images: {err}");
-            error!("{}", msg);
         }
     }
 
@@ -599,10 +549,6 @@ impl BuildPlatform for LocalDocker {
                 application: build.image.service_id.clone(),
             });
         }
-
-        // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
-        // ex: this cause regular cleanup on CI, leading to random tests errors
-        self.reclaim_space_if_needed();
 
         let app_id = build.image.service_id.clone();
 
