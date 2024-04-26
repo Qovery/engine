@@ -12,7 +12,7 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
   annotations:
     {%- for key, value in annotations_group.service %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   type: ClusterIP
@@ -47,7 +47,7 @@ metadata:
     {{ annotation | first }}: "{{ annotation | last }}"
     {%- endfor %}
     {%- for key, value in annotations_group.service %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   type: LoadBalancer

@@ -12,7 +12,7 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
   annotations:
     {%- for key, value in annotations_group.hpa %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   scaleTargetRef:

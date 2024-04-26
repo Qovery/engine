@@ -13,7 +13,7 @@ metadata:
   annotations:
     qovery.com/service-version: {{ service.version }}
     {%- for key, value in annotations_group.job %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   minAvailable: 1

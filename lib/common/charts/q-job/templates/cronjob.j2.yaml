@@ -13,7 +13,7 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
   annotations:
     {%- for key, value in annotations_group.cronjob %}
-    {{ key }}: {{ value }}
+    {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
   schedule: "{{ service.cronjob_schedule }}"
@@ -33,7 +33,7 @@ spec:
       annotations:
         qovery.com/service-version: {{ service.version }}
         {%- for key, value in annotations_group.pods %}
-        {{ key }}: {{ value }}
+        {{ key }}: "{{ value }}"
         {%- endfor %}
     spec:
       backoffLimit: {{ service.max_nb_restart }}
