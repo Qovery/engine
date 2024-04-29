@@ -1104,6 +1104,8 @@ pub enum Tag {
     CannotCreateHelmAdmissionControllerConfigMap,
     /// CannotPatchHelmAdmissionControllerConfigMap: cannot patch K8S config map for admission controller
     CannotPatchHelmAdmissionControllerConfigMap,
+    /// ServiceInstantiationError: represents an error while trying to instantiate a service
+    ServiceInstantiationError,
 }
 
 impl Tag {
@@ -1230,6 +1232,28 @@ impl EngineError {
             link: self.link.as_ref().cloned(),
             hint_message: self.hint_message.as_ref().cloned(),
         }
+    }
+
+    /// Creates new service error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
+    /// * `underlying_error`: raw error message such as command input / output.
+    pub fn new_service_instantiation_error(
+        event_details: EventDetails,
+        service_name: String,
+        underlying_error: Option<CommandError>,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::ServiceInstantiationError,
+            format!("Cannot instantiate an underlying service: `{service_name}`"),
+            underlying_error,
+            None,
+            None,
+        )
     }
 
     /// Creates new unknown error.

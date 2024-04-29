@@ -69,6 +69,18 @@ variable "vpc_network_mode" {
   type        = string
 }
 
+variable "vpc_enable_flow_logs" {
+  description = "Activate VPC flow logs for all subnetworks in the VPC"
+  default     = {{ vpc_enable_flow_logs }}
+  type        = bool
+}
+
+variable "vpc_flow_logs_sampling" {
+  description = "Set VPC logs flow sampling percentage. Value should be within [`0.0` (no sampling), `1.0` (all logs)] range."
+  default     = {{ vpc_flow_logs_sampling }}
+  type        = number
+}
+
 variable "description" {
   # TODO(benjaminch): check if we should pass the one from the Core
   default     = "Qovery managed cluster {{ kubernetes_cluster_name }}"

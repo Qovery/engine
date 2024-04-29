@@ -36,6 +36,7 @@ use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
+use crate::models::types::Percentage;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::google_object_storage::GoogleOS;
@@ -462,6 +463,18 @@ impl Gke {
                 context.insert("ip_range_pods", "");
                 context.insert("ip_range_services", "");
                 context.insert("additional_ip_range_pods", "");
+
+                // VPC log flow (won't be set for user provided VPC)
+                context.insert("vpc_enable_flow_logs", &self.advanced_settings.gcp_vpc_enable_flow_logs);
+                context.insert(
+                    "vpc_flow_logs_sampling",
+                    &self
+                        .advanced_settings
+                        .gcp_vpc_flow_logs_sampling
+                        .as_ref()
+                        .unwrap_or(&Percentage::min())
+                        .as_f64(),
+                );
             }
             VpcMode::UserNetworkConfig {
                 vpc_project_id,
@@ -501,6 +514,10 @@ impl Gke {
                     "additional_ip_range_pods",
                     &additional_ip_range_pods_names.clone().unwrap_or_default(),
                 );
+
+                // VPC log flow (won't be set for user provided VPC)
+                context.insert("vpc_enable_flow_logs", &false);
+                context.insert("vpc_flow_logs_sampling", &Percentage::min().as_f64());
             }
         }
 
