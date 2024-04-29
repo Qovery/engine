@@ -42,4 +42,36 @@ resource "google_compute_network" "vpc_network" {
     ignore_changes = [description]
   }
 }
+
+# Activate / Deactivate VPC logs flow via gcloud CLI
+# This is a workaround to enable / disable VPC flow logs since it's not supported by Terraform
+# TODO(benjaminch): Remove this workaround once Terraform supports it OR once the Google Rust API supports it
+data "google_compute_network" "vpc" {
+  name = google_compute_network.vpc_network.name
+
+  depends_on = [
+    google_compute_network.vpc_network
+  ]
+}
+
+# This is a dirty workaround allowing to get subnetworks self links via data after network creation
+# `for_each` doesn't seem to like the when using not yet created resources
+locals {
+    vpc_logs_flow_gcloud_commands = [for i, subnetwork in data.google_compute_network.vpc.subnetworks_self_links : "gcloud compute networks subnets update ${subnetwork} {% if vpc_enable_flow_logs %} --enable-flow-logs --logging-flow-sampling=${var.vpc_flow_logs_sampling} {% else %} --no-enable-flow-logs {% endif %} --project=${var.project_id}"]
+}
+
+resource "null_resource" "set_subnetwork_vpc_log_flow" {
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+
+  provisioner "local-exec" {
+    command = join(" && ", local.vpc_logs_flow_gcloud_commands)
+  }
+
+  depends_on = [
+    data.google_compute_network.vpc
+  ]
+}
+
 {% endif %}

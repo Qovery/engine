@@ -24,6 +24,7 @@ pub mod helm_chart;
 pub mod job;
 pub mod probe;
 pub mod router;
+mod types;
 pub mod variable_utils;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug, Default)]
