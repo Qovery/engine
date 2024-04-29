@@ -102,6 +102,7 @@ fn should_increase_app_storage_size() {
             resized_app.ram_request_in_mib,
             resized_app.ram_limit_in_mib,
             false,
+            false,
         )
         .expect("Unable to create application");
 

@@ -132,7 +132,8 @@ impl<T: CloudProvider> Container<T> {
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
-        allow_service_resource_overcommit: bool,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -153,7 +154,8 @@ impl<T: CloudProvider> Container<T> {
             ram_limit_in_mib,
             advanced_settings.resources_override_limit_cpu_in_milli,
             advanced_settings.resources_override_limit_ram_in_mib,
-            allow_service_resource_overcommit,
+            allow_service_cpu_overcommit,
+            allow_service_ram_overcommit,
         )
         .map_err(ContainerError::InvalidConfig)?;
 

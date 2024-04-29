@@ -308,7 +308,8 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
-        allow_service_resource_overcommit: bool,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
         let annotations_groups = self
@@ -353,7 +354,8 @@ impl Application {
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -385,7 +387,8 @@ impl Application {
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?))
                 }
             }
@@ -418,7 +421,8 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -449,7 +453,8 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -480,7 +485,8 @@ impl Application {
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
         }
     }

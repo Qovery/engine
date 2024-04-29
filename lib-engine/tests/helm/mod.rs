@@ -336,6 +336,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         3,
         3,
         false,
+        false,
     )
     .unwrap()
 }
@@ -431,6 +432,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
+        false,
         false,
     )
     .unwrap()
@@ -641,6 +643,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_job(),
+        false,
         false,
     )
     .unwrap()

@@ -126,8 +126,10 @@ pub struct ClusterAdvancedSettings {
     pub scaleway_enable_private_network_migration: bool,
     #[serde(alias = "infra.pdb.enabled", default)]
     pub infra_pdb_enabled: bool,
-    #[serde(alias = "allow_service_resource_overcommit")]
-    pub allow_service_resource_overcommit: bool,
+    #[serde(alias = "allow_service_cpu_overcommit")]
+    pub allow_service_cpu_overcommit: bool,
+    #[serde(alias = "allow_service_ram_overcommit")]
+    pub allow_service_ram_overcommit: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -170,7 +172,8 @@ impl Default for ClusterAdvancedSettings {
             aws_karpenter_max_node_drain_in_sec: None,
             aws_karpenter_enable_spot: false,
             infra_pdb_enabled: false,
-            allow_service_resource_overcommit: false,
+            allow_service_cpu_overcommit: false,
+            allow_service_ram_overcommit: false,
         }
     }
 }

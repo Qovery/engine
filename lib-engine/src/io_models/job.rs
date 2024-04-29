@@ -277,7 +277,8 @@ impl Job {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
-        allow_service_resource_overcommit: bool,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
@@ -356,7 +357,8 @@ impl Job {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 } else {
                     Box::new(models::job::Job::<AWSEc2>::new(
@@ -388,7 +390,8 @@ impl Job {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 }
             }
@@ -421,7 +424,8 @@ impl Job {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -452,7 +456,8 @@ impl Job {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -483,7 +488,8 @@ impl Job {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
         };
 
