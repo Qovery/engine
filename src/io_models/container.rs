@@ -369,7 +369,8 @@ impl Container {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
-        allow_service_resource_overcommit: bool,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
@@ -425,7 +426,8 @@ impl Container {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 } else {
                     Box::new(models::container::Container::<AWSEc2>::new(
@@ -457,7 +459,8 @@ impl Container {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
-                        allow_service_resource_overcommit,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 }
             }
@@ -490,7 +493,8 @@ impl Container {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -521,7 +525,8 @@ impl Container {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
@@ -552,7 +557,8 @@ impl Container {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
-                allow_service_resource_overcommit,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
         };
 

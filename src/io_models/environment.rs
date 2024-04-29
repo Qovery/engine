@@ -98,7 +98,8 @@ impl EnvironmentRequest {
                     build,
                     cloud_provider,
                     &self.annotations_groups,
-                    cluster.advanced_settings().allow_service_resource_overcommit,
+                    cluster.advanced_settings().allow_service_cpu_overcommit,
+                    cluster.advanced_settings().allow_service_ram_overcommit,
                 )
             })
             .collect();
@@ -115,7 +116,8 @@ impl EnvironmentRequest {
                     container_registry,
                     cluster,
                     &self.annotations_groups,
-                    cluster.advanced_settings().allow_service_resource_overcommit,
+                    cluster.advanced_settings().allow_service_cpu_overcommit,
+                    cluster.advanced_settings().allow_service_ram_overcommit,
                 )
             })
             .collect();
@@ -328,7 +330,8 @@ impl EnvironmentRequest {
                     container_registry,
                     cluster,
                     &self.annotations_groups,
-                    cluster.advanced_settings().allow_service_resource_overcommit,
+                    cluster.advanced_settings().allow_service_cpu_overcommit,
+                    cluster.advanced_settings().allow_service_ram_overcommit,
                 )
             })
             .collect();

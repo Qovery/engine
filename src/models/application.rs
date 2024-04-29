@@ -100,7 +100,8 @@ impl<T: CloudProvider> Application<T> {
         cpu_limit_in_milli: u32,
         ram_request_in_mib: u32,
         ram_limit_in_mib: u32,
-        allow_service_resource_overcommit: bool,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
@@ -111,7 +112,8 @@ impl<T: CloudProvider> Application<T> {
             ram_limit_in_mib,
             advanced_settings.resources_override_limit_cpu_in_milli,
             advanced_settings.resources_override_limit_ram_in_mib,
-            allow_service_resource_overcommit,
+            allow_service_cpu_overcommit,
+            allow_service_ram_overcommit,
         )
         .map_err(ApplicationError::InvalidConfig)?;
 

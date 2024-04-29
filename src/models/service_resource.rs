@@ -15,7 +15,8 @@ pub fn compute_service_requests_and_limits(
     ram_limit_in_mib: u32,
     overridden_cpu_limit_in_milli: Option<u32>,
     overridden_ram_limit_in_mib: Option<u32>,
-    allow_service_resource_overcommit: bool,
+    allow_service_cpu_overcommit: bool,
+    allow_service_ram_overcommit: bool,
 ) -> Result<ServiceRequestsAndLimits, String> {
     if cpu_request_in_milli == 0 {
         return Err("cpu_request_in_milli must be greater than 0".to_string());
@@ -41,14 +42,26 @@ pub fn compute_service_requests_and_limits(
         return Err("ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string());
     }
 
-    // Return early if limit override is disabled
-    if !allow_service_resource_overcommit {
+    // Return early if limit overrides are disabled
+    if !allow_service_cpu_overcommit && !allow_service_ram_overcommit {
         return Ok(ServiceRequestsAndLimits {
             cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
             cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
             ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
             ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
         });
+    }
+
+    if !allow_service_cpu_overcommit && overridden_cpu_limit_in_milli.is_some() {
+        return Err(
+            "This is forbidden to override cpu limit, update your cluster advanced settings to enable it".to_string(),
+        );
+    }
+
+    if !allow_service_ram_overcommit && overridden_ram_limit_in_mib.is_some() {
+        return Err(
+            "This is forbidden to override ram limit, update your cluster advanced settings to enable it".to_string(),
+        );
     }
 
     // Compute cpu & ram limits according to service overridden limits in advanced settings
@@ -94,7 +107,7 @@ mod tests {
         let cpu_request_in_milli = 0;
 
         // when
-        let result = compute_service_requests_and_limits(cpu_request_in_milli, 200, 256, 256, None, None, false);
+        let result = compute_service_requests_and_limits(cpu_request_in_milli, 200, 256, 256, None, None, false, false);
 
         // then
         assert!(result.is_err());
@@ -107,7 +120,7 @@ mod tests {
         let cpu_limit_in_milli = 0;
 
         // when
-        let result = compute_service_requests_and_limits(200, cpu_limit_in_milli, 256, 256, None, None, false);
+        let result = compute_service_requests_and_limits(200, cpu_limit_in_milli, 256, 256, None, None, false, false);
 
         // then
         assert!(result.is_err());
@@ -121,8 +134,16 @@ mod tests {
         let cpu_limit_in_milli = 100;
 
         // when
-        let result =
-            compute_service_requests_and_limits(cpu_request_in_milli, cpu_limit_in_milli, 256, 256, None, None, false);
+        let result = compute_service_requests_and_limits(
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            256,
+            256,
+            None,
+            None,
+            false,
+            false,
+        );
 
         // then
         assert!(result.is_err());
@@ -138,7 +159,7 @@ mod tests {
         let ram_request_in_mib = 0;
 
         // when
-        let result = compute_service_requests_and_limits(200, 200, ram_request_in_mib, 256, None, None, false);
+        let result = compute_service_requests_and_limits(200, 200, ram_request_in_mib, 256, None, None, false, false);
 
         // then
         assert!(result.is_err());
@@ -151,7 +172,7 @@ mod tests {
         let _ram_limit_in_mib = 0;
 
         // when
-        let result = compute_service_requests_and_limits(200, 200, 256, 0, None, None, false);
+        let result = compute_service_requests_and_limits(200, 200, 256, 0, None, None, false, false);
 
         // then
         assert!(result.is_err());
@@ -165,8 +186,16 @@ mod tests {
         let ram_limit_in_mib = 128;
 
         // when
-        let result =
-            compute_service_requests_and_limits(200, 200, ram_request_in_mib, ram_limit_in_mib, None, None, false);
+        let result = compute_service_requests_and_limits(
+            200,
+            200,
+            ram_request_in_mib,
+            ram_limit_in_mib,
+            None,
+            None,
+            false,
+            false,
+        );
 
         // then
         assert!(result.is_err());
@@ -193,6 +222,7 @@ mod tests {
             None,
             None,
             false,
+            false,
         );
 
         // then
@@ -210,7 +240,41 @@ mod tests {
     }
 
     //
-    // Tests with overridden disabled
+    // Tests with overridden enabled
+
+    #[test]
+    fn should_reject_when_overridden_cpu_limit_is_defined_but_forbidden_at_cluster_level() {
+        // given
+        let overridden_cpu_limit_in_milli = Some(200);
+
+        // when
+        let result =
+            compute_service_requests_and_limits(100, 100, 256, 256, overridden_cpu_limit_in_milli, None, false, true);
+
+        // then
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap(),
+            "This is forbidden to override cpu limit, update your cluster advanced settings to enable it"
+        );
+    }
+
+    #[test]
+    fn should_reject_when_overridden_ram_limit_is_defined_but_forbidden_at_cluster_level() {
+        // given
+        let overriden_ram_limit_in_mib = Some(1024);
+
+        // when
+        let result =
+            compute_service_requests_and_limits(100, 100, 256, 256, None, overriden_ram_limit_in_mib, true, false);
+
+        // then
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap(),
+            "This is forbidden to override ram limit, update your cluster advanced settings to enable it"
+        );
+    }
 
     #[test]
     fn should_reject_when_overridden_cpu_limit_is_zero() {
@@ -218,7 +282,8 @@ mod tests {
         let overridden_cpu_limit_in_milli = Some(0);
 
         // when
-        let result = compute_service_requests_and_limits(100, 100, 256, 256, overridden_cpu_limit_in_milli, None, true);
+        let result =
+            compute_service_requests_and_limits(100, 100, 256, 256, overridden_cpu_limit_in_milli, None, true, false);
 
         // then
         assert!(result.is_err());
@@ -241,6 +306,7 @@ mod tests {
             overridden_cpu_limit_in_milli,
             None,
             true,
+            false,
         );
 
         // then
@@ -257,7 +323,8 @@ mod tests {
         let overridden_ram_limit_in_mib = Some(0);
 
         // when
-        let result = compute_service_requests_and_limits(200, 200, 256, 256, None, overridden_ram_limit_in_mib, true);
+        let result =
+            compute_service_requests_and_limits(200, 200, 256, 256, None, overridden_ram_limit_in_mib, false, true);
 
         // then
         assert!(result.is_err());
@@ -279,6 +346,7 @@ mod tests {
             ram_limit_in_mib,
             None,
             overridden_ram_limit_in_mib,
+            false,
             true,
         );
 
@@ -308,6 +376,7 @@ mod tests {
             ram_limit_in_mib,
             Some(overridden_cpu_limit_in_milli),
             Some(overridden_ram_limit_in_mib),
+            true,
             true,
         );
 
@@ -343,6 +412,7 @@ mod tests {
             ram_limit_in_mib,
             overridden_cpu_limit_in_milli,
             overridden_ram_limit_in_mib,
+            false,
             true,
         );
 

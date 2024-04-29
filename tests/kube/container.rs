@@ -105,6 +105,7 @@ fn should_increase_container_storage_size() {
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
             false,
+            false,
         )
         .expect("Unable to create container");
 
