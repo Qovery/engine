@@ -199,7 +199,7 @@ impl Stream for EngineMessageStream {
     type Item = EngineMessageTx;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        unsafe { self.map_unchecked_mut(|s| s.stream.deref_mut()).poll_next(cx) }
+        unsafe { self.map_unchecked_mut(|s| s.stream.as_mut()).poll_next(cx) }
     }
 }
 

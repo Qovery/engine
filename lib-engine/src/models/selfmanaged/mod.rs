@@ -47,4 +47,7 @@ impl CloudProvider for OnPremise {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum OnPremiseStorageType {}
+pub enum OnPremiseStorageType {
+    #[serde(rename(serialize = "local-path"))]
+    Local,
+}

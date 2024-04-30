@@ -545,7 +545,10 @@ impl Container {
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                vec![],
+                self.storages
+                    .iter()
+                    .map(|s| s.to_on_premise_storage())
+                    .collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()

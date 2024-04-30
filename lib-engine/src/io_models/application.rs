@@ -19,7 +19,7 @@ use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
 use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::selfmanaged::{OnPremiseAppExtraSettings, OnPremiseStorageType};
 use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
@@ -469,7 +469,10 @@ impl Application {
                 build,
                 self.command_args,
                 self.entrypoint,
-                vec![],
+                self.storage
+                    .iter()
+                    .map(|s| s.to_on_premise_storage())
+                    .collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -650,6 +653,18 @@ impl Storage {
             //     StorageType::Ssd => GcpStorageType::SSD,
             //     StorageType::FastSsd => GcpStorageType::Extreme,
             // },
+            size_in_gib: self.size_in_gib,
+            mount_point: self.mount_point.clone(),
+            snapshot_retention_in_days: self.snapshot_retention_in_days,
+        }
+    }
+
+    pub fn to_on_premise_storage(&self) -> crate::cloud_provider::models::Storage<OnPremiseStorageType> {
+        crate::cloud_provider::models::Storage {
+            id: self.id.clone(),
+            long_id: self.long_id,
+            name: self.name.clone(),
+            storage_type: OnPremiseStorageType::Local,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
