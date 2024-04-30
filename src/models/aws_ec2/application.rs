@@ -23,6 +23,6 @@ impl ToTeraContext for Application<AWSEc2> {
             .collect::<Vec<_>>();
 
         context.service.storages = storages;
-        Ok(TeraContext::from_serialize(context).unwrap())
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
     }
 }

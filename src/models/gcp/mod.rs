@@ -47,7 +47,7 @@ pub struct JsonCredentials {
 }
 
 // https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gce-pd-csi-driver
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum GcpStorageType {
     Balanced,
     SSD,

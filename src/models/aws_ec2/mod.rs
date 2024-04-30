@@ -49,7 +49,7 @@ impl CloudProvider for AWSEc2 {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum AwsEc2StorageType {
     SC1,
     ST1,
