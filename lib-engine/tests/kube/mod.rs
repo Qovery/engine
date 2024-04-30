@@ -98,6 +98,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 publicly_accessible: false,
                 mode: CONTAINER,
                 database_instance_type: None,
+                annotations_group_ids: btreeset! {},
             };
             environment.databases = vec![db];
         }

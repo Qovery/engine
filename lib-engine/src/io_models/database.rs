@@ -2,6 +2,7 @@ use crate::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use crate::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::Action;
 use crate::models;
@@ -13,7 +14,9 @@ use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -51,6 +54,8 @@ pub struct Database {
     pub activate_backups: bool,
     pub publicly_accessible: bool,
     pub mode: DatabaseMode,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
 }
 
 impl Database {
@@ -58,6 +63,7 @@ impl Database {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
     ) -> Result<Box<dyn DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
@@ -72,6 +78,13 @@ impl Database {
             activate_backups: self.activate_backups,
             publicly_accessible: self.publicly_accessible,
         };
+
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
 
         let version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
@@ -120,6 +133,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, PostgresSQL>::new(
@@ -142,6 +156,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -170,6 +185,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, PostgresSQL>::new(
@@ -192,6 +208,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -221,6 +238,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MySQL>::new(
@@ -243,6 +261,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -271,6 +290,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MySQL>::new(
@@ -293,6 +313,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -321,6 +342,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, Redis>::new(
@@ -343,6 +365,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -371,6 +394,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, Redis>::new(
@@ -393,6 +417,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -421,6 +446,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MongoDB>::new(
@@ -443,6 +469,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -471,6 +498,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MongoDB>::new(
@@ -493,6 +521,7 @@ impl Database {
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
                     )?))
                 }
             }
@@ -518,6 +547,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -543,6 +573,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -568,6 +599,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -593,6 +625,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -618,6 +651,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -643,6 +677,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -682,6 +717,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -710,6 +746,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -741,6 +778,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -769,6 +807,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -794,6 +833,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -819,6 +859,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -844,6 +885,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -869,6 +911,7 @@ impl Database {
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
                 )?;
 
                 Ok(Box::new(db))

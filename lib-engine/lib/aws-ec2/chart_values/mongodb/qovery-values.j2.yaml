@@ -33,7 +33,7 @@ resources:
     cpu: "{{ cpu_limit_in_milli }}"
 
 # on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
-# otherwise customize the default probes timers, because with minimal resources it taskes time to start
+# otherwise customize the default probes timers, because with minimal resources it takes time to start
 # https://github.com/bitnami/charts/issues/10264
 {% set version_number = version | int -%}
 {% if version_number >= 6 -%}
@@ -86,6 +86,9 @@ service:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
   {% endif %}
 
 persistence:
@@ -117,3 +120,48 @@ volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_minideb }}
+
+hidden:
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+
+arbiter:
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: "{{ value }}"
+  {%- endfor %}
+
+annotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: "{{ value }}"
+  {%- endfor %}

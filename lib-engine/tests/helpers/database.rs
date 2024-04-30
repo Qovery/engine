@@ -474,6 +474,7 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -500,6 +501,7 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -526,6 +528,7 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
             },
         ],
         helms: vec![],
@@ -750,6 +753,7 @@ pub fn test_db(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db.clone()];
@@ -1106,6 +1110,7 @@ pub fn test_pause_managed_db(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db];
@@ -1393,6 +1398,7 @@ pub fn test_db_on_upgrade(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db];

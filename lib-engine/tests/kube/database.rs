@@ -83,6 +83,7 @@ fn should_increase_db_storage_size() {
                 publicly_accessible: resized_db.publicly_accessible,
             },
             |transmitter| infra_ctx.context().get_event_details(transmitter),
+            vec![],
         )
         .expect("Unable to create database");
 

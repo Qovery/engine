@@ -86,6 +86,9 @@ service:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
   {% endif %}
 
 persistence:
@@ -125,3 +128,48 @@ volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_minideb }}
+
+hidden:
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+
+arbiter:
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: "{{ value }}"
+  {%- endfor %}
+
+annotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: "{{ value }}"
+  {%- endfor %}

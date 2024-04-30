@@ -70,10 +70,17 @@ master:
     annotations:
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
     {% endif %}
   serviceAccount:
     create: true
     name: "{{ sanitized_name }}"
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
 
 rbac:
   create: true
@@ -88,3 +95,17 @@ sysctlImage:
   enabled: true
   registry: {{ registry_name }}
   repository: {{ repository_name_bitnami_shell }}
+
+replica:
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+
+sentinel:
+  service:
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
