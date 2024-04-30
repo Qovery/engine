@@ -59,6 +59,14 @@ primary:
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
     {% endif %}
   persistence:
     storageClass: "{{ database_disk_type }}"
@@ -87,3 +95,17 @@ primary:
     limits:
       memory: "{{ ram_limit_in_mib }}"
       cpu: "{{ cpu_limit_in_milli }}"
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+
+readReplicas:
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}

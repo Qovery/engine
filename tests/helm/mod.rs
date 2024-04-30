@@ -503,6 +503,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
             publicly_accessible: true,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
     )
     .unwrap()
 }
@@ -540,6 +541,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             publicly_accessible: true,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
     )
     .unwrap()
 }

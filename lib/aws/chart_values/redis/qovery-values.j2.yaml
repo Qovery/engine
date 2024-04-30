@@ -78,10 +78,17 @@ master:
       service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
     {% endif %}
   serviceAccount:
     create: true
     name: "{{ sanitized_name }}"
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
 
 rbac:
   create: true
@@ -102,3 +109,16 @@ replica:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
+
+
+sentinel:
+  service:
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}

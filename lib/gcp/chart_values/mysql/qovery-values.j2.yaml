@@ -74,10 +74,22 @@ primary:
     name: {{ service_name }}
     type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
     {% if publicly_accessible -%}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
     annotations:
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
     {% endif %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
 
 rbac:
   create: true
