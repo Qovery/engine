@@ -46,8 +46,16 @@ impl CloudProvider for OnPremise {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OnPremiseStorageType {
-    #[serde(rename(serialize = "local-path"))]
     Local,
+}
+
+impl OnPremiseStorageType {
+    pub fn to_k8s_storage_class(&self) -> String {
+        match self {
+            OnPremiseStorageType::Local => "local-path",
+        }
+        .to_string()
+    }
 }

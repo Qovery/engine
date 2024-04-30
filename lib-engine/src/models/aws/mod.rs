@@ -53,7 +53,7 @@ impl CloudProvider for AWS {
 
 impl AWS {}
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum AwsStorageType {
     SC1,
     ST1,

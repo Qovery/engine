@@ -115,7 +115,7 @@ impl FromStr for ScwRegion {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScwZone {
     Paris1,
     Paris2,
