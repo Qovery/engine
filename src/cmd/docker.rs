@@ -583,20 +583,22 @@ impl Docker {
         info!("Docker check remotely image exist {:?}", image);
 
         let builder = self.configure_builder_for_http_registries(image);
+        let image_name = image.image_name();
+        let mut args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
+            "buildx",
+            "imagetools",
+            "inspect",
+            &image_name,
+        ];
+        if let Some(builder_name) = &builder.as_ref().and_then(|b| b.builder_name.as_deref()) {
+            args.push("--builder");
+            args.push(builder_name)
+        }
+
         let ret = docker_exec(
-            &[
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "buildx",
-                "imagetools",
-                "--builder",
-                &builder
-                    .as_ref()
-                    .and_then(|b| b.builder_name.as_deref())
-                    .unwrap_or(DEFAULT_BUILDER_NAME),
-                "inspect",
-                &image.image_name(),
-            ],
+            &args,
             &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
@@ -880,25 +882,22 @@ impl Docker {
         let builder = self.configure_builder_for_http_registries(image);
         let image_tag = image.image_name();
         info!("Docker create manifest {} with digests {:?}", image_tag, digests);
+        let mut args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
+            "buildx",
+            "imagetools",
+            "create",
+            "-t",
+            image_tag.as_str(),
+        ];
+        if let Some(builder_name) = &builder.as_ref().and_then(|b| b.builder_name.as_deref()) {
+            args.push("--builder");
+            args.push(builder_name)
+        }
+
         docker_exec(
-            &[
-                &[
-                    "--config",
-                    self.config_path.path().to_str().unwrap_or(""),
-                    "buildx",
-                    "imagetools",
-                    "--builder",
-                    &builder
-                        .as_ref()
-                        .and_then(|b| b.builder_name.as_deref())
-                        .unwrap_or(DEFAULT_BUILDER_NAME),
-                    "create",
-                    "-t",
-                    image_tag.as_str(),
-                ],
-                digests,
-            ]
-            .concat(),
+            &[&args, digests].concat(),
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
