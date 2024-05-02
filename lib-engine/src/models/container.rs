@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -231,6 +232,11 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
+        let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
+            format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+        } else {
+            registry_info.endpoint.host_str().unwrap_or_default().into()
+        };
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
@@ -246,9 +252,8 @@ impl<T: CloudProvider> Container<T> {
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
                 image_full: format!(
-                    "{}:{}/{}:{}",
-                    registry_info.endpoint.host_str().unwrap_or_default(),
-                    registry_info.endpoint.port_or_known_default().unwrap_or(443),
+                    "{}/{}:{}",
+                    repository,
                     registry_info.get_image_name(&get_mirror_repository_name(
                         self.long_id(),
                         kubernetes.long_id(),

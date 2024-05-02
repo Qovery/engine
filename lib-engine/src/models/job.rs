@@ -19,6 +19,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::utilities::to_short_id;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -185,11 +186,15 @@ impl<T: CloudProvider> Job<T> {
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
                 let image_tag = source.tag_for_mirror(&self.long_id);
+                let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
+                    format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+                } else {
+                    registry_info.endpoint.host_str().unwrap_or_default().into()
+                };
                 (
                     format!(
-                        "{}:{}/{}:{}",
-                        registry_info.endpoint.host_str().unwrap_or_default(),
-                        registry_info.endpoint.port_or_known_default().unwrap_or(443),
+                        "{}/{}:{}",
+                        repository,
                         registry_info.get_image_name(&models::container::get_mirror_repository_name(
                             self.long_id(),
                             target.kubernetes.long_id(),
