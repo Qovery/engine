@@ -246,8 +246,9 @@ impl<T: CloudProvider> Container<T> {
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
                 image_full: format!(
-                    "{}/{}:{}",
+                    "{}:{}/{}:{}",
                     registry_info.endpoint.host_str().unwrap_or_default(),
+                    registry_info.endpoint.port_or_known_default().unwrap_or(443),
                     registry_info.get_image_name(&get_mirror_repository_name(
                         self.long_id(),
                         kubernetes.long_id(),

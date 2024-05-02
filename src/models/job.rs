@@ -187,8 +187,9 @@ impl<T: CloudProvider> Job<T> {
                 let image_tag = source.tag_for_mirror(&self.long_id);
                 (
                     format!(
-                        "{}/{}:{}",
+                        "{}:{}/{}:{}",
                         registry_info.endpoint.host_str().unwrap_or_default(),
+                        registry_info.endpoint.port_or_known_default().unwrap_or(443),
                         registry_info.get_image_name(&models::container::get_mirror_repository_name(
                             self.long_id(),
                             target.kubernetes.long_id(),

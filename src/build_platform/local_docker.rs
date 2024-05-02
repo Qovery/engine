@@ -286,6 +286,7 @@ impl LocalDocker {
                     .map(String::as_ref)
                     .collect::<Vec<_>>()
                     .as_slice(),
+                true,
             ) {
                 Ok(build_handle) => break build_handle,
                 Err(err) => {

@@ -15,6 +15,7 @@ use std::time::Duration;
 use std::{fs, thread};
 use tempfile::TempDir;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DockerError {
@@ -314,6 +315,7 @@ impl Docker {
         should_abort: &CommandKiller,
         http_registries: &[&str],
         tls_invalid_registries: &[&str],
+        bootstrap_builder: bool,
     ) -> Result<BuilderHandle, DockerError> {
         match &self.builder_location {
             // For local builder, we have at max 1 builder available
@@ -386,7 +388,7 @@ impl Docker {
                         driver_opt.push_str(",\"rootless=true\"");
                     }
 
-                    let args = vec![
+                    let mut args = vec![
                         "--config",
                         self.config_path.path().to_str().unwrap_or(""),
                         "buildx",
@@ -403,8 +405,11 @@ impl Docker {
                         &buildkitd_cfg_arg,
                         "--driver=kubernetes",
                         &driver_opt,
-                        "--bootstrap",
                     ];
+                    if bootstrap_builder {
+                        args.push("--bootstrap");
+                    }
+
                     docker_exec(
                         &args,
                         &self.get_all_envs(&[]),
@@ -577,12 +582,18 @@ impl Docker {
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
         info!("Docker check remotely image exist {:?}", image);
 
+        let builder = self.configure_builder_for_http_registries(image);
         let ret = docker_exec(
             &[
                 "--config",
                 self.config_path.path().to_str().unwrap_or(""),
                 "buildx",
                 "imagetools",
+                "--builder",
+                &builder
+                    .as_ref()
+                    .and_then(|b| b.builder_name.as_deref())
+                    .unwrap_or(DEFAULT_BUILDER_NAME),
                 "inspect",
                 &image.image_name(),
             ],
@@ -866,6 +877,7 @@ impl Docker {
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
+        let builder = self.configure_builder_for_http_registries(image);
         let image_tag = image.image_name();
         info!("Docker create manifest {} with digests {:?}", image_tag, digests);
         docker_exec(
@@ -875,6 +887,11 @@ impl Docker {
                     self.config_path.path().to_str().unwrap_or(""),
                     "buildx",
                     "imagetools",
+                    "--builder",
+                    &builder
+                        .as_ref()
+                        .and_then(|b| b.builder_name.as_deref())
+                        .unwrap_or(DEFAULT_BUILDER_NAME),
                     "create",
                     "-t",
                     image_tag.as_str(),
@@ -889,69 +906,34 @@ impl Docker {
         )
     }
 
-    pub fn prune_images(&self) -> Result<(), DockerError> {
-        info!("Docker prune images");
-
-        let all_prunes_commands = vec![
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "buildx",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "container",
-                "prune",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "image",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "builder",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "volume",
-                "prune",
-                "-f",
-            ],
-        ];
-
-        let mut errored_commands = vec![];
-        for prune in all_prunes_commands {
-            let ret = docker_exec(
-                &prune,
-                &self.get_all_envs(&[]),
-                &mut |_| {},
-                &mut |_| {},
-                &CommandKiller::never(),
+    fn configure_builder_for_http_registries(&self, image: &ContainerImage) -> Option<BuilderHandle> {
+        // If the registry is HTTP, we need to create a new buildx config to allow HTTP registry
+        let mut builder = None;
+        if image.registry.scheme() == "http" {
+            let http_registries = format!(
+                "{}:{}",
+                image.registry.host_str().unwrap_or(""),
+                image.registry.port_or_known_default().unwrap_or(80)
             );
-            if let Err(e) = ret {
-                errored_commands.push(e);
-            }
-        }
 
-        if !errored_commands.is_empty() {
-            return Err(errored_commands.remove(0));
-        }
+            let now = format!("{}", Uuid::new_v4());
+            builder = self
+                .spawn_builder(
+                    &now,
+                    &now,
+                    NonZeroUsize::new(1).unwrap(),
+                    &[Architecture::AMD64],
+                    (0, 0),
+                    (0, 0),
+                    &CommandKiller::never(),
+                    &[http_registries.as_str()],
+                    &[],
+                    false,
+                )
+                .ok();
+        };
 
-        Ok(())
+        builder
     }
 }
 
@@ -1220,6 +1202,7 @@ mod tests {
                 &CommandKiller::never(),
                 &[],
                 &[],
+                true,
             )
             .unwrap();
 
