@@ -22,6 +22,7 @@ pub mod engine_request;
 pub mod environment;
 pub mod helm_chart;
 pub mod job;
+pub mod labels_group;
 pub mod probe;
 pub mod router;
 mod types;

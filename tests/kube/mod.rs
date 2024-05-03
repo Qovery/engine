@@ -67,6 +67,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     match options {
@@ -193,6 +194,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             };
             environment.containers = vec![container];
         }
@@ -280,6 +282,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 mounted_files: vec![],
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             };
             environment.applications = vec![app];
         }
@@ -325,6 +328,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 liveness_probe: None,
                 container_registries: ContainerRegistries { registries: vec![] },
                 annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             };
             environment.jobs = vec![job];
         }

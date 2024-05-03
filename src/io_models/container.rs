@@ -5,6 +5,7 @@ use crate::container_registry::ContainerRegistry;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{Action, MountedFile};
@@ -359,6 +360,8 @@ pub struct Container {
     pub advanced_settings: ContainerAdvancedSettings,
     #[serde(default)]
     pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 impl Container {
@@ -369,6 +372,7 @@ impl Container {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
         allow_service_cpu_overcommit: bool,
         allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
@@ -391,6 +395,12 @@ impl Container {
             .annotations_group_ids
             .iter()
             .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
             .cloned()
             .collect_vec();
 
@@ -426,6 +436,7 @@ impl Container {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         allow_service_cpu_overcommit,
                         allow_service_ram_overcommit,
                     )?)
@@ -459,6 +470,7 @@ impl Container {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         allow_service_cpu_overcommit,
                         allow_service_ram_overcommit,
                     )?)
@@ -493,6 +505,7 @@ impl Container {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),
@@ -525,6 +538,7 @@ impl Container {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),
@@ -560,6 +574,7 @@ impl Container {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),

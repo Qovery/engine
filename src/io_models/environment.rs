@@ -8,6 +8,7 @@ use crate::io_models::context::Context;
 use crate::io_models::database::Database;
 use crate::io_models::helm_chart::HelmChart;
 use crate::io_models::job::Job;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::router::Router;
 use crate::io_models::Action;
 use crate::models::application::{ApplicationError, ApplicationService};
@@ -45,6 +46,8 @@ pub struct EnvironmentRequest {
     pub helms: Vec<HelmChart>,
     #[serde(default = "default_annotations_groups")]
     pub annotations_groups: BTreeMap<Uuid, AnnotationsGroup>,
+    #[serde(default = "default_labels_groups")]
+    pub labels_groups: BTreeMap<Uuid, LabelsGroup>,
 }
 
 fn default_max_parallel_build() -> u32 {
@@ -56,6 +59,10 @@ fn default_max_parallel_deploy() -> u32 {
 }
 
 fn default_annotations_groups() -> BTreeMap<Uuid, AnnotationsGroup> {
+    BTreeMap::new()
+}
+
+fn default_labels_groups() -> BTreeMap<Uuid, LabelsGroup> {
     BTreeMap::new()
 }
 
@@ -98,6 +105,7 @@ impl EnvironmentRequest {
                     build,
                     cloud_provider,
                     &self.annotations_groups,
+                    &self.labels_groups,
                     cluster.advanced_settings().allow_service_cpu_overcommit,
                     cluster.advanced_settings().allow_service_ram_overcommit,
                 )
@@ -116,6 +124,7 @@ impl EnvironmentRequest {
                     container_registry,
                     cluster,
                     &self.annotations_groups,
+                    &self.labels_groups,
                     cluster.advanced_settings().allow_service_cpu_overcommit,
                     cluster.advanced_settings().allow_service_ram_overcommit,
                 )
@@ -127,11 +136,13 @@ impl EnvironmentRequest {
         for router in &self.routers {
             let mut router_advanced_settings = RouterAdvancedSettings::default();
             let mut annotations_groups_ids = BTreeSet::new();
+            let mut labels_groups_ids = BTreeSet::new();
 
             for app in &self.applications {
                 for route in &router.routes {
                     if route.service_long_id == app.long_id {
                         annotations_groups_ids = app.annotations_group_ids.clone();
+                        labels_groups_ids = app.labels_group_ids.clone();
 
                         // disable custom domain check for this router
                         if !app.advanced_settings.deployment_custom_domain_check_enabled {
@@ -186,6 +197,7 @@ impl EnvironmentRequest {
                 for route in &router.routes {
                     if route.service_long_id == container.long_id {
                         annotations_groups_ids = container.annotations_group_ids.clone();
+                        labels_groups_ids = container.labels_group_ids.clone();
 
                         // disable custom domain check for this router
                         if !container.advanced_settings.deployment_custom_domain_check_enabled {
@@ -302,8 +314,19 @@ impl EnvironmentRequest {
                 .flat_map(|annotations_group_id| self.annotations_groups.get(annotations_group_id))
                 .cloned()
                 .collect_vec();
+            let labels_groups = labels_groups_ids
+                .iter()
+                .flat_map(|labels_group_id| self.labels_groups.get(labels_group_id))
+                .cloned()
+                .collect_vec();
 
-            match router.to_router_domain(context, router_advanced_settings, cloud_provider, annotations_groups) {
+            match router.to_router_domain(
+                context,
+                router_advanced_settings,
+                cloud_provider,
+                annotations_groups,
+                labels_groups,
+            ) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     return Err(DomainError::RouterError(err));
@@ -330,6 +353,7 @@ impl EnvironmentRequest {
                     container_registry,
                     cluster,
                     &self.annotations_groups,
+                    &self.labels_groups,
                     cluster.advanced_settings().allow_service_cpu_overcommit,
                     cluster.advanced_settings().allow_service_ram_overcommit,
                 )

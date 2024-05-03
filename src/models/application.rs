@@ -22,11 +22,13 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::application::{ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{
     to_public_l4_ports, ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext,
 };
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -70,6 +72,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -96,6 +99,7 @@ impl<T: CloudProvider> Application<T> {
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
         cpu_request_in_milli: u32,
         cpu_limit_in_milli: u32,
         ram_request_in_mib: u32,
@@ -155,6 +159,7 @@ impl<T: CloudProvider> Application<T> {
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -237,6 +242,7 @@ impl<T: CloudProvider> Application<T> {
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
             annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
         };
 
         ctx
