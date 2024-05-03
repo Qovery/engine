@@ -103,6 +103,7 @@ pub fn working_environment(
             public_domain: format!("{}.{}", application_id.to_uuid(), test_domain),
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
@@ -110,6 +111,7 @@ pub fn working_environment(
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     if with_router {
@@ -333,6 +335,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 public_domain: format!("{}.{}", application_id1, test_domain),
                 container_registries: Vec::new(),
                 annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             },
             Application {
                 long_id: application_id2,
@@ -398,6 +401,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 }),
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             },
         ],
         containers: vec![],
@@ -434,6 +438,7 @@ pub fn environment_2_app_2_routers_1_psql(
         max_parallel_deploy: 1,
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -530,6 +535,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             }),
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
@@ -549,6 +555,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -640,6 +647,7 @@ pub fn environment_only_http_server(
             }),
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
@@ -647,6 +655,7 @@ pub fn environment_only_http_server(
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     if with_router {

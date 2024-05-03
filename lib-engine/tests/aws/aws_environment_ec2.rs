@@ -230,6 +230,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -370,6 +371,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();

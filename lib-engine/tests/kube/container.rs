@@ -104,6 +104,7 @@ fn should_increase_container_storage_size() {
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
+            vec![],
             false,
             false,
         )

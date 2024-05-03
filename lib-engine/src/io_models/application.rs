@@ -8,6 +8,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
@@ -295,6 +296,8 @@ pub struct Application {
     pub container_registries: Vec<Registry>,
     #[serde(default)]
     pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 fn default_root_path_value() -> String {
@@ -308,6 +311,7 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
         allow_service_cpu_overcommit: bool,
         allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
@@ -316,6 +320,13 @@ impl Application {
             .annotations_group_ids
             .iter()
             .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
             .cloned()
             .collect_vec();
 
@@ -350,6 +361,7 @@ impl Application {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         self.cpu_request_in_milli,
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
@@ -383,6 +395,7 @@ impl Application {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         self.cpu_request_in_milli,
                         self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
@@ -417,6 +430,7 @@ impl Application {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 self.cpu_request_in_milli,
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
@@ -449,6 +463,7 @@ impl Application {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 self.cpu_request_in_milli,
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
@@ -484,6 +499,7 @@ impl Application {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 self.cpu_request_in_milli,
                 self.cpu_limit_in_milli,
                 self.ram_request_in_mib,

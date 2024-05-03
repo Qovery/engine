@@ -2,6 +2,7 @@ use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::Action;
 use crate::models;
 use crate::models::aws::AwsRouterExtraSettings;
@@ -51,6 +52,7 @@ impl Router {
         advanced_settings: RouterAdvancedSettings,
         cloud_provider: &dyn CloudProvider,
         annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
@@ -90,6 +92,7 @@ impl Router {
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::router::Router::<AWSEc2>::new(
@@ -105,6 +108,7 @@ impl Router {
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -122,6 +126,7 @@ impl Router {
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    labels_groups,
                 )?);
                 Ok(router)
             }
@@ -138,6 +143,7 @@ impl Router {
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
             )?)),
             CPKind::OnPremise => {
                 let router = Box::new(models::router::Router::<OnPremise>::new(
@@ -153,6 +159,7 @@ impl Router {
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    labels_groups,
                 )?);
                 Ok(router)
             }

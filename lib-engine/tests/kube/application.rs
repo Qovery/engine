@@ -97,6 +97,7 @@ fn should_increase_app_storage_size() {
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
+            vec![],
             resized_app.cpu_request_in_milli,
             resized_app.cpu_limit_in_milli,
             resized_app.ram_request_in_mib,

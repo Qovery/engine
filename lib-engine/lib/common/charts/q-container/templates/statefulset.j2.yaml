@@ -11,6 +11,9 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
     {%- for key, value in annotations_group.stateful_set %}
@@ -42,6 +45,9 @@ spec:
         qovery.com/service-type: {{ service.type }}
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
@@ -224,6 +230,9 @@ spec:
         appId: {{ service.short_id }}
         diskId: {{ s.id }}
         diskType: {{ s.storage_type }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
       {%- else %}
       name: {{ s.long_id }}
       labels:
@@ -234,6 +243,9 @@ spec:
         qovery.com/project-id: {{ project_long_id }}
         qovery.com/disk-id: {{ s.long_id }}
         qovery.com/disk-type: {{ s.storage_type }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: "{{ value }}"
+        {%- endfor %}
       {%- endif %}
     spec:
       accessModes:

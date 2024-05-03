@@ -9,6 +9,7 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
@@ -168,6 +169,8 @@ pub struct Job {
     pub container_registries: ContainerRegistries,
     #[serde(default)]
     pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -277,6 +280,7 @@ impl Job {
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
         allow_service_cpu_overcommit: bool,
         allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn JobService>, JobError> {
@@ -324,6 +328,12 @@ impl Job {
             .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
             .cloned()
             .collect_vec();
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
+            .cloned()
+            .collect_vec();
 
         let service: Box<dyn JobService> = match cloud_provider.kind() {
             Kind::Aws => {
@@ -357,6 +367,7 @@ impl Job {
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         allow_service_cpu_overcommit,
                         allow_service_ram_overcommit,
                     )?)
@@ -390,6 +401,7 @@ impl Job {
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        labels_groups,
                         allow_service_cpu_overcommit,
                         allow_service_ram_overcommit,
                     )?)
@@ -424,6 +436,7 @@ impl Job {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),
@@ -456,6 +469,7 @@ impl Job {
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),
@@ -488,6 +502,7 @@ impl Job {
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
+                labels_groups,
                 allow_service_cpu_overcommit,
                 allow_service_ram_overcommit,
             )?),

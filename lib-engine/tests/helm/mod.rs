@@ -27,6 +27,7 @@ use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, P
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
+use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
@@ -331,6 +332,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
+        get_labels_group(),
         1,
         2,
         3,
@@ -432,6 +434,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
+        get_labels_group(),
         false,
         false,
     )
@@ -452,6 +455,15 @@ fn get_annotations_group_for_app() -> Vec<AnnotationsGroup> {
             AnnotationsGroupScope::Secrets,
             AnnotationsGroupScope::Pods,
         ],
+    }]
+}
+
+fn get_labels_group() -> Vec<LabelsGroup> {
+    vec![LabelsGroup {
+        labels: vec![Label {
+            key: "label_key".to_string(),
+            value: "label_value".to_string(),
+        }],
     }]
 }
 
@@ -566,6 +578,7 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
         vec![],
+        vec![],
     )
     .unwrap()
 }
@@ -645,6 +658,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_job(),
+        get_labels_group(),
         false,
         false,
     )

@@ -24,6 +24,7 @@ use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
@@ -1149,6 +1150,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
                 RouterAdvancedSettings::default(),
                 infra_ctx.cloud_provider(),
                 vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = environment
@@ -1254,6 +1256,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
                 vec![],
             )
             .unwrap();
@@ -1374,6 +1377,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
                 vec![],
             )
             .unwrap();
@@ -1542,6 +1546,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             }),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
@@ -1747,6 +1752,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             }),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1881,6 +1887,7 @@ fn deploy_container_with_storages_on_aws_eks() {
             mounted_files: vec![],
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2010,6 +2017,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2093,6 +2101,7 @@ fn deploy_container_with_router_on_aws_eks() {
             .as_str();
 
         let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
@@ -2164,6 +2173,7 @@ fn deploy_container_with_router_on_aws_eks() {
             mounted_files: vec![],
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2182,6 +2192,12 @@ fn deploy_container_with_router_on_aws_eks() {
                 AnnotationsGroupScope::Pods,
                 AnnotationsGroupScope::Secrets,
             ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+            }]
         }};
 
         environment.routers = vec![Router {
@@ -2294,6 +2310,7 @@ fn deploy_job_on_aws_eks() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2336,6 +2353,7 @@ fn deploy_cronjob_on_aws_eks() {
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
@@ -2391,6 +2409,7 @@ fn deploy_cronjob_on_aws_eks() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! {},
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2402,6 +2421,12 @@ fn deploy_cronjob_on_aws_eks() {
                 AnnotationsGroupScope::Pods,
                 AnnotationsGroupScope::Secrets,
             ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+            }]
         }};
 
         let mut environment_for_delete = environment.clone();
@@ -2500,6 +2525,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2569,6 +2595,7 @@ fn build_and_deploy_job_on_aws_eks() {
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         let json_output = r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
         environment.applications = vec![];
         environment.jobs = vec![Job {
@@ -2623,6 +2650,7 @@ fn build_and_deploy_job_on_aws_eks() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2638,6 +2666,12 @@ fn build_and_deploy_job_on_aws_eks() {
                 AnnotationsGroupScope::Pods,
                 AnnotationsGroupScope::Secrets,
             ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+            }]
         }};
 
         let mut environment_for_delete = environment.clone();
@@ -2757,6 +2791,7 @@ fn test_restart_deployment() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2890,6 +2925,7 @@ fn test_restart_statefulset() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3001,6 +3037,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             }),
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3313,6 +3350,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             }),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();

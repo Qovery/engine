@@ -311,6 +311,7 @@ pub fn environment_3_apps_3_databases(
                 }),
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -376,6 +377,7 @@ pub fn environment_3_apps_3_databases(
                 public_domain: format!("{}.example.com", app_id),
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -443,6 +445,7 @@ pub fn environment_3_apps_3_databases(
                 }),
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
         ],
         containers: vec![],
@@ -533,6 +536,7 @@ pub fn environment_3_apps_3_databases(
         ],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -581,6 +585,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             public_domain: format!("{}.example.com", Uuid::new_v4()),
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
@@ -588,6 +593,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -636,6 +642,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             liveness_probe: None,
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
@@ -643,6 +650,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         databases: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 

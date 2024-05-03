@@ -9,9 +9,11 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
+use crate::io_models::labels_group::LabelsGroup;
 use crate::models;
 use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::service_resource::compute_service_requests_and_limits;
@@ -62,6 +64,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -92,6 +95,7 @@ impl<T: CloudProvider> Job<T> {
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
         allow_service_cpu_overcommit: bool,
         allow_service_ram_overcommit: bool,
     ) -> Result<Self, JobError> {
@@ -145,6 +149,7 @@ impl<T: CloudProvider> Job<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             default_port,
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -255,6 +260,7 @@ impl<T: CloudProvider> Job<T> {
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
         };
 
         ctx
@@ -519,4 +525,5 @@ pub(super) struct JobTeraContext {
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
