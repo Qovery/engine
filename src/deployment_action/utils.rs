@@ -207,6 +207,7 @@ fn mirror_image(
         }
     }) {
         let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
+        logger.warning(msg.clone());
         let user_err = EngineError::new_docker_error(event_details, err.error);
 
         return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
