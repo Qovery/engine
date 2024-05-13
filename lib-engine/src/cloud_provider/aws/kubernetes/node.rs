@@ -206,6 +206,14 @@ pub enum AwsInstancesType {
     G5G_4XLARGE,
     G5G_8XLARGE,
     G5G_XLARGE,
+    G6_12XLARGE,
+    G6_16XLARGE,
+    G6_2XLARGE,
+    G6_4XLARGE,
+    G6_8XLARGE,
+    G6_XLARGE,
+    GR6_4XLARGE,
+    GR6_8XLARGE,
     H1_16XLARGE,
     H1_2XLARGE,
     H1_4XLARGE,
@@ -745,6 +753,14 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::G5G_4XLARGE => "g5g.4xlarge",
             AwsInstancesType::G5G_8XLARGE => "g5g.8xlarge",
             AwsInstancesType::G5G_XLARGE => "g5g.xlarge",
+            AwsInstancesType::G6_12XLARGE => "g6.12xlarge",
+            AwsInstancesType::G6_16XLARGE => "g6.16xlarge",
+            AwsInstancesType::G6_2XLARGE => "g6.2xlarge",
+            AwsInstancesType::G6_4XLARGE => "g6.4xlarge",
+            AwsInstancesType::G6_8XLARGE => "g6.8xlarge",
+            AwsInstancesType::G6_XLARGE => "g6.xlarge",
+            AwsInstancesType::GR6_4XLARGE => "gr6.4xlarge",
+            AwsInstancesType::GR6_8XLARGE => "gr6.8xlarge",
             AwsInstancesType::H1_16XLARGE => "h1.16xlarge",
             AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
             AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
@@ -1286,6 +1302,14 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::G5_4XLARGE
                 | AwsInstancesType::G5_8XLARGE
                 | AwsInstancesType::G5_XLARGE
+                | AwsInstancesType::G6_12XLARGE
+                | AwsInstancesType::G6_16XLARGE
+                | AwsInstancesType::G6_2XLARGE
+                | AwsInstancesType::G6_4XLARGE
+                | AwsInstancesType::G6_8XLARGE
+                | AwsInstancesType::G6_XLARGE
+                | AwsInstancesType::GR6_4XLARGE
+                | AwsInstancesType::GR6_8XLARGE
                 | AwsInstancesType::H1_16XLARGE
                 | AwsInstancesType::H1_2XLARGE
                 | AwsInstancesType::H1_4XLARGE
@@ -1965,6 +1989,14 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::G5_4XLARGE
                 | AwsInstancesType::G5_8XLARGE
                 | AwsInstancesType::G5_XLARGE
+                | AwsInstancesType::G6_12XLARGE
+                | AwsInstancesType::G6_16XLARGE
+                | AwsInstancesType::G6_2XLARGE
+                | AwsInstancesType::G6_4XLARGE
+                | AwsInstancesType::G6_8XLARGE
+                | AwsInstancesType::G6_XLARGE
+                | AwsInstancesType::GR6_4XLARGE
+                | AwsInstancesType::GR6_8XLARGE
                 | AwsInstancesType::H1_16XLARGE
                 | AwsInstancesType::H1_2XLARGE
                 | AwsInstancesType::H1_4XLARGE
@@ -2502,6 +2534,14 @@ impl AwsInstancesType {
             AwsInstancesType::G5G_4XLARGE => "g5g.4xlarge",
             AwsInstancesType::G5G_8XLARGE => "g5g.8xlarge",
             AwsInstancesType::G5G_XLARGE => "g5g.xlarge",
+            AwsInstancesType::G6_12XLARGE => "g6.12xlarge",
+            AwsInstancesType::G6_16XLARGE => "g6.16xlarge",
+            AwsInstancesType::G6_2XLARGE => "g6.2xlarge",
+            AwsInstancesType::G6_4XLARGE => "g6.4xlarge",
+            AwsInstancesType::G6_8XLARGE => "g6.8xlarge",
+            AwsInstancesType::G6_XLARGE => "g6.xlarge",
+            AwsInstancesType::GR6_4XLARGE => "gr6.4xlarge",
+            AwsInstancesType::GR6_8XLARGE => "gr6.8xlarge",
             AwsInstancesType::H1_16XLARGE => "h1.16xlarge",
             AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
             AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
@@ -3043,6 +3083,14 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::G5G_4XLARGE => write!(f, "g5g.4xlarge"),
             AwsInstancesType::G5G_8XLARGE => write!(f, "g5g.8xlarge"),
             AwsInstancesType::G5G_XLARGE => write!(f, "g5g.xlarge"),
+            AwsInstancesType::G6_12XLARGE => write!(f, "g6.12xlarge"),
+            AwsInstancesType::G6_16XLARGE => write!(f, "g6.16xlarge"),
+            AwsInstancesType::G6_2XLARGE => write!(f, "g6.2xlarge"),
+            AwsInstancesType::G6_4XLARGE => write!(f, "g6.4xlarge"),
+            AwsInstancesType::G6_8XLARGE => write!(f, "g6.8xlarge"),
+            AwsInstancesType::G6_XLARGE => write!(f, "g6.xlarge"),
+            AwsInstancesType::GR6_4XLARGE => write!(f, "gr6.4xlarge"),
+            AwsInstancesType::GR6_8XLARGE => write!(f, "gr6.8xlarge"),
             AwsInstancesType::H1_16XLARGE => write!(f, "h1.16xlarge"),
             AwsInstancesType::H1_2XLARGE => write!(f, "h1.2xlarge"),
             AwsInstancesType::H1_4XLARGE => write!(f, "h1.4xlarge"),
@@ -3586,6 +3634,14 @@ impl FromStr for AwsInstancesType {
             "g5g.4xlarge" => Ok(AwsInstancesType::G5G_4XLARGE),
             "g5g.8xlarge" => Ok(AwsInstancesType::G5G_8XLARGE),
             "g5g.xlarge" => Ok(AwsInstancesType::G5G_XLARGE),
+            "g6.12xlarge" => Ok(AwsInstancesType::G6_12XLARGE),
+            "g6.16xlarge" => Ok(AwsInstancesType::G6_16XLARGE),
+            "g6.2xlarge" => Ok(AwsInstancesType::G6_2XLARGE),
+            "g6.4xlarge" => Ok(AwsInstancesType::G6_4XLARGE),
+            "g6.8xlarge" => Ok(AwsInstancesType::G6_8XLARGE),
+            "g6.xlarge" => Ok(AwsInstancesType::G6_XLARGE),
+            "gr6.4xlarge" => Ok(AwsInstancesType::GR6_4XLARGE),
+            "gr6.8xlarge" => Ok(AwsInstancesType::GR6_8XLARGE),
             "h1.16xlarge" => Ok(AwsInstancesType::H1_16XLARGE),
             "h1.2xlarge" => Ok(AwsInstancesType::H1_2XLARGE),
             "h1.4xlarge" => Ok(AwsInstancesType::H1_4XLARGE),
@@ -4144,6 +4200,14 @@ mod tests {
                     AwsInstancesType::G5G_4XLARGE => "g5g.4xlarge",
                     AwsInstancesType::G5G_8XLARGE => "g5g.8xlarge",
                     AwsInstancesType::G5G_XLARGE => "g5g.xlarge",
+                    AwsInstancesType::G6_12XLARGE => "g6.12xlarge",
+                    AwsInstancesType::G6_16XLARGE => "g6.16xlarge",
+                    AwsInstancesType::G6_2XLARGE => "g6.2xlarge",
+                    AwsInstancesType::G6_4XLARGE => "g6.4xlarge",
+                    AwsInstancesType::G6_8XLARGE => "g6.8xlarge",
+                    AwsInstancesType::G6_XLARGE => "g6.xlarge",
+                    AwsInstancesType::GR6_4XLARGE => "gr6.4xlarge",
+                    AwsInstancesType::GR6_8XLARGE => "gr6.8xlarge",
                     AwsInstancesType::H1_16XLARGE => "h1.16xlarge",
                     AwsInstancesType::H1_2XLARGE => "h1.2xlarge",
                     AwsInstancesType::H1_4XLARGE => "h1.4xlarge",
