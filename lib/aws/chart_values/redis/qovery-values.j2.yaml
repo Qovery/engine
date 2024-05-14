@@ -50,7 +50,7 @@ master:
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
   persistence:
-    storageClass: "aws-ebs-gp2-0"
+    storageClass: "{{ database_disk_type }}"
     size: "{{ database_disk_size_in_gib }}Gi"
     labels:
       # app label required for legacy cahrt (installed before 01/06/23)
