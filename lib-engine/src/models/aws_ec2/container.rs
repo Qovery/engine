@@ -15,7 +15,7 @@ impl ToTeraContext for Container<AWSEc2> {
                 id: s.id.clone(),
                 long_id: self.long_id,
                 name: s.name.clone(),
-                storage_type: s.storage_type.to_k8s_storage_class(),
+                storage_type: s.storage_class.0.clone(),
                 size_in_gib: s.size_in_gib,
                 mount_point: s.mount_point.clone(),
                 snapshot_retention_in_days: s.snapshot_retention_in_days,

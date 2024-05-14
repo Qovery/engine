@@ -16,7 +16,7 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::models::application::{get_application_with_invalid_storage_size, Application};
-use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
+use qovery_engine::models::aws::AwsAppExtraSettings;
 use qovery_engine::models::types::AWS;
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
@@ -60,7 +60,7 @@ fn should_increase_app_storage_size() {
             .storage
             .iter()
             .map(|storage| storage.to_aws_storage())
-            .collect::<Vec<Storage<AwsStorageType>>>();
+            .collect::<Vec<Storage>>();
 
         let envs = resized_app
             .environment_vars_with_infos
@@ -263,6 +263,7 @@ fn should_have_mounted_files_as_volume() {
             long_id: storage_id.to_uuid(),
             name: storage_id.short().to_string(),
             storage_type: StorageType::Ssd,
+            storage_class: None,
             size_in_gib: 10,
             mount_point: format!("/tmp/{}", storage_id.short()),
             snapshot_retention_in_days: 1,

@@ -1,6 +1,6 @@
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable};
+use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable, StorageClass};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
@@ -18,7 +18,7 @@ use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
 use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
-use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
+use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::selfmanaged::{OnPremiseAppExtraSettings, OnPremiseStorageType};
 use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
@@ -580,6 +580,7 @@ pub struct Storage {
     pub long_id: Uuid,
     pub name: String,
     pub storage_type: StorageType,
+    pub storage_class: Option<String>,
     pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
@@ -595,16 +596,15 @@ pub enum StorageType {
 }
 
 impl Storage {
-    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage<AwsStorageType> {
+    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: match self.storage_type {
-                StorageType::SlowHdd => AwsStorageType::SC1,
-                StorageType::Hdd => AwsStorageType::ST1,
-                StorageType::Ssd => AwsStorageType::GP2,
-                StorageType::FastSsd => AwsStorageType::IO1,
+            storage_class: if let Some(storage_class) = &self.storage_class {
+                StorageClass(storage_class.clone())
+            } else {
+                StorageClass(AwsStorageType::IO1.to_k8s_storage_class())
             },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
@@ -612,16 +612,15 @@ impl Storage {
         }
     }
 
-    pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage<AwsEc2StorageType> {
+    pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: match self.storage_type {
-                StorageType::SlowHdd => AwsEc2StorageType::SC1,
-                StorageType::Hdd => AwsEc2StorageType::ST1,
-                StorageType::Ssd => AwsEc2StorageType::GP2,
-                StorageType::FastSsd => AwsEc2StorageType::IO1,
+            storage_class: if let Some(storage_class) = &self.storage_class {
+                StorageClass(storage_class.clone())
+            } else {
+                StorageClass(AwsEc2StorageType::IO1.to_k8s_storage_class())
             },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
@@ -629,42 +628,48 @@ impl Storage {
         }
     }
 
-    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage<ScwStorageType> {
+    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: ScwStorageType::BlockSsd, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
+            storage_class: if let Some(storage_class) = &self.storage_class {
+                StorageClass(storage_class.clone())
+            } else {
+                StorageClass("scw-sbv-ssd-0".to_string())
+            },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
     }
 
-    pub fn to_gcp_storage(&self) -> crate::cloud_provider::models::Storage<GcpStorageType> {
+    pub fn to_gcp_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: GcpStorageType::SSD, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
-            // storage_type: match self.storage_type {
-            //     StorageType::SlowHdd => GcpStorageType::Standard,
-            //     StorageType::Hdd => GcpStorageType::Balanced,
-            //     StorageType::Ssd => GcpStorageType::SSD,
-            //     StorageType::FastSsd => GcpStorageType::Extreme,
-            // },
+            storage_class: if let Some(storage_class) = &self.storage_class {
+                StorageClass(storage_class.clone())
+            } else {
+                StorageClass(GcpStorageType::SSD.to_k8s_storage_class())
+            },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
     }
 
-    pub fn to_on_premise_storage(&self) -> crate::cloud_provider::models::Storage<OnPremiseStorageType> {
+    pub fn to_on_premise_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: OnPremiseStorageType::Local,
+            storage_class: if let Some(storage_class) = &self.storage_class {
+                StorageClass(storage_class.clone())
+            } else {
+                StorageClass(OnPremiseStorageType::Local.to_k8s_storage_class())
+            },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
