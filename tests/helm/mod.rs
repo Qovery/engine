@@ -14,7 +14,7 @@ use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{
-    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage,
+    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage, StorageClass,
 };
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
@@ -166,12 +166,12 @@ fn test_port() -> Port {
     }
 }
 
-fn test_storage() -> Storage<AwsStorageType> {
+fn test_storage() -> Storage {
     Storage {
         id: "my_storage_id".to_string(),
         long_id: Uuid::new_v4(),
         name: "my_storage_name".to_string(),
-        storage_type: AwsStorageType::GP2,
+        storage_class: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
         size_in_gib: 1,
         mount_point: "my_mount_point".to_string(),
         snapshot_retention_in_days: 2,

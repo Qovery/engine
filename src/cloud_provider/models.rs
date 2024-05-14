@@ -27,11 +27,14 @@ pub struct MountedFile {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
-pub struct Storage<T> {
+pub struct StorageClass(pub String);
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct Storage {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub storage_type: T,
+    pub storage_class: StorageClass,
     pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,

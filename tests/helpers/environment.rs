@@ -200,6 +200,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
         long_id: storage_id.to_uuid(),
         name: storage_id.short().to_string(),
         storage_type: StorageType::Ssd,
+        storage_class: None,
         size_in_gib: 10,
         mount_point: format!("/tmp/{}", storage_id.short()),
         snapshot_retention_in_days: 1,
