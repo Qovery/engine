@@ -57,7 +57,7 @@ resource "aws_db_instance" "postgresql_instance" {
   username = var.username
   engine_version = var.postgresql_version
   engine = "postgres"
-  ca_cert_identifier = "rds-ca-2019"
+  ca_cert_identifier = "rds-ca-rsa2048-g1"
   {%- endif %}
 
   # Network
