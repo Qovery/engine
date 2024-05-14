@@ -83,7 +83,7 @@ resource "aws_db_instance" "mysql_instance" {
   username = var.username
   engine_version = var.mysql_version
   engine = "mysql"
-  ca_cert_identifier = "rds-ca-2019"
+  ca_cert_identifier = "rds-ca-rsa2048-g1"
   {%- endif %}
 
   # Network
