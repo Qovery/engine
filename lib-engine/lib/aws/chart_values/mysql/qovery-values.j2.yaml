@@ -51,7 +51,7 @@ primary:
       memory: "{{ ram_limit_in_mib }}"
       cpu: "{{ cpu_limit_in_milli }}"
   persistence:
-    storageClass: "aws-ebs-gp2-0"
+    storageClass: "{{ database_disk_type }}"
     size: "{{ database_disk_size_in_gib }}Gi"
     labels:
       # app label required for legacy chart (installed before 15/06/23)
