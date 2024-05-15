@@ -3,7 +3,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol, StorageType};
+use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -144,6 +144,7 @@ pub fn working_minimal_environment_with_router(context: &Context, test_domain: &
 pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
     context: &Context,
     mounted_file: &MountedFile,
+    storage_class: &str,
 ) -> EnvironmentRequest {
     let mut environment = working_environment(context, "", false, false);
 
@@ -201,8 +202,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
         id: storage_id.short().to_string(),
         long_id: storage_id.to_uuid(),
         name: storage_id.short().to_string(),
-        storage_type: StorageType::Ssd,
-        storage_class: None,
+        storage_class: storage_class.to_string(),
         size_in_gib: 10,
         mount_point: format!("/tmp/{}", storage_id.short()),
         snapshot_retention_in_days: 1,

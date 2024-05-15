@@ -289,7 +289,19 @@ impl<T: CloudProvider> Container<T> {
                     vec
                 },
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
-                storages: vec![],
+                storages: self
+                    .storages
+                    .iter()
+                    .map(|s| StorageDataTemplate {
+                        id: s.id.clone(),
+                        long_id: s.long_id,
+                        name: s.name.clone(),
+                        storage_type: s.storage_class.0.clone(),
+                        size_in_gib: s.size_in_gib,
+                        mount_point: s.mount_point.clone(),
+                        snapshot_retention_in_days: s.snapshot_retention_in_days,
+                    })
+                    .collect(),
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings,
@@ -436,6 +448,14 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use tera::Context as TeraContext;
+
+impl<T: CloudProvider> ToTeraContext for Container<T> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
+        let context = self.default_tera_context(target);
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
+    }
+}
 impl<T: CloudProvider> ContainerService for Container<T>
 where
     Container<T>: Service + ToTeraContext + DeploymentAction,

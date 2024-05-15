@@ -1,8 +1,6 @@
 use crate::cloud_provider::Kind;
 use crate::models::types::CloudProvider;
 use crate::models::types::OnPremise;
-mod application;
-mod container;
 mod database;
 mod job;
 mod router;
@@ -15,8 +13,6 @@ impl CloudProvider for OnPremise {
     type AppExtraSettings = OnPremiseAppExtraSettings;
     type DbExtraSettings = OnPremiseDbExtraSettings;
     type RouterExtraSettings = OnPremiseRouterExtraSettings;
-    type StorageTypes = OnPremiseStorageType;
-
     fn cloud_provider() -> Kind {
         Kind::OnPremise
     }

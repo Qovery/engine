@@ -13,7 +13,7 @@ use kube::api::ListParams;
 use kube::Api;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
-use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -678,8 +678,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::FastSsd,
-                    storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -753,6 +752,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                &AwsStorageType::GP2.to_k8s_storage_class(),
             );
 
         let mut environment_delete = environment.clone();
@@ -847,8 +847,7 @@ fn redeploy_same_app_with_ebs() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
-                    storage_class: None,
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1866,8 +1865,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                     id: to_short_id(&storage_id_1),
                     long_id: storage_id_1,
                     name: "photos1".to_string(),
-                    storage_type: StorageType::Ssd,
-                    storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: 10,
                     mount_point: "/mnt/photos1".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1876,8 +1874,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                     id: to_short_id(&storage_id_2),
                     long_id: storage_id_2,
                     name: "photos2".to_string(),
-                    storage_type: StorageType::Ssd,
-                    storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: 10,
                     mount_point: "/mnt/photos2".to_string(),
                     snapshot_retention_in_days: 0,
@@ -2869,8 +2866,7 @@ fn test_restart_statefulset() {
                 name: "storage-1".to_string(),
                 mount_point: "/storage".to_string(),
                 size_in_gib: 10,
-                storage_type: StorageType::FastSsd,
-                storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                 snapshot_retention_in_days: 1,
             }],
             mounted_files: vec![],
@@ -3129,8 +3125,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         id: to_short_id(&id_1),
                         long_id: id_1,
                         name: "photos_1".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: initial_storage_size,
                         mount_point: "/mnt/photos_1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -3139,8 +3134,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         id: to_short_id(&id_2),
                         long_id: id_2,
                         name: "photos_2".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: Some(AwsStorageType::IO1.to_k8s_storage_class()),
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: initial_storage_size,
                         mount_point: "/mnt/photos_2".to_string(),
                         snapshot_retention_in_days: 0,

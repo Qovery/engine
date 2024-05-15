@@ -6,7 +6,7 @@ use crate::helpers::utilities::{
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Application, Port, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -14,6 +14,7 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use url::Url;
@@ -92,7 +93,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ram_request_in_mib: 512,
                 ram_limit_in_mib: 512, // MySQL requires at least 512Mo in order to boot
                 disk_size_in_gib: NormalSize.size(),
-                database_disk_type: "gp2".to_string(),
+                database_disk_type: AwsStorageType::GP2.to_k8s_storage_class(),
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
@@ -173,8 +174,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_1_id),
                         long_id: storage_1_id,
                         name: "photos1".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: None,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -183,8 +183,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_2_id),
                         long_id: storage_2_id,
                         name: "photos2".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: None,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos2".to_string(),
                         snapshot_retention_in_days: 0,
@@ -221,8 +220,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_1_id),
                         long_id: storage_1_id,
                         name: "photos1".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: None,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -231,8 +229,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_2_id),
                         long_id: storage_2_id,
                         name: "photos2".to_string(),
-                        storage_type: StorageType::Ssd,
-                        storage_class: None,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos2".to_string(),
                         snapshot_retention_in_days: 0,

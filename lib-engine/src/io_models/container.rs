@@ -424,7 +424,7 @@ impl Container {
                         self.max_instances,
                         self.public_domain,
                         self.ports,
-                        self.storages.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -458,7 +458,7 @@ impl Container {
                         self.max_instances,
                         self.public_domain,
                         self.ports,
-                        self.storages.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
+                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -493,7 +493,7 @@ impl Container {
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                self.storages.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -526,7 +526,7 @@ impl Container {
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                self.storages.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -559,10 +559,7 @@ impl Container {
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                self.storages
-                    .iter()
-                    .map(|s| s.to_on_premise_storage())
-                    .collect::<Vec<_>>(),
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()

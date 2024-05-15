@@ -33,7 +33,6 @@ pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_28 {
     suffix: None,
 };
 pub const AWS_DATABASE_INSTANCE_TYPE: AwsDatabaseInstanceType = AwsDatabaseInstanceType::DB_T3_MICRO;
-pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 pub const AWS_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
 

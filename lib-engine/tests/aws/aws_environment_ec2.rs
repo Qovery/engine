@@ -16,6 +16,7 @@ use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSo
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 use url::Url;
@@ -62,6 +63,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                &AwsStorageType::GP2.to_k8s_storage_class(),
             );
 
         let mut environment_delete = environment.clone();

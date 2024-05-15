@@ -11,7 +11,7 @@ use ::function_name::named;
 use bstr::ByteSlice;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
-use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -484,8 +484,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
-                    storage_class: Some("scw-sbv-ssd-0".to_string()),
+                    storage_class: "scw-sbv-ssd-0".to_string(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -564,6 +563,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                "scw-sbv-ssd-0",
             );
 
         let mut environment_delete = environment.clone();
@@ -729,8 +729,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
-                    storage_class: Some("scw-sbv-ssd-0".to_string()),
+                    storage_class: "scw-sbv-ssd-0".to_string(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,

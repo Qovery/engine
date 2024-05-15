@@ -55,6 +55,7 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::msg_publisher::StdMsgPublisher;
 use time::Instant;
@@ -868,7 +869,7 @@ pub fn db_infos(
 
 pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
     match provider_kind {
-        Kind::Aws => "gp2".to_string(),
+        Kind::Aws => AwsStorageType::GP2.to_k8s_storage_class(),
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
