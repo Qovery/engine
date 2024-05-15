@@ -1,5 +1,3 @@
-mod application;
-mod container;
 mod database;
 mod database_utils;
 mod job;
@@ -22,8 +20,6 @@ impl CloudProvider for SCW {
     type AppExtraSettings = ScwAppExtraSettings;
     type DbExtraSettings = ScwDbExtraSettings;
     type RouterExtraSettings = ScwRouterExtraSettings;
-    type StorageTypes = ScwStorageType;
-
     fn cloud_provider() -> Kind {
         Kind::Scw
     }
@@ -64,14 +60,6 @@ impl CloudProvider for SCW {
             ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
         ]
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum ScwStorageType {
-    #[serde(rename = "b_ssd")]
-    BlockSsd,
-    #[serde(rename = "l_ssd")]
-    LocalSsd,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]

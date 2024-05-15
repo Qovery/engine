@@ -11,12 +11,11 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
-use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
-use qovery_engine::models::aws::AwsAppExtraSettings;
+use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::container::{get_container_with_invalid_storage_size, Container};
 use qovery_engine::models::registry_image_source::RegistryImageSource;
 use qovery_engine::models::types::AWS;
@@ -61,7 +60,7 @@ fn should_increase_container_storage_size() {
         let storages = resized_container
             .storages
             .iter()
-            .map(|storage| storage.to_aws_storage())
+            .map(|storage| storage.to_storage())
             .collect::<Vec<Storage>>();
 
         let envs = resized_container
@@ -259,8 +258,7 @@ fn should_have_mounted_files_as_volume() {
             id: storage_id.short().to_string(),
             long_id: storage_id.to_uuid(),
             name: storage_id.short().to_string(),
-            storage_type: StorageType::Ssd,
-            storage_class: None,
+            storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
             size_in_gib: 10,
             mount_point: format!("/tmp/{}", storage_id.short()),
             snapshot_retention_in_days: 1,

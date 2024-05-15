@@ -1,3 +1,16 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::str;
+use std::sync::Arc;
+use std::time::Duration;
+
+use base64::engine::general_purpose;
+use base64::Engine;
+use chrono::{DateTime, Utc};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use url::Url;
+use uuid::Uuid;
+
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable, StorageClass};
@@ -16,24 +29,13 @@ use crate::io_models::{
 };
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
-use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
-use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
-use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
+use crate::models::aws::AwsAppExtraSettings;
+use crate::models::aws_ec2::AwsEc2AppExtraSettings;
+use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::{OnPremiseAppExtraSettings, OnPremiseStorageType};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
-use base64::engine::general_purpose;
-use base64::Engine;
-use chrono::{DateTime, Utc};
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
-use std::str;
-use std::sync::Arc;
-use std::time::Duration;
-use url::Url;
-use uuid::Uuid;
 
 use super::{PodAntiAffinity, UpdateStrategy};
 
@@ -349,7 +351,7 @@ impl Application {
                         build,
                         self.command_args,
                         self.entrypoint,
-                        self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -383,7 +385,7 @@ impl Application {
                         build,
                         self.command_args,
                         self.entrypoint,
-                        self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
+                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -418,7 +420,7 @@ impl Application {
                 build,
                 self.command_args,
                 self.entrypoint,
-                self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -451,7 +453,7 @@ impl Application {
                 build,
                 self.command_args,
                 self.entrypoint,
-                self.storage.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -484,10 +486,7 @@ impl Application {
                 build,
                 self.command_args,
                 self.entrypoint,
-                self.storage
-                    .iter()
-                    .map(|s| s.to_on_premise_storage())
-                    .collect::<Vec<_>>(),
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -595,97 +594,19 @@ pub struct Storage {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub storage_type: StorageType,
-    pub storage_class: Option<String>,
+    pub storage_class: String,
     pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum StorageType {
-    SlowHdd,
-    Hdd,
-    Ssd,
-    FastSsd,
-}
-
 impl Storage {
-    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage {
+    pub fn to_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_class: if let Some(storage_class) = &self.storage_class {
-                StorageClass(storage_class.clone())
-            } else {
-                StorageClass(AwsStorageType::IO1.to_k8s_storage_class())
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_class: if let Some(storage_class) = &self.storage_class {
-                StorageClass(storage_class.clone())
-            } else {
-                StorageClass(AwsEc2StorageType::IO1.to_k8s_storage_class())
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_class: if let Some(storage_class) = &self.storage_class {
-                StorageClass(storage_class.clone())
-            } else {
-                StorageClass("scw-sbv-ssd-0".to_string())
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_gcp_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_class: if let Some(storage_class) = &self.storage_class {
-                StorageClass(storage_class.clone())
-            } else {
-                StorageClass(GcpStorageType::SSD.to_k8s_storage_class())
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_on_premise_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_class: if let Some(storage_class) = &self.storage_class {
-                StorageClass(storage_class.clone())
-            } else {
-                StorageClass(OnPremiseStorageType::Local.to_k8s_storage_class())
-            },
+            storage_class: StorageClass(self.storage_class.clone()),
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,

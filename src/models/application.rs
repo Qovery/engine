@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
-    KubernetesMemoryResourceUnit, MountedFile, Storage,
+    KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -62,7 +62,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) build: Build,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) storage: Vec<Storage>,
+    pub(super) storages: Vec<Storage>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) readiness_probe: Option<Probe>,
@@ -90,7 +90,7 @@ impl<T: CloudProvider> Application<T> {
         build: Build,
         command_args: Vec<String>,
         entrypoint: Option<String>,
-        storage: Vec<Storage>,
+        storages: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
         readiness_probe: Option<Probe>,
@@ -149,7 +149,7 @@ impl<T: CloudProvider> Application<T> {
             build,
             command_args,
             entrypoint,
-            storage,
+            storages,
             environment_variables,
             mounted_files,
             readiness_probe,
@@ -222,7 +222,19 @@ impl<T: CloudProvider> Application<T> {
                     vec
                 },
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
-                storages: vec![],
+                storages: self
+                    .storages
+                    .iter()
+                    .map(|s| StorageDataTemplate {
+                        id: s.id.clone(),
+                        long_id: s.long_id,
+                        name: s.name.clone(),
+                        storage_type: s.storage_class.0.clone(),
+                        size_in_gib: s.size_in_gib,
+                        mount_point: s.mount_point.clone(),
+                        snapshot_retention_in_days: s.snapshot_retention_in_days,
+                    })
+                    .collect(),
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings: advanced_settings.to_container_advanced_settings(),
@@ -249,7 +261,7 @@ impl<T: CloudProvider> Application<T> {
     }
 
     pub fn is_stateful(&self) -> bool {
-        !self.storage.is_empty()
+        !self.storages.is_empty()
     }
 
     pub fn service_type(&self) -> ServiceType {
@@ -396,6 +408,14 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use tera::Context as TeraContext;
+impl<T: CloudProvider> ToTeraContext for Application<T> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
+        let context = self.default_tera_context(target);
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
+    }
+}
+
 impl<T: CloudProvider> ApplicationService for Application<T>
 where
     Application<T>: Service + ToTeraContext + DeploymentAction,
@@ -480,7 +500,8 @@ pub fn get_application_with_invalid_storage_size<T: CloudProvider>(
                                 ))
                             })?;
 
-                            if let Some(storage) = application.storage.iter().find(|storage| volume_name == &storage.id)
+                            if let Some(storage) =
+                                application.storages.iter().find(|storage| volume_name == &storage.id)
                             {
                                 if storage.size_in_gib > size {
                                     // if volume size in request is bigger than effective size we get related PVC to get its infos

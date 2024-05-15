@@ -22,7 +22,6 @@ pub trait CloudProvider: Send + Sync {
     type AppExtraSettings: Send + Sync;
     type DbExtraSettings: Send + Sync;
     type RouterExtraSettings: Send + Sync;
-    type StorageTypes: Send + Sync;
 
     fn cloud_provider() -> Kind;
     fn short_name() -> &'static str;

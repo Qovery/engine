@@ -1,5 +1,3 @@
-mod application;
-mod container;
 mod database;
 pub mod io;
 mod job;
@@ -50,29 +48,12 @@ pub struct JsonCredentials {
 #[derive(Clone, Eq, PartialEq)]
 pub enum GcpStorageType {
     Balanced,
-    SSD,
-    Standard,
-    Extreme,
-}
-
-impl Display for GcpStorageType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GcpStorageType::Balanced => write!(f, "pd-balanced"),
-            GcpStorageType::SSD => write!(f, "pd-ssd"),
-            GcpStorageType::Standard => write!(f, "pd-standard"),
-            GcpStorageType::Extreme => write!(f, "pd-extreme"),
-        }
-    }
 }
 
 impl GcpStorageType {
     pub fn to_k8s_storage_class(&self) -> String {
         match self {
             GcpStorageType::Balanced => "gcp-pd-balanced",
-            GcpStorageType::SSD => "gcp-pd-ssd",
-            GcpStorageType::Standard => "gcp-pd-standard",
-            GcpStorageType::Extreme => "gcp-pd-extreme",
         }
         .to_string()
     }
@@ -86,8 +67,6 @@ impl CloudProvider for GCP {
     type AppExtraSettings = GcpAppExtraSettings;
     type DbExtraSettings = GcpDbExtraSettings;
     type RouterExtraSettings = GcpRouterExtraSettings;
-    type StorageTypes = GcpStorageType;
-
     fn cloud_provider() -> Kind {
         Kind::Gcp
     }

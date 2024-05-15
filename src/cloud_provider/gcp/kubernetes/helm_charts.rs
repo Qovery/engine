@@ -260,7 +260,7 @@ pub fn gcp_helm_charts(
         true => Some(Box::new(
             KubePrometheusStackChart::new(
                 chart_prefix_path,
-                GcpStorageType::Standard.to_k8s_storage_class(),
+                GcpStorageType::Balanced.to_k8s_storage_class(),
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 true,
