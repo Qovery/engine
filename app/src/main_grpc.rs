@@ -52,6 +52,7 @@ use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
 };
+use qovery_engine::git::initialize_git_opts;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
@@ -277,6 +278,9 @@ pub fn main() -> io::Result<()> {
             process::exit(1);
         }
     }
+
+    info!("Setting git opts for timeout config");
+    initialize_git_opts(Duration::from_secs(10), Duration::from_secs(20));
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
     // docker daemon is slower to start than the engine

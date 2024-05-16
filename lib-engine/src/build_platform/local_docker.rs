@@ -8,8 +8,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, thread};
 
-use git2::{Cred, CredentialType};
+use git2::{Cred, CredentialType, ErrorClass};
 use retry::delay::Fibonacci;
+use retry::OperationResult;
 use time::Instant;
 use uuid::Uuid;
 
@@ -526,17 +527,32 @@ impl BuildPlatform for LocalDocker {
         // Do the real git clone
         let git_clone_record =
             metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::GitClone);
-        if let Err(clone_error) = git::clone_at_commit(
-            &build.git_repository.url,
-            &build.git_repository.commit_id,
-            &repository_root_path,
-            &get_credentials,
-        ) {
+        if let Err(error) = retry::retry(retry::delay::Fixed::from_millis(10_000).take(3), || {
+            if let Err(err_git) = git::clone_at_commit(
+                &build.git_repository.url,
+                &build.git_repository.commit_id,
+                &repository_root_path,
+                &get_credentials,
+            ) {
+                let message = err_git.message();
+                let git_error_class = err_git.class();
+                if git_error_class == ErrorClass::Net && message.contains("timed out") {
+                    debug!("Encountered git timeout issue, retrying maximum 3 times");
+                    return OperationResult::Retry(BuildError::GitError {
+                        application: build.image.service_id.clone(),
+                        raw_error: err_git,
+                    });
+                } else {
+                    return OperationResult::Err(BuildError::GitError {
+                        application: build.image.service_id.clone(),
+                        raw_error: err_git,
+                    });
+                };
+            }
+            OperationResult::Ok(())
+        }) {
             git_clone_record.stop(StepStatus::Error);
-            return Err(BuildError::GitError {
-                application: build.image.service_id.clone(),
-                raw_error: clone_error,
-            });
+            return Err(error.error);
         }
         git_clone_record.stop(StepStatus::Success);
 

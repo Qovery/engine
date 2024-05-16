@@ -1,13 +1,33 @@
 use std::path::Path;
+use std::time::Duration;
 
 use git2::build::CheckoutBuilder;
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
 use git2::{
-    AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, RemoteCallbacks,
+    opts, AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, RemoteCallbacks,
     Repository, SubmoduleUpdateOptions,
 };
+use tracing::field::debug;
 use url::Url;
+
+pub fn initialize_git_opts(
+    git_opts_set_server_connection_timeout_in_milliseconds: Duration,
+    git_opts_set_server_timeout_in_milliseconds: Duration,
+) {
+    unsafe {
+        if let Err(err) = opts::set_server_connect_timeout_in_milliseconds(
+            git_opts_set_server_connection_timeout_in_milliseconds.as_millis() as i32,
+        ) {
+            debug(format!("Cannot set git_server_connect_timeout: {}", err));
+        }
+        if let Err(err) =
+            opts::set_server_timeout_in_milliseconds(git_opts_set_server_timeout_in_milliseconds.as_millis() as i32)
+        {
+            debug(format!("Cannot set git_server_timeout: {}", err));
+        }
+    }
+}
 
 pub fn clone_at_commit<P>(
     repository_url: &Url,
