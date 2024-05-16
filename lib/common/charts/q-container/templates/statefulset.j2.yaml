@@ -230,9 +230,6 @@ spec:
         appId: {{ service.short_id }}
         diskId: {{ s.id }}
         diskType: {{ s.storage_type }}
-        {%- for key, value in labels_group.common %}
-        {{ key }}: "{{ value }}"
-        {%- endfor %}
       {%- else %}
       name: {{ s.long_id }}
       labels:
@@ -243,9 +240,6 @@ spec:
         qovery.com/project-id: {{ project_long_id }}
         qovery.com/disk-id: {{ s.long_id }}
         qovery.com/disk-type: {{ s.storage_type }}
-        {%- for key, value in labels_group.common %}
-        {{ key }}: "{{ value }}"
-        {%- endfor %}
       {%- endif %}
     spec:
       accessModes:
