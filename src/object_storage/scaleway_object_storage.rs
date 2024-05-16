@@ -323,6 +323,10 @@ impl ObjectStorage for ScalewayOS {
         }
     }
 
+    fn delete_bucket_non_blocking(&self, _bucket_name: &str) -> Result<(), ObjectStorageError> {
+        todo!("delete_bucket for SCW is not implemented")
+    }
+
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;

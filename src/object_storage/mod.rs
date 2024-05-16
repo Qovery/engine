@@ -58,6 +58,7 @@ pub trait ObjectStorage {
         bucket_name: &str,
         bucket_delete_strategy: BucketDeleteStrategy,
     ) -> Result<(), ObjectStorageError>;
+    fn delete_bucket_non_blocking(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError>;
     fn put_object(
         &self,

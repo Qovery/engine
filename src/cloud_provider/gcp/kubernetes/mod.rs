@@ -43,6 +43,7 @@ use crate::object_storage::google_object_storage::GoogleOS;
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -892,24 +893,10 @@ impl Gke {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
-        // Get credentials file path
-        let temp_dir = self.temp_dir();
-        let gcp_credentials_file_path = format!("{}/gcp-credentials.json", temp_dir.to_string_lossy());
-
-        let _ = QoveryCommand::new(
-            "gcloud",
-            &[
-                "auth",
-                "activate-service-account",
-                &self.options.gcp_json_credentials.client_email,
-                format!("--key-file={}", gcp_credentials_file_path).as_str(),
-            ],
-            infra_ctx
-                .cloud_provider()
-                .credentials_environment_variables()
-                .as_slice(),
-        )
-        .exec(); // TODO(benjaminch): introduce an EngineError for it and handle it properly
+        if let Err(e) = GoogleAuthService::activate_service_account(self.options.gcp_json_credentials.clone()) {
+            error!("Cannot activate service account: {}", e);
+            // TODO(benjaminch): introduce an EngineError for it and handle it properly
+        }
 
         let _ = QoveryCommand::new(
             "gcloud",
@@ -1243,10 +1230,8 @@ impl Gke {
                 ),
             ))
         }
-        if let Err(e) = self
-            .object_storage
-            .delete_bucket(&self.logs_bucket_name(), BucketDeleteStrategy::HardDelete)
-        {
+        // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
+        if let Err(e) = self.object_storage.delete_bucket_non_blocking(&self.logs_bucket_name()) {
             self.logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(

@@ -154,6 +154,15 @@ impl ObjectStorage for GoogleOS {
         }
     }
 
+    fn delete_bucket_non_blocking(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+        self.service
+            .delete_bucket_non_blocking(bucket_name, self.region.clone())
+            .map_err(|e| ObjectStorageError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            })
+    }
+
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         match self.service.get_object(bucket_name, object_key) {
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
@@ -605,6 +614,66 @@ mod tests {
 
         // execute:
         let delete_result = object_storage.delete_bucket(bucket_name, BucketDeleteStrategy::HardDelete);
+
+        // verify:
+        assert_eq!(
+            ObjectStorageError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Cannot delete bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+            },
+            delete_result.unwrap_err(),
+        );
+    }
+
+    #[test]
+    fn delete_bucket_non_blocking_success_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.delete_bucket_non_blocking(bucket_name, _)).then_return(Ok(()));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+        );
+
+        // execute:
+        let delete_result = object_storage.delete_bucket_non_blocking(bucket_name);
+
+        // verify:
+        assert_eq!(Ok(()), delete_result);
+    }
+
+    #[test]
+    fn delete_bucket_non_blocking_failure_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let raw_error_message = "delete error message";
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.delete_bucket_non_blocking(bucket_name, _)).then_return(Err(
+            ObjectStorageServiceError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: raw_error_message.to_string(),
+            },
+        ));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+        );
+
+        // execute:
+        let delete_result = object_storage.delete_bucket_non_blocking(bucket_name);
 
         // verify:
         assert_eq!(

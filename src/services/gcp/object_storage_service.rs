@@ -1,7 +1,9 @@
+use crate::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
 use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
+use crate::services::gcp::cloud_job_service::CloudJobService;
 use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_storage::client::{Client, ClientConfig};
@@ -26,6 +28,7 @@ use governor::{clock, RateLimiter};
 use reqwest::Body;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -91,8 +94,11 @@ enum StorageResourceKind {
 #[cfg_attr(test, faux::create)]
 pub struct ObjectStorageService {
     client: Client,
+    client_email: String,
+    project_id: String,
     write_bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     write_object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+    cloud_job_service: Arc<CloudJobService>,
 }
 
 #[cfg_attr(test, faux::methods)]
@@ -105,7 +111,7 @@ impl ObjectStorageService {
         Ok(Self {
             client: Client::new(
                 block_on(ClientConfig::default().with_credentials(
-                    new_gcp_credentials_file_from_credentials(google_credentials).map_err(|e| {
+                    new_gcp_credentials_file_from_credentials(google_credentials.clone()).map_err(|e| {
                         ObjectStorageServiceError::CannotCreateService {
                             raw_error_message: e.to_string(),
                         }
@@ -117,6 +123,13 @@ impl ObjectStorageService {
             ),
             write_bucket_rate_limiter: bucket_rate_limiter,
             write_object_rate_limiter: object_rate_limiter,
+            client_email: google_credentials.client_email.to_string(),
+            project_id: google_credentials.project_id.to_string(),
+            cloud_job_service: Arc::from(CloudJobService::new(google_credentials).map_err(|e| {
+                ObjectStorageServiceError::CannotCreateService {
+                    raw_error_message: e.to_string(),
+                }
+            })?),
         })
     }
 
@@ -302,6 +315,55 @@ impl ObjectStorageService {
             object_id: object_id.to_string(),
             raw_error_message: e.to_string(),
         })
+    }
+
+    /// This to handle buckets having big / lot of objects deletion as it can be very long and might lead to timeout
+    /// On cluster deletion, a job is created on Google side to handle the bucket deletion asynchronously.
+    /// Note: there is no way as of today to setup a lifetime on bucket to set a TTL, hence need to handle it manually.
+    pub fn delete_bucket_non_blocking(
+        &self,
+        bucket_name: &str,
+        bucket_location: GcpStorageRegion,
+    ) -> Result<(), ObjectStorageServiceError> {
+        match self.cloud_job_service.create_job(
+            format!("delete-bucket-{}", bucket_name).as_str(),
+            "gcr.io/google.com/cloudsdktool/google-cloud-cli:latest",
+            "gcloud",
+            &[
+                "storage",
+                "rm",
+                "--recursive",
+                format!("gs://{bucket_name}", bucket_name = bucket_name).as_str(),
+            ],
+            self.client_email.as_str(),
+            self.project_id.as_str(),
+            GcpCloudJobRegion::from_str(bucket_location.to_cloud_provider_format()).map_err(|_| {
+                ObjectStorageServiceError::CannotDeleteBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: format!(
+                        "Cannot create run job to delete the bucket, invalid region: {}",
+                        bucket_location.to_cloud_provider_format()
+                    ),
+                }
+            })?,
+            true,
+            Some(HashMap::from([
+                // Tags keys rule: Only hyphens (-), underscores (_), lowercase characters, and numbers are allowed.
+                // Keys must start with a lowercase character. International characters are allowed.
+                ("action".to_string(), "bucket-deletion-async".to_string()),
+                ("bucket_name".to_string(), bucket_name.to_string()),
+                (
+                    "bucket_location".to_string(),
+                    bucket_location.to_cloud_provider_format().to_lowercase(),
+                ),
+            ])),
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ObjectStorageServiceError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Cannot create run job to delete the bucket: {e}"),
+            }),
+        }
     }
 
     pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageServiceError> {
