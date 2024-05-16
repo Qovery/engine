@@ -5,9 +5,12 @@ use function_name::named;
 use qovery_engine::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::time::Duration;
+use tracing::error;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on bucket / objects
@@ -309,7 +312,7 @@ fn test_update_bucket() {
 #[cfg(feature = "test-gcp-minimal")]
 #[test]
 #[named]
-fn test_delete_bucket_success() {
+fn test_delete_bucket_using_run_job() {
     // setup:
     let secrets = FuncTestsSecrets::new();
     let credentials = try_parse_json_credentials_from_str(
@@ -341,13 +344,30 @@ fn test_delete_bucket_success() {
         )
         .expect("Cannot create bucket")
         .name;
+    // stick a guard on the bucket to delete bucket after test
+    let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
+        // make sure to delete the bucket after test
+        service
+            .delete_bucket(bucket_name.as_str(), true)
+            .unwrap_or_else(|_| error!("Cannot delete test bucket `{}` after test", bucket_name));
+    });
 
     // execute:
-    let delete_result = service.delete_bucket(existing_bucket_name.as_str(), true);
+    let delete_result =
+        service.delete_bucket_non_blocking(existing_bucket_name.as_str(), GcpStorageRegion::from(GCP_REGION));
 
     // verify:
     assert!(delete_result.is_ok());
-    assert!(!service.bucket_exists(existing_bucket_name.as_str()));
+    // deletion job should be executed immediately, but there is a delay in the bucket deletion while job is being created and executed
+    // so we need to wait a bit before checking if the bucket is deleted
+    let bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        if service.bucket_exists(existing_bucket_name.as_str()) {
+            OperationResult::Retry("Bucket still exists")
+        } else {
+            OperationResult::Ok(())
+        }
+    });
+    assert!(bucket_exists_result.is_ok());
 }
 
 #[cfg(feature = "test-gcp-minimal")]
