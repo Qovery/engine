@@ -8,7 +8,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{
-    CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist,
+    CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
 use crate::cmd::helm_utils::ChartYAML;
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
@@ -69,6 +69,9 @@ pub enum HelmError {
 
     #[error("Invalid Helm Repository Config: {0}")]
     InvalidRepositoryConfig(String),
+
+    #[error("Error: releaseContent: Release name is invalid: {0}")]
+    ReleaseNameInvalid(String),
 }
 
 #[derive(Debug, Clone)]
@@ -157,6 +160,7 @@ impl Helm {
             &CommandKiller::never(),
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
+            Err(_) if stderr.contains("Release name is invalid") => Err(ReleaseNameInvalid(chart.name.clone())),
             Err(err) => {
                 stderr.push_str(err.to_string().as_str());
                 Err(CmdError(chart.name.clone(), STATUS, err.into()))
@@ -220,7 +224,10 @@ impl Helm {
         // If the release does not exist, we do not return an error
         match self.check_release_exist(chart, envs) {
             Ok(_) => {}
-            Err(ReleaseDoesNotExist(_)) => return Ok(()),
+            Err(ReleaseDoesNotExist(x)) => {
+                info!("Helm release `{x}` does not exist. Nothing to do");
+                return Ok(());
+            }
             Err(err) => return Err(err),
         }
 
