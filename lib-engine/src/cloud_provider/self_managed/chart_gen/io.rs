@@ -301,6 +301,7 @@ impl ValuesFile {
         value.services.gcp = GcpServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
 
         value
     }
@@ -344,6 +345,7 @@ impl ValuesFile {
             qovery_storage_class: ServiceEnabled { enabled: true },
         };
 
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
         value
     }
 
@@ -385,6 +387,7 @@ impl ValuesFile {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
 
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
         value
     }
 
@@ -440,7 +443,7 @@ impl ValuesFile {
             build_container: BuildContainer {
                 environment_variables: BTreeMap::from([
                     ("BUILDER_CPU_ARCHITECTURES".to_string(), "*architectures".to_string()),
-                    ("BUILDER_ROOTLESS_ENABLED".to_string(), "false".to_string()),
+                    ("BUILDER_ROOTLESS_ENABLED".to_string(), "false".to_string()), // need to disable rootless to use http registries
                 ]),
             },
             environment_variables: BTreeMap::from([
