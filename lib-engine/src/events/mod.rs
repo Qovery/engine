@@ -299,6 +299,8 @@ pub enum InfrastructureStep {
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
     RetrieveClusterResources,
+    /// GlobalError: used to identify an error happening during a deployment step which is not linked to a specific deployment error step
+    GlobalError,
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
@@ -367,6 +369,7 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Restarted => "restarted",
                 InfrastructureStep::RestartedError => "restart-error",
                 InfrastructureStep::CannotProcessRequest => "cannot-process-request",
+                InfrastructureStep::GlobalError => "global-error",
             },
         )
     }
@@ -376,6 +379,11 @@ impl Display for InfrastructureStep {
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
     // general steps
+    /// Deployment has started. It is the first message sent by the engine.
+    Start,
+    /// Deployment is terminated. It is the terminal message sent by the engine
+    Terminated,
+
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
     LoadConfiguration,
     /// ValidateApiInput: validating Engine's API input
@@ -388,10 +396,8 @@ pub enum EnvironmentStep {
     RetrieveClusterResources,
     /// UnderMigration: error migration hasn't been completed yet.
     UnderMigration,
-    /// Deployment has started. It is the first message sent by the engine.
-    Start,
-    /// Deployment is terminated. It is the terminal message sent by the engine
-    Terminated,
+    /// GlobalError: used to identify an error happening during a deployment step which is not linked to a specific deployment error step
+    GlobalError,
 
     // Env specific steps
     /// Build: building an application (docker or build packs).
@@ -491,6 +497,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::JobOutput => "job-output",
                 EnvironmentStep::DatabaseOutput => "database-output",
                 EnvironmentStep::Recap => "recap",
+                EnvironmentStep::GlobalError => "global-error",
             },
         )
     }
@@ -628,7 +635,8 @@ impl EventDetails {
                 | InfrastructureStep::ValidateSystemRequirements
                 | InfrastructureStep::RetrieveClusterConfig
                 | InfrastructureStep::RetrieveClusterResources
-                | InfrastructureStep::Start
+                | InfrastructureStep::GlobalError => Stage::Infrastructure(InfrastructureStep::GlobalError),
+                InfrastructureStep::Start
                 | InfrastructureStep::Terminated
                 | InfrastructureStep::CreateError
                 | InfrastructureStep::PauseError
@@ -653,7 +661,8 @@ impl EventDetails {
                 | EnvironmentStep::RetrieveClusterConfig
                 | EnvironmentStep::RetrieveClusterResources
                 | EnvironmentStep::UnderMigration
-                | EnvironmentStep::Start
+                | EnvironmentStep::GlobalError => Stage::Environment(EnvironmentStep::GlobalError),
+                EnvironmentStep::Start
                 | EnvironmentStep::Terminated
                 | EnvironmentStep::BuiltError
                 | EnvironmentStep::Cancel
