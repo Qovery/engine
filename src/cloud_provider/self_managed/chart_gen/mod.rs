@@ -571,12 +571,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_gcp(),
@@ -654,12 +654,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_gcp(),
@@ -820,12 +820,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_scaleway(),
@@ -875,12 +875,6 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::QoveryEngine,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
