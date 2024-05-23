@@ -536,17 +536,27 @@ impl BuildPlatform for LocalDocker {
             ) {
                 let message = err_git.message();
                 let git_error_class = err_git.class();
-                if git_error_class == ErrorClass::Net && message.contains("timed out") {
-                    debug!("Encountered git timeout issue, retrying maximum 3 times");
-                    return OperationResult::Retry(BuildError::GitError {
+                // Some errors can happen "randomly":
+                // - SSL error: syscall failure: Resource temporarily unavailable
+                // - Timeout on git clone
+                debug!("Error on git clone: git_error_class={:?}, message={}", git_error_class, message);
+                return if git_error_class == ErrorClass::Os
+                    || (git_error_class == ErrorClass::Net && message.contains("timed out"))
+                {
+                    debug!("Retrying git clone...");
+                    logger.send_warning(format!(
+                        "⚠️ Retrying cloning your git repository, due to following error: {}",
+                        message
+                    ));
+                    OperationResult::Retry(BuildError::GitError {
                         application: build.image.service_id.clone(),
                         raw_error: err_git,
-                    });
+                    })
                 } else {
-                    return OperationResult::Err(BuildError::GitError {
+                    OperationResult::Err(BuildError::GitError {
                         application: build.image.service_id.clone(),
                         raw_error: err_git,
-                    });
+                    })
                 };
             }
             OperationResult::Ok(())
