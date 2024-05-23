@@ -25,6 +25,7 @@ use google_cloud_storage::http::objects::Object as GcpObject;
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, RateLimiter};
+
 use reqwest::Body;
 use std::cmp::max;
 use std::collections::HashMap;
@@ -84,6 +85,24 @@ pub enum ObjectStorageServiceError {
     },
     #[error("Cannot proceed, admission control blocked after several tries")]
     AdmissionControlCannotProceedAfterSeveralTries,
+}
+
+impl ObjectStorageServiceError {
+    pub fn get_raw_error_message(self) -> String {
+        match self {
+            ObjectStorageServiceError::CannotCreateService { raw_error_message } => raw_error_message,
+            ObjectStorageServiceError::CannotCreateBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotUpdateBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotGetBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotDeleteBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotDeleteObject { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotListBuckets { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotListObjects { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotPutObjectToBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotGetObject { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::AdmissionControlCannotProceedAfterSeveralTries => "".to_string(),
+        }
+    }
 }
 
 enum StorageResourceKind {
