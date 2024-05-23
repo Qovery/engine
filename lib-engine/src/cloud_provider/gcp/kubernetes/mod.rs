@@ -50,6 +50,7 @@ use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cloud_provider, secret_manager};
 use base64::engine::general_purpose;
+
 use base64::Engine;
 use function_name::named;
 use governor::{Quota, RateLimiter};
@@ -57,6 +58,8 @@ use ipnet::IpNet;
 use itertools::Itertools;
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -65,6 +68,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{env, fs};
 use tera::Context as TeraContext;
 use time::{format_description, Time};
@@ -238,33 +242,43 @@ impl Gke {
             Transmitter::Kubernetes(long_id, name.to_string()),
         );
 
+        let object_storage_service_client = retry::retry(Fixed::from(Duration::from_secs(20)).take(3), || {
+            match ObjectStorageService::new(
+                options.gcp_json_credentials.clone(),
+                // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
+                // Max default quotas are 0.5 RPS
+                // more info here https://cloud.google.com/storage/quotas?hl=fr
+                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32))))),
+                // A rate limiter making sure to keep the QPS under quotas while bucket objects writes requests
+                // Max default quotas are 1 RPS
+                // more info here https://cloud.google.com/storage/quotas?hl=fr
+                Some(Arc::from(RateLimiter::direct(Quota::per_second(nonzero!(1_u32))))),
+            ) {
+                Ok(client) => OperationResult::Ok(client),
+                Err(error) => {
+                    let object_storage_error = EngineError::new_object_storage_error(
+                        event_details.clone(),
+                        ObjectStorageError::CannotInstantiateClient {
+                            raw_error_message: error.to_string(),
+                        },
+                    );
+                    // Only retry if the operation timed out (no other way than looking in raw_error content)
+                    if error.get_raw_error_message().contains("operation timed out") {
+                        OperationResult::Retry(object_storage_error)
+                    } else {
+                        OperationResult::Err(object_storage_error)
+                    }
+                }
+            }
+        })
+        .map_err(|error| Box::new(error.error))?;
         let google_object_storage = GoogleOS::new(
             id,
             long_id,
             name,
             &options.gcp_json_credentials.project_id.to_string(),
             GcpStorageRegion::from(region.clone()),
-            Arc::new(
-                ObjectStorageService::new(
-                    options.gcp_json_credentials.clone(),
-                    // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
-                    // Max default quotas are 0.5 RPS
-                    // more info here https://cloud.google.com/storage/quotas?hl=fr
-                    Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32))))),
-                    // A rate limiter making sure to keep the QPS under quotas while bucket objects writes requests
-                    // Max default quotas are 1 RPS
-                    // more info here https://cloud.google.com/storage/quotas?hl=fr
-                    Some(Arc::from(RateLimiter::direct(Quota::per_second(nonzero!(1_u32))))),
-                )
-                .map_err(|e| {
-                    Box::new(EngineError::new_object_storage_error(
-                        event_details.clone(),
-                        ObjectStorageError::CannotInstantiateClient {
-                            raw_error_message: e.to_string(),
-                        },
-                    ))
-                })?,
-            ),
+            Arc::new(object_storage_service_client),
         );
 
         let cluster = Self {
