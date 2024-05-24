@@ -854,6 +854,20 @@ fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, true);
 }
 
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, true);
+}
+
 /**
  **
  ** MySQL tests

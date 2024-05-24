@@ -837,6 +837,20 @@ fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
 //
 // MongoDB production environment (DocumentDB)
 //
