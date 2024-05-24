@@ -14,7 +14,7 @@ webhooks:
         namespace: qovery
         path: "/mutate"
     rules:
-      - operations: ["CREATE"]
+      - operations: ["CREATE", "UPDATE"]
         apiGroups: ["*"]
         apiVersions: ["v1"]
         resources: ["services", "deployments", "statefulsets", "jobs", "cronjobs", "daemonsets"]
