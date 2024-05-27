@@ -90,6 +90,10 @@ impl ToCommonHelmChart for QoveryShellAgentChart {
                         value: "full".to_string(),
                     },
                     ChartSetValue {
+                        key: "environmentVariables.RUST_LIB_BACKTRACE".to_string(),
+                        value: "0".to_string(),
+                    },
+                    ChartSetValue {
                         key: "environmentVariables.RUST_LOG".to_string(),
                         value: "h2::codec::framed_write=INFO\\,INFO".to_string(),
                     },
