@@ -10,6 +10,9 @@ commonLabels:
   qovery.com/service-type: "database"
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: "{{ value }}"
+  {%- endfor %}
 
 image:
   registry: {{ registry_name}}

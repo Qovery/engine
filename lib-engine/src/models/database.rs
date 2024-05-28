@@ -14,12 +14,14 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::database_utils::{
     is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
     is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
 };
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
@@ -168,6 +170,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
@@ -192,6 +195,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         options: T::DatabaseOptions,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
 
@@ -260,6 +264,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -467,6 +472,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("node_affinity_key", &node_affinity_key);
         context.insert("node_affinity_values", &node_affinity_values);
         context.insert("annotations_group", &self.annotations_group);
+        context.insert("labels_group", &self.labels_group);
 
         Ok(context)
     }

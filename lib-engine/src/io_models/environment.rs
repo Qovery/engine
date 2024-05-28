@@ -338,7 +338,7 @@ impl EnvironmentRequest {
             .databases
             .iter()
             .cloned()
-            .map(|srv| srv.to_database_domain(context, cloud_provider, &self.annotations_groups))
+            .map(|srv| srv.to_database_domain(context, cloud_provider, &self.annotations_groups, &self.labels_groups))
             .collect();
         let databases = databases?;
 
