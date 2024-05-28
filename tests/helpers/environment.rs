@@ -269,6 +269,7 @@ pub fn environment_2_app_2_routers_1_psql(
             publicly_accessible: false,
             mode: CONTAINER,
             annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }],
         applications: vec![
             Application {
