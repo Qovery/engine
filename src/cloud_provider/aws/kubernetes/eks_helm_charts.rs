@@ -34,6 +34,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_c
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -256,6 +257,9 @@ pub fn eks_aws_helm_charts(
         false,
     )
     .to_common_helm_chart()?;
+
+    // Karpenter CRD
+    let karpenter_crd = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     let karpenter_with_monitoring = KarpenterChart::new(
         chart_prefix_path,
@@ -719,40 +723,21 @@ pub fn eks_aws_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let level_0: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_0: Vec<Box<dyn HelmChart>> = vec![
         // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
         Box::new(q_priority_class_chart),
     ];
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_1.push(Box::new(coredns_config.clone()));
-        level_1.push(Box::new(karpenter));
-    }
-
     // If IAM settings are set and activated
     if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
         level_1.push(Box::new(aws_iam_eks_user_mapper));
     }
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(aws_ui_view), Box::new(vpa)];
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_2.push(Box::new(karpenter_configuration));
-    }
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
-    if !chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_3.push(Box::new(coredns_config));
-    }
+
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
@@ -796,13 +781,6 @@ pub fn eks_aws_helm_charts(
     if let Some(grafana_chart) = grafana {
         level_3.push(Box::new(grafana_chart))
     }
-    if chart_config_prerequisites.ff_metrics_history_enabled
-        && chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter
-    {
-        level_4.push(Box::new(karpenter_with_monitoring))
-    }
 
     // pdb infra
     if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
@@ -815,6 +793,25 @@ pub fn eks_aws_helm_charts(
         .to_common_helm_chart()?;
 
         level_8.push(Box::new(pdb_infra));
+    }
+
+    // karpenter
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_enable_karpenter
+    {
+        level_0.push(Box::new(karpenter_crd));
+
+        level_1.push(Box::new(coredns_config.clone()));
+        level_1.push(Box::new(karpenter));
+
+        level_2.push(Box::new(karpenter_configuration));
+
+        if chart_config_prerequisites.ff_metrics_history_enabled {
+            level_4.push(Box::new(karpenter_with_monitoring))
+        }
+    } else {
+        level_3.push(Box::new(coredns_config));
     }
 
     info!("charts configuration preparation finished");

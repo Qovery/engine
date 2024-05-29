@@ -11,3 +11,5 @@ serviceAccount:
   annotations: {
     eks.amazonaws.com/role-arn: set-by-engine-code
   }
+
+dnsPolicy: Default
