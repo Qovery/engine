@@ -280,6 +280,7 @@ pub fn scw_helm_charts(
                 }),
                 get_chart_override_fn.clone(),
                 true,
+                None,
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
                 chart_config_prerequisites
