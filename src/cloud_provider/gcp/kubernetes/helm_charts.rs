@@ -202,7 +202,6 @@ pub fn gcp_helm_charts(
 
     // Metrics server is built-in GCP cluster, no need to manage it
     // VPA is built-in GCP cluster, no need to manage it
-
     let loki: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(Box::new(
@@ -222,6 +221,7 @@ pub fn gcp_helm_charts(
                 }),
                 get_chart_override_fn.clone(),
                 true,
+                Some(500), // GCP need at least 500m for pod with antiAffinity
                 HelmChartResourcesConstraintType::Constrained(HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(500), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
                     request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
