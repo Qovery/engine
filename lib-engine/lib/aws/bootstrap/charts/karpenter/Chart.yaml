@@ -1,5 +1,23 @@
+annotations:
+  artifacthub.io/alternativeName: karpenter-provider-aws
+  artifacthub.io/crds: |
+    - kind: EC2NodeClass
+      version: v1beta1
+      name: ec2nodeclasses.karpenter.k8s.aws
+      displayName: EC2NodeClass
+      description: EC2NodeClass is the Schema for the EC2NodeClass API.
+    - kind: NodeClaim
+      version: v1beta1
+      name: nodeclaims.karpenter.sh
+      displayName: NodeClaim
+      description: NodeClaim is the Schema for the NodeClaims API.
+    - kind: NodePool
+      version: v1beta1
+      name: nodepools.karpenter.sh
+      displayName: NodePool
+      description: NodePool is the Schema for the NodePools API.
 apiVersion: v2
-appVersion: 0.33.2
+appVersion: 0.36.2
 description: A Helm chart for Karpenter, an open-source node provisioning project
   built for Kubernetes.
 home: https://karpenter.sh/
@@ -12,6 +30,6 @@ keywords:
 - lifecycle
 name: karpenter
 sources:
-- https://github.com/aws/karpenter/
+- https://github.com/aws/karpenter-provider-aws/
 type: application
-version: v0.33.2
+version: 0.36.2

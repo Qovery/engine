@@ -57,6 +57,7 @@ use crate::secret_manager::vault::QVaultClient;
 
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
@@ -2220,6 +2221,7 @@ fn delete(
                 for chart in helm_charts.into_iter().filter(|helm_chart| {
                     helm_chart.name != KarpenterChart::chart_name()
                         && helm_chart.name != KarpenterConfigurationChart::chart_name()
+                        && helm_chart.name != KarpenterCrdChart::chart_name()
                 }) {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                     match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {

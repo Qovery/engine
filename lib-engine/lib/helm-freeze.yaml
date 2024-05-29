@@ -118,7 +118,12 @@ charts:
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: v0.33.2
+    version: 0.36.2
+  - name: karpenter-crd
+    dest_folder_override: karpenter-crd
+    repo_name: oci://public.ecr.aws/karpenter
+    dest: aws-bootstrap
+    version: 0.36.2
 
 repos:
   - name: stable

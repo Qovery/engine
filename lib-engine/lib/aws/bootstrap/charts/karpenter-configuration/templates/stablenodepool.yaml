@@ -1,7 +1,7 @@
 apiVersion: karpenter.sh/v1beta1
 kind: NodePool
 metadata:
-  name: default
+  name: stable
 spec:
   template:
     spec:
@@ -26,9 +26,13 @@ spec:
           values: ["2"]
       nodeClassRef:
         name: default
+      taints:
+        - key: nodepool/stable
+          effect: NoSchedule
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
     expireAfter: 720h # 30 * 24h = 720h
     budgets:
-    - nodes: 10%
-  weight: 50
+      - nodes: 10%
+  weight: 10
