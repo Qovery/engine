@@ -39,6 +39,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
 use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
+use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
@@ -805,6 +806,7 @@ impl Kapsule {
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
             &[],
+            &TerraformValidators::Default,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
@@ -1139,10 +1141,14 @@ impl Kapsule {
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
-        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.to_string_lossy().as_ref(), &[]) {
+        let tf_workers_resources = match terraform_init_validate_state_list(
+            temp_dir.to_string_lossy().as_ref(),
+            &[],
+            &TerraformValidators::Default,
+        ) {
             Ok(x) => {
                 let mut tf_workers_resources_name = Vec::new();
-                for name in x {
+                for name in x.raw_std_output {
                     if name.starts_with("scaleway_k8s_pool.") {
                         tf_workers_resources_name.push(name);
                     }
@@ -1225,9 +1231,12 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        if let Err(e) =
-            terraform_apply_with_tf_workers_resources(temp_dir.to_string_lossy().as_ref(), tf_workers_resources, &[])
-        {
+        if let Err(e) = terraform_apply_with_tf_workers_resources(
+            temp_dir.to_string_lossy().as_ref(),
+            tf_workers_resources,
+            &[],
+            &TerraformValidators::Default,
+        ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
@@ -1265,7 +1274,7 @@ impl Kapsule {
             )));
         }
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
+        // copy lib/common/bootstrap/charts directory (and subdirectory) into the lib/scaleway/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
@@ -1294,7 +1303,12 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
 
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.to_string_lossy().as_ref(), false, &[]) {
+        if let Err(e) = terraform_init_validate_plan_apply(
+            temp_dir.to_string_lossy().as_ref(),
+            false,
+            &[],
+            &TerraformValidators::None,
+        ) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error(event_details.clone(), e),
@@ -1515,6 +1529,7 @@ impl Kapsule {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::None,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1779,6 +1794,7 @@ impl Kubernetes for Kapsule {
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
             &[],
+            &TerraformValidators::Default,
         ) {
             Ok(_) => match check_workers_on_upgrade(
                 self,

@@ -886,6 +886,8 @@ pub enum Tag {
     TerraformCannotImportResource,
     /// TerraformManagedDatabaseError: represents an error on managed database.
     TerraformManagedDatabaseError,
+    /// TerraformValidatorError: represents an error while trying to validate Terraform configuration.
+    TerraformValidatorError,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -3009,6 +3011,14 @@ impl EngineError {
                     )
                 }
             },
+            TerraformError::ValidatorError { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformValidatorError,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
         }
     }
 

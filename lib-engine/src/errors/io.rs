@@ -228,6 +228,7 @@ pub enum Tag {
     TerraformValidateError,
     TerraformWaitingTimeoutResource,
     TerraformWrongState,
+    TerraformValidatorError,
     UncompressError,
     Unknown,
     UnsupportedClusterKind,
@@ -439,6 +440,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::TerraformCannotImportResource => Tag::TerraformCannotImportResource,
             errors::Tag::TerraformManagedDatabaseError => Tag::TerraformManagedDatabaseError,
+            errors::Tag::TerraformValidatorError => Tag::TerraformValidatorError,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,

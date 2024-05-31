@@ -2,6 +2,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::kubectl::kubectl_exec_delete_secret;
+use crate::cmd::terraform_validators::TerraformValidators;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
@@ -97,6 +98,7 @@ impl DeploymentAction for TerraformDeployment {
             &self.destination_folder.to_string_lossy(),
             self.is_dry_run,
             target.cloud_provider.credentials_environment_variables().as_slice(),
+            &TerraformValidators::Default,
         );
 
         if let Err(err) = ret {
@@ -116,6 +118,7 @@ impl DeploymentAction for TerraformDeployment {
             &self.destination_folder.to_string_lossy(),
             false,
             target.cloud_provider.credentials_environment_variables().as_slice(),
+            &TerraformValidators::None,
         ) {
             Ok(_) => {
                 if let Err(err) = TerraformDeployment::delete_tfstate_secret(

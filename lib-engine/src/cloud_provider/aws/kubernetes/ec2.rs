@@ -43,6 +43,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use crate::cmd::terraform_validators::TerraformValidators;
 use uuid::Uuid;
 
 use super::ec2_helm_charts::{get_aws_ec2_qovery_terraform_config, AwsEc2QoveryTerraformConfig};
@@ -383,6 +384,7 @@ impl Kubernetes for EC2 {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::Default,
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
