@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -229,10 +229,16 @@ impl<T: CloudProvider> Container<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
-        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+        let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
         );
+
+        let mut tolerations = BTreeMap::<String, String>::new();
+        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, self.storages.len()) {
+            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations);
+        }
+
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
@@ -308,6 +314,7 @@ impl<T: CloudProvider> Container<T> {
                 legacy_deployment_matchlabels: false,
                 legacy_volumeclaim_template: false,
                 legacy_deployment_from_scaleway: false,
+                tolerations,
             },
             registry: registry_info
                 .registry_docker_json_config
@@ -555,6 +562,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) legacy_deployment_matchlabels: bool,
     pub(super) legacy_volumeclaim_template: bool,
     pub(super) legacy_deployment_from_scaleway: bool,
+    pub(super) tolerations: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Debug, Clone)]

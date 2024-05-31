@@ -1,3 +1,4 @@
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::CpuArchitecture;
 use std::collections::BTreeMap;
 
@@ -19,6 +20,25 @@ pub fn add_arch_to_deployment_affinity_node(
     }
 
     deployment_affinity_node_required
+}
+
+pub fn need_target_stable_node_pool(kubernetes: &dyn Kubernetes, min_instances: u32, storages_length: usize) -> bool {
+    kubernetes.kind() == Kind::Eks
+        && kubernetes.advanced_settings().aws_enable_karpenter
+        && (min_instances == 1 || storages_length > 0)
+}
+
+pub fn target_stable_node_pool(
+    deployment_affinity_node_required: &mut BTreeMap<String, String>,
+    tolerations: &mut BTreeMap<String, String>,
+) {
+    deployment_affinity_node_required
+        .entry("karpenter.sh/nodepool".to_string())
+        .or_insert_with(|| "stable".to_string());
+
+    tolerations
+        .entry("nodepool/stable".to_string())
+        .or_insert_with(|| "NoSchedule".to_string());
 }
 
 #[cfg(test)]

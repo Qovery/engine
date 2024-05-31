@@ -59,13 +59,21 @@ spec:
         {{ key }}: "{{ value }}"
         {%- endfor %}
     spec:
+      {%- if service.tolerations %}
+      tolerations:
+      {%- for key, value in service.tolerations %}
+        - key: "{{ key }}"
+          operator: "Exists"
+          effect: "{{ value }}"
+      {%- endfor %}
+      {%- endif %}
       affinity:
         {%- if service.advanced_settings.deployment_affinity_node_required %}
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
             - matchExpressions:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
               - key: "{{ key }}"
                 operator: In
                 values:
