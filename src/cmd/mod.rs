@@ -8,3 +8,4 @@ pub mod kubectl_utils;
 pub mod skopeo;
 pub mod structs;
 pub mod terraform;
+pub mod terraform_validators;

@@ -50,6 +50,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use crate::cmd::terraform_validators::TerraformValidators;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -418,6 +419,7 @@ impl Kubernetes for EKS {
                         .cloud_provider()
                         .credentials_environment_variables()
                         .as_slice(),
+                    &TerraformValidators::Default,
                 ) {
                     Ok(_) => {
                         self.logger().log(EngineEvent::Info(
@@ -612,6 +614,7 @@ impl Kubernetes for EKS {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::Default,
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 

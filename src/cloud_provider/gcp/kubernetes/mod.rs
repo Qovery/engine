@@ -32,6 +32,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
+use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::gcp::JsonCredentials;
@@ -783,6 +784,7 @@ impl Gke {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::Default,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
@@ -1006,6 +1008,7 @@ impl Gke {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::None,
         ) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
@@ -1223,6 +1226,7 @@ impl Gke {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::None,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1590,6 +1594,7 @@ impl Kubernetes for Gke {
                 .cloud_provider()
                 .credentials_environment_variables()
                 .as_slice(),
+            &TerraformValidators::Default,
         ) {
             Ok(_) => match check_control_plane_on_upgrade(self, infra_ctx.cloud_provider(), kubernetes_version) {
                 Ok(_) => {

@@ -73,6 +73,7 @@ use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
+use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::object_storage::ObjectStorage;
@@ -1069,6 +1070,7 @@ fn create(
                 temp_dir.to_string_lossy().as_ref(),
                 kubernetes.context().is_dry_run_deploy(),
                 cloud_provider.credentials_environment_variables().as_slice(),
+                &TerraformValidators::Default,
             ) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
@@ -1091,6 +1093,7 @@ fn create(
                                 format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
                                 bucket_name,
                                 cloud_provider.credentials_environment_variables().as_slice(),
+                                &TerraformValidators::Default,
                             ) {
                                 Ok(_) => {
                                     kubernetes.logger().log(EngineEvent::Info(
@@ -1148,6 +1151,7 @@ fn create(
                                     &event_details,
                                     kubernetes.context().is_dry_run_deploy(),
                                     cloud_provider.credentials_environment_variables().as_slice(),
+                                    &TerraformValidators::None, // no validator for now, it's likely to introduce a destructive change
                                 ) {
                                     return OperationResult::Err(Box::new(EngineError::new_terraform_error(
                                         event_details.clone(),
@@ -1681,10 +1685,11 @@ fn pause(
     let tf_workers_resources = match terraform_init_validate_state_list(
         temp_dir.to_string_lossy().as_ref(),
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::Default,
     ) {
         Ok(x) => {
             let mut tf_workers_resources_name = Vec::new();
-            for name in x {
+            for name in x.raw_std_output {
                 if name.starts_with("aws_eks_node_group.") {
                     tf_workers_resources_name.push(name);
                 }
@@ -1778,6 +1783,7 @@ fn pause(
         temp_dir.to_string_lossy().as_ref(),
         tf_workers_resources,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::Default,
     ) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
@@ -1933,6 +1939,7 @@ fn delete(
         temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::None,
     ) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Warning(
@@ -2294,6 +2301,7 @@ fn delete(
             match cmd::terraform::terraform_remove_resource_from_tf_state(
                 temp_dir.to_string_lossy().as_ref(),
                 resource_to_be_removed_from_tf_state.0,
+                &TerraformValidators::None,
             ) {
                 Ok(_) => {
                     kubernetes.logger().log(EngineEvent::Info(
@@ -2335,6 +2343,7 @@ fn delete(
         temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::None,
     ) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
     }
