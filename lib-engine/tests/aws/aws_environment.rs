@@ -1631,10 +1631,14 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .clone()
                 .match_expressions
                 .unwrap();
-            for nf in node_affinity {
-                assert_eq!(nf.key, node_selector_key);
-                assert_eq!(nf.values.unwrap()[0], node_selector_value);
-            }
+            let nf = node_affinity
+                .iter()
+                .find(|node_affinity| node_affinity.key == node_selector_key);
+            assert_ne!(nf, None);
+            assert_eq!(
+                <Option<Vec<String>> as Clone>::clone(&nf.unwrap().values).unwrap()[0],
+                node_selector_value
+            );
         }
 
         // delete
