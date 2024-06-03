@@ -192,7 +192,11 @@ impl Cluster<AWS, Options> for AWS {
                 secret_access_key: secrets
                     .TERRAFORM_AWS_SECRET_ACCESS_KEY
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set"),
-                region: "eu-west-3".to_string(),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
+                s3_bucket: secrets.TERRAFORM_AWS_BUCKET.expect("TERRAFORM_AWS_BUCKET is not set"),
+                dynamodb_table: secrets
+                    .TERRAFORM_AWS_DYNAMODB_TABLE
+                    .expect("TERRAFORM_AWS_DYNAMODB_TABLE is not set"),
             },
         ))
     }

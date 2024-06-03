@@ -572,8 +572,20 @@ impl Kapsule {
                 None => "",
             },
         );
-        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
-        context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+        context.insert(
+            "aws_terraform_backend_bucket",
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.s3_bucket.as_str(),
+                None => "",
+            },
+        );
+        context.insert(
+            "aws_terraform_backend_dynamodb_table",
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.dynamodb_table.as_str(),
+                None => "",
+            },
+        );
 
         // TLS
         context.insert(

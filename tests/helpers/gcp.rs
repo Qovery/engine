@@ -1,12 +1,15 @@
-use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::get_environment_test_kubernetes;
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use time::Time;
+use uuid::Uuid;
+
 use qovery_engine::cloud_provider::gcp::kubernetes::{Gke, GkeOptions, VpcMode};
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::gcp::Google;
@@ -26,11 +29,11 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use qovery_engine::models::gcp::{GcpStorageType, JsonCredentials};
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use time::Time;
-use uuid::Uuid;
+
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::dns::dns_provider_qoverydns;
+use crate::helpers::kubernetes::get_environment_test_kubernetes;
+use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
@@ -226,7 +229,11 @@ impl Cluster<Google, GkeOptions> for Gke {
                 secret_access_key: secrets
                     .TERRAFORM_AWS_SECRET_ACCESS_KEY
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
-                region: "eu-west-3".to_string(),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
+                s3_bucket: secrets.TERRAFORM_AWS_BUCKET.expect("TERRAFORM_AWS_BUCKET is not set"),
+                dynamodb_table: secrets
+                    .TERRAFORM_AWS_DYNAMODB_TABLE
+                    .expect("TERRAFORM_AWS_DYNAMODB_TABLE is not set"),
             },
         ))
     }
