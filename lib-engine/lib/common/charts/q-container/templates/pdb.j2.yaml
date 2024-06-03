@@ -15,6 +15,7 @@ metadata:
     {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
+  unhealthyPodEvictionPolicy: AlwaysAllow
   maxUnavailable: 10%
   selector:
     matchLabels:
