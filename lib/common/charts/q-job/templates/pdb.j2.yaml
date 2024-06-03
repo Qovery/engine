@@ -1,4 +1,3 @@
-{%- if service.max_nb_restart == 0 %}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -19,8 +18,8 @@ metadata:
     {{ key }}: "{{ value }}"
     {%- endfor %}
 spec:
+  unhealthyPodEvictionPolicy: AlwaysAllow
   minAvailable: 1
   selector:
     matchLabels:
       qovery.com/service-id: {{ service.long_id }}
-{%- endif %}
