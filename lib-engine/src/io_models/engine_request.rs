@@ -256,6 +256,8 @@ impl CloudProvider {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
             secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
             region: self.terraform_state_credentials.region.clone(),
+            s3_bucket: self.terraform_state_credentials.s3_bucket.clone(),
+            dynamodb_table: self.terraform_state_credentials.dynamodb_table.clone(),
         };
 
         match self.kind {
@@ -316,6 +318,9 @@ pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub region: String,
+    pub s3_bucket: String,
+    #[serde(alias = "dynamo_db_table")]
+    pub dynamodb_table: String,
 }
 
 pub type ChartValuesOverrideName = String;

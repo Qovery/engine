@@ -109,14 +109,24 @@ pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub region: String,
+    pub s3_bucket: String,
+    pub dynamodb_table: String,
 }
 
 impl TerraformStateCredentials {
-    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
+    pub fn new(
+        access_key_id: &str,
+        secret_access_key: &str,
+        region: &str,
+        s3_bucket: &str,
+        dynamodb_table: &str,
+    ) -> Self {
         TerraformStateCredentials {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: region.to_string(),
+            s3_bucket: s3_bucket.to_string(),
+            dynamodb_table: dynamodb_table.to_string(),
         }
     }
 }
