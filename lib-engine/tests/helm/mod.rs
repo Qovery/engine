@@ -463,6 +463,7 @@ fn get_labels_group() -> Vec<LabelsGroup> {
         labels: vec![Label {
             key: "label_key".to_string(),
             value: "label_value".to_string(),
+            propagate_to_cloud_provider: true,
         }],
     }]
 }

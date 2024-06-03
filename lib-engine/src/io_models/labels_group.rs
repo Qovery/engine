@@ -12,4 +12,6 @@ pub struct Label {
     pub key: String,
     #[serde(default)]
     pub value: String,
+    #[serde(default)]
+    pub propagate_to_cloud_provider: bool,
 }

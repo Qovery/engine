@@ -365,6 +365,7 @@ where
         context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
         context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
+        context.insert("labels_group", &self.labels_group);
 
         context.insert(
             "resource_expiration_in_seconds",
