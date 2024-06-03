@@ -1831,6 +1831,7 @@ fn deploy_container_with_router_on_scw() {
             labels: vec![Label {
                 key: "label_key".to_string(),
                 value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
             }]
         }};
 
@@ -1965,6 +1966,7 @@ fn deploy_job_on_scw_kapsule() {
             labels: vec![Label {
                 key: "label_key".to_string(),
                 value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
             }],
         }};
 
