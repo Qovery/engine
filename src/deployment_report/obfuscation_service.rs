@@ -28,6 +28,7 @@ impl StdObfuscationService {
 
         let secret_regex = secrets
             .iter()
+            .filter(|&secret| !secret.trim().is_empty())
             .map(|secret| regex::escape(secret))
             .collect_vec()
             .join("|");
@@ -101,6 +102,8 @@ mod tests {
             "with".to_string(),
             "/1234-a/bcd".to_string(),
             "12".to_string(),
+            "".to_string(),
+            " ".to_string(),
         ]);
 
         assert_eq!(
