@@ -1,14 +1,15 @@
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use crate::cloud_provider::Kind;
+use crate::models::types::CloudProvider;
+use crate::models::types::AWS;
+use crate::models::ToCloudProviderFormat;
+
 mod database;
 mod database_utils;
 mod job;
 mod router;
-
-use crate::cloud_provider::Kind;
-use std::fmt::Display;
-use std::fmt::Formatter;
-
-use crate::models::types::CloudProvider;
-use crate::models::types::AWS;
 
 pub struct AwsAppExtraSettings {}
 pub struct AwsDbExtraSettings {}
@@ -53,6 +54,14 @@ impl AWS {}
 #[derive(Clone, Eq, PartialEq)]
 pub enum AwsStorageType {
     GP2,
+}
+
+impl ToCloudProviderFormat for AwsStorageType {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            AwsStorageType::GP2 => "gp2",
+        }
+    }
 }
 
 impl Display for AwsStorageType {
