@@ -65,18 +65,18 @@ pub static GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
 > = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
 
 /// A rate limiter making sure we do not send too many bucket write requests while testing
-/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 10 seconds)
+/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 12 seconds)
 /// more info here https://cloud.google.com/storage/quotas?hl=fr
 pub static GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER: Lazy<
     Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(5_u32)))));
 
 /// A rate limiter making sure we do not send too many object write requests while testing
-/// Max default quotas are 1 RPS, let's take some room and use 10x less (1 per 5 seconds)
+/// Max default quotas are 1 RPS, let's take some room and use 10x less (1 per 6 seconds)
 /// more info here https://cloud.google.com/storage/quotas?hl=fr
 pub static GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
     Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(20_u32)))));
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
 
 pub fn gcp_container_registry(context: &Context) -> GoogleArtifactRegistry {
     let secrets = FuncTestsSecrets::new();
