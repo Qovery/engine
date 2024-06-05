@@ -146,6 +146,7 @@ pub struct GitRepository {
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<PathBuf>,
+    pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
     pub buildpack_language: Option<String>,
 }

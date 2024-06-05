@@ -129,8 +129,9 @@ pub enum JobSource {
         git_credentials: Option<GitCredentials>,
         branch: String,
         commit_id: String,
-        dockerfile_path: Option<String>,
         root_path: String,
+        dockerfile_path: Option<String>,
+        dockerfile_content: Option<String>,
     },
 }
 
@@ -185,17 +186,34 @@ impl Job {
         qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
     ) -> Option<Build> {
-        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
-            JobSource::Docker {
-                git_url,
-                git_credentials,
-                branch,
-                commit_id,
-                dockerfile_path,
-                root_path,
-            } => (git_url, git_credentials, branch, commit_id, dockerfile_path, root_path),
-            _ => return None,
-        };
+        let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
+        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, dockerfile_content, root_path) =
+            match &self.source {
+                JobSource::Docker {
+                    git_url,
+                    git_credentials,
+                    branch,
+                    commit_id,
+                    root_path,
+                    dockerfile_path,
+                    dockerfile_content,
+                } => {
+                    if dockerfile_content.is_some() {
+                        (
+                            git_url,
+                            git_credentials,
+                            branch,
+                            commit_id,
+                            &qovery_dockerfile,
+                            dockerfile_content,
+                            root_path,
+                        )
+                    } else {
+                        (git_url, git_credentials, branch, commit_id, dockerfile_path, &None, root_path)
+                    }
+                }
+                _ => return None,
+            };
 
         // Retrieve ssh keys from env variables
 
@@ -222,6 +240,7 @@ impl Job {
                 ssh_keys,
                 commit_id: commit_id.clone(),
                 dockerfile_path,
+                dockerfile_content: dockerfile_content.clone(),
                 root_path,
                 buildpack_language: None,
             },

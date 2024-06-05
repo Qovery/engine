@@ -658,6 +658,15 @@ impl BuildPlatform for LocalDocker {
 
             let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
 
+            // if the dockerfile content is provided, write it to the file before building
+            if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
+                fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
+                    application: app_id.clone(),
+                    action_description: "writing dockerfile content".to_string(),
+                    raw_error: err,
+                })?;
+            }
+
             // If the dockerfile does not exist, abort
             if !dockerfile_absolute_path.is_file() {
                 return Err(BuildError::InvalidConfig {

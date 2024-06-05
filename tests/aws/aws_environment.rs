@@ -2331,6 +2331,113 @@ fn deploy_job_on_aws_eks() {
 #[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
+fn deploy_job_on_aws_eks_with_dockerfile_content() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let job_id = QoveryIdentifier::new_random();
+        //environment.long_id = Uuid::default();
+        //environment.project_long_id = Uuid::default();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                git_credentials: None,
+                branch: "main".to_string(),
+                commit_id: "168be6d16d8ade877f679ae752de5d095d95b8d0".to_string(),
+                root_path: "/".to_string(),
+                dockerfile_path: None,
+                dockerfile_content: Some(
+                    r#"
+FROM debian:bookworm-slim
+CMD ["/bin/sh", "-c", "echo hello"]
+                    "#
+                    .trim()
+                    .to_string(),
+                ),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
 fn deploy_cronjob_on_aws_eks() {
     engine_run_test(|| {
         init();
@@ -2614,6 +2721,7 @@ fn build_and_deploy_job_on_aws_eks() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2998,6 +3106,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
