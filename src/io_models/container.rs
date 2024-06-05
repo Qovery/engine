@@ -231,6 +231,10 @@ pub struct ContainerAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
+    pub deployment_lifecycle_post_start_exec_command: Vec<String>,
+    #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
+    pub deployment_lifecycle_pre_stop_exec_command: Vec<String>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -300,6 +304,8 @@ impl Default for ContainerAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
