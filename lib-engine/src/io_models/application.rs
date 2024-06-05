@@ -553,6 +553,7 @@ impl Application {
                 ssh_keys,
                 commit_id: self.commit_id.clone(),
                 dockerfile_path,
+                dockerfile_content: None,
                 root_path,
                 buildpack_language: self.buildpack_language.clone(),
             },

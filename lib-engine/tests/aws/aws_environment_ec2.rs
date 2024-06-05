@@ -331,6 +331,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
