@@ -217,6 +217,17 @@ spec:
             requests:
               cpu: {{ service.cpu_request_in_milli }}
               memory: {{ service.ram_request_in_mib }}
+          lifecycle:
+            {% if service.advanced_settings.deployment_lifecycle_post_start_exec_command | length > 0 %}
+            postStart:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_post_start_exec_command }}
+            {%- endif %}
+            {% if service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | length > 0 %}
+            preStop:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_pre_stop_exec_command }}
+            {%- endif %}
           volumeMounts:
             {%- for mounted_file in mounted_files %}
             - mountPath: "{{ mounted_file.mount_path }}"

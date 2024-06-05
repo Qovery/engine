@@ -109,6 +109,10 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
+    pub deployment_lifecycle_post_start_exec_command: Vec<String>,
+    #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
+    pub deployment_lifecycle_pre_stop_exec_command: Vec<String>,
 
     // Build
     #[serde(alias = "build.timeout_max_sec")]
@@ -186,6 +190,8 @@ impl Default for ApplicationAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
@@ -232,6 +238,8 @@ impl ApplicationAdvancedSettings {
                 .deployment_update_strategy_rolling_update_max_surge_percent,
             deployment_affinity_node_required: self.deployment_affinity_node_required.clone(),
             deployment_antiaffinity_pod: self.deployment_antiaffinity_pod.clone(),
+            deployment_lifecycle_post_start_exec_command: self.deployment_lifecycle_post_start_exec_command.clone(),
+            deployment_lifecycle_pre_stop_exec_command: self.deployment_lifecycle_pre_stop_exec_command.clone(),
             network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
             network_ingress_cors_enable: self.network_ingress_cors_enable,
             network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,
