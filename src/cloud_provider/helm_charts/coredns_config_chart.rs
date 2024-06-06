@@ -295,7 +295,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
         // This is a verify basic check: make sure CoreDNS pod is running
         let pods: Api<Pod> = Api::all(kube_client.clone());
 
-        let result = retry::retry(Fixed::from_millis(5000).take(5), || {
+        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
             match block_on(pods.list(&ListParams::default().labels("k8s-app=kube-dns"))) {
                 Ok(coredns_pods_result) => {
                     let mut err = Ok(());
