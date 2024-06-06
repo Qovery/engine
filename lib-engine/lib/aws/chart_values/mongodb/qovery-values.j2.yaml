@@ -138,11 +138,51 @@ nodeAffinityPreset:
   key: "{{ node_affinity_key }}"
   values: {{ node_affinity_values }}
 
+tolerations:
+{%- for key, value in toleration %}
+  - key: "{{ key }}"
+    operator: Exists
+    effect: "{{ value }}"
+{%- endfor %}
+
+{%- if node_affinity %}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+
 hidden:
   nodeAffinityPreset:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
   service:
     annotations:
       {%- for key, value in annotations_group.service %}
@@ -153,8 +193,6 @@ hidden:
     {{ key }}: "{{ value }}"
     {%- endfor %}
   podAnnotations:
-    karpenter.sh/do-not-disrupt: "true"
-    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     {%- for key, value in annotations_group.pods %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
@@ -164,13 +202,30 @@ arbiter:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
   podAnnotations:
-    karpenter.sh/do-not-disrupt: "true"
-    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     {%- for key, value in annotations_group.pods %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
@@ -186,8 +241,6 @@ arbiter:
         {%- endfor %}
 
 podAnnotations:
-  karpenter.sh/do-not-disrupt: "true"
-  cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
   {%- for key, value in annotations_group.pods %}
   {{ key }}: "{{ value }}"
   {%- endfor %}

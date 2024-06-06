@@ -184,8 +184,9 @@ impl<T: CloudProvider> Application<T> {
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();
-        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, self.storages.len()) {
-            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations);
+        let is_stateful_set = !self.storages.is_empty();
+        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set) {
+            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations, is_stateful_set);
         }
 
         let mut advanced_settings = self.advanced_settings.clone();
