@@ -32,6 +32,25 @@ primary:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
   podLabels:
     # app label required for legacy chart (installed before 15/06/23)
     app: "{{ sanitized_name }}" 
@@ -96,7 +115,7 @@ primary:
       {%- endfor %}
     {% endif %}
   pdb:
-    create: true
+    create: false
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
     {{ key }}: "{{ value }}"
@@ -116,3 +135,22 @@ readReplicas:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}

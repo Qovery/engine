@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
     ServiceType, ServiceVersionCheckResult,
 };
-use crate::cloud_provider::{service, DeploymentTarget, Kind};
+use crate::cloud_provider::{kubernetes, service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
@@ -23,11 +23,13 @@ use crate::models::database_utils::{
 };
 use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
+use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -458,6 +460,9 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             &kubernetes.advanced_settings().pleco_resources_ttl,
         );
 
+        let mut node_affinity = BTreeMap::<String, String>::new();
+        let mut toleration = BTreeMap::<String, String>::new();
+
         // some Database/Version do not support arm arch
         let (node_affinity_type, node_affinity_key, node_affinity_values) = match T::db_type() {
             service::DatabaseType::PostgreSQL if version.major == "10" => ("hard", "kubernetes.io/arch", vec!["amd64"]),
@@ -468,6 +473,15 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             service::DatabaseType::MySQL => ("", "", vec![]),
         };
 
+        if let Some(value) = node_affinity_values.first() {
+            node_affinity.insert(node_affinity_key.to_string(), value.to_string());
+        }
+        if kubernetes.kind() == kubernetes::Kind::Eks && kubernetes.advanced_settings().aws_enable_karpenter {
+            utils::target_stable_node_pool(&mut node_affinity, &mut toleration, true);
+        }
+
+        context.insert("toleration", &toleration);
+        context.insert("node_affinity", &node_affinity);
         context.insert("node_affinity_type", &node_affinity_type);
         context.insert("node_affinity_key", &node_affinity_key);
         context.insert("node_affinity_values", &node_affinity_values);

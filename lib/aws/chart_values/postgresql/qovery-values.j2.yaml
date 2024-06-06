@@ -49,6 +49,25 @@ primary:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+{%- for key, value in node_affinity %}
+          - key: "{{ key }}"
+            operator: In
+            values:
+              - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
   initdb:
     user: "{{ database_login }}"
     password: "{{ database_password }}"
@@ -97,8 +116,6 @@ primary:
       memory: "{{ ram_limit_in_mib }}"
       cpu: "{{ cpu_limit_in_milli }}"
   podAnnotations:
-    karpenter.sh/do-not-disrupt: "true"
-    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     {%- for key, value in annotations_group.pods %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
@@ -118,3 +135,22 @@ readReplicas:
     {%- for key, value in annotations_group.pods %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+              - key: "{{ key }}"
+                operator: In
+                values:
+                  - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
