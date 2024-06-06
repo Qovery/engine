@@ -41,6 +41,8 @@ use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_comp
 use crate::engine::InfrastructureContext;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
+use aws_sdk_iam::error::{CreateServiceLinkedRoleError, GetRoleError};
+use aws_sdk_iam::output::{CreateServiceLinkedRoleOutput, GetRoleOutput};
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
@@ -903,6 +905,23 @@ impl QoveryAwsSdkConfigEks for SdkConfig {
             .delete_nodegroup()
             .cluster_name(cluster_name)
             .nodegroup_name(nodegroup_name)
+            .send()
+            .await
+    }
+
+    async fn get_role(&self, name: &str) -> Result<GetRoleOutput, SdkError<GetRoleError>> {
+        let client = aws_sdk_iam::Client::new(self);
+        client.get_role().role_name(name).send().await
+    }
+
+    async fn create_service_linked_role(
+        &self,
+        service_name: &str,
+    ) -> Result<CreateServiceLinkedRoleOutput, SdkError<CreateServiceLinkedRoleError>> {
+        let client = aws_sdk_iam::Client::new(self);
+        client
+            .create_service_linked_role()
+            .aws_service_name(service_name)
             .send()
             .await
     }

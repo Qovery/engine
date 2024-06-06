@@ -99,6 +99,7 @@ aws-sdk-elasticache = "0.24.0"
 aws-sdk-docdb = "0.24.0"
 aws-sdk-ec2 = "0.24.0"
 aws-types = "0.54.1"
+aws-sdk-iam = "0.24.0"
 aws-smithy-client = { version = "0.54.4", features = ["rt-tokio"] }
 aws-smithy-async = { version = "0.54.4", features = ["rt-tokio"] }
 

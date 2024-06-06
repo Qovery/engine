@@ -1,6 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terraform_config;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
@@ -13,6 +14,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
+use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
 use k8s_openapi::api::core::v1::Node;
 use std::str::FromStr;
@@ -118,6 +120,29 @@ impl Karpenter {
         .unwrap_or(Vec::with_capacity(0));
 
         !deployments.is_empty()
+    }
+
+    pub async fn create_aws_service_role_for_ec2_spot(
+        aws_conn: &SdkConfig,
+        event_details: &EventDetails,
+    ) -> Result<(), Box<EngineError>> {
+        match aws_conn.get_role("AWSServiceRoleForEC2Spot").await {
+            Ok(_) => Ok(()),
+            Err(_) => Ok(aws_conn
+                .create_service_linked_role("spot.amazonaws.com")
+                .await
+                .map(|_| ())
+                .map_err(|e| {
+                    EngineError::new_cannot_create_aws_service_linked_role_for_spot_instance(
+                        event_details.clone(),
+                        CommandError::new(
+                            "Fail to create the service-linked role: AWSServiceRoleForEC2Spot".to_string(),
+                            Some(e.to_string()),
+                            None,
+                        ),
+                    )
+                })?),
+        }
     }
 
     async fn get_karpenter_nodes(

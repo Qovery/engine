@@ -1113,6 +1113,8 @@ pub enum Tag {
     ServiceInstantiationError,
     /// CannotGetRegistryCredentials
     CannotGetRegistryCredentials,
+    /// CannotCreateAwsServiceLinkedRoleForSpotInstance: represents an error while trying to create an AWS Service Linked Role
+    CannotCreateAwsServiceLinkedRoleForSpotInstance,
 }
 
 impl Tag {
@@ -5122,7 +5124,7 @@ impl EngineError {
         )
     }
 
-    /// Creates new error when cannot get the registy credentials
+    /// Creates new error when cannot get the registry credentials
     ///
     /// Arguments:
     ///
@@ -5137,6 +5139,26 @@ impl EngineError {
             None,
             None,
             Some("Cannot get the registry credentials".to_string()),
+        )
+    }
+
+    /// * `error`: Raw error message.
+    /// Creates new error when attempting to create the service-linked rome for Spot Instances
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_cannot_create_aws_service_linked_role_for_spot_instance(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
         )
     }
 }
