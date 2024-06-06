@@ -1315,15 +1315,23 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    if kubernetes.is_karpenter_enabled() && Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
-        let kube_client = infra_ctx.mk_kube_client()?;
-        block_on(Karpenter::restart(
-            kubernetes,
-            cloud_provider,
-            &kube_client,
-            kubernetes_long_id,
-            &qovery_terraform_config_file,
-        ))?;
+    if kubernetes.is_karpenter_enabled() {
+        if let Some(karpenter_parameters) = &kubernetes.get_karpenter_parameters() {
+            if karpenter_parameters.spot_enabled {
+                block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
+            }
+        }
+
+        if Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
+            let kube_client = infra_ctx.mk_kube_client()?;
+            block_on(Karpenter::restart(
+                kubernetes,
+                cloud_provider,
+                &kube_client,
+                kubernetes_long_id,
+                &qovery_terraform_config_file,
+            ))?;
+        }
     }
 
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {

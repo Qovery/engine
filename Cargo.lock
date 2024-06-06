@@ -411,6 +411,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-iam"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea127485edd6c6b5f1c41ec75a5e4a7e501fe08665cce5b1ce13351f4e2be0b5"
+dependencies = [
+ "aws-credential-types",
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-json",
+ "aws-smithy-query",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "bytes",
+ "http",
+ "regex",
+ "tokio-stream",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-rds"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3283,6 +3310,7 @@ dependencies = [
  "aws-sdk-eks",
  "aws-sdk-elasticache",
  "aws-sdk-elasticloadbalancingv2",
+ "aws-sdk-iam",
  "aws-sdk-rds",
  "aws-smithy-async",
  "aws-smithy-client",

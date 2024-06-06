@@ -501,6 +501,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::ServiceInstantiationError => Tag::ServiceInstantiationError,
             errors::Tag::CannotGetRegistryCredentials => Tag::CannotGetRegistryCredentials,
+            errors::Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance => Tag::ServiceInstantiationError,
         }
     }
 }

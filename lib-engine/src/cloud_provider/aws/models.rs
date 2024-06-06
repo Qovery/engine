@@ -9,6 +9,8 @@ use aws_sdk_elasticloadbalancingv2::{
     error::{DeleteLoadBalancerError, DescribeTagsError},
     model::{LoadBalancer, TagDescription},
 };
+use aws_sdk_iam::error::{CreateServiceLinkedRoleError, GetRoleError};
+use aws_sdk_iam::output::{CreateServiceLinkedRoleOutput, GetRoleOutput};
 
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -58,6 +60,13 @@ pub trait QoveryAwsSdkConfigEks {
         cluster_id: String,
         nodegroup_id: String,
     ) -> Result<DeleteNodegroupOutput, SdkError<DeleteNodegroupError>>;
+
+    async fn get_role(&self, name: &str) -> Result<GetRoleOutput, SdkError<GetRoleError>>;
+
+    async fn create_service_linked_role(
+        &self,
+        name: &str,
+    ) -> Result<CreateServiceLinkedRoleOutput, SdkError<CreateServiceLinkedRoleError>>;
 }
 
 #[async_trait]
