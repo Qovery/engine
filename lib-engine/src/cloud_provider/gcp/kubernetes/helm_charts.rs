@@ -229,9 +229,7 @@ pub fn gcp_helm_charts(
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
                 }),
                 HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .aws_enable_karpenter,
+                false,
             )
             .to_common_helm_chart()?,
         )),

@@ -38,6 +38,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
@@ -1881,5 +1882,13 @@ impl Kubernetes for Kapsule {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        None
     }
 }

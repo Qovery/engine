@@ -50,7 +50,6 @@ impl Karpenter {
         cloud_provider: &dyn CloudProvider,
         client: &QubeClient,
         kubernetes_long_id: uuid::Uuid,
-        disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
     ) -> Result<(), Box<EngineError>> {
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Restart));
@@ -70,7 +69,6 @@ impl Karpenter {
             cloud_provider,
             &event_details,
             kubernetes_long_id,
-            disk_size_in_gib,
             qovery_terraform_config_file,
         )
     }
@@ -140,9 +138,15 @@ impl Karpenter {
         client: &QubeClient,
         event_details: &EventDetails,
     ) -> Result<(), Box<EngineError>> {
-        let max_nodes_drain_in_sec = kubernetes
-            .advanced_settings()
-            .aws_karpenter_max_node_drain_in_sec
+        let karpenter_parameters = kubernetes.get_karpenter_parameters().ok_or_else(|| {
+            Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message("Karpenter parameters are missing".to_string()),
+            ))
+        })?;
+
+        let max_nodes_drain_in_sec = karpenter_parameters
+            .max_node_drain_time_in_secs
             .map(|duration| ChronoDuration::seconds(duration as i64));
         let nodes_drain_timeout = get_nodes_drain_timeout(client, event_details, max_nodes_drain_in_sec).await?;
 
@@ -230,7 +234,6 @@ impl Karpenter {
         cloud_provider: &dyn CloudProvider,
         event_details: &EventDetails,
         cluster_long_id: uuid::Uuid,
-        disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
@@ -244,7 +247,6 @@ impl Karpenter {
             kubernetes,
             cloud_provider,
             cluster_long_id,
-            disk_size_in_gib,
             qovery_terraform_config_file,
             event_details,
         )?;
@@ -267,10 +269,16 @@ impl Karpenter {
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
         cluster_long_id: uuid::Uuid,
-        disk_size_in_gib: Option<i32>,
         qovery_terraform_config_file: &str,
         event_details: &EventDetails,
     ) -> Result<ChartInfo, Box<EngineError>> {
+        let karpenter_parameters = kubernetes.get_karpenter_parameters().ok_or_else(|| {
+            Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message("Karpenter parameters are missing".to_string()),
+            ))
+        })?;
+
         let qovery_terraform_config = get_qovery_terraform_config(qovery_terraform_config_file, &[]).map_err(|e| {
             EngineError::new_k8s_node_not_ready(
                 event_details.clone(),
@@ -292,13 +300,12 @@ impl Karpenter {
             cluster_name.to_string(),
             true,
             qovery_terraform_config.cluster_security_group_id,
-            disk_size_in_gib,
             &cluster_id,
             cluster_long_id,
             &organization_id,
             organization_long_id,
             region.to_cloud_provider_format(),
-            kubernetes.advanced_settings().aws_karpenter_enable_spot,
+            Some(karpenter_parameters.clone()),
         )
         .to_common_helm_chart()
         .map_err(|el| {

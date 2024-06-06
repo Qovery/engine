@@ -23,9 +23,7 @@ pub fn add_arch_to_deployment_affinity_node(
 }
 
 pub fn need_target_stable_node_pool(kubernetes: &dyn Kubernetes, min_instances: u32, is_stateful_set: bool) -> bool {
-    kubernetes.kind() == Kind::Eks
-        && kubernetes.advanced_settings().aws_enable_karpenter
-        && (min_instances == 1 || is_stateful_set)
+    kubernetes.kind() == Kind::Eks && kubernetes.is_karpenter_enabled() && (min_instances == 1 || is_stateful_set)
 }
 
 pub fn target_stable_node_pool(

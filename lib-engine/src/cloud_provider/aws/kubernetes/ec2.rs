@@ -1,6 +1,6 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
-use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
@@ -549,6 +549,14 @@ impl Kubernetes for EC2 {
 
     fn as_kubernetes(&self) -> &dyn Kubernetes {
         self
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        None
     }
 }
 

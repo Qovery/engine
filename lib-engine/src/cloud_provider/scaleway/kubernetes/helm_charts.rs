@@ -283,9 +283,7 @@ pub fn scw_helm_charts(
                 None,
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .aws_enable_karpenter,
+                false,
             )
             .to_common_helm_chart()?,
         ),
