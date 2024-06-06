@@ -2,7 +2,6 @@ use k8s_openapi::api::apps::v1::DaemonSet;
 use kube::api::{Patch, PatchParams};
 use kube::Api;
 
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -162,6 +161,16 @@ pub struct Options {
     pub aws_addon_coredns_version_override: Option<String>,
     #[serde(default)]
     pub ec2_exposed_port: Option<u16>,
+    #[serde(default)]
+    pub karpenter_parameters: Option<KarpenterParameters>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterParameters {
+    pub spot_enabled: bool,
+    pub max_node_drain_time_in_secs: Option<i32>,
+    pub disk_size_in_gib: i32,
+    pub default_service_architecture: CpuArchitecture,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -452,7 +461,7 @@ fn tera_context(
     context.insert("aws_secret_key", &cloud_provider.secret_access_key());
 
     // Karpenter
-    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
+    context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
     context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
     context.insert("fargate_profile_zone_a_subnet_blocks", &fargate_profile_zone_a_subnet_blocks);
     context.insert("fargate_profile_zone_b_subnet_blocks", &fargate_profile_zone_b_subnet_blocks);
@@ -963,7 +972,7 @@ fn create(
 
     let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
         // don't create node groups if karpenter is enabled
-        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+        let applied_node_groups = if kubernetes.is_karpenter_enabled() {
             node_groups_when_karpenter_is_enabled(
                 kubernetes,
                 infra_ctx,
@@ -975,7 +984,7 @@ fn create(
             node_groups
         };
 
-        let bootstrap_on_fargate = if kubernetes.advanced_settings().aws_enable_karpenter {
+        let bootstrap_on_fargate = if kubernetes.is_karpenter_enabled() {
             bootstrap_on_fargate_when_karpenter_is_enabled(kubernetes, kubernetes_action)
         } else {
             false
@@ -1302,17 +1311,13 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    if kubernetes.advanced_settings().aws_enable_karpenter
-        && Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)?
-    {
-        let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+    if kubernetes.is_karpenter_enabled() && Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
         let kube_client = infra_ctx.mk_kube_client()?;
         block_on(Karpenter::restart(
             kubernetes,
             cloud_provider,
             &kube_client,
             kubernetes_long_id,
-            disk_size_in_gib,
             &qovery_terraform_config_file,
         ))?;
     }
@@ -1347,15 +1352,9 @@ fn create(
     }
 
     // retrieve cluster CPU architectures
-    let mut nodegroups_arch_set = HashSet::new();
-    for n in node_groups {
-        nodegroups_arch_set.insert(n.instance_architecture);
-    }
-    let cpu_architectures = nodegroups_arch_set.into_iter().collect::<Vec<CpuArchitecture>>();
-
+    let cpu_architectures = kubernetes.cpu_architectures();
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
-            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
             let charts_prerequisites = EksChartsConfigPrerequisites {
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
@@ -1390,7 +1389,8 @@ fn create(
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
-                disk_size_in_gib,
+                is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
+                karpenter_parameters: kubernetes.get_karpenter_parameters(),
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
@@ -1505,7 +1505,7 @@ fn create(
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
 
-        if kubernetes.advanced_settings().aws_enable_karpenter {
+        if kubernetes.is_karpenter_enabled() {
             let has_node_group_running = node_groups.iter().any(|ng| {
                 matches!(
                     node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
@@ -1698,7 +1698,7 @@ fn pause(
         }
     };
 
-    if tf_workers_resources.is_empty() && !kubernetes.advanced_settings().aws_enable_karpenter {
+    if tf_workers_resources.is_empty() && !kubernetes.is_karpenter_enabled() {
         kubernetes.logger().log(EngineEvent::Warning(
             event_details,
             EventMessage::new_from_safe(
@@ -1769,7 +1769,7 @@ fn pause(
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
-    if kubernetes.advanced_settings().aws_enable_karpenter {
+    if kubernetes.is_karpenter_enabled() {
         let kube_client = infra_ctx.mk_kube_client()?;
         block_on(Karpenter::pause(kubernetes, cloud_provider, &kube_client))?;
     }
@@ -1819,7 +1819,7 @@ fn delete(
     let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
-            let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+            let applied_node_groups = if kubernetes.is_karpenter_enabled() {
                 node_groups_when_karpenter_is_enabled(
                     kubernetes,
                     infra_ctx,
@@ -2270,7 +2270,7 @@ fn delete(
             event_details.clone(),
         ))?;
 
-        if kubernetes.advanced_settings().aws_enable_karpenter {
+        if kubernetes.is_karpenter_enabled() {
             let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
         }

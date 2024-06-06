@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use kube::Client;
 
 use crate::cloud_provider::helm::{
@@ -14,13 +15,12 @@ pub struct KarpenterConfigurationChart {
     cluster_name: String,
     replace_cluster_autoscaler: bool,
     security_group_id: String,
-    disk_size_in_gib: i32,
     cluster_id: String,
     cluster_long_id: String,
     organization_id: String,
     organization_long_id: String,
     region: String,
-    spot_enabled: bool,
+    karpenter_parameters: Option<KarpenterParameters>,
 }
 
 impl KarpenterConfigurationChart {
@@ -29,15 +29,13 @@ impl KarpenterConfigurationChart {
         cluster_name: String,
         replace_cluster_autoscaler: bool,
         cluster_security_group_id: String,
-        disk_size_in_gib: Option<i32>,
         cluster_id: &str,
         cluster_long_id: uuid::Uuid,
         organization_id: &str,
         organization_long_id: uuid::Uuid,
         region: &str,
-        spot_enabled: bool,
+        karpenter_parameters: Option<KarpenterParameters>,
     ) -> Self {
-        let disk_size_in_gib = disk_size_in_gib.expect("disk size should be defined");
         KarpenterConfigurationChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -52,13 +50,12 @@ impl KarpenterConfigurationChart {
             cluster_name,
             replace_cluster_autoscaler,
             security_group_id: cluster_security_group_id,
-            disk_size_in_gib,
             cluster_id: cluster_id.to_string(),
             cluster_long_id: cluster_long_id.to_string(),
             organization_id: organization_id.to_string(),
             organization_long_id: organization_long_id.to_string(),
             region: region.to_string(),
-            spot_enabled,
+            karpenter_parameters,
         }
     }
 
@@ -69,6 +66,12 @@ impl KarpenterConfigurationChart {
 
 impl ToCommonHelmChart for KarpenterConfigurationChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let (disk_size_in_gib, spot_enabled) = if let Some(karpenter_parameters) = &self.karpenter_parameters {
+            (karpenter_parameters.disk_size_in_gib, karpenter_parameters.spot_enabled)
+        } else {
+            (0, false)
+        };
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KarpenterConfigurationChart::chart_name(),
@@ -90,7 +93,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     },
                     ChartSetValue {
                         key: "diskSizeInGib".to_string(),
-                        value: format!("{}Gi", self.disk_size_in_gib),
+                        value: format!("{}Gi", disk_size_in_gib),
                     },
                     ChartSetValue {
                         key: "tags.ClusterId".to_string(),
@@ -114,7 +117,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     },
                     ChartSetValue {
                         key: "capacity_type".to_string(),
-                        value: match self.spot_enabled {
+                        value: match spot_enabled {
                             false => "{on-demand}".to_string(),
                             true => "{spot,on-demand}".to_string(),
                         },
@@ -161,11 +164,13 @@ mod tests {
     use uuid::Uuid;
 
     use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+    use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use crate::cloud_provider::models::CpuArchitecture::{AMD64, ARM64};
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -176,13 +181,17 @@ mod tests {
             "whatever".to_string(),
             true,
             "securitry_group".to_string(),
-            Some(50),
             "cluster_id",
             Uuid::new_v4(),
             "organization_id",
             Uuid::new_v4(),
             "region",
-            true,
+            Some(KarpenterParameters {
+                spot_enabled: true,
+                max_node_drain_time_in_secs: None,
+                disk_size_in_gib: 50,
+                default_service_architecture: ARM64,
+            }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -214,13 +223,17 @@ mod tests {
             "whatever".to_string(),
             true,
             "securitry_group".to_string(),
-            Some(50),
             "cluster_id",
             Uuid::new_v4(),
             "organization_id",
             Uuid::new_v4(),
             "region",
-            true,
+            Some(KarpenterParameters {
+                spot_enabled: true,
+                max_node_drain_time_in_secs: None,
+                disk_size_in_gib: 50,
+                default_service_architecture: AMD64,
+            }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -253,13 +266,17 @@ mod tests {
             "whatever".to_string(),
             true,
             "securitry_group".to_string(),
-            Some(50),
             "cluster_id",
             Uuid::new_v4(),
             "organization_id",
             Uuid::new_v4(),
             "region",
-            true,
+            Some(KarpenterParameters {
+                spot_enabled: true,
+                max_node_drain_time_in_secs: None,
+                disk_size_in_gib: 50,
+                default_service_architecture: AMD64,
+            }),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
 use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
@@ -386,6 +387,10 @@ pub trait Kubernetes: Send + Sync {
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
+
+    fn is_karpenter_enabled(&self) -> bool;
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
 }
 
 pub trait KubernetesNode {

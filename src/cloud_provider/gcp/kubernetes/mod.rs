@@ -51,6 +51,7 @@ use crate::string::terraform_list_format;
 use crate::{cloud_provider, secret_manager};
 use base64::engine::general_purpose;
 
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use base64::Engine;
 use function_name::named;
 use governor::{Quota, RateLimiter};
@@ -1663,6 +1664,14 @@ impl Kubernetes for Gke {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        None
     }
 }
 

@@ -6,6 +6,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use uuid::Uuid;
 
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{self, Kind, Kubernetes, KubernetesVersion};
@@ -249,6 +250,14 @@ impl Kubernetes for SelfManaged {
             crate::io_models::engine_request::ChartValuesOverrideValues,
         >,
     > {
+        None
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
         None
     }
 }

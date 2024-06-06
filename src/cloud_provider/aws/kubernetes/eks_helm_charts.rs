@@ -1,5 +1,5 @@
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
-use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
     PriorityClass, QoveryPriorityClass, UpdateStrategy,
@@ -111,7 +111,8 @@ pub struct EksChartsConfigPrerequisites {
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
-    pub disk_size_in_gib: Option<i32>,
+    pub is_karpenter_enabled: bool,
+    pub karpenter_parameters: Option<KarpenterParameters>,
 }
 
 pub fn eks_aws_helm_charts(
@@ -166,9 +167,7 @@ pub fn eks_aws_helm_charts(
         || chart_config_prerequisites
             .cluster_advanced_settings
             .aws_iam_user_mapper_group_enabled
-        || chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter
+        || chart_config_prerequisites.is_karpenter_enabled
     {
         aws_iam_eks_user_mapper = Some(
             AwsIamEksUserMapperChart::new(
@@ -206,10 +205,7 @@ pub fn eks_aws_helm_charts(
                     },
                     false => SSOConfig::Disabled,
                 },
-                match chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .aws_enable_karpenter
-                {
+                match chart_config_prerequisites.is_karpenter_enabled {
                     true => KarpenterConfig::Enabled {
                         aws_account_id: qovery_terraform_config.aws_account_id,
                         cluster_name: chart_config_prerequisites.cluster_name.clone(),
@@ -224,13 +220,9 @@ pub fn eks_aws_helm_charts(
     }
 
     // AWS nodes term handler
-    let aws_node_term_handler = AwsNodeTermHandlerChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
-    )
-    .to_common_helm_chart()?;
+    let aws_node_term_handler =
+        AwsNodeTermHandlerChart::new(chart_prefix_path, chart_config_prerequisites.is_karpenter_enabled)
+            .to_common_helm_chart()?;
 
     // AWS UI view
     let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
@@ -251,9 +243,7 @@ pub fn eks_aws_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
         qovery_terraform_config.karpenter_controller_aws_role_arn.clone(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
         false,
     )
     .to_common_helm_chart()?;
@@ -265,9 +255,7 @@ pub fn eks_aws_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
         qovery_terraform_config.karpenter_controller_aws_role_arn,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
         true,
     )
     .to_common_helm_chart()?;
@@ -276,19 +264,14 @@ pub fn eks_aws_helm_charts(
     let karpenter_configuration = KarpenterConfigurationChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
         qovery_terraform_config.cluster_security_group_id,
-        chart_config_prerequisites.disk_size_in_gib,
         &chart_config_prerequisites.cluster_id,
         chart_config_prerequisites.cluster_long_id,
         &chart_config_prerequisites.organization_id,
         chart_config_prerequisites.organization_long_id,
         chart_config_prerequisites.region.to_cloud_provider_format(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_karpenter_enable_spot,
+        chart_config_prerequisites.karpenter_parameters.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -304,9 +287,7 @@ pub fn eks_aws_helm_charts(
         qovery_terraform_config.aws_iam_cluster_autoscaler_role_arn.to_string(),
         prometheus_namespace,
         chart_config_prerequisites.ff_metrics_history_enabled,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
 
@@ -376,9 +357,7 @@ pub fn eks_aws_helm_charts(
                 None,
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .aws_enable_karpenter,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
@@ -796,10 +775,7 @@ pub fn eks_aws_helm_charts(
     }
 
     // karpenter
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
+    if chart_config_prerequisites.is_karpenter_enabled {
         level_0.push(Box::new(karpenter_crd));
 
         level_1.push(Box::new(coredns_config.clone()));
