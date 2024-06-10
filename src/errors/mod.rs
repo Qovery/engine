@@ -578,6 +578,9 @@ impl From<BuildError> for CommandError {
                 Some(raw_error.to_string()),
                 None,
             ),
+            BuildError::CannotGetCredentials { .. } => {
+                CommandError::new("Build error, cannot get registry credentials".to_string(), None, None)
+            }
         }
     }
 }
@@ -1108,6 +1111,8 @@ pub enum Tag {
     CannotPatchHelmAdmissionControllerConfigMap,
     /// ServiceInstantiationError: represents an error while trying to instantiate a service
     ServiceInstantiationError,
+    /// CannotGetRegistryCredentials
+    CannotGetRegistryCredentials,
 }
 
 impl Tag {
@@ -5114,6 +5119,24 @@ impl EngineError {
             Some(error),
             None,
             None,
+        )
+    }
+
+    /// Creates new error when cannot get the registy credentials
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_cannot_get_registry_credentials(event_details: EventDetails) -> EngineError {
+        let message_safe = "Cannot get the registry credentials".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetRegistryCredentials,
+            message_safe,
+            None,
+            None,
+            Some("Cannot get the registry credentials".to_string()),
         )
     }
 }

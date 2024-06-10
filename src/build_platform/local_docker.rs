@@ -144,7 +144,11 @@ impl LocalDocker {
                 continue;
             }
 
-            let url = registry.get_url_with_credentials();
+            let url = registry
+                .get_url_with_credentials()
+                .map_err(|_| BuildError::CannotGetCredentials {
+                    raw_error_message: "Cannot get the registry credentials".to_string(),
+                })?;
             if url.password().is_none() {
                 continue;
             }

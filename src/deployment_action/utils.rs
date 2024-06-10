@@ -139,7 +139,10 @@ fn mirror_image(
     tags: RegistryTags,
 ) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
-    let url = source.registry.get_url_with_credentials();
+    let url = source.registry.get_url_with_credentials().map_err(|_| {
+        logger.warning("⚠️Cannot get the registry credentials".to_string());
+        EngineError::new_error_cannot_get_registry_credentials(event_details.clone())
+    })?;
     if url.password().is_some() {
         logger.info(format!(
             "🔓 Login to registry {} as user {}",
