@@ -9,6 +9,7 @@ use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::logger::Logger;
 use crate::metrics_registry::{StepLabel, StepName, StepStatus};
+use crate::models::abort::Abort;
 use crate::models::router::RouterService;
 use itertools::Itertools;
 use std::cmp::{max, min};
@@ -30,10 +31,10 @@ impl<'a> EnvironmentDeployment<'a> {
     pub fn new(
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
-        should_abort: &'a (dyn Fn() -> bool + Send + Sync),
+        abort: &'a dyn Abort,
         logger: Arc<Box<dyn Logger>>,
     ) -> Result<EnvironmentDeployment<'a>, Box<EngineError>> {
-        let deployment_target = DeploymentTarget::new(infra_ctx, environment, should_abort)?;
+        let deployment_target = DeploymentTarget::new(infra_ctx, environment, abort)?;
         Ok(EnvironmentDeployment {
             deployed_services: Arc::new(Mutex::new(HashSet::with_capacity(
                 Self::services_without_routers_iter(environment).count()
@@ -96,7 +97,7 @@ impl<'a> EnvironmentDeployment<'a> {
         event_details: &'b EventDetails,
     ) -> impl Fn() -> Result<(), Box<EngineError>> + 'b + Send + Sync {
         move || {
-            if (target.should_abort)() {
+            if target.abort.status().should_cancel() {
                 Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())))
             } else {
                 Ok(())

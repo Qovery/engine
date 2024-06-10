@@ -11,6 +11,7 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseOptions;
 use qovery_engine::io_models::Action;
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
+use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::database::{get_database_with_invalid_storage_size, Container, Database, PostgresSQL};
 use qovery_engine::models::types::{VersionsNumber, AWS};
 use qovery_engine::runtime::block_on;
@@ -48,7 +49,7 @@ fn should_increase_db_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| AbortStatus::None).unwrap();
         let test_db = &test_env.databases[0];
 
         let db: Database<AWS, Container, PostgresSQL> = Database::new(
