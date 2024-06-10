@@ -1,6 +1,7 @@
 use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ecr::ECR;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::ContainerRegistry;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
@@ -127,7 +128,7 @@ impl Registry {
     }
 
     // Does some network calls for AWS/ECR
-    pub fn get_url_with_credentials(&self) -> Url {
+    pub fn get_url_with_credentials(&self) -> Result<Url, ContainerRegistryError> {
         let url = match self {
             Registry::DockerHub { url, credentials, .. } => {
                 let mut url = url.clone();
@@ -165,8 +166,7 @@ impl Registry {
                 let region = Region::from_str(region).unwrap_or_default();
                 let ecr_client =
                     EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
-
-                let credentials = ECR::get_credentials(&ecr_client).unwrap();
+                let credentials = ECR::get_credentials(&ecr_client)?;
                 let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
                 let _ = url.set_username(&credentials.access_token);
                 let _ = url.set_password(Some(&credentials.password));
@@ -189,7 +189,7 @@ impl Registry {
             }
         };
 
-        url
+        Ok(url)
     }
 
     pub(crate) fn get_url(&self) -> Url {

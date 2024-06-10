@@ -401,10 +401,6 @@ impl<T: CloudProvider> Service for Application<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        vec![]
-    }
 }
 
 pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send {

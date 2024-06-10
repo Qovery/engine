@@ -58,6 +58,9 @@ pub enum BuildError {
         application: String,
         raw_error: CommandError,
     },
+
+    #[error("Cannot get credentials error.")]
+    CannotGetCredentials { raw_error_message: String },
 }
 
 pub fn to_build_error(service_id: String, err: DockerError) -> BuildError {

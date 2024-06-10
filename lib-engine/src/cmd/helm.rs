@@ -72,6 +72,9 @@ pub enum HelmError {
 
     #[error("Error: releaseContent: Release name is invalid: {0}")]
     ReleaseNameInvalid(String),
+
+    #[error("Cannot get credentials error.")]
+    CannotGetCredentials(String),
 }
 
 #[derive(Debug, Clone)]
@@ -419,7 +422,9 @@ impl Helm {
         // So use same target dir, to avoid issues
         let tmpdir = Self::get_temp_dir(target_directory, chart_name, PULL)?;
 
-        let url_with_credentials = engine_helm_registry.get_url_with_credentials();
+        let url_with_credentials = engine_helm_registry
+            .get_url_with_credentials()
+            .map_err(|_| HelmError::CannotGetCredentials("Cannot get the OCI registy credentials".to_string()))?;
         if let Some((registry_url, username, password)) =
             Self::get_registry_with_username_password(&url_with_credentials)
         {

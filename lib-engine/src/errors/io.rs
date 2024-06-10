@@ -245,6 +245,7 @@ pub enum Tag {
     RouterBasicAuthEnvVarCannotDecodeBase64Error,
     RouterBasicAuthEnvVarNotFound,
     ServiceInstantiationError,
+    CannotGetRegistryCredentials,
 }
 
 impl From<errors::Tag> for Tag {
@@ -499,6 +500,7 @@ impl From<errors::Tag> for Tag {
                 Tag::CannotPatchHelmAdmissionControllerConfigMap
             }
             errors::Tag::ServiceInstantiationError => Tag::ServiceInstantiationError,
+            errors::Tag::CannotGetRegistryCredentials => Tag::CannotGetRegistryCredentials,
         }
     }
 }
