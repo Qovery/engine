@@ -23,6 +23,10 @@ pub struct GenericCr {
     _repository_name: String,
     skopeo: Skopeo,
     cr_info: ContainerRegistryInfo,
+    // Only used for the demo mode, which does not support delete operations on its registry.
+    // And skopeo does not return the same error with ARM version. On AMD64 it works fine.
+    // https://github.com/k3d-io/k3d/issues/1090
+    support_delete: bool,
 }
 
 impl GenericCr {
@@ -34,6 +38,7 @@ impl GenericCr {
         skip_tls_verification: bool,
         repository_name: String,
         credentials: Option<(String, String)>,
+        support_delete: bool,
     ) -> Result<Self, ContainerRegistryError> {
         let mut registry_docker_json_config = None;
         if let Some((user, pass)) = &credentials {
@@ -86,6 +91,7 @@ impl GenericCr {
             _repository_name: repository_name,
             skopeo,
             cr_info: container_registry_info,
+            support_delete,
         };
 
         Ok(cr)
@@ -174,6 +180,10 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        if !self.support_delete {
+            return Ok(());
+        }
+
         let container =
             ContainerImage::new(self.cr_info.endpoint.clone(), repository_name.to_string(), vec!["".to_string()]);
         let tags = self
@@ -200,6 +210,10 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+        if !self.support_delete {
+            return Ok(());
+        }
+
         let container = ContainerImage::new(self.cr_info.endpoint.clone(), image.name.clone(), vec![image.tag.clone()]);
         self.skopeo
             .delete_image(&container, !self.skip_tls_verification)
