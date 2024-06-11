@@ -623,6 +623,7 @@ impl ContainerRegistry {
                     options.skip_tls_verify,
                     options.repository_name.clone(),
                     options.username.and_then(|l| options.password.map(|p| (l, p))),
+                    options.url.host_str().unwrap_or("") != "qovery-registry.lan",
                 )?))
             }
         }
