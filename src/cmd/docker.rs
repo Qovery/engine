@@ -3,7 +3,6 @@ use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, Qovery
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::cmp::max;
-use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::num::NonZeroUsize;
@@ -161,9 +160,21 @@ enum BuilderLocation {
     Kubernetes {
         namespace: String,
         builder_prefix: String,
-        supported_architectures: BTreeSet<Architecture>,
+        supported_architectures: Vec<Architecture>,
         enable_rootless: bool,
     },
+}
+
+impl BuilderLocation {
+    fn supported_architectures(&self) -> &[Architecture] {
+        match self {
+            BuilderLocation::Local => &[],
+            BuilderLocation::Kubernetes {
+                supported_architectures,
+                ..
+            } => supported_architectures,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -296,7 +307,7 @@ impl Docker {
         docker.builder_location = BuilderLocation::Kubernetes {
             namespace,
             builder_prefix,
-            supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
+            supported_architectures: supported_architectures.iter().dedup().cloned().collect_vec(),
             enable_rootless,
         };
         docker.common_envs.extend(args);
@@ -360,6 +371,7 @@ impl Docker {
                     for tls in tls_invalid_registries {
                         cfg_file.push_str(&format!("[registry.\"{}\"]\n  insecure = true\n", tls));
                     }
+                    info!("Docker buildkitd config {}", &cfg_file);
                     let _ = fs::write(&cfg_path, cfg_file);
 
                     format!("--buildkitd-config={}", cfg_path.to_string_lossy())
@@ -915,13 +927,14 @@ impl Docker {
                 image.registry.port_or_known_default().unwrap_or(80)
             );
 
+            info!("Docker configure builder for HTTP registry {:?}", http_registries);
             let now = format!("{}", Uuid::new_v4());
             builder = self
                 .spawn_builder(
                     &now,
                     &now,
                     NonZeroUsize::new(1).unwrap(),
-                    &[Architecture::AMD64],
+                    self.builder_location.supported_architectures(),
                     (0, 0),
                     (0, 0),
                     &CommandKiller::never(),
