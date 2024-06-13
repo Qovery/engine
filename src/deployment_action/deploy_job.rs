@@ -158,7 +158,6 @@ where
                 mirror_image_if_necessary(
                     job.long_id(),
                     source,
-                    source.tag_for_mirror(job.long_id()),
                     target,
                     logger,
                     event_details.clone(),
