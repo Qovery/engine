@@ -75,7 +75,6 @@ pub fn delete_cached_image(
 pub fn mirror_image_if_necessary(
     service_id: &Uuid,
     source: &RegistryImageSource,
-    tag_for_mirror: String,
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
@@ -83,23 +82,25 @@ pub fn mirror_image_if_necessary(
 ) -> Result<(), Box<EngineError>> {
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 
-    let registry_info = target.container_registry.registry_info();
-    let mirror_repo_name = get_mirror_repository_name(
-        service_id,
-        target.kubernetes.long_id(),
-        &target.kubernetes.advanced_settings().registry_mirroring_mode,
-    );
-    let dest_image = ContainerImage::new(
-        target.container_registry.registry_info().endpoint.clone(),
-        registry_info.get_image_name(&mirror_repo_name),
-        vec![tag_for_mirror],
-    );
+    let (cluster_container_registry, image_name, image_tag, must_mirror_image) = source
+        .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+            service_id,
+            target.kubernetes.long_id(),
+            &target.kubernetes.advanced_settings().registry_mirroring_mode,
+            target.container_registry.registry_info(),
+        );
+    let dest_image = ContainerImage::new(cluster_container_registry, image_name, vec![image_tag]);
 
     if image_already_exist(&dest_image, target) {
-        logger.info(format!(
-            "🎯 Skipping image mirroring. Image {} already exists in the registry",
-            source.image
-        ));
+        let skip_image_mirroring_message = if must_mirror_image {
+            format!(
+                "🎯 Skipping image mirroring: image {} already exists in the registry",
+                source.image
+            )
+        } else {
+            "🎯 Skipping image mirroring: service and cluster registries are the same".to_string()
+        };
+        logger.info(skip_image_mirroring_message);
         mirror_record.stop(StepStatus::Skip);
         Ok(())
     } else {

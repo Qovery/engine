@@ -249,6 +249,17 @@ impl<T: CloudProvider> Container<T> {
         } else {
             registry_info.endpoint.host_str().unwrap_or_default().into()
         };
+
+        let (_, image_name, image_tag, _) = self
+            .source
+            .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+                self.long_id(),
+                target.kubernetes.long_id(),
+                &target.kubernetes.advanced_settings().registry_mirroring_mode,
+                target.container_registry.registry_info(),
+            );
+        let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
@@ -263,17 +274,8 @@ impl<T: CloudProvider> Container<T> {
                 name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
-                image_full: format!(
-                    "{}/{}:{}",
-                    repository,
-                    registry_info.get_image_name(&get_mirror_repository_name(
-                        self.long_id(),
-                        kubernetes.long_id(),
-                        &kubernetes.advanced_settings().registry_mirroring_mode,
-                    )),
-                    self.source.tag_for_mirror(&self.long_id)
-                ),
-                image_tag: self.source.tag_for_mirror(&self.long_id),
+                image_full,
+                image_tag,
                 version: self.service_version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),

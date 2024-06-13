@@ -10,7 +10,6 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
 use crate::io_models::labels_group::LabelsGroup;
-use crate::models;
 use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
 use crate::models::labels_group::LabelsGroupTeraContext;
@@ -190,25 +189,21 @@ impl<T: CloudProvider> Job<T> {
         let registry_info = target.container_registry.registry_info();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
-                let image_tag = source.tag_for_mirror(&self.long_id);
                 let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
                     format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
                 } else {
                     registry_info.endpoint.host_str().unwrap_or_default().into()
                 };
-                (
-                    format!(
-                        "{}/{}:{}",
-                        repository,
-                        registry_info.get_image_name(&models::container::get_mirror_repository_name(
-                            self.long_id(),
-                            target.kubernetes.long_id(),
-                            &target.kubernetes.advanced_settings().registry_mirroring_mode,
-                        )),
-                        image_tag
-                    ),
-                    image_tag,
-                )
+
+                let (_, image_name, image_tag, _) = source
+                    .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+                        self.long_id(),
+                        target.kubernetes.long_id(),
+                        &target.kubernetes.advanced_settings().registry_mirroring_mode,
+                        target.container_registry.registry_info(),
+                    );
+                let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+                (image_full, image_tag)
             }
             ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
         };
