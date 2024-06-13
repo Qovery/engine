@@ -2,7 +2,7 @@ use super::utils::delete_cached_image;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::kubectl::kubectl_get_job_pod_output;
+use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::utils::{get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind};
@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Duration;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
 where
@@ -229,13 +230,47 @@ where
                 )?;
                 set_of_pods_already_processed.insert(pod_name.clone());
 
+                let should_force_cancel = async {
+                    while !target.abort.status().should_force_cancel() {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                };
+
                 // Wait for the job container to be terminated
                 logger.info(format!("Waiting for the job container {} to be processed...", job.kube_name()));
-                let _ = block_on(await_condition(
-                    kube_pod_api.clone(),
-                    &pod_name,
-                    is_job_pod_container_terminated(job.kube_name()),
-                ));
+                block_on(async {
+                    tokio::select! {
+                        biased;
+                        _ = should_force_cancel => {},
+                        _ = await_condition(
+                            kube_pod_api.clone(),
+                            &pod_name,
+                            is_job_pod_container_terminated(job.kube_name()),
+                        ) => {},
+                    }
+                });
+
+                let status = target.abort.status();
+                // If abort is forced, we delete lifecycle jobs
+                if status.should_force_cancel() {
+                    // force delete lifecycle jobs
+                    for job in target.environment.jobs.iter().filter(|&j| j.job_schedule().is_job()) {
+                        info!("Trying to delete lifecycle jobs with label `{}`", job.kube_label_selector());
+                        match kubectl_exec_delete_job(
+                            &target.kube,
+                            job.kube_label_selector().as_str(),
+                            Some(target.environment.namespace()),
+                        ) {
+                            Ok(_) => {
+                                info!("Job with selector `{}` has been deleted", job.kube_label_selector());
+                                return Err(Box::new(EngineError::new_task_cancellation_requested(
+                                    event_details.clone(),
+                                )));
+                            }
+                            Err(_) => warn!("Cannot delete job with selector `{}`", job.kube_label_selector()),
+                        }
+                    }
+                }
 
                 info!("Get JSON output from shared volume");
                 // Get JSON output from shared volume
@@ -316,6 +351,7 @@ where
                         format!("Cannot find job for terminated pod {}", &pod_name),
                     )
                 })?;
+
                 let job_status_result = match job_status(&ret.as_ref()) {
                     JobStatus::Success => return Ok(state),
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),

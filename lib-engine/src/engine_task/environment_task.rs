@@ -633,14 +633,19 @@ impl Task for EnvironmentTask {
         info!("environment task {} finished", self.id());
     }
 
-    fn cancel(&self) -> bool {
+    fn cancel(&self, force_requested: bool) -> bool {
         if self.is_terminated() {
             info!("Skipping cancel action as the task is already terminated.");
             return false;
         }
 
-        self.cancel_requested
-            .store(AbortStatus::UserForceRequested, Ordering::Relaxed);
+        self.cancel_requested.store(
+            match force_requested {
+                true => AbortStatus::UserForceRequested,
+                false => AbortStatus::Requested,
+            },
+            Ordering::Relaxed,
+        );
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Cancel),
             EventMessage::new(r#"
