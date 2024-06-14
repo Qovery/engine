@@ -577,9 +577,13 @@ impl ContainerRegistry {
                     self.name.as_str(),
                     &options.scaleway_secret_key,
                     &options.scaleway_project_id,
-                    ScwZone::from_str(&options.region).unwrap_or_else(|_| {
-                        panic!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
-                    }),
+                    ScwZone::from_str(&options.region).map_err(|e| {
+                        anyhow!(
+                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone: {}",
+                            options.region,
+                            e
+                        )
+                    })?,
                 )?))
             }
             container_registry::Kind::GcpArtifactRegistry => {
@@ -608,7 +612,7 @@ impl ContainerRegistry {
                             Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                             Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                         )
-                        .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
+                        .with_context(|| "cannot instantiate ArtifactRegistryService")?,
                     ),
                 )?))
             }
