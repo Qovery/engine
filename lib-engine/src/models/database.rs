@@ -472,7 +472,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         if let Some(value) = node_affinity_values.first() {
             node_affinity.insert(node_affinity_key.to_string(), value.to_string());
         }
-        if kubernetes.kind() == kubernetes::Kind::Eks && kubernetes.advanced_settings().aws_enable_karpenter {
+        if kubernetes.kind() == kubernetes::Kind::Eks && kubernetes.is_karpenter_enabled() {
             utils::target_stable_node_pool(&mut node_affinity, &mut toleration, true);
         }
 
