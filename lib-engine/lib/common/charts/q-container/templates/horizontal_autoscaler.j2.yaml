@@ -1,5 +1,5 @@
 {%- if service.storages | length == 0 and service.min_instances != service.max_instances and service.advanced_settings.hpa_cpu_average_utilization_percent >= 0 %}
-apiVersion: autoscaling/v1
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ service.name }}
@@ -15,8 +15,8 @@ metadata:
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.hpa %}
-    {{ key }}: "{{ value }}"
-    {%- endfor %}
+      {{ key }}: "{{ value }}"
+      {%- endfor %}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -24,5 +24,19 @@ spec:
     name: {{ service.name }}
   minReplicas: {{ service.min_instances }}
   maxReplicas: {{ service.max_instances }}
-  targetCPUUtilizationPercentage: {{ service.advanced_settings.hpa_cpu_average_utilization_percent }}
-{%- endif %}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ service.advanced_settings.hpa_cpu_average_utilization_percent }}
+    {%- if service.advanced_settings.hpa_memory_average_utilization_percent %}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ service.advanced_settings.hpa_memory_average_utilization_percent }}
+    {%- endif %}
+  {%- endif %}

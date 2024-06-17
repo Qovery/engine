@@ -170,6 +170,8 @@ pub struct ApplicationAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+    #[serde(alias = "hpa.memory.average_utilization_percent")]
+    pub hpa_memory_average_utilization_percent: Option<u8>,
 
     #[serde(alias = "resources.override.limit.cpu_in_milli")]
     pub resources_override_limit_cpu_in_milli: Option<u32>,
@@ -217,6 +219,7 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            hpa_memory_average_utilization_percent: None,
             resources_override_limit_cpu_in_milli: None,
             resources_override_limit_ram_in_mib: None,
         }
@@ -262,6 +265,7 @@ impl ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
+            hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
             resources_override_limit_cpu_in_milli: self.resources_override_limit_cpu_in_milli,
             resources_override_limit_ram_in_mib: self.resources_override_limit_ram_in_mib,
         }
