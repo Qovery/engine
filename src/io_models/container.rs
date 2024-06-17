@@ -284,6 +284,8 @@ pub struct ContainerAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+    #[serde(alias = "hpa.memory.average_utilization_percent")]
+    pub hpa_memory_average_utilization_percent: Option<u8>,
 
     #[serde(alias = "resources.override.limit.cpu_in_milli")]
     pub resources_override_limit_cpu_in_milli: Option<u32>,
@@ -328,6 +330,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            hpa_memory_average_utilization_percent: None,
             resources_override_limit_cpu_in_milli: None,
             resources_override_limit_ram_in_mib: None,
         }
