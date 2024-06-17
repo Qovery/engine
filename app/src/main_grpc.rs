@@ -30,7 +30,7 @@ use qovery_engine::cmd::docker;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
-use tracing::error;
+use tracing::{error, warn};
 use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
@@ -43,7 +43,7 @@ use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::grpc::GrpcEngineClient;
 use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, check_versions_from};
+use crate::utils::{check_libs_directory, check_versions_from, clean_configuration_directories};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
@@ -367,6 +367,9 @@ pub fn main() -> io::Result<()> {
                                            logger: Box<dyn Logger>,
                                            metrics_registry: Box<dyn MetricsRegistry>|
               -> Result<Arc<dyn Task>, EngineEvent> {
+            // make sure to clean configuration directories so engine task can start fresh
+            clean_configuration_directories();
+
             let ret = to_engine_task(
                 payload,
                 &cli.workspace_root_dir,

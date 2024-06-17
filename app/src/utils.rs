@@ -69,3 +69,42 @@ where
     let file = File::open(filename)?;
     Ok(BufReader::new(file).lines())
 }
+
+pub fn clean_configuration_directories() {
+    // make sure kube config directory is cleaned
+    // GKE gcloud command might set those eventually and eventually clashes later on
+    info!("Deleting ~/.kube/config");
+    if let Err(e) = fs::remove_dir_all("~/.kube/config") {
+        warn!("Error while trying to delete ~/.kube/config, error: {}", e);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::utils::clean_configuration_directories;
+    use std::fs::{create_dir_all, File};
+    use std::io::Write;
+    use std::path::Path;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_clean_configuration_directories() {
+        // setup:
+
+        // kubeconfigs
+        let kubeconfig_file = format!("~/.kube/config/{}", Uuid::new_v4());
+        let kubeconfig_path = Path::new(kubeconfig_file.as_str());
+        if let Some(p) = kubeconfig_path.parent() {
+            create_dir_all(p).expect("Cannot create directory")
+        };
+        let mut file = File::create(kubeconfig_path).expect("Cannot create file");
+        file.write_all(b"Anything").expect("Cannot write file");
+        assert!(kubeconfig_path.exists());
+
+        // execute:
+        clean_configuration_directories();
+
+        // verify:
+        assert!(!kubeconfig_path.exists());
+    }
+}
