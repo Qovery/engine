@@ -20,7 +20,7 @@ spec:
   # third party will be overwriten by cert-manager to match the secretTemplate.
   secretTemplate:
     labels:
-      {{- include "qovery-cluster-agent.labels" . | nindent 4 }}
+      {{- include "qovery-cluster-agent.labels" . | nindent 6 }}
 
   duration: 2160h # 90d
   renewBefore: 360h # 15d
