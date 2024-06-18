@@ -180,16 +180,6 @@ impl Karpenter {
             .map(|duration| ChronoDuration::seconds(duration as i64));
         let nodes_drain_timeout = get_nodes_drain_timeout(client, event_details, max_nodes_drain_in_sec).await?;
 
-        // Check that karpenter is installed.
-        if !Self::deployment_is_installed(client, event_details) {
-            return Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
-                event_details.clone(),
-                CommandError::new_from_safe_message(
-                    "Karpenter is not running. That prevents the deletion of the nodes".to_string(),
-                ),
-            )));
-        }
-
         // Uninstall karpenter-configuration chart then Karpenter will delete the nodes
         // The Ec2nodeclasses has a finalizer that wait for the NodeClaims to be terminated
         // The NodeClaims has a finalizer that wait for the Nodes to be terminated
