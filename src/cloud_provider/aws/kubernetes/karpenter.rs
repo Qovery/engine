@@ -107,7 +107,7 @@ impl Karpenter {
             return Ok(false);
         }
 
-        let nodes = block_on(Self::get_karpenter_nodes(kube_client, event_details))?;
+        let nodes = block_on(Self::get_nodes_spawned_by_karpenter(kube_client, event_details))?;
         Ok(nodes.is_empty())
     }
 
@@ -145,7 +145,7 @@ impl Karpenter {
         }
     }
 
-    async fn get_karpenter_nodes(
+    async fn get_nodes_spawned_by_karpenter(
         client: &QubeClient,
         event_details: &EventDetails,
     ) -> Result<Vec<Node>, Box<EngineError>> {
@@ -170,14 +170,18 @@ impl Karpenter {
             ))
         })?;
 
+        let nodes = Self::get_nodes_spawned_by_karpenter(client, event_details).await?;
+        if nodes.is_empty() {
+            return Ok(());
+        }
+
         let max_nodes_drain_in_sec = karpenter_parameters
             .max_node_drain_time_in_secs
             .map(|duration| ChronoDuration::seconds(duration as i64));
         let nodes_drain_timeout = get_nodes_drain_timeout(client, event_details, max_nodes_drain_in_sec).await?;
 
         // Check that karpenter is installed.
-        let nodes = Self::get_karpenter_nodes(client, event_details).await?;
-        if nodes.is_empty() {
+        if !Self::deployment_is_installed(client, event_details) {
             return Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
                 event_details.clone(),
                 CommandError::new_from_safe_message(
