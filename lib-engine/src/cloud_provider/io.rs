@@ -1,3 +1,4 @@
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping as LogFormatEscapingModel;
 use crate::models::types::Percentage;
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use base64::engine::general_purpose;
@@ -13,6 +14,10 @@ pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
 
 fn default_registry_mirroring_mode() -> RegistryMirroringMode {
     RegistryMirroringMode::Service
+}
+
+fn default_nginx_controller_log_format_escaping() -> LogFormatEscaping {
+    LogFormatEscaping::Default
 }
 
 #[derive(Deserialize, Serialize)]
@@ -50,6 +55,26 @@ pub enum RegistryMirroringMode {
     #[serde(alias = "service", alias = "SERVICE")]
     #[serde(other)]
     Service,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub enum LogFormatEscaping {
+    #[serde(alias = "default")]
+    Default,
+    #[serde(alias = "none")]
+    None,
+    #[serde(alias = "json", alias = "Json")]
+    JSON,
+}
+
+impl LogFormatEscaping {
+    pub fn to_model(&self) -> LogFormatEscapingModel {
+        match &self {
+            LogFormatEscaping::Default => LogFormatEscapingModel::Default,
+            LogFormatEscaping::None => LogFormatEscapingModel::None,
+            LogFormatEscaping::JSON => LogFormatEscapingModel::JSON,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -121,6 +146,13 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_min_number_instances: u32,
     #[serde(alias = "nginx.controller.enable_client_ip")]
     pub nginx_controller_enable_client_ip: bool,
+    #[serde(alias = "nginx.controller.log_format_upstream")]
+    pub nginx_controller_log_format_upstream: Option<String>,
+    #[serde(
+        alias = "nginx.controller.log_format_escaping",
+        default = "default_nginx_controller_log_format_escaping"
+    )]
+    pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
@@ -140,6 +172,7 @@ pub struct ClusterAdvancedSettings {
 impl Default for ClusterAdvancedSettings {
     fn default() -> Self {
         let default_database_cirds = vec!["0.0.0.0/0".to_string()];
+
         ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time_sec: 31536000,
@@ -171,6 +204,8 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
             nginx_controller_enable_client_ip: false,
+            nginx_controller_log_format_upstream: None,
+            nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             aws_enable_karpenter: false,
@@ -235,7 +270,7 @@ impl CustomerHelmChartsOverrideEncoded {
 mod tests {
     use uuid::Uuid;
 
-    use crate::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
+    use crate::cloud_provider::io::{ClusterAdvancedSettings, LogFormatEscaping, RegistryMirroringMode};
     use crate::{
         cloud_provider::io::validate_aws_cloudwatch_eks_logs_retention_days,
         events::{EventDetails, Stage, Transmitter},
@@ -327,6 +362,12 @@ mod tests {
         assert_eq!(cluster_advanced_settings.nginx_hpa_cpu_utilization_percentage_threshold, 50);
         assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
         assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
+        assert!(!cluster_advanced_settings.nginx_controller_enable_client_ip);
+        assert_eq!(cluster_advanced_settings.nginx_controller_log_format_upstream, None);
+        assert_eq!(
+            cluster_advanced_settings.nginx_controller_log_format_escaping,
+            LogFormatEscaping::Default
+        );
     }
 
     #[test]
