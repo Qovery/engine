@@ -15,6 +15,13 @@ controller:
     server-tokens: "false"
     # enable real IP (client IP)
     enable-real-ip: "false" # set-by-engine-code
+    # customize log-format / set-by-engine-code
+    # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
+    log-format-upstream: >
+      '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$http_x_forwarded_for"
+    log-format-escaping-json: "false" # set-by-engine-code
+    log-format-escaping-none: "false" # set-by-engine-code
+
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:
@@ -30,7 +37,7 @@ controller:
     enabled: false # set-by-engine-code
     minReplicas: 2 # set-by-engine-code
     maxReplicas: 25 # set-by-engine-code
-    targetCPUUtilizationPercentage: 50  # set-by-engine-code
+    targetCPUUtilizationPercentage: 50 # set-by-engine-code
 
   # required if you rely on a load balancer
   # the controller mirrors the address of this service's endpoints to the load-balancer status of all Ingress objects it satisfies.

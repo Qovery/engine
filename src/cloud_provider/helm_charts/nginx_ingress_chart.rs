@@ -1,4 +1,6 @@
+use std::fmt::Display;
 use std::sync::Arc;
+use strum_macros::EnumIter;
 
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
@@ -19,6 +21,29 @@ use tera::{Context, Tera};
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
 
+#[derive(Clone)]
+pub enum LogFormat {
+    Default,
+    Custom(String),
+}
+
+#[derive(Clone, EnumIter)]
+pub enum LogFormatEscaping {
+    Default,
+    None,
+    JSON,
+}
+
+impl Display for LogFormatEscaping {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogFormatEscaping::Default => write!(f, "default"),
+            LogFormatEscaping::None => write!(f, "none"),
+            LogFormatEscaping::JSON => write!(f, "json"),
+        }
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -35,6 +60,8 @@ pub struct NginxIngressChart {
     namespace: HelmChartNamespaces,
     loadbalancer_size: Option<String>,
     enable_real_ip: bool,
+    log_format_upstream: LogFormat,
+    log_format_escaping: LogFormatEscaping,
 }
 
 impl NginxIngressChart {
@@ -53,6 +80,8 @@ impl NginxIngressChart {
         namespace: HelmChartNamespaces,
         loadbalancer_size: Option<String>,
         enable_real_ip: bool,
+        log_format_upstream: LogFormat,
+        log_format_escaping: LogFormatEscaping,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -94,6 +123,8 @@ impl NginxIngressChart {
             namespace,
             loadbalancer_size,
             enable_real_ip,
+            log_format_upstream,
+            log_format_escaping,
         }
     }
 
@@ -218,6 +249,27 @@ defaultBackend:
                 value: value.to_string(),
             })
         }
+        if let LogFormat::Custom(log_format_upstream) = &self.log_format_upstream {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.config.log-format-upstream".to_string(),
+                value: log_format_upstream.to_string(),
+            });
+        }
+        match self.log_format_escaping {
+            LogFormatEscaping::None => {
+                chart_set_values.push(ChartSetValue {
+                    key: "controller.config.log-format-escaping-none".to_string(),
+                    value: true.to_string(),
+                });
+            }
+            LogFormatEscaping::JSON => {
+                chart_set_values.push(ChartSetValue {
+                    key: "controller.config.log-format-escaping-json".to_string(),
+                    value: true.to_string(),
+                });
+            }
+            LogFormatEscaping::Default => {}
+        }
 
         // custom cloud provider configuration
         match self.cloud_provider {
@@ -309,11 +361,11 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use strum::IntoEnumIterator;
-
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
     use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
+    use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormat;
+    use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType;
     use crate::cloud_provider::helm_charts::HelmChartType;
@@ -324,6 +376,7 @@ mod tests {
     use crate::models::domain::Domain;
     use std::env;
     use std::sync::Arc;
+    use strum::IntoEnumIterator;
 
     fn get_nginx_ingress_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
         Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
@@ -357,6 +410,8 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
+            LogFormat::Default,
+            LogFormatEscaping::Default,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -396,6 +451,8 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
+            LogFormat::Default,
+            LogFormatEscaping::Default,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -438,6 +495,8 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
+            LogFormat::Default,
+            LogFormatEscaping::Default,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -488,6 +547,8 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
+            LogFormat::Default,
+            LogFormatEscaping::Default,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -506,5 +567,96 @@ mod tests {
 
         // verify:
         assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+    }
+
+    #[test]
+    fn nginx_ingress_chart_log_format_test() {
+        for log_format in [LogFormat::Default, LogFormat::Custom("custom log_format".to_string())] {
+            // setup:
+            let chart = NginxIngressChart::new(
+                None,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                true,
+                get_nginx_ingress_chart_override(),
+                get_domain().wildcarded(),
+                Kind::Aws,
+                KubernetesKind::Ec2,
+                None,
+                None,
+                None,
+                HelmChartNamespaces::NginxIngress,
+                None,
+                false,
+                log_format.clone(),
+                LogFormatEscaping::Default,
+            );
+
+            // execute:
+            let common_chart = chart.to_common_helm_chart().expect("cannot create common chart");
+
+            // verify:
+            match &log_format {
+                LogFormat::Default => {
+                    assert!(!common_chart
+                        .chart_info
+                        .values
+                        .iter()
+                        .any(|x| x.key == "controller.config.log-format-upstream"));
+                }
+                LogFormat::Custom(_) => {
+                    assert!(common_chart
+                        .chart_info
+                        .values
+                        .iter()
+                        .any(|x| x.key == "controller.config.log-format-upstream" && x.value == "custom log_format"),);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn nginx_ingress_chart_log_format_escaping_test() {
+        for log_format_escaping in LogFormatEscaping::iter() {
+            // setup:
+            let chart = NginxIngressChart::new(
+                None,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                true,
+                get_nginx_ingress_chart_override(),
+                get_domain().wildcarded(),
+                Kind::Aws,
+                KubernetesKind::Ec2,
+                None,
+                None,
+                None,
+                HelmChartNamespaces::NginxIngress,
+                None,
+                false,
+                LogFormat::Default,
+                log_format_escaping.clone(),
+            );
+
+            // execute:
+            let common_chart = chart.to_common_helm_chart().expect("cannot create common chart");
+
+            // verify:
+            match &log_format_escaping {
+                LogFormatEscaping::Default => {
+                    assert!(!common_chart
+                        .chart_info
+                        .values
+                        .iter()
+                        .any(|x| x.key == "controller.config.log-format-escaping-none"
+                            || x.key == "controller.config.log-format-escaping-json"));
+                }
+                _ => {
+                    assert!(common_chart.chart_info.values.iter().any(|x| x.key
+                        == format!("controller.config.log-format-escaping-{}", log_format_escaping)
+                        && x.value == "true"),);
+                }
+            }
+        }
     }
 }
