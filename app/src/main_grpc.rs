@@ -15,8 +15,7 @@ use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{env, thread};
-use std::{io, process};
+use std::{env, fs, io, process, thread};
 
 use dirs::home_dir;
 use dotenv::dotenv;
@@ -43,7 +42,7 @@ use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::grpc::GrpcEngineClient;
 use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, check_versions_from, clean_configuration_directories};
+use crate::utils::{check_libs_directory, check_versions_from};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
@@ -475,5 +474,45 @@ async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) 
             error!("Error while reaping dead builders: {}", err);
         }
         tokio::time::sleep(Duration::from_secs(3600)).await;
+    }
+}
+
+pub fn clean_configuration_directories() {
+    // make sure kube config directory is cleaned
+    // GKE gcloud command might set those eventually and eventually clashes later on
+    info!("Deleting ~/.kube/config");
+    if let Err(e) = fs::remove_dir_all("~/.kube/config") {
+        warn!("Error while trying to delete ~/.kube/config, error: {}", e);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::fs::{create_dir_all, File};
+    use std::io::Write;
+    use std::path::Path;
+    use uuid::Uuid;
+
+    use crate::clean_configuration_directories;
+
+    #[test]
+    fn test_clean_configuration_directories() {
+        // setup:
+
+        // kubeconfigs
+        let kubeconfig_file = format!("~/.kube/config/{}", Uuid::new_v4());
+        let kubeconfig_path = Path::new(kubeconfig_file.as_str());
+        if let Some(p) = kubeconfig_path.parent() {
+            create_dir_all(p).expect("Cannot create directory")
+        };
+        let mut file = File::create(kubeconfig_path).expect("Cannot create file");
+        file.write_all(b"Anything").expect("Cannot write file");
+        assert!(kubeconfig_path.exists());
+
+        // execute:
+        clean_configuration_directories();
+
+        // verify:
+        assert!(!kubeconfig_path.exists());
     }
 }
