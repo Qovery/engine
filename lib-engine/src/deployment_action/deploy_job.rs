@@ -25,6 +25,7 @@ use kube::Api;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -227,6 +228,7 @@ where
                     &job_pod_selector,
                     event_details,
                     &set_of_pods_already_processed,
+                    job.max_duration(),
                 )?;
                 set_of_pods_already_processed.insert(pod_name.clone());
 
@@ -606,9 +608,16 @@ fn get_active_job_pod_by_selector(
     job_pod_selector: &str,
     event_details: &EventDetails,
     set_of_pods_already_processed: &HashSet<String>,
+    job_max_duration: &Duration,
 ) -> Result<String, Box<EngineError>> {
+    // When max duration is lower than 5 minutes use a custom fixed delay, with a minimum retry every 2 seconds
+    let retry_fixed_delay = if job_max_duration < &Duration::from_secs(300) {
+        retry::delay::Fixed::from_millis(max(job_max_duration.as_secs() / 30, 2)).take(30)
+    } else {
+        retry::delay::Fixed::from_millis(10_000).take(30)
+    };
     // Trying to get the pod name, letting it up to 5 minutes to be scheduled
-    let list_job_pods_result = retry::retry(retry::delay::Fixed::from_millis(10_000).take(30), || {
+    let list_job_pods_result = retry::retry(retry_fixed_delay, || {
         // List pods according to job label selector
         let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
             Ok(pods_list) => {
