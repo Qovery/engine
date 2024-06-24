@@ -2,6 +2,7 @@ clusterName: set-by-engine-code
 securityGroupId: set-by-engine-code
 diskSizeInGib: set-by-engine-code
 capacity_type: set-by-engine-code
+explicitSubnetIds: []
 
 tags:
   ClusterId: set-by-engine-code

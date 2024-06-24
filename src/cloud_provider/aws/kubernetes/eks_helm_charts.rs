@@ -272,11 +272,9 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.organization_long_id,
         chart_config_prerequisites.region.to_cloud_provider_format(),
         chart_config_prerequisites.karpenter_parameters.clone(),
+        chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
     )
     .to_common_helm_chart()?;
-
-    // let prometheus_service_monitor_crd =
-    //     PrometheusServiceMonitorCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // Cluster autoscaler
     let cluster_autoscaler = ClusterAutoscalerChart::new(
