@@ -9,6 +9,7 @@ securityGroupId: ""
 diskSizeInGib: 0
 
 capacity_type: []
+explicitSubnetIds: []
 
 tags:
   ClusterId: ""

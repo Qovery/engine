@@ -6,8 +6,14 @@ spec:
   amiFamily: AL2 # Amazon Linux 2
   role: "KarpenterNodeRole-{{ .Values.clusterName }}"
   subnetSelectorTerms:
+    {{- if .Values.explicitSubnetIds }}
+    {{- range.Values.explicitSubnetIds }}
+    - id: {{ . }}
+    {{- end }}
+    {{- else }}
     - tags:
         karpenter.sh/discovery: "{{ .Values.clusterName }}"
+    {{- end }}
   securityGroupSelectorTerms:
     - id: {{ .Values.securityGroupId }}
 

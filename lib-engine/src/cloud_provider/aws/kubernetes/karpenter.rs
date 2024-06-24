@@ -1,6 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terraform_config;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
@@ -53,6 +54,7 @@ impl Karpenter {
         client: &QubeClient,
         kubernetes_long_id: uuid::Uuid,
         qovery_terraform_config_file: &str,
+        options: &Options,
     ) -> Result<(), Box<EngineError>> {
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Restart));
 
@@ -72,6 +74,7 @@ impl Karpenter {
             &event_details,
             kubernetes_long_id,
             qovery_terraform_config_file,
+            options,
         )
     }
 
@@ -254,6 +257,7 @@ impl Karpenter {
         event_details: &EventDetails,
         cluster_long_id: uuid::Uuid,
         qovery_terraform_config_file: &str,
+        options: &Options,
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
         let helm = Helm::new(
@@ -268,6 +272,7 @@ impl Karpenter {
             cluster_long_id,
             qovery_terraform_config_file,
             event_details,
+            options,
         )?;
 
         Ok(helm
@@ -290,6 +295,7 @@ impl Karpenter {
         cluster_long_id: uuid::Uuid,
         qovery_terraform_config_file: &str,
         event_details: &EventDetails,
+        options: &Options,
     ) -> Result<ChartInfo, Box<EngineError>> {
         let karpenter_parameters = kubernetes.get_karpenter_parameters().ok_or_else(|| {
             Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
@@ -325,6 +331,7 @@ impl Karpenter {
             organization_long_id,
             region.to_cloud_provider_format(),
             Some(karpenter_parameters.clone()),
+            options.user_provided_network.as_ref(),
         )
         .to_common_helm_chart()
         .map_err(|el| {

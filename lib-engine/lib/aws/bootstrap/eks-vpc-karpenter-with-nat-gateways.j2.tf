@@ -56,16 +56,16 @@ resource "aws_route_table_association" "eks_karpenter_cluster_zone_a_public" {
 
 # Routing table
 resource "aws_route_table" "eks_karpenter_cluster_zone_a_private" {
-count = length(aws_nat_gateway.eks_karpenter_zone_a_public)
+  count = length(aws_nat_gateway.eks_karpenter_zone_a_public)
 
-vpc_id = aws_vpc.eks.id
+  vpc_id = aws_vpc.eks.id
 
-route {
-cidr_block = "0.0.0.0/0"
-gateway_id = aws_nat_gateway.eks_karpenter_zone_a_public[count.index].id
-}
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.eks_karpenter_zone_a_public[count.index].id
+  }
 
-tags = local.tags_eks_vpc_private
+  tags = local.tags_eks_vpc_private
 }
 
 {% endif %}

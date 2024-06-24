@@ -195,6 +195,11 @@ pub struct UserNetworkConfig {
     pub eks_subnets_zone_a_ids: Vec<String>,
     pub eks_subnets_zone_b_ids: Vec<String>,
     pub eks_subnets_zone_c_ids: Vec<String>,
+
+    // karpenter
+    pub eks_karpenter_fargate_subnets_zone_a_ids: Vec<String>,
+    pub eks_karpenter_fargate_subnets_zone_b_ids: Vec<String>,
+    pub eks_karpenter_fargate_subnets_zone_c_ids: Vec<String>,
 }
 
 impl ProviderOptions for Options {}
@@ -283,6 +288,19 @@ fn tera_context(
         context.insert("eks_subnets_zone_a_ids", &user_network_cfg.eks_subnets_zone_a_ids);
         context.insert("eks_subnets_zone_b_ids", &user_network_cfg.eks_subnets_zone_b_ids);
         context.insert("eks_subnets_zone_c_ids", &user_network_cfg.eks_subnets_zone_c_ids);
+
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_a_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_a_ids,
+        );
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_b_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_b_ids,
+        );
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_c_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_c_ids,
+        );
     }
 
     let format_ips =
@@ -1330,6 +1348,7 @@ fn create(
                 &kube_client,
                 kubernetes_long_id,
                 &qovery_terraform_config_file,
+                options,
             ))?;
         }
     }

@@ -1,4 +1,5 @@
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
+use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, UserNetworkConfig};
+use itertools::Itertools;
 use kube::Client;
 
 use crate::cloud_provider::helm::{
@@ -21,6 +22,7 @@ pub struct KarpenterConfigurationChart {
     organization_long_id: String,
     region: String,
     karpenter_parameters: Option<KarpenterParameters>,
+    explicit_subnet_ids: Vec<String>,
 }
 
 impl KarpenterConfigurationChart {
@@ -35,6 +37,7 @@ impl KarpenterConfigurationChart {
         organization_long_id: uuid::Uuid,
         region: &str,
         karpenter_parameters: Option<KarpenterParameters>,
+        user_network_config: Option<&UserNetworkConfig>,
     ) -> Self {
         KarpenterConfigurationChart {
             chart_path: HelmChartPath::new(
@@ -56,6 +59,21 @@ impl KarpenterConfigurationChart {
             organization_long_id: organization_long_id.to_string(),
             region: region.to_string(),
             karpenter_parameters,
+            explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
+                let combined_subnets = [
+                    &user_network_config.eks_subnets_zone_a_ids,
+                    &user_network_config.eks_subnets_zone_b_ids,
+                    &user_network_config.eks_subnets_zone_c_ids,
+                ]
+                .iter()
+                .flat_map(|v| v.iter())
+                .cloned()
+                .collect_vec();
+
+                combined_subnets
+            } else {
+                vec![]
+            },
         }
     }
 
@@ -72,6 +90,55 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             (0, false)
         };
 
+        let mut values = vec![
+            ChartSetValue {
+                key: "clusterName".to_string(),
+                value: self.cluster_name.clone(),
+            },
+            ChartSetValue {
+                key: "securityGroupId".to_string(),
+                value: self.security_group_id.clone(),
+            },
+            ChartSetValue {
+                key: "diskSizeInGib".to_string(),
+                value: format!("{}Gi", disk_size_in_gib),
+            },
+            ChartSetValue {
+                key: "tags.ClusterId".to_string(),
+                value: self.cluster_id.clone(),
+            },
+            ChartSetValue {
+                key: "tags.ClusterLongId".to_string(),
+                value: self.cluster_long_id.clone(),
+            },
+            ChartSetValue {
+                key: "tags.OrganizationId".to_string(),
+                value: self.organization_id.clone(),
+            },
+            ChartSetValue {
+                key: "tags.OrganizationLongId".to_string(),
+                value: self.organization_long_id.clone(),
+            },
+            ChartSetValue {
+                key: "tags.Region".to_string(),
+                value: self.region.clone(),
+            },
+            ChartSetValue {
+                key: "capacity_type".to_string(),
+                value: match spot_enabled {
+                    false => "{on-demand}".to_string(),
+                    true => "{spot,on-demand}".to_string(),
+                },
+            },
+        ];
+
+        if !self.explicit_subnet_ids.is_empty() {
+            values.push(ChartSetValue {
+                key: "explicitSubnetIds".to_string(),
+                value: format!("{{{}}}", self.explicit_subnet_ids.join(",")),
+            });
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KarpenterConfigurationChart::chart_name(),
@@ -82,47 +149,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 namespace: HelmChartNamespaces::KubeSystem,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "clusterName".to_string(),
-                        value: self.cluster_name.clone(),
-                    },
-                    ChartSetValue {
-                        key: "securityGroupId".to_string(),
-                        value: self.security_group_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "diskSizeInGib".to_string(),
-                        value: format!("{}Gi", disk_size_in_gib),
-                    },
-                    ChartSetValue {
-                        key: "tags.ClusterId".to_string(),
-                        value: self.cluster_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "tags.ClusterLongId".to_string(),
-                        value: self.cluster_long_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "tags.OrganizationId".to_string(),
-                        value: self.organization_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "tags.OrganizationLongId".to_string(),
-                        value: self.organization_long_id.clone(),
-                    },
-                    ChartSetValue {
-                        key: "tags.Region".to_string(),
-                        value: self.region.clone(),
-                    },
-                    ChartSetValue {
-                        key: "capacity_type".to_string(),
-                        value: match spot_enabled {
-                            false => "{on-demand}".to_string(),
-                            true => "{spot,on-demand}".to_string(),
-                        },
-                    },
-                ],
+                values,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
@@ -192,6 +219,7 @@ mod tests {
                 disk_size_in_gib: 50,
                 default_service_architecture: ARM64,
             }),
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -234,6 +262,7 @@ mod tests {
                 disk_size_in_gib: 50,
                 default_service_architecture: AMD64,
             }),
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -277,6 +306,7 @@ mod tests {
                 disk_size_in_gib: 50,
                 default_service_architecture: AMD64,
             }),
+            None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
