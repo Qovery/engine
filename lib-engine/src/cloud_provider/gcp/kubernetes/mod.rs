@@ -652,6 +652,12 @@ impl Gke {
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
         context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
+        if let Some(nginx_controller_log_format_upstream) =
+            &self.advanced_settings().nginx_controller_log_format_upstream
+        {
+            context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
+        }
+
         Ok(context)
     }
 

@@ -6,7 +6,7 @@ use crate::cloud_provider::helm::{
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::cloud_provider::helm_charts::nginx_ingress_chart::{LogFormat, NginxIngressChart};
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -549,13 +549,6 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites
             .cluster_advanced_settings
             .nginx_controller_enable_client_ip,
-        match &chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_log_format_upstream
-        {
-            Some(l) => LogFormat::Custom(l.to_string()),
-            None => LogFormat::Default,
-        },
         chart_config_prerequisites
             .cluster_advanced_settings
             .nginx_controller_log_format_escaping
