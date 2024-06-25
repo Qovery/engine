@@ -60,7 +60,6 @@ pub struct NginxIngressChart {
     namespace: HelmChartNamespaces,
     loadbalancer_size: Option<String>,
     enable_real_ip: bool,
-    log_format_upstream: LogFormat,
     log_format_escaping: LogFormatEscaping,
 }
 
@@ -80,7 +79,6 @@ impl NginxIngressChart {
         namespace: HelmChartNamespaces,
         loadbalancer_size: Option<String>,
         enable_real_ip: bool,
-        log_format_upstream: LogFormat,
         log_format_escaping: LogFormatEscaping,
     ) -> Self {
         NginxIngressChart {
@@ -123,7 +121,6 @@ impl NginxIngressChart {
             namespace,
             loadbalancer_size,
             enable_real_ip,
-            log_format_upstream,
             log_format_escaping,
         }
     }
@@ -249,12 +246,6 @@ defaultBackend:
                 value: value.to_string(),
             })
         }
-        if let LogFormat::Custom(log_format_upstream) = &self.log_format_upstream {
-            chart_set_values.push(ChartSetValue {
-                key: "controller.config.log-format-upstream".to_string(),
-                value: log_format_upstream.to_string(),
-            });
-        }
         match self.log_format_escaping {
             LogFormatEscaping::None => {
                 chart_set_values.push(ChartSetValue {
@@ -363,8 +354,6 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 mod tests {
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
-    use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
-    use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormat;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType;
@@ -410,7 +399,6 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
-            LogFormat::Default,
             LogFormatEscaping::Default,
         );
 
@@ -451,7 +439,6 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
-            LogFormat::Default,
             LogFormatEscaping::Default,
         );
 
@@ -475,146 +462,6 @@ mod tests {
         assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
-    // Make sure rust code doesn't set a value not declared inside values file.
-    // All values should be declared / set in values file unless it needs to be injected via rust code.
-    #[test]
-    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test_but_not_on_ec2() {
-        // setup:
-        let chart = NginxIngressChart::new(
-            None,
-            HelmChartResourcesConstraintType::ChartDefault,
-            HelmChartResourcesConstraintType::ChartDefault,
-            true,
-            get_nginx_ingress_chart_override(),
-            get_domain().wildcarded(),
-            Kind::Aws,
-            KubernetesKind::Ec2,
-            Some(1),
-            Some(10),
-            Some(50),
-            HelmChartNamespaces::NginxIngress,
-            None,
-            false,
-            LogFormat::Default,
-            LogFormatEscaping::Default,
-        );
-        let common_chart = chart.to_common_helm_chart().unwrap();
-
-        // TODO(benjaminch): GKE integration
-        for cloud_provider in KubernetesKind::iter().filter(|k| {
-            k != &KubernetesKind::Gke
-                && k != &KubernetesKind::Ec2
-                && k != &KubernetesKind::EksSelfManaged
-                && k != &KubernetesKind::ScwSelfManaged
-                && k != &KubernetesKind::GkeSelfManaged
-                && k != &KubernetesKind::OnPremiseSelfManaged
-        }) {
-            let values_file_lib_path = format!(
-                "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(
-                    chart.chart_values_path.helm_path(),
-                    HelmChartType::CloudProviderSpecific(cloud_provider)
-                ),
-                NginxIngressChart::chart_name(),
-            );
-
-            // execute:
-            let missing_fields =
-                get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
-
-            // verify:
-            assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
-        }
-    }
-
-    // Make sure rust code doesn't set a value not declared inside values file.
-    // All values should be declared / set in values file unless it needs to be injected via rust code.
-    #[test]
-    fn nginx_ingress_chart_rust_overridden_values_exists_in_ec2_values_yaml_test() {
-        // setup:
-        let chart = NginxIngressChart::new(
-            None,
-            HelmChartResourcesConstraintType::ChartDefault,
-            HelmChartResourcesConstraintType::ChartDefault,
-            true,
-            get_nginx_ingress_chart_override(),
-            get_domain().wildcarded(),
-            Kind::Aws,
-            KubernetesKind::Ec2,
-            None,
-            None,
-            None,
-            HelmChartNamespaces::NginxIngress,
-            None,
-            false,
-            LogFormat::Default,
-            LogFormatEscaping::Default,
-        );
-        let common_chart = chart.to_common_helm_chart().unwrap();
-
-        let values_file_lib_path = format!(
-            "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
-            get_helm_path_kubernetes_provider_sub_folder_name(
-                chart.chart_values_path.helm_path(),
-                HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2)
-            ),
-            NginxIngressChart::chart_name(),
-        );
-
-        // execute:
-        let missing_fields =
-            get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
-
-        // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
-    }
-
-    #[test]
-    fn nginx_ingress_chart_log_format_test() {
-        for log_format in [LogFormat::Default, LogFormat::Custom("custom log_format".to_string())] {
-            // setup:
-            let chart = NginxIngressChart::new(
-                None,
-                HelmChartResourcesConstraintType::ChartDefault,
-                HelmChartResourcesConstraintType::ChartDefault,
-                true,
-                get_nginx_ingress_chart_override(),
-                get_domain().wildcarded(),
-                Kind::Aws,
-                KubernetesKind::Ec2,
-                None,
-                None,
-                None,
-                HelmChartNamespaces::NginxIngress,
-                None,
-                false,
-                log_format.clone(),
-                LogFormatEscaping::Default,
-            );
-
-            // execute:
-            let common_chart = chart.to_common_helm_chart().expect("cannot create common chart");
-
-            // verify:
-            match &log_format {
-                LogFormat::Default => {
-                    assert!(!common_chart
-                        .chart_info
-                        .values
-                        .iter()
-                        .any(|x| x.key == "controller.config.log-format-upstream"));
-                }
-                LogFormat::Custom(_) => {
-                    assert!(common_chart
-                        .chart_info
-                        .values
-                        .iter()
-                        .any(|x| x.key == "controller.config.log-format-upstream" && x.value == "custom log_format"),);
-                }
-            }
-        }
-    }
-
     #[test]
     fn nginx_ingress_chart_log_format_escaping_test() {
         for log_format_escaping in LogFormatEscaping::iter() {
@@ -634,7 +481,6 @@ mod tests {
                 HelmChartNamespaces::NginxIngress,
                 None,
                 false,
-                LogFormat::Default,
                 log_format_escaping.clone(),
             );
 

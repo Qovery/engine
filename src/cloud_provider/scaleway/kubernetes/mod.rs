@@ -684,6 +684,12 @@ impl Kapsule {
         }
         context.insert("create_private_network", &create_private_network);
 
+        if let Some(nginx_controller_log_format_upstream) =
+            &self.advanced_settings().nginx_controller_log_format_upstream
+        {
+            context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
+        }
+
         Ok(context)
     }
 

@@ -315,6 +315,12 @@ fn tera_context(
     let mut eks_zone_b_subnet_blocks_private = format_ips(&options.eks_zone_b_subnet_blocks);
     let mut eks_zone_c_subnet_blocks_private = format_ips(&options.eks_zone_c_subnet_blocks);
 
+    if let Some(nginx_controller_log_format_upstream) =
+        &kubernetes.advanced_settings().nginx_controller_log_format_upstream
+    {
+        context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
+    }
+
     context.insert(
         "aws_enable_vpc_flow_logs",
         &kubernetes.advanced_settings().aws_vpc_enable_flow_logs,

@@ -10,7 +10,7 @@ use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChar
 use crate::cloud_provider::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
-use crate::cloud_provider::helm_charts::nginx_ingress_chart::{LogFormat, NginxIngressChart};
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
@@ -390,13 +390,6 @@ pub fn gcp_helm_charts(
         chart_config_prerequisites
             .cluster_advanced_settings
             .nginx_controller_enable_client_ip,
-        match &chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_log_format_upstream
-        {
-            Some(l) => LogFormat::Custom(l.to_string()),
-            None => LogFormat::Default,
-        },
         chart_config_prerequisites
             .cluster_advanced_settings
             .nginx_controller_log_format_escaping
