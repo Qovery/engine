@@ -629,6 +629,11 @@ impl Task for EnvironmentTask {
     }
 
     fn cancel(&self) -> bool {
+        if self.is_terminated() {
+            info!("Skipping cancel action as the task is already terminated.");
+            return false;
+        }
+
         self.cancel_requested.store(true, Ordering::Relaxed);
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Cancel),
