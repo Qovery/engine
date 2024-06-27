@@ -70,6 +70,18 @@ metadata:
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}
       {%- endif %}
+
+      {%- if advanced_settings.network_ingress_add_headers %}
+      {%- for key, value in advanced_settings.network_ingress_add_headers %}
+      add_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+      {%- endif %}
+
+      {%- if advanced_settings.network_ingress_proxy_set_headers %}
+      {%- for key, value in advanced_settings.network_ingress_proxy_set_headers %}
+      proxy_set_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+      {%- endif %}
     {%- for key, value in annotations_group.ingress %}
     {{ key }}: "{{ value }}"
     {%- endfor %}
