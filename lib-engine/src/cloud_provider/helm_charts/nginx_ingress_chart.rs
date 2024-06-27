@@ -270,7 +270,12 @@ defaultBackend:
                         key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
                             .to_string(),
                         value: "nlb".to_string(),
-                    })
+                    });
+                    chart_set_values.push(ChartSetValue {
+                        key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
+                            .to_string(),
+                        value: "6".to_string(),
+                    });
                 };
             }
             Kind::Scw => {

@@ -57,3 +57,20 @@ controller:
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
+
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - "sleep 20; /wait-shutdown"
+
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule
