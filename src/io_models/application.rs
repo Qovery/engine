@@ -143,6 +143,10 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_send_timeout_seconds: u32,
     #[serde(alias = "network.ingress.extra_headers")]
     pub network_ingress_extra_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.add_headers")]
+    pub network_ingress_add_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.proxy_set_headers")]
+    pub network_ingress_proxy_set_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
@@ -207,6 +211,8 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
             network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
             network_ingress_proxy_send_timeout_seconds: 60,
             network_ingress_proxy_read_timeout_seconds: 60,
@@ -253,6 +259,8 @@ impl ApplicationAdvancedSettings {
             network_ingress_keepalive_timeout_seconds: self.network_ingress_keepalive_timeout_seconds,
             network_ingress_send_timeout_seconds: self.network_ingress_send_timeout_seconds,
             network_ingress_extra_headers: self.network_ingress_extra_headers.clone(),
+            network_ingress_add_headers: self.network_ingress_add_headers.clone(),
+            network_ingress_proxy_set_headers: self.network_ingress_proxy_set_headers.clone(),
             network_ingress_proxy_connect_timeout_seconds: self.network_ingress_proxy_connect_timeout_seconds,
             network_ingress_proxy_send_timeout_seconds: self.network_ingress_proxy_send_timeout_seconds,
             network_ingress_proxy_read_timeout_seconds: self.network_ingress_proxy_read_timeout_seconds,
