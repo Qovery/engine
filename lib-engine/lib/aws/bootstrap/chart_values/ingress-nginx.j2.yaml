@@ -58,14 +58,6 @@ controller:
     sessionAffinity: ""
     healthCheckNodePort: 0
 
-  lifecycle:
-    preStop:
-      exec:
-        command:
-          - sh
-          - -c
-          - "sleep 30; /wait-shutdown"
-
   topologySpreadConstraints:
     - labelSelector:
         matchLabels:
