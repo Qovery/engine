@@ -64,7 +64,7 @@ controller:
         command:
           - sh
           - -c
-          - "sleep 20; /wait-shutdown"
+          - "sleep 30; /wait-shutdown"
 
   topologySpreadConstraints:
     - labelSelector:
