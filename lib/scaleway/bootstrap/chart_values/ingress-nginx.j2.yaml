@@ -65,3 +65,12 @@ controller:
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
       external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
     externalTrafficPolicy: "Local"
+
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule
