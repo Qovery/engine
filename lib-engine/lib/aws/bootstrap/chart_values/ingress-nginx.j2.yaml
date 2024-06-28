@@ -32,8 +32,14 @@ controller:
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
   updateStrategy:
     rollingUpdate:
-      # set the minimum acceptable number of unavailable pods during a rolling update
-      maxUnavailable: 1
+      # AWS LB is slow to catchup change in the topology, so we go 1 by 1 to not have any downtime
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # AWS LB is slow to catchup change in the topology, so we go slowly to let AWS catchup change before moving to the next instance
+  # LB healthcheck is 6, and need 2 rounds to consider the instance as (un)healthy. Double the time to be safe
+  readinessProbe:
+    initialDelaySeconds: 30
 
   # enable autoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
@@ -57,6 +63,17 @@ controller:
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
+
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
 
   topologySpreadConstraints:
     - labelSelector:
