@@ -332,6 +332,7 @@ impl Karpenter {
             region.to_cloud_provider_format(),
             Some(karpenter_parameters.clone()),
             options.user_provided_network.as_ref(),
+            kubernetes.advanced_settings().pleco_resources_ttl,
         )
         .to_common_helm_chart()
         .map_err(|el| {

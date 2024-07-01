@@ -23,6 +23,7 @@ pub struct KarpenterConfigurationChart {
     region: String,
     karpenter_parameters: Option<KarpenterParameters>,
     explicit_subnet_ids: Vec<String>,
+    pleco_resources_ttl: i32,
 }
 
 impl KarpenterConfigurationChart {
@@ -38,6 +39,7 @@ impl KarpenterConfigurationChart {
         region: &str,
         karpenter_parameters: Option<KarpenterParameters>,
         user_network_config: Option<&UserNetworkConfig>,
+        pleco_resources_ttl: i32,
     ) -> Self {
         KarpenterConfigurationChart {
             chart_path: HelmChartPath::new(
@@ -74,6 +76,7 @@ impl KarpenterConfigurationChart {
             } else {
                 vec![]
             },
+            pleco_resources_ttl,
         }
     }
 
@@ -139,6 +142,14 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             });
         }
 
+        let mut values_string: Vec<ChartSetValue> = vec![];
+        if self.pleco_resources_ttl > 0 {
+            values_string.push(ChartSetValue {
+                key: "tags.ttl".to_string(),
+                value: format!("\"{}\"", self.pleco_resources_ttl),
+            });
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KarpenterConfigurationChart::chart_name(),
@@ -150,6 +161,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
+                values_string,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
@@ -220,6 +232,7 @@ mod tests {
                 default_service_architecture: ARM64,
             }),
             None,
+            0,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -263,6 +276,7 @@ mod tests {
                 default_service_architecture: AMD64,
             }),
             None,
+            0,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -307,6 +321,7 @@ mod tests {
                 default_service_architecture: AMD64,
             }),
             None,
+            0,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
