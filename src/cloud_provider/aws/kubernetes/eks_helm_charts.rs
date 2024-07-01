@@ -273,6 +273,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.region.to_cloud_provider_format(),
         chart_config_prerequisites.karpenter_parameters.clone(),
         chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
+        chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
     )
     .to_common_helm_chart()?;
 
