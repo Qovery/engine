@@ -31,7 +31,11 @@ controller:
   updateStrategy:
     rollingUpdate:
       # set the minimum acceptable number of unavailable pods during a rolling update
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
+
+  readinessProbe:
+    initialDelaySeconds: 15
 
   # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
@@ -54,6 +58,17 @@ controller:
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
+
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
 
   topologySpreadConstraints:
     - labelSelector:
