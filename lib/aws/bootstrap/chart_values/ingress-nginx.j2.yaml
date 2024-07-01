@@ -83,3 +83,20 @@ controller:
       topologyKey: kubernetes.io/hostname
       maxSkew: 1
       whenUnsatisfiable: DoNotSchedule
+
+  {%- if enable_karpenter %}
+  tolerations:
+    - effect: NoSchedule
+      key: nodepool/stable
+      operator: Exists
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: karpenter.sh/nodepool
+              operator: In
+              values:
+                - stable
+  {%- endif %}
