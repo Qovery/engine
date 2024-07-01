@@ -35,7 +35,11 @@ controller:
   updateStrategy:
     rollingUpdate:
       # set the minimum acceptable number of unavailable pods during a rolling update
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
+
+  readinessProbe:
+    initialDelaySeconds: 15
 
   # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
@@ -58,8 +62,15 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
+      # cant enable http checks due to missing annotations to enable proxy protocol on checks
+      # https://console.scaleway.com/support/tickets/1423150
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-delay: "2s"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-timeout: "2s"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-max-retries: "2"
+      service.beta.kubernetes.io/scw-loadbalancer-redispatch-attempt-count: "1"
+      service.beta.kubernetes.io/scw-loadbalancer-timeout-server: "30s"
       # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-GP-S, LB-GP-M, LB-GP-L, LB-GP-XL)
       service.beta.kubernetes.io/scw-loadbalancer-type: "LB-GP-S" # set-by-engine-code
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
