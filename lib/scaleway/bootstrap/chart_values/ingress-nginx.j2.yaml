@@ -53,6 +53,17 @@ controller:
   publishService:
     enabled: true
 
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
+
   # set a load balancer if you want your Nginx to be publicly accessible
   service:
     enabled: true
