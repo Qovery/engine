@@ -489,6 +489,7 @@ mod test {
     use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
     use qovery_engine::io_models::QoveryIdentifier;
     use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
+    use qovery_engine::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex, RwLock};
@@ -557,7 +558,7 @@ mod test {
     pub struct EngineTaskTest {
         #[allow(clippy::type_complexity)]
         is_terminated: Arc<(RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>)>,
-        should_shutdown: Arc<AtomicBool>,
+        should_shutdown: Arc<AtomicAbortStatus>,
         is_running: Arc<AtomicBool>,
     }
 
@@ -568,7 +569,7 @@ mod test {
                     let (tx, rx) = broadcast::channel(1);
                     Arc::new((RwLock::new(Some(tx)), rx))
                 },
-                should_shutdown: Arc::new(AtomicBool::new(false)),
+                should_shutdown: Arc::new(AtomicAbortStatus::new(AbortStatus::None)),
                 is_running: Arc::new(AtomicBool::new(false)),
             }
         }
@@ -586,22 +587,24 @@ mod test {
                 let Some(is_terminated_tx) = self.is_terminated.0.write().unwrap().take() else {
                     return;
                 };
+
                 let _ = is_terminated_tx.send(());
                 self.is_running.store(false, Ordering::Relaxed);
             });
 
-            while !self.should_shutdown.load(Ordering::Relaxed) {
+            while !self.should_shutdown.load(Ordering::Relaxed).should_cancel() {
                 thread::sleep(Duration::from_millis(100));
             }
             info!("Task terminated to run");
         }
 
         fn cancel(&self) -> bool {
-            self.should_shutdown.store(true, Ordering::Relaxed);
+            self.should_shutdown
+                .store(AbortStatus::UserForceRequested, Ordering::Relaxed);
             true
         }
 
-        fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
+        fn cancel_checker(&self) -> Box<dyn Abort> {
             let should_shutdown = self.should_shutdown.clone();
             Box::new(move || should_shutdown.load(Ordering::Relaxed))
         }
@@ -720,7 +723,7 @@ mod test {
         assert!(timeout(Duration::from_secs(2), &mut fut).await.is_err());
         assert!(task_is_running.load(Ordering::Relaxed));
 
-        task_cancel.store(true, Ordering::Relaxed);
+        task_cancel.store(AbortStatus::Requested, Ordering::Relaxed);
         should_shutdown.store(true, Ordering::Relaxed);
         assert!(timeout(Duration::from_secs(7), &mut fut).await.is_ok());
         assert!(!task_is_running.load(Ordering::Relaxed));
