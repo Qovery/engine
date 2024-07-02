@@ -424,6 +424,10 @@ impl DeploymentManager {
                                         }
                                     }
                                 }
+                                Some(engine_message_rx::Request::DeploymentCancel(_)) => {
+                                   info!("Received cancel request: {:?}", msg);
+                                    task.task.cancel(false);
+                                }
                                 Some(engine_message_rx::Request::DeploymentCancelRequest(cancel_type)) => {
                                     info!("Received cancel request: {:?}", msg);
                                     task.task.cancel(match cancel_type {
