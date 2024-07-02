@@ -16,6 +16,10 @@ impl AbortStatus {
         !matches!(self, AbortStatus::None)
     }
 
+    pub fn should_force_cancel(&self) -> bool {
+        matches!(self, AbortStatus::UserForceRequested)
+    }
+
     pub fn merge(status_1: AbortStatus, status_2: AbortStatus) -> AbortStatus {
         let statuses = HashSet::from([status_1, status_2]);
 

@@ -239,7 +239,7 @@ impl Task for InfrastructureTask {
         info!("infrastructure task {} finished", self.id());
     }
 
-    fn cancel(&self) -> bool {
+    fn cancel(&self, _force_requested: bool) -> bool {
         false
     }
 
