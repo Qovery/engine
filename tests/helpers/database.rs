@@ -44,6 +44,7 @@ use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -89,7 +90,7 @@ impl Infrastructure for EnvironmentRequest {
             1,
             |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-            &|| false,
+            &|| AbortStatus::None,
         );
         ret.unwrap();
 
@@ -111,7 +112,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -133,7 +134,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -155,7 +156,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -177,7 +178,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
