@@ -17,7 +17,7 @@ pub mod qovery_api;
 pub trait Task: Send + Sync {
     fn id(&self) -> &str;
     fn run(&self);
-    fn cancel(&self) -> bool;
+    fn cancel(&self, force_requested: bool) -> bool;
     fn cancel_checker(&self) -> Box<dyn Abort>;
     fn is_terminated(&self) -> bool;
     fn await_terminated(&self) -> broadcast::Receiver<()>;

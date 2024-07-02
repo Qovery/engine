@@ -38,7 +38,7 @@ impl TaskContext {
         }
 
         warn!("Canceling current task");
-        self.task.cancel();
+        self.task.cancel(false);
         info!("Task canceled, waiting for task to terminate");
         self.await_task_termination().await;
     }

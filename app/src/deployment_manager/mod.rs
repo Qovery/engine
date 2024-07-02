@@ -10,7 +10,7 @@ use crate::deployment_manager::task_context::TaskContext;
 use crate::deployment_manager::upstream_gtw_context::UpstreamGatewayContext;
 use crate::grpc::engine::{engine_message_rx, EngineMessageRx};
 use crate::grpc::engine::{engine_message_tx, DeploymentInfo, DeploymentType, EngineMessageTx};
-use crate::grpc::engine::{DeploymentRequest, Metrics};
+use crate::grpc::engine::{CancelType, DeploymentRequest, Metrics};
 use crate::grpc::GrpcEngineClient;
 use crate::logger::composite_logger::CompositeLogger;
 use crate::metrics::METRICS_NB_RUNNING_TASKS;
@@ -424,9 +424,16 @@ impl DeploymentManager {
                                         }
                                     }
                                 }
-                                Some(engine_message_rx::Request::DeploymentCancel(_)) => {
+                                Some(engine_message_rx::Request::DeploymentCancelRequest(cancel_type)) => {
                                     info!("Received cancel request: {:?}", msg);
-                                    task.task.cancel();
+                                    task.task.cancel(match cancel_type {
+                                       0 => false, // CancelType::Standard
+                                       1 => true, // CancelType::Forced
+                                       _ => {
+                                           error!("Invalid variant for deployment_cancel_request received from grpc server. Update the protobuf !");
+                                           false // Unknown  CancelType::Standard
+                                       },
+                                    });
                                 }
                                 Some(engine_message_rx::Request::Terminated(_)) => {
                                     info!("Received terminated message for deployment: {:?}", msg);
@@ -598,9 +605,14 @@ mod test {
             info!("Task terminated to run");
         }
 
-        fn cancel(&self) -> bool {
-            self.should_shutdown
-                .store(AbortStatus::UserForceRequested, Ordering::Relaxed);
+        fn cancel(&self, force_requested: bool) -> bool {
+            self.should_shutdown.store(
+                match force_requested {
+                    true => AbortStatus::UserForceRequested,
+                    false => AbortStatus::Requested,
+                },
+                Ordering::Relaxed,
+            );
             true
         }
 
