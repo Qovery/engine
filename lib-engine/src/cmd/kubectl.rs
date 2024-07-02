@@ -1,6 +1,4 @@
-use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
-use kube::api::{DeleteParams, PropagationPolicy};
 use kube::core::params::ListParams;
 use kube::{Api, Client};
 use std::fmt::Debug;
@@ -1401,38 +1399,6 @@ pub fn kubectl_get_secret(kube_client: Client, fields_selector: &str) -> Result<
         }
         Err(e) => Err(CommandError::new(
             format!("Error trying to get Secret for fields selector `{fields_selector}`"),
-            Some(e.to_string()),
-            None,
-        )),
-    }
-}
-
-/// kubectl_exec_delete_job: allow to delete a k8s job if exists.
-///
-/// Arguments
-///
-/// * `kube_client`: kubernetes API client.
-/// * `job_selector`: job's selector.
-pub fn kubectl_exec_delete_job(
-    kube_client: &Client,
-    job_selector: &str,
-    namespace: Option<&str>,
-) -> Result<(), CommandError> {
-    let jobs_api: Api<Job> = match namespace {
-        Some(ns) => Api::namespaced(kube_client.clone(), ns),
-        None => Api::all(kube_client.clone()),
-    };
-
-    match block_on(jobs_api.delete_collection(
-        &DeleteParams {
-            propagation_policy: Some(PropagationPolicy::Foreground), // deletes linked pods
-            ..Default::default()
-        },
-        &ListParams::default().labels(job_selector),
-    )) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(CommandError::new(
-            format!("Error while trying to delete job with selector`{job_selector}`"),
             Some(e.to_string()),
             None,
         )),
