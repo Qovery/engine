@@ -19,14 +19,13 @@ use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
-use crate::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::transaction::DeploymentOption;
 use base64::Engine;
 use itertools::Itertools;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroUsize;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::ScopedJoinHandle;
 use std::time::Duration;
@@ -39,7 +38,7 @@ pub struct EnvironmentTask {
     lib_root_dir: String,
     docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
-    cancel_requested: Arc<AtomicAbortStatus>,
+    cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
     qovery_api: Arc<dyn QoveryApi>,
@@ -72,7 +71,7 @@ impl EnvironmentTask {
             request,
             logger: logger.with_secrets(secrets),
             metrics_registry,
-            cancel_requested: Arc::new(AtomicAbortStatus::new(AbortStatus::None)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
             qovery_api: Arc::from(qovery_api),
             span,
             is_terminated: {
@@ -109,7 +108,7 @@ impl EnvironmentTask {
     }
 
     fn _is_canceled(&self) -> bool {
-        self.cancel_requested.load(Ordering::Relaxed).should_cancel()
+        self.cancel_requested.load(Ordering::Relaxed)
     }
 
     fn get_event_details(&self, step: EnvironmentStep) -> EventDetails {
@@ -125,7 +124,7 @@ impl EnvironmentTask {
         max_build_in_parallel: usize,
         env_logger: impl Fn(String),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
-        abort: &dyn Abort,
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
         let mut build_needs_buildpacks = false;
@@ -167,8 +166,8 @@ impl EnvironmentTask {
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
 
         // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
-        let abort_flag = AtomicAbortStatus::new(AbortStatus::None);
-        let abort_status = || AbortStatus::merge(abort_flag.load(Ordering::Relaxed), abort.status());
+        let should_abort_flag = AtomicBool::new(false);
+        let should_abort = || should_abort_flag.load(Ordering::Relaxed) || should_abort();
 
         // Prepare our tasks
         let img_retention_time_sec = infra_ctx
@@ -202,7 +201,7 @@ impl EnvironmentTask {
                         cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
-                        &abort_status,
+                        &should_abort,
                     )
                 }
             })
@@ -212,8 +211,8 @@ impl EnvironmentTask {
         builder_threadpool.run(
             build_tasks,
             NonZeroUsize::new(max_build_in_parallel).unwrap(),
-            &abort_flag,
-            &abort_status,
+            &should_abort_flag,
+            should_abort,
         )
     }
 
@@ -227,7 +226,7 @@ impl EnvironmentTask {
         cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        abort: &dyn Abort,
+        should_abort: &dyn Fn() -> bool,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(service);
         let build = match service.build_mut() {
@@ -264,7 +263,7 @@ impl EnvironmentTask {
         }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), abort);
+        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), should_abort);
         match build_result {
             Ok(_) => {
                 let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -307,13 +306,13 @@ impl EnvironmentTask {
         mut environment: Environment,
         infra_ctx: &InfrastructureContext,
         env_logger: impl Fn(String),
-        abort: &dyn Abort,
+        should_abort: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<(), Box<EngineError>> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
         let event_details = environment.event_details().clone();
         let run_deploy = || -> Result<(), Box<EngineError>> {
             // Build apps
-            if abort.status().should_cancel() {
+            if should_abort() {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
@@ -336,14 +335,14 @@ impl EnvironmentTask {
                 environment.max_parallel_build as usize,
                 env_logger,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-                abort,
+                should_abort,
             )?;
 
-            if abort.status().should_cancel() {
+            if should_abort() {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
 
-            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, abort, logger.clone())?;
+            let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, should_abort, logger.clone())?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
@@ -534,12 +533,8 @@ impl Task for EnvironmentTask {
             .map(|service_id| metrics_registry.start_record(*service_id, StepLabel::Service, StepName::Total))
             .collect();
 
-        let deployment_ret = EnvironmentTask::deploy_environment(
-            environment,
-            &infra_context,
-            env_logger,
-            self.cancel_checker().as_ref(),
-        );
+        let deployment_ret =
+            EnvironmentTask::deploy_environment(environment, &infra_context, env_logger, &self.cancel_checker());
 
         Self::stop_total_steps_records(&deployment_ret, record, service_records);
 
@@ -639,8 +634,7 @@ impl Task for EnvironmentTask {
             return false;
         }
 
-        self.cancel_requested
-            .store(AbortStatus::UserForceRequested, Ordering::Relaxed);
+        self.cancel_requested.store(true, Ordering::Relaxed);
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Cancel),
             EventMessage::new(r#"
@@ -653,7 +647,7 @@ impl Task for EnvironmentTask {
         true
     }
 
-    fn cancel_checker(&self) -> Box<dyn Abort> {
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
         let cancel_requested = self.cancel_requested.clone();
         Box::new(move || cancel_requested.load(Ordering::Relaxed))
     }
@@ -678,8 +672,8 @@ impl BuilderThreadPool {
         &self,
         tasks: Vec<Task>,
         max_parallelism: NonZeroUsize,
-        should_abort_flag: &AtomicAbortStatus,
-        abort: &dyn Abort,
+        should_abort_flag: &AtomicBool,
+        should_abort: impl Fn() -> bool + Send + Sync,
     ) -> Result<(), Err>
     where
         Err: Send,
@@ -698,7 +692,7 @@ impl BuilderThreadPool {
                     Ok(Err(err)) => {
                         // We want to store only the first error
                         if ret.is_ok() {
-                            should_abort_flag.store(AbortStatus::Requested, Ordering::Relaxed);
+                            should_abort_flag.store(true, Ordering::Relaxed);
                             ret = Err(err);
                         }
                     }
@@ -729,7 +723,7 @@ impl BuilderThreadPool {
                 // Ensure we have a slot available to run a new thread
                 await_build_slot(&mut active_threads);
 
-                if abort.status().should_cancel() {
+                if should_abort() {
                     break;
                 }
 
@@ -779,13 +773,8 @@ mod test {
                 Result::<(), ()>::Ok(())
             });
         }
-        pool.run(
-            tasks,
-            NonZeroUsize::new(3).unwrap(),
-            &AtomicAbortStatus::new(AbortStatus::None),
-            &|| AbortStatus::None,
-        )
-        .unwrap();
+        pool.run(tasks, NonZeroUsize::new(3).unwrap(), &AtomicBool::new(false), || false)
+            .unwrap();
 
         assert_eq!(active_tasks.load(Ordering::Relaxed), 10);
 
@@ -802,13 +791,8 @@ mod test {
                 Result::<(), ()>::Ok(())
             });
         }
-        pool.run(
-            tasks,
-            NonZeroUsize::new(3).unwrap(),
-            &AtomicAbortStatus::new(AbortStatus::None),
-            &|| AbortStatus::None,
-        )
-        .unwrap();
+        pool.run(tasks, NonZeroUsize::new(3).unwrap(), &AtomicBool::new(false), || false)
+            .unwrap();
 
         assert_eq!(active_tasks.load(Ordering::Relaxed), 0);
         assert_eq!(max_active_task.load(Ordering::Relaxed), 3);
@@ -816,7 +800,7 @@ mod test {
         // Test we get our error, and that we try to stop all tasks on first error
         let mut tasks = Vec::new();
         let active_taks = Arc::new(AtomicUsize::new(0));
-        let should_abort_flag = AtomicAbortStatus::new(AbortStatus::None);
+        let should_abort_flag = AtomicBool::new(false);
         for i in 0..10 {
             tasks.push({
                 let active_tasks = active_taks.clone();
@@ -831,7 +815,7 @@ mod test {
                 }
             });
         }
-        let ret = pool.run(tasks, NonZeroUsize::new(2).unwrap(), &should_abort_flag, &|| {
+        let ret = pool.run(tasks, NonZeroUsize::new(2).unwrap(), &should_abort_flag, || {
             should_abort_flag.load(Ordering::Relaxed)
         });
 

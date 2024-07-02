@@ -15,7 +15,6 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
-use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::container::{get_container_with_invalid_storage_size, Container};
 use qovery_engine::models::registry_image_source::RegistryImageSource;
@@ -55,7 +54,7 @@ fn should_increase_container_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| AbortStatus::None).unwrap();
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
         let test_container = &test_env.containers[0];
 
         let storages = resized_container

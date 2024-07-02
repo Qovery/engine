@@ -95,7 +95,7 @@ impl DeploymentAction for HelmDeployment {
                 &target.kube,
                 &target.kubernetes.kubeconfig_local_file_path(),
                 target.cloud_provider.credentials_environment_variables().as_slice(),
-                &CommandKiller::from_cancelable(target.abort),
+                &CommandKiller::from_cancelable(target.should_abort),
             )
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(self.event_details.clone(), e)))?;
         Ok(())
@@ -111,7 +111,7 @@ impl DeploymentAction for HelmDeployment {
             .uninstall(
                 &self.helm_chart,
                 &[],
-                &CommandKiller::from_cancelable(target.abort),
+                &CommandKiller::from_cancelable(&target.should_abort),
                 &mut |line| {
                     info!("{}", line);
                 },

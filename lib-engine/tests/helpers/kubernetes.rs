@@ -31,7 +31,6 @@ use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
-use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
 use tracing::{span, Level};
 
@@ -145,7 +144,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
             panic!("{ret:?}")
         }
     }
@@ -313,7 +312,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
             panic!("{ret:?}")
         }
     }

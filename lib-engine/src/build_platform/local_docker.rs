@@ -28,7 +28,6 @@ use crate::git;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
-use crate::models::abort::Abort;
 use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
@@ -84,7 +83,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        abort: &dyn Abort,
+        is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
@@ -190,8 +189,11 @@ impl LocalDocker {
             .map(|arch| docker::Architecture::from(arch))
             .collect();
 
-        let builder_handle =
-            self.provision_builder(build, |line| logger.send_progress(line), &CommandKiller::from_cancelable(abort))?;
+        let builder_handle = self.provision_builder(
+            build,
+            |line| logger.send_progress(line),
+            &CommandKiller::from_cancelable(is_task_canceled),
+        )?;
 
         let exit_status = self.context.docker.build(
             &builder_handle.builder_name.as_deref(),
@@ -204,7 +206,7 @@ impl LocalDocker {
             &arch,
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
-            &CommandKiller::from(build.timeout, abort),
+            &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
         if let Err(err) = exit_status {
@@ -325,7 +327,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         use_build_cache: bool,
         logger: &EnvLogger,
-        abort: &dyn Abort,
+        is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
@@ -409,7 +411,7 @@ impl LocalDocker {
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
             cmd.set_kill_grace_period(Duration::from_secs(0));
-            let cmd_killer = CommandKiller::from(build.timeout, abort);
+            let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
             exit_status = cmd.exec_with_abort(
                 &mut |line| logger.send_progress(line),
                 &mut |line| logger.send_progress(line),
@@ -470,10 +472,10 @@ impl BuildPlatform for LocalDocker {
         build: &mut Build,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        abort: &dyn Abort,
+        is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
         // check if we should already abort the task
-        if abort.status().should_cancel() {
+        if is_task_canceled() {
             return Err(BuildError::Aborted {
                 application: build.image.service_id.clone(),
             });
@@ -573,7 +575,7 @@ impl BuildPlatform for LocalDocker {
             let _ = fs::remove_dir_all(path);
         });
 
-        if abort.status().should_cancel() {
+        if is_task_canceled() {
             return Err(BuildError::Aborted {
                 application: build.image.service_id.clone(),
             });
@@ -587,7 +589,7 @@ impl BuildPlatform for LocalDocker {
         } else {
             GitLfs::default()
         };
-        let cmd_killer = CommandKiller::from_cancelable(abort);
+        let cmd_killer = CommandKiller::from_cancelable(is_task_canceled);
         let size_estimate_kb = git_lfs
             .files_size_estimate_in_kb(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
             .unwrap_or(0);
@@ -686,7 +688,7 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 logger,
                 metrics_registry.clone(),
-                abort,
+                is_task_canceled,
             )
         } else {
             // build container with Buildpacks
@@ -697,7 +699,7 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
                 logger,
-                abort,
+                is_task_canceled,
             );
             build_record.stop(if build_result.is_ok() {
                 StepStatus::Success

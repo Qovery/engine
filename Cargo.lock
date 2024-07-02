@@ -199,17 +199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_enum"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99e1aca718ea7b89985790c94aad72d77533063fe00bc497bb79a7c2dae6a661"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.50",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3315,7 +3304,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "atomic_enum",
  "aws-config",
  "aws-sdk-docdb",
  "aws-sdk-ec2",
