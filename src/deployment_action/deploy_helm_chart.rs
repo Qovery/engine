@@ -72,7 +72,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     target.environment.namespace(),
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
                     &[],
-                    &CommandKiller::from(self.helm_timeout(), target.abort),
+                    &CommandKiller::from(self.helm_timeout(), target.should_abort),
                     &mut |line| logger.info(line),
                     &mut |line| logger.warning(line),
                 )
@@ -155,7 +155,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 .uninstall(
                     &chart_info,
                     &[],
-                    &CommandKiller::from(self.helm_timeout(), target.abort),
+                    &CommandKiller::from(self.helm_timeout(), &target.should_abort),
                     &mut |line| logger.info(line),
                     &mut |line| logger.warning(line),
                 )
@@ -411,7 +411,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     this.chart_workspace_directory(),
                     *skip_tls_verify,
                     &[],
-                    &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
+                    &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
                 )
                 .map_err(|e| (event_details.clone(), e))?;
         }
@@ -451,7 +451,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             this.chart_workspace_directory(),
             &[],
             &[],
-            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
             &mut |line| logger.info(line),
             &mut |line| logger.warning(line),
         )
@@ -558,7 +558,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
             target.environment.namespace(),
             &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
             &[],
-            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
             &mut |line| logger.warning(line),
         )
         .map_err(|e| (event_details.clone(), e))?;

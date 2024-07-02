@@ -21,7 +21,6 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::models::abort::Abort;
 
 pub mod aws;
 pub mod environment;
@@ -141,7 +140,7 @@ pub struct DeploymentTarget<'a> {
     pub docker: &'a Docker,
     pub kube: kube::Client,
     pub helm: Helm,
-    pub abort: &'a dyn Abort,
+    pub should_abort: &'a (dyn Fn() -> bool + Send + Sync),
     logger: Arc<Box<dyn Logger>>,
     pub metrics_registry: Arc<dyn MetricsRegistry>,
     pub is_dry_run_deploy: bool,
@@ -152,7 +151,7 @@ impl<'a> DeploymentTarget<'a> {
     pub fn new(
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
-        abort: &'a dyn Abort,
+        should_abort: &'a (dyn Fn() -> bool + Sync + Send),
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
@@ -184,7 +183,7 @@ impl<'a> DeploymentTarget<'a> {
             docker: &infra_ctx.context().docker,
             kube: infra_ctx.mk_kube_client()?.client().clone(),
             helm,
-            abort,
+            should_abort,
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),

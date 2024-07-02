@@ -4,7 +4,6 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::models::abort::Abort;
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -16,7 +15,7 @@ pub struct CheckDnsForDomains<'a> {
 
 const DEFAULT_CHECK_FREQUENCY: Duration = Duration::from_secs(30);
 
-fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), abort: &dyn Abort) {
+fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), should_abort: &dyn Fn() -> bool) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
         "🌍 Checking DNS Ip resolution for domain {domain}. Please wait, it can take some time..."
@@ -27,7 +26,7 @@ fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), abort: &dyn Abor
         domain
     };
 
-    let should_abort = CommandKiller::from(Duration::from_secs(60 * 5), abort);
+    let should_abort = CommandKiller::from(Duration::from_secs(60 * 5), should_abort);
     let does_resolve = await_domain_resolve_ip(get_domain, DEFAULT_CHECK_FREQUENCY, should_abort);
 
     match does_resolve {
@@ -49,7 +48,7 @@ fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), abort: &dyn Abor
     }
 }
 
-fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String), abort_status: &dyn Abort) {
+fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String), should_abort: &dyn Fn() -> bool) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
         "🌍 Checking DNS CNAME resolution for domain {}. Please wait, it can take some time...",
@@ -64,7 +63,7 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
         custom_domain.domain.as_str()
     };
 
-    let should_abort = CommandKiller::from(Duration::from_secs(60 * 5), abort_status);
+    let should_abort = CommandKiller::from(Duration::from_secs(60 * 5), should_abort);
     let does_resolve = await_domain_resolve_cname(get_domain, DEFAULT_CHECK_FREQUENCY, should_abort);
 
     match does_resolve {
@@ -88,11 +87,11 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
 impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         for domain in &self.resolve_to_ip {
-            check_domain_resolve_ip(domain, &self.log, target.abort);
+            check_domain_resolve_ip(domain, &self.log, target.should_abort);
         }
 
         for domain in &self.resolve_to_cname {
-            check_domain_resolve_cname(domain, &self.log, target.abort);
+            check_domain_resolve_cname(domain, &self.log, target.should_abort);
         }
 
         Ok(())

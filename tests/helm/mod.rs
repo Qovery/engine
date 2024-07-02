@@ -29,7 +29,6 @@ use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
-use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
@@ -700,7 +699,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
 }
 
 fn deployment_target<'a>(test_env: &'a Environment, infra_ctx: &'a InfrastructureContext) -> DeploymentTarget<'a> {
-    DeploymentTarget::new(infra_ctx, test_env, &|| AbortStatus::None)
+    DeploymentTarget::new(infra_ctx, test_env, &|| false)
         .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 

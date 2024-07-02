@@ -11,7 +11,6 @@ use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::models::abort::{Abort, AbortStatus};
 use crate::transaction::{Transaction, TransactionResult};
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
@@ -243,8 +242,8 @@ impl Task for InfrastructureTask {
         false
     }
 
-    fn cancel_checker(&self) -> Box<dyn Abort> {
-        Box::new(move || AbortStatus::None)
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
+        Box::new(|| false)
     }
 
     fn is_terminated(&self) -> bool {

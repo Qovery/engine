@@ -2,7 +2,6 @@ use crate::cloud_provider::aws::regions::AwsRegion;
 
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
-use crate::models::abort::Abort;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
 use std::borrow::Cow;
@@ -18,7 +17,7 @@ pub trait Task: Send + Sync {
     fn id(&self) -> &str;
     fn run(&self);
     fn cancel(&self) -> bool;
-    fn cancel_checker(&self) -> Box<dyn Abort>;
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync>;
     fn is_terminated(&self) -> bool;
     fn await_terminated(&self) -> broadcast::Receiver<()>;
 }

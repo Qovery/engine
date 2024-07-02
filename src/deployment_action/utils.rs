@@ -199,7 +199,7 @@ fn mirror_image(
             dest_image,
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 9), target.abort),
+            &CommandKiller::from(Duration::from_secs(60 * 9), target.should_abort),
         ) {
             Ok(ret) => OperationResult::Ok(ret),
             Err(err) if err.is_aborted() => OperationResult::Err(err),
