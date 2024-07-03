@@ -8,7 +8,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
-use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
+use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
 use crate::io_models::labels_group::LabelsGroup;
 use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
@@ -232,12 +232,13 @@ impl<T: CloudProvider> Job<T> {
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration.as_secs(),
+                with_rbac: matches!(self.schedule.lifecycle_type(), Some(LifecycleType::TERRAFORM)),
                 cronjob_schedule: match &self.schedule {
-                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => None,
                     JobSchedule::Cron { schedule, .. } => Some(schedule.clone()),
                 },
                 cronjob_timezone: match &self.schedule {
-                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => None,
                     JobSchedule::Cron { timezone, .. } => Some(timezone.clone()),
                 },
                 readiness_probe: self.readiness_probe.clone(),
@@ -484,6 +485,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) default_port: Option<u16>,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: u64,
+    pub(super) with_rbac: bool,
     pub(super) cronjob_schedule: Option<String>,
     pub(super) cronjob_timezone: Option<String>,
     pub(super) readiness_probe: Option<Probe>,

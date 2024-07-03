@@ -97,12 +97,20 @@ impl Default for JobAdvancedSettings {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum LifecycleType {
+    TERRAFORM,
+    CLOUDFORMATION,
+    #[serde(other)]
+    GENERIC,
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum JobSchedule {
-    OnStart {},
-    OnPause {},
-    OnDelete {},
+    OnStart { lifecycle_type: LifecycleType },
+    OnPause { lifecycle_type: LifecycleType },
+    OnDelete { lifecycle_type: LifecycleType },
     Cron { schedule: String, timezone: String },
 }
 
@@ -113,6 +121,15 @@ impl JobSchedule {
 
     pub fn is_job(&self) -> bool {
         !self.is_cronjob()
+    }
+
+    pub fn lifecycle_type(&self) -> Option<LifecycleType> {
+        match self {
+            JobSchedule::OnStart { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::OnPause { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::OnDelete { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::Cron { .. } => None,
+        }
     }
 }
 

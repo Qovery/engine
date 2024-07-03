@@ -18,7 +18,7 @@ use base64::Engine;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
@@ -1899,7 +1899,9 @@ fn deploy_job_on_scw_kapsule() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            }, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
                 registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
@@ -2210,7 +2212,9 @@ fn build_and_deploy_job_on_scw_kapsule() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -2315,7 +2319,9 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
