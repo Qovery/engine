@@ -83,7 +83,7 @@ message EngineMessageRx {
   string message_id = 1;
   oneof request {
     string deployment_request = 2;
-    int32 deployment_cancel = 3; // TODO(COR-948): Deprecated: use `deployment_cancel_request` instead, this field is commented to avoid matching on a dead field
+    // int32 deployment_cancel = 3; // Deprecated: use `deployment_cancel_request` instead, this field is commented to avoid matching on a dead field
     bool terminated = 4;
     CancelType deployment_cancel_request = 5;
   }
