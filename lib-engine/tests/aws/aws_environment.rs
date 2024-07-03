@@ -23,7 +23,7 @@ use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
-use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
@@ -2265,7 +2265,9 @@ fn deploy_job_on_aws_eks() {
             name: format!("job-test-{}", job_id.short()),
             kube_name: format!("job-test-{}", job_id.short()),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
             source: JobSource::Image {
                 registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
@@ -2364,7 +2366,9 @@ fn deploy_job_on_aws_eks_with_dockerfile_content() {
             name: format!("job-test-{}", job_id.short()),
             kube_name: format!("job-test-{}", job_id.short()),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            }, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 git_credentials: None,
@@ -2713,7 +2717,9 @@ fn build_and_deploy_job_on_aws_eks() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
@@ -3098,7 +3104,9 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),

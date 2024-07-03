@@ -13,7 +13,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
-use crate::io_models::job::JobSchedule;
+use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -38,14 +38,17 @@ where
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
 
         // Force job to run, if force trigger is requested
+        let default = JobSchedule::OnStart {
+            lifecycle_type: self.schedule().lifecycle_type().unwrap_or(LifecycleType::GENERIC),
+        };
         let job_schedule = if self.should_force_trigger() {
-            &JobSchedule::OnStart {}
+            &default
         } else {
             self.schedule()
         };
 
         match job_schedule {
-            JobSchedule::OnStart {} | JobSchedule::Cron { .. } => {
+            JobSchedule::OnStart { .. } | JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -55,7 +58,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Create), task)
             }
-            JobSchedule::OnPause {} | JobSchedule::OnDelete {} => {
+            JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Create);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
@@ -76,7 +79,7 @@ where
                 };
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnPause {} => {
+            JobSchedule::OnPause { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -86,7 +89,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnStart {} | JobSchedule::OnDelete {} => {
+            JobSchedule::OnStart { .. } | JobSchedule::OnDelete { .. } => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Pause);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
@@ -98,7 +101,7 @@ where
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
-            JobSchedule::OnDelete {} => {
+            JobSchedule::OnDelete { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -113,7 +116,7 @@ where
                     task,
                 )
             }
-            JobSchedule::Cron { .. } | JobSchedule::OnStart {} | JobSchedule::OnPause {} => Ok(()),
+            JobSchedule::Cron { .. } | JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } => Ok(()),
         }?;
 
         let (pre_run, run, post_run) = delete_job(self, target, &event_details);
@@ -763,11 +766,7 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
 
         // Get job output 'value' as string or any other type
         let job_output_value = if value.is_string() {
-            match value.as_str() {
-                None => "",
-                Some(value_as_str) => value_as_str,
-            }
-            .to_string()
+            value.as_str().unwrap_or_default().to_string()
         } else {
             value.to_string()
         };

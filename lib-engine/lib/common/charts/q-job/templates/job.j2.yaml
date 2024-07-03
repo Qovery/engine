@@ -57,9 +57,14 @@ spec:
         {%- endif %}
       restartPolicy: Never
       shareProcessNamespace: true
-      automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
       {%- if service.advanced_settings.security_service_account_name != "" %}
+      automountServiceAccountToken: true
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+      {%- elif service.with_rbac %}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ service.name }}
+      {%- else %}
+      automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
       {%- if registry %}
