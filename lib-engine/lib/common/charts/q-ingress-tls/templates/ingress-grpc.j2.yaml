@@ -61,7 +61,7 @@ metadata:
       grpc_send_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
       client_body_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
 
-    {%- if advanced_settings.network_ingress_extra_headers or value in advanced_settings.network_ingress_add_headers or value in advanced_settings.network_ingress_proxy_set_headers %}
+    {%- if advanced_settings.network_ingress_extra_headers or advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
     nginx.ingress.kubernetes.io/configuration-snippet: |
       {%- for key, value in advanced_settings.network_ingress_extra_headers %}
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
