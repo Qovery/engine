@@ -311,7 +311,7 @@ defaultBackend:
                 namespace: self.namespace,
                 // Because of NLB, svc can take some time to start
                 // rolling out the deployment can take a lot of time for users that has a lot of nginx
-                timeout_in_seconds: 60 * 30,
+                timeout_in_seconds: 60 * 60,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,
                 yaml_files_content: {
