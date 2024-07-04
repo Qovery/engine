@@ -25,7 +25,7 @@ use kube::Api;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::cmp::max;
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -613,12 +613,11 @@ fn get_active_job_pod_by_selector(
     set_of_pods_already_processed: &HashSet<String>,
     job_max_duration: &Duration,
 ) -> Result<String, Box<EngineError>> {
-    // When max duration is lower than 5 minutes use a custom fixed delay, with a minimum retry every 2 seconds
-    let retry_fixed_delay = if job_max_duration < &Duration::from_secs(300) {
-        retry::delay::Fixed::from_millis(max(job_max_duration.as_secs() / 30, 2)).take(30)
-    } else {
-        retry::delay::Fixed::from_millis(10_000).take(30)
-    };
+    // We wait at max 30 times 10 seconds (5min) for the pod to be running.
+    // If the job max duration is lower than 5min, we reduce the number of retries to clamp it to its maximum duration
+    let retry_fixed_delay =
+        retry::delay::Fixed::from_millis(10_000).take(min(30, job_max_duration.as_secs() as usize / 10));
+
     // Trying to get the pod name, letting it up to 5 minutes to be scheduled
     let list_job_pods_result = retry::retry(retry_fixed_delay, || {
         // List pods according to job label selector
