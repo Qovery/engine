@@ -193,7 +193,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let mut statefulset = application.clone();
     let statefulset_id = QoveryIdentifier::new_random();
     statefulset.name = statefulset_id.short().to_string();
-    statefulset.kube_name = statefulset.name.clone();
+    statefulset.kube_name.clone_from(&statefulset.name);
     statefulset.long_id = statefulset_id.to_uuid();
     statefulset.liveness_probe = None;
     statefulset.readiness_probe = None;

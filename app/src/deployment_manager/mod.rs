@@ -129,10 +129,10 @@ impl DeploymentManager {
     ) -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
         let deployment_request = match task_type {
-            TaskSelector::Infrastructure(_) => DeploymentRequest {
+            TaskSelector::Infrastructure => DeploymentRequest {
                 deployment_type: DeploymentType::Infrastructure as i32,
             },
-            TaskSelector::Environment(_) => DeploymentRequest {
+            TaskSelector::Environment => DeploymentRequest {
                 deployment_type: DeploymentType::Environment as i32,
             },
         };
@@ -658,7 +658,7 @@ mod test {
 
         let client = new_engine_client_test(Some(client)).await;
 
-        let task = TaskSelector::Environment("");
+        let task = TaskSelector::Environment;
         let should_shutdown = Arc::new(AtomicBool::new(false));
         let mk_engine_task = |_, _: &_, _: &_, _, _| {
             let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
@@ -724,7 +724,7 @@ mod test {
             Ok::<_, EngineEvent>(task)
         };
 
-        let task = TaskSelector::Environment("");
+        let task = TaskSelector::Environment;
         let mut deployment_mngr =
             DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task));
         deployment_mngr.default_wait_time = Duration::from_millis(200);

@@ -200,7 +200,7 @@ where
         Ok(file) => file,
     };
 
-    match file.write(content.as_bytes()) {
+    match file.write_all(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
             format!("Unable to edit YAML backup file for chart {chart_name}."),
             Some(e.to_string()),
@@ -237,7 +237,7 @@ pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<S
             CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
-    match file.write(content.join("\n").as_bytes()) {
+    match file.write_all(content.join("\n").as_bytes()) {
         Err(e) => Err(CommandError::new(
             format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),
@@ -272,7 +272,7 @@ pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<Stri
             CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
-    match file.write(content.as_bytes()) {
+    match file.write_all(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
             format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),
@@ -302,7 +302,7 @@ pub fn indent_file(path: String) -> Result<String, CommandError> {
             CommandError::new(format!("Unable to edit YAML backup file {path}."), Some(e.to_string()), None)
         })?;
 
-    match file.write(content.as_bytes()) {
+    match file.write_all(content.as_bytes()) {
         Err(e) => Err(CommandError::new(
             format!("Unable to edit YAML backup file {path}."),
             Some(e.to_string()),

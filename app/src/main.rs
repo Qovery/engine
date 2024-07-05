@@ -133,7 +133,7 @@ pub fn main() -> io::Result<()> {
                 workspace_root_dir,
                 lib_root_dir,
                 test_cluster,
-                TaskSelector::Infrastructure(""),
+                TaskSelector::Infrastructure,
                 docker,
                 metrics_registry,
             ),
@@ -143,7 +143,7 @@ pub fn main() -> io::Result<()> {
                 workspace_root_dir,
                 lib_root_dir,
                 test_cluster,
-                TaskSelector::Environment(""),
+                TaskSelector::Environment,
                 docker,
                 metrics_registry,
             ),
@@ -180,7 +180,7 @@ pub fn using_json_path_parameter(
     let file = BufReader::new(File::open(deploy_from_file)?);
 
     let task: Box<dyn Task> = match deployment_type {
-        TaskSelector::Environment(_) => {
+        TaskSelector::Environment => {
             let mut req: EnvironmentEngineRequest = serde_json::from_reader(file)
                 .map_err(|err| {
                     error!("Impossible to parse json file: {}", err);
@@ -198,7 +198,7 @@ pub fn using_json_path_parameter(
                 Box::new(FakeQoveryApi {}),
             ))
         }
-        TaskSelector::Infrastructure(_) => {
+        TaskSelector::Infrastructure => {
             let mut req: InfrastructureEngineRequest = serde_json::from_reader(file)
                 .map_err(|err| {
                     error!("Impossible to parse json file: {}", err);

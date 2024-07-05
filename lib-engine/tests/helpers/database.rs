@@ -778,8 +778,8 @@ pub fn test_db(
         .map(|mut app| {
             app.long_id = app_id;
             app.name = to_short_id(&app_id);
-            app.branch = app_name.clone();
-            app.commit_id = db_infos.app_commit.clone();
+            app.branch.clone_from(&app_name);
+            app.commit_id.clone_from(&db_infos.app_commit);
             app.ports = vec![Port {
                 long_id: Default::default(),
                 port: 1234,
@@ -1425,8 +1425,8 @@ pub fn test_db_on_upgrade(
         .map(|mut app| {
             app.long_id = app_id;
             app.name = to_short_id(&app_id);
-            app.branch = app_name.clone();
-            app.commit_id = db_infos.app_commit.clone();
+            app.branch.clone_from(&app_name);
+            app.commit_id.clone_from(&db_infos.app_commit);
             app.ports = vec![Port {
                 long_id: Default::default(),
                 port: 1234,

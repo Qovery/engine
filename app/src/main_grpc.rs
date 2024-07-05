@@ -90,7 +90,7 @@ fn to_engine_task(
 ) -> Result<Arc<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
-            TaskSelector::Infrastructure(_) => {
+            TaskSelector::Infrastructure => {
                 let request = serde_json::from_slice::<InfrastructureEngineRequest>(msg.as_bytes())?;
                 let qovery_api = Box::new(GrpcCoreServiceApi::new(
                     request.deployment_jwt_token.clone(),
@@ -107,7 +107,7 @@ fn to_engine_task(
                     qovery_api,
                 )))
             }
-            TaskSelector::Environment(_) => {
+            TaskSelector::Environment => {
                 let request = serde_json::from_slice::<EnvironmentEngineRequest>(msg.as_bytes())?;
                 let qovery_api = Box::new(GrpcCoreServiceApi::new(
                     request.deployment_jwt_token.clone(),
@@ -343,9 +343,9 @@ pub fn main() -> io::Result<()> {
     let docker = Arc::new(docker);
 
     let task_selector = if cli.deployment_type == "ENVIRONMENT" {
-        TaskSelector::Environment("environment")
+        TaskSelector::Environment
     } else {
-        TaskSelector::Infrastructure("infrastructure")
+        TaskSelector::Infrastructure
     };
 
     let task_executor = async move {

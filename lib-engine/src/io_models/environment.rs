@@ -141,8 +141,8 @@ impl EnvironmentRequest {
             for app in &self.applications {
                 for route in &router.routes {
                     if route.service_long_id == app.long_id {
-                        annotations_groups_ids = app.annotations_group_ids.clone();
-                        labels_groups_ids = app.labels_group_ids.clone();
+                        annotations_groups_ids.clone_from(&app.annotations_group_ids);
+                        labels_groups_ids.clone_from(&app.labels_group_ids);
 
                         // disable custom domain check for this router
                         if !app.advanced_settings.deployment_custom_domain_check_enabled {
@@ -196,8 +196,8 @@ impl EnvironmentRequest {
             for container in &self.containers {
                 for route in &router.routes {
                     if route.service_long_id == container.long_id {
-                        annotations_groups_ids = container.annotations_group_ids.clone();
-                        labels_groups_ids = container.labels_group_ids.clone();
+                        annotations_groups_ids.clone_from(&container.annotations_group_ids);
+                        labels_groups_ids.clone_from(&container.labels_group_ids);
 
                         // disable custom domain check for this router
                         if !container.advanced_settings.deployment_custom_domain_check_enabled {
