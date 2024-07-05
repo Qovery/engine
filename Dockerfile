@@ -23,7 +23,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.76.0-2024-03-29T10-39-50 as engine_ci
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.79.0-2024-07-05T10-24-58 as engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
