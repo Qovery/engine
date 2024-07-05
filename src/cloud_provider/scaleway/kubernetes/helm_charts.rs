@@ -59,6 +59,7 @@ pub struct ScalewayQoveryTerraformConfig {
     pub loki_storage_config_scaleway_s3: String,
 }
 
+#[allow(dead_code)]
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,

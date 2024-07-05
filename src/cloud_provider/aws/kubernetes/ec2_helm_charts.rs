@@ -60,6 +60,7 @@ impl AwsEc2QoveryTerraformConfig {
     }
 }
 
+#[allow(dead_code)]
 pub struct Ec2ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,

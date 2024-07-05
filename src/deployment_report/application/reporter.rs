@@ -103,7 +103,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             self.logger.send_progress(format!(
                 "🚀 {} of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
                 self.action,
-                self.service_type.to_string(),
+                self.service_type,
                 to_short_id(&self.long_id),
                 self.tag,
                 deployment_info.pods.len(),
@@ -203,7 +203,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             Ok(_) => {
                 self.stop_records(StepStatus::Success);
                 self.logger
-                    .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type.to_string()));
+                    .send_success(format!("✅ {} of {} succeeded", self.action, self.service_type));
                 return;
             }
             Err(err) => err,
@@ -218,8 +218,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                     r#"
                 🚫 {} has been cancelled. {} has been rollback to previous version if rollout was on-going
                 "#,
-                    self.action,
-                    self.service_type.to_string()
+                    self.action, self.service_type
                 )
                 .trim()
                 .to_string(),
@@ -250,7 +249,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
 Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
 ⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
 ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️️
-                "#, self.action, self.service_type.to_string()).trim().to_string(),
+                "#, self.action, self.service_type).trim().to_string(),
                 None,
             ));
         }

@@ -1173,7 +1173,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
     let mut set_cpu_burst = cpu_burst;
 
     if cpu_burst_float < total_cpu_float {
-        set_cpu_burst = total_cpu.clone();
+        set_cpu_burst.clone_from(&total_cpu);
     }
 
     Ok(CpuLimits {

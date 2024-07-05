@@ -298,7 +298,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = app_name.clone();
+                app.branch.clone_from(&app_name);
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.ports = vec![Port {
                     long_id: Default::default(),

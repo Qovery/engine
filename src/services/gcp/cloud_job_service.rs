@@ -21,7 +21,7 @@ pub enum CloudJobServiceError {
 }
 
 pub struct CloudJob {
-    pub name: String,
+    pub _name: String,
 }
 
 // TODO(benjaminch): this service implementation needs to be done using rust SDK for GCP
@@ -109,7 +109,7 @@ impl CloudJobService {
         .exec()
         {
             Ok(_) => Ok(CloudJob {
-                name: job_name.to_string(),
+                _name: job_name.to_string(),
             }),
             Err(e) => Err(CloudJobServiceError::CannotCreateCloudJob {
                 job_name: job_name.to_string(),
