@@ -48,12 +48,7 @@ impl RegistryImageSource {
         let service_container_registry_host = service_container_registry.host_str().unwrap_or_default();
 
         if cluster_container_registry_host == service_container_registry_host {
-            (
-                cluster_container_registry,
-                cluster_registry_info.get_image_name(self.image.as_str()),
-                self.tag.clone(),
-                false,
-            )
+            (cluster_container_registry, self.image.to_string(), self.tag.clone(), false)
         } else {
             (
                 cluster_container_registry,
