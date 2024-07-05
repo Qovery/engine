@@ -990,6 +990,11 @@ mod tests {
         Url::parse("http://localhost:5000").unwrap()
     }
 
+    #[cfg(target_arch = "x86_64")]
+    static CPU_ARCHITECTURE: &[Architecture] = &[Architecture::AMD64];
+    #[cfg(target_arch = "aarch64")]
+    static CPU_ARCHITECTURE: &[Architecture] = &[Architecture::ARM64];
+
     #[test]
     fn test_pull() {
         let docker = Docker::new(None).unwrap();
@@ -1058,7 +1063,7 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1074,7 +1079,7 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1108,7 +1113,7 @@ mod tests {
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1208,7 +1213,7 @@ mod tests {
                 Uuid::new_v4().to_string().as_str(),
                 "builder",
                 NonZeroUsize::new(1).unwrap(),
-                &[Architecture::AMD64],
+                CPU_ARCHITECTURE,
                 (0, 1000),
                 (0, 1),
                 &CommandKiller::never(),
