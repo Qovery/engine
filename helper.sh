@@ -397,11 +397,16 @@ function update_qovery_chart() {
   git config --global user.name "Qovery"
   git add .
   git status
-  current_date=$(date "+%x %X") && git commit -a -m "update $current_date"
-  git status
 
-  # push to github
-  git push
+  # Check if a commit & push is necessary
+  if ! git diff-index --quiet HEAD; then
+    current_date=$(date "+%x %X") && git commit -a -m "update $current_date"
+    git status
+    # push to github
+    git push
+  else
+    echo "Nothing to push"
+  fi
 }
 
 function update_engine_protobuf() {

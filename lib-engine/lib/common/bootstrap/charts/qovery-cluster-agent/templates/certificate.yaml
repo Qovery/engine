@@ -1,3 +1,4 @@
+{{- if not .Values.useSelfSignCertificate }}
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
@@ -40,3 +41,4 @@ spec:
   # Issuer references are always required.
   issuerRef:
     name: {{ include "qovery-cluster-agent.fullname" . }}-issuer
+{{- end }}

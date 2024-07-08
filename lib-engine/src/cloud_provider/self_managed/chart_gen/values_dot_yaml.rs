@@ -32,9 +32,9 @@ pub struct ValuesFile {
     pub services: ServicesEnabler,
     pub qovery: QoveryGlobalConfig,
     #[serde(rename = "qovery-cluster-agent")]
-    pub qovery_cluster_agent: QoveryAgents,
+    pub qovery_cluster_agent: QoveryClusterAgent,
     #[serde(rename = "qovery-shell-agent")]
-    pub qovery_shell_agent: QoveryAgents,
+    pub qovery_shell_agent: QoveryShellAgent,
     #[serde(rename = "qovery-engine", default, skip_serializing_if = "Option::is_none")]
     pub qovery_engine: Option<QoveryEngine>,
     #[serde(rename = "ingress-nginx")]
@@ -106,10 +106,19 @@ pub struct QoveryGlobalConfig {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QoveryAgents {
-    pub full_name_override: String,
+pub struct QoveryShellAgent {
+    pub fullname_override: String,
     pub image: ImageTag,
     pub environment_variables: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QoveryClusterAgent {
+    pub fullname_override: String,
+    pub image: ImageTag,
+    pub environment_variables: BTreeMap<String, String>,
+    pub use_self_sign_certificate: bool,
 }
 
 #[derive(Serialize, Deserialize)]
