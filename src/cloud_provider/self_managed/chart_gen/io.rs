@@ -9,8 +9,8 @@ use super::{
     chart_dot_yaml,
     values_dot_yaml::{
         AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
-        LoggingServices, ObservabilityServices, QoveryAgents, QoveryGlobalConfig, QoveryServices, ScalewayServices,
-        ServiceEnabled, ServicesEnabler, ValuesFile,
+        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryServices,
+        QoveryShellAgent, ScalewayServices, ServiceEnabled, ServicesEnabler, ValuesFile,
     },
     QoverySelfManagedChart, SupportedCharts,
 };
@@ -204,8 +204,8 @@ impl ValuesFile {
                 cluster_agent_version: "&clusterAgentVersion set-by-customer".to_string(),
                 engine_version: "&engineVersion set-by-customer".to_string(),
             },
-            qovery_cluster_agent: QoveryAgents {
-                full_name_override: "qovery-shell-agent".to_string(),
+            qovery_cluster_agent: QoveryClusterAgent {
+                fullname_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
                     tag: "*clusterAgentVersion".to_string(),
                 },
@@ -215,9 +215,10 @@ impl ValuesFile {
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("LOKI_URL".to_string(), "*lokiUrl".to_string()),
                 ]),
+                use_self_sign_certificate: true,
             },
-            qovery_shell_agent: QoveryAgents {
-                full_name_override: "qovery-shell-agent".to_string(),
+            qovery_shell_agent: QoveryShellAgent {
+                fullname_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
                     tag: "*shellAgentVersion".to_string(),
                 },
