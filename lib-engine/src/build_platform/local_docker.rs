@@ -39,6 +39,15 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
     //"paketobuildpacks/builder:base",
 ];
 
+const DOCKER_IGNORE: &str = r#"
+# Ignore all logs
+*.log
+
+# Ignore git repository files
+.git
+.gitignore
+"#;
+
 /// use Docker in local
 pub struct LocalDocker {
     context: Context,
@@ -667,6 +676,16 @@ impl BuildPlatform for LocalDocker {
                     action_description: "writing dockerfile content".to_string(),
                     raw_error: err,
                 })?;
+
+                if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
+                    let docker_ignore_path = dockerfile_directory.join(".dockerignore");
+
+                    fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
+                        application: app_id.clone(),
+                        action_description: "writing .dockerignore content".to_string(),
+                        raw_error: err,
+                    })?;
+                }
             }
 
             // If the dockerfile does not exist, abort
