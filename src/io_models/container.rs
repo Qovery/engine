@@ -255,8 +255,6 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_keepalive_timeout_seconds: u32,
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
-    #[serde(alias = "network.ingress.extra_headers")]
-    pub network_ingress_extra_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.add_headers")]
     pub network_ingress_add_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_set_headers")]
@@ -321,7 +319,6 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_keepalive_time_seconds: 3600,
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
-            network_ingress_extra_headers: BTreeMap::new(),
             network_ingress_add_headers: BTreeMap::new(),
             network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
