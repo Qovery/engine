@@ -10,7 +10,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
@@ -214,9 +214,13 @@ impl Karpenter {
         })];
 
         for node in nodes {
-            client
-                .patch_node(event_details.clone(), node, &patch_operations)
-                .await?;
+            match client.patch_node(event_details.clone(), node, &patch_operations).await {
+                Ok(_) => {}
+                Err(error) => warn!(
+                    "Error while removing node finalizers: {}",
+                    error.message(ErrorMessageVerbosity::FullDetails)
+                ),
+            }
         }
 
         // wait for Ec2NodeClasses to be deleted
