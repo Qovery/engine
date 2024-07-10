@@ -51,7 +51,7 @@ use uuid::Uuid;
 #[test]
 fn aws_test_build_phase() {
     // This test tries to run up to the build phase of the engine
-    // basically building and pushing each applications
+    // basically building and pushing each application
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -2255,7 +2255,7 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}, "foo_3": {"value": "bar_3", "description": "bar_3"}}"#;
         let job_id = QoveryIdentifier::new_random();
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
