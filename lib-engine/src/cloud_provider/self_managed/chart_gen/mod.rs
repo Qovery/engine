@@ -147,8 +147,9 @@ mod tests {
     use std::{fs, io, path::Path};
 
     use regex::Regex;
+    use tera::{Context, Tera};
 
-    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart};
+    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart, SupportedCharts};
 
     pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(&destination)?;
@@ -202,6 +203,22 @@ mod tests {
                     };
 
                     let override_values = fs::read_to_string(file).unwrap();
+                    let override_values = if chart.name == SupportedCharts::IngressNginx {
+                        let mut tera = Tera::default();
+                        match tera.add_raw_template("self-managed-template-nginx", &override_values) {
+                            Ok(_) => {}
+                            Err(_) => return override_values,
+                        }
+
+                        let mut context = Context::new();
+                        context.insert("enable_karpenter", &false);
+
+                        tera.render("self-managed-template-nginx", &context)
+                            .unwrap_or(override_values)
+                    } else {
+                        override_values
+                    };
+
                     let replace_values = override_values
                         // add Yaml indentation to validate Yaml
                         .replace('\n', "\n  ")
