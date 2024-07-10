@@ -738,6 +738,7 @@ fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<P
 struct JobOutputVariable {
     pub value: String,
     pub sensitive: bool,
+    pub description: String,
 }
 
 impl Default for JobOutputVariable {
@@ -745,6 +746,7 @@ impl Default for JobOutputVariable {
         JobOutputVariable {
             value: String::new(),
             sensitive: true,
+            description: String::new(),
         }
     }
 }
@@ -769,6 +771,12 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
         } else {
             value.to_string()
         };
+        let job_output_description = job_output_variable_hashmap
+            .get("description")
+            .unwrap_or(serde_value_default)
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
 
         job_output_variables.insert(
             key.to_string(),
@@ -779,6 +787,7 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
                     .unwrap_or(serde_value_default)
                     .as_bool()
                     .unwrap_or(false),
+                description: job_output_description,
             },
         );
     }
@@ -805,6 +814,7 @@ mod test {
             &JobOutputVariable {
                 value: "bar".to_string(),
                 sensitive: true,
+                description: "".to_string(),
             }
         );
         assert_eq!(
@@ -812,6 +822,7 @@ mod test {
             &JobOutputVariable {
                 value: "bar_2".to_string(),
                 sensitive: false,
+                description: "".to_string(),
             }
         );
     }
@@ -832,6 +843,7 @@ mod test {
             &JobOutputVariable {
                 value: "123".to_string(),
                 sensitive: true,
+                description: "".to_string(),
             }
         );
         assert_eq!(
@@ -839,6 +851,30 @@ mod test {
             &JobOutputVariable {
                 value: "123.456".to_string(),
                 sensitive: false,
+                description: "".to_string(),
+            }
+        );
+        let json_final = serde_json::to_string(&hashmap).unwrap();
+        println!("{json_final}");
+    }
+
+    #[test]
+    fn should_serialize_json_to_job_output_variable_with_description() {
+        // given
+        let json_output_with_numeric_values = r#"
+        {"foo": { "value": 123, "description": "a description" }}
+        "#;
+
+        // when
+        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+
+        // then
+        assert_eq!(
+            hashmap.get("foo").unwrap(),
+            &JobOutputVariable {
+                value: "123".to_string(),
+                sensitive: false,
+                description: "a description".to_string(),
             }
         );
         let json_final = serde_json::to_string(&hashmap).unwrap();
