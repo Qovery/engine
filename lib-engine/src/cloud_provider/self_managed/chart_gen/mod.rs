@@ -291,6 +291,7 @@ mod tests {
     pub fn generate_helm_chart() {
         use semver::Version;
         use url::Url;
+        use walkdir::WalkDir;
 
         use crate::cloud_provider::self_managed::chart_gen::{
             chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
@@ -300,7 +301,7 @@ mod tests {
         };
 
         use super::QoverySelfManagedChart;
-        use std::{fs, path::Path, process::Command};
+        use std::{fs, io::Read, path::Path, process::Command};
 
         // create chart directories
         dotenv::dotenv().ok();
@@ -988,5 +989,35 @@ mod tests {
             Ok(_) => println!("helm lint ok"),
             Err(e) => panic!("helm lint failed: {e}"),
         }
+
+        // assert all generated files do not contain jinja templating like '{{ }}' or '{% %}'
+        for entry in WalkDir::new(aws_qovery_chart.destination).max_depth(1) {
+            let entry = entry.expect("failed to read folder entry {entry}");
+            if entry.file_type().is_file() {
+                let file_path = entry.path();
+
+                let mut file_content = String::new();
+                fs::File::open(file_path)
+                    .expect("can't open file {file_path}")
+                    .read_to_string(&mut file_content)
+                    .unwrap();
+
+                assert!(
+                    contains_invalid_chars(&file_content),
+                    "File {} contains invalid chars. No Jinja is allowed here.",
+                    file_path.display()
+                );
+            }
+        }
+    }
+
+    pub fn contains_invalid_chars(content: &str) -> bool {
+        let invalid_patterns = ["{{", "}}", "{%", "%}"];
+        for pattern in &invalid_patterns {
+            if content.contains(pattern) {
+                return true;
+            }
+        }
+        false
     }
 }
