@@ -90,8 +90,4 @@ impl CloudProvider for GCP {
     fn lib_directory_name() -> &'static str {
         "gcp"
     }
-
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
 }

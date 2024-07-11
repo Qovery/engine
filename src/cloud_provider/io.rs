@@ -108,6 +108,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
     pub aws_vpc_flow_logs_retention_days: u32,
+    #[serde(alias = "aws.eks.enable_alb_controller")]
+    pub aws_eks_enable_alb_controller: bool,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -186,6 +188,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_ec2_metadata_imds: AwsEc2MetadataImds::Optional,
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
+            aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
             database_postgresql_deny_public_access: false,
             database_postgresql_allowed_cidrs: default_database_cirds.clone(),

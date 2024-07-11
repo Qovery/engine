@@ -3502,18 +3502,14 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
-    pub fn new_k8s_cannot_get_services(
-        event_details: EventDetails,
-        error: CommandError,
-        services_id: &str,
-    ) -> EngineError {
+    pub fn new_k8s_cannot_get_services(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetServices,
             error.to_string(),
-            Some(error),
+            Some(error.clone()),
             None,
-            Some(format!("K8s service for service {services_id} can't be found")),
+            Some(format!("K8s service for service can't be found: {error}")),
         )
     }
 

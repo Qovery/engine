@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, io::Read};
 use chrono::Duration;
 use k8s_openapi::api::{
     apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
-    core::v1::{Pod, PodStatus, Secret},
+    core::v1::{Pod, PodStatus, Secret, Service},
 };
 use k8s_openapi::ByteString;
 use kube::core::ObjectList;
@@ -43,6 +43,8 @@ pub enum K8sPodPhase {
 pub struct K8sMetadata {
     pub name: String,
     pub namespace: String,
+    pub labels: Option<BTreeMap<String, String>>,
+    pub annotations: Option<BTreeMap<String, String>>,
     //#[serde(rename(deserialize = "deletion_grace_period_seconds"))]
     pub termination_grace_period_seconds: Option<Duration>,
 }
@@ -120,8 +122,70 @@ impl K8sPod {
                     }
                 },
                 termination_grace_period_seconds: k8s_pod.metadata.deletion_grace_period_seconds.map(Duration::seconds),
+                labels: k8s_pod.metadata.labels.clone(),
+                annotations: k8s_pod.metadata.annotations.clone(),
             },
             status: pod_status,
+        })
+    }
+}
+
+/********
+SERVICES
+*********/
+
+pub struct K8sService {
+    pub metadata: K8sMetadata,
+}
+
+impl K8sService {
+    pub fn from_k8s_service_objectlist(
+        event_details: EventDetails,
+        k8s_services: ObjectList<Service>,
+    ) -> Vec<K8sService> {
+        let mut services: Vec<K8sService> = Vec::with_capacity(k8s_services.items.len());
+
+        for service in k8s_services.items {
+            if let Ok(x) = K8sService::from_k8s_service(event_details.clone(), service) {
+                services.push(x);
+            };
+        }
+        services
+    }
+
+    pub fn from_k8s_service(event_details: EventDetails, k8s_service: Service) -> Result<K8sService, Box<EngineError>> {
+        Ok(K8sService {
+            metadata: K8sMetadata {
+                name: match k8s_service.metadata.name.clone() {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                            event_details,
+                            CommandError::new_from_safe_message(
+                                "can't read kubernetes service, name is missing".to_string(),
+                            ),
+                        )))
+                    }
+                },
+                namespace: match k8s_service.metadata.namespace {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_deployment_error(
+                            event_details,
+                            CommandError::new_from_safe_message(format!(
+                                "can't read kubernetes service, namespace is missing for service name `{}`",
+                                k8s_service.metadata.name.unwrap_or("unknown".to_string())
+                            )),
+                        )))
+                    }
+                },
+                termination_grace_period_seconds: k8s_service
+                    .metadata
+                    .deletion_grace_period_seconds
+                    .map(Duration::seconds),
+                labels: k8s_service.metadata.labels.clone(),
+                annotations: k8s_service.metadata.annotations.clone(),
+            },
         })
     }
 }
@@ -201,6 +265,8 @@ impl K8sDeployment {
                     .metadata
                     .deletion_grace_period_seconds
                     .map(Duration::seconds),
+                labels: k8s_deployment.metadata.labels.clone(),
+                annotations: k8s_deployment.metadata.annotations.clone(),
             },
             status: deployment_status,
         })
@@ -277,6 +343,8 @@ impl K8sStatefulset {
                     .metadata
                     .deletion_grace_period_seconds
                     .map(Duration::seconds),
+                labels: k8s_statefulset.metadata.labels.clone(),
+                annotations: k8s_statefulset.metadata.annotations.clone(),
             },
             status: statefulset_status,
         })
@@ -343,6 +411,8 @@ impl K8sSecret {
                     }
                 },
                 termination_grace_period_seconds: None,
+                labels: k8s_secret.metadata.labels.clone(),
+                annotations: k8s_secret.metadata.annotations.clone(),
             },
             decoded_secret: encoded_secret_content,
         })

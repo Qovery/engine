@@ -4,7 +4,7 @@ resource "aws_eks_addon" "kube_proxy" {
 
   # Pick the recommended version for the k8s version or override if set
   addon_version        = "{{ eks_addon_kube_proxy.version }}"
-  resolve_conflicts    = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 
   tags = local.tags_eks
 }

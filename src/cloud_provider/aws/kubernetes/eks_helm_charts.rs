@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::helm_charts::alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
@@ -81,6 +82,7 @@ pub struct AwsEksQoveryTerraformConfig {
     pub loki_storage_config_aws_s3: String,
     pub karpenter_controller_aws_role_arn: String,
     pub cluster_security_group_id: String,
+    pub aws_iam_alb_controller_arn: String,
 }
 
 pub struct EksChartsConfigPrerequisites {
@@ -299,6 +301,13 @@ pub fn eks_aws_helm_charts(
             .managed_dns_resolvers_terraform_format
             .to_string(),
         HelmChartNamespaces::KubeSystem,
+    );
+
+    // ALB controller
+    let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
+        chart_prefix_path,
+        qovery_terraform_config.aws_iam_alb_controller_arn,
+        chart_config_prerequisites.cluster_name.clone(),
     );
 
     // External DNS
@@ -554,6 +563,9 @@ pub fn eks_aws_helm_charts(
             .cluster_advanced_settings
             .nginx_controller_log_format_escaping
             .to_model(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_enable_alb_controller,
     )
     .to_common_helm_chart()?;
 
@@ -728,11 +740,18 @@ pub fn eks_aws_helm_charts(
         level_5.push(Box::new(qovery_webhook));
     }
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(metrics_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
     ];
+
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_eks_enable_alb_controller
+    {
+        level_6.push(Box::new(aws_load_balancer_controller));
+    }
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 

@@ -612,10 +612,7 @@ impl QPodExt for Pod {
     }
 
     fn service_version(&self) -> Option<String> {
-        let Some(annotations) = &self.metadata.annotations else {
-            return None;
-        };
-
+        let annotations = &self.metadata.annotations.clone()?;
         annotations.get("qovery.com/service-version").cloned()
     }
 }

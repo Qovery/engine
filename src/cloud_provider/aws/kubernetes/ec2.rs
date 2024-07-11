@@ -1,7 +1,6 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, force_fetch_kubeconfig};
@@ -25,6 +24,7 @@ use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::aws::models::QoveryAwsSdkConfigEc2;
 use async_trait::async_trait;
 use aws_sdk_ec2::model::{Filter, VolumeState};
 use aws_sdk_ec2::types::SdkError;
@@ -559,6 +559,16 @@ impl Kubernetes for EC2 {
 
     fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
         None
+    }
+
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+        match self.advanced_settings().aws_eks_enable_alb_controller {
+            true => &[
+                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
+                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
+            ],
+            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+        }
     }
 }
 

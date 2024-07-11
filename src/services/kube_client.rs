@@ -1,6 +1,6 @@
 use json_patch::PatchOperation;
 use k8s_openapi::api::autoscaling::v1::Scale;
-use k8s_openapi::api::core::v1::Node;
+use k8s_openapi::api::core::v1::{Node, Service};
 use k8s_openapi::api::{
     apps::v1::{Deployment, StatefulSet},
     core::v1::{Pod, Secret},
@@ -14,11 +14,12 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+use crate::models::kubernetes::K8sDeployment;
 use crate::utilities::create_kube_client_in_cluster;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
-    models::kubernetes::{K8sDeployment, K8sPod, K8sSecret, K8sStatefulset},
+    models::kubernetes::{K8sPod, K8sSecret, K8sService, K8sStatefulset},
     runtime::block_on,
     utilities::create_kube_client,
 };
@@ -341,6 +342,51 @@ impl QubeClient {
                 event_details,
                 CommandError::new_from_safe_message(format!("Error while trying to delete kubernetes deployment. {e}")),
             ))),
+        }
+    }
+
+    pub async fn get_services(
+        &self,
+        event_details: EventDetails,
+        namespace: Option<&str>,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sService>, Box<EngineError>> {
+        let client: Api<Service> = match namespace {
+            Some(namespace_name) => Api::namespaced(self.client.clone(), namespace_name),
+            None => Api::all(self.client.clone()),
+        };
+
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match select_resource {
+            SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
+                Ok(x) => Ok(K8sService::from_k8s_service_objectlist(event_details, x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_cannot_get_services(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes service with labels `{labels}`. {e}"
+                    )),
+                ))),
+            },
+            SelectK8sResourceBy::Name(service_name) => match client.get(service_name.as_str()).await {
+                Ok(x) => Ok(vec![K8sService::from_k8s_service(event_details, x)?]),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_cannot_get_services(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes service from {service_name}/{}. {e}",
+                        namespace.unwrap_or("no namespace")
+                    )),
+                ))),
+            },
         }
     }
 

@@ -204,7 +204,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     }
 }
 
-fn write_helm_value_with_replacement<'a, T: CloudProvider>(
+fn write_helm_value_with_replacement<'a>(
     mut lines: impl Iterator<Item = Cow<'a, str>>,
     output_writer: &mut impl Write,
     service_id: Uuid,
@@ -213,6 +213,7 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
     environment_id: Uuid,
     project_id: Uuid,
     env_vars: &HashMap<String, VariableInfo>,
+    loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
 ) -> Result<(), anyhow::Error> {
     let mut output_writer = BufWriter::new(output_writer);
     let mut lines = lines.try_fold(Vec::with_capacity(512), |mut acc, l| {
@@ -234,7 +235,7 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
         ),
         (
             "qovery.annotations.loadbalancer",
-            T::loadbalancer_l4_annotations()
+            loadbalancer_l4_annotations
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect_vec(),
@@ -468,7 +469,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     File::create(this.chart_workspace_directory().join(&value.name)).map_err(|e| {
                         to_error(format!("Cannot create output helm value file {} due to {}", value.name, e))
                     })?;
-                write_helm_value_with_replacement::<T>(
+                write_helm_value_with_replacement(
                     lines,
                     &mut output_path,
                     *this.long_id(),
@@ -477,6 +478,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
+                    target.kubernetes.loadbalancer_l4_annotations(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {} due to {}", value.name, e)))?;
             }
@@ -520,7 +522,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 let mut output_path = File::create(this.chart_workspace_directory().join(filename)).map_err(|e| {
                     to_error(format!("Cannot create output helm value file {:?} due to {}", filename, e))
                 })?;
-                write_helm_value_with_replacement::<T>(
+                write_helm_value_with_replacement(
                     lines,
                     &mut output_path,
                     *this.long_id(),
@@ -529,6 +531,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
+                    target.kubernetes.loadbalancer_l4_annotations(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {:?} due to {}", filename, e)))?;
             }
@@ -761,7 +764,6 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models;
 
     use maplit::hashmap;
 
@@ -884,7 +886,7 @@ controller:
         };
         let mut output: Vec<u8> = vec![];
 
-        let ret = write_helm_value_with_replacement::<models::types::AWS>(
+        let ret = write_helm_value_with_replacement(
             value_file.lines().map(Cow::Borrowed),
             &mut output,
             service_id,
@@ -893,6 +895,7 @@ controller:
             env_id,
             project_id,
             &envs,
+            &[],
         );
         assert!(ret.is_ok());
 
@@ -919,6 +922,7 @@ controller:
   loadBalancer:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 
   annotations:
     - qovery.com/service-version: 42

@@ -13,6 +13,8 @@ controller:
     proxy-body-size: 100m
     # hide Nginx version
     server-tokens: "false"
+    # required for X-Forwarded-for to work with ALB controller
+    use-proxy-protocol: "false"
     # enable real IP (client IP)
     enable-real-ip: "false" # set-by-engine-code
     # customize log-format / set-by-engine-code

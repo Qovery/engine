@@ -2,7 +2,6 @@ use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terrafor
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::cloud_provider::aws::kubernetes::Options;
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
@@ -14,6 +13,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
+use crate::services::aws::models::QoveryAwsSdkConfigEks;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
