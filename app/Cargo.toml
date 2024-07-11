@@ -58,6 +58,7 @@ futures-util = "0.3.28"
 tracing = { version = "0.1.37", features = ["log"] }
 tracing-futures = { version = "0.2.5", features = ["futures-03"] }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "fmt", "local-time"] }
+tracing-appender = "0.2.3"
 
 # To load .env file into env variables
 dotenv = "0.15.0"

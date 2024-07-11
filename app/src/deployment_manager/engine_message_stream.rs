@@ -227,6 +227,7 @@ mod test {
     use qovery_engine::events;
     use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
     use qovery_engine::io_models::QoveryIdentifier;
+    use qovery_engine::log_file_writer::LogFileWriter;
     use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -254,7 +255,7 @@ mod test {
             EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details.clone()), None);
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration);
+        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Box::default());
 
         // Dropping the handle should terminate the stream
         let (_, _, mut stream, abort_handle) = deployment.get_message_stream().await;
@@ -317,7 +318,7 @@ mod test {
         )));
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration);
+        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Box::default());
         let (_, msg_tx, mut stream, abort_handle) = deployment.get_message_stream().await;
 
         let _ = msg_tx.send(engine_msg.clone());

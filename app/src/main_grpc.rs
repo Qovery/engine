@@ -31,7 +31,7 @@ use retry::OperationResult;
 use tokio::signal::unix::SignalKind;
 use tracing::{error, warn};
 use tracing_subscriber::fmt::time::UtcTime;
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
 use url::Url;
 use uuid::Uuid;
 use warp::http::Uri;
@@ -54,6 +54,7 @@ use qovery_engine::events::{
 use qovery_engine::git::initialize_git_opts;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
@@ -87,6 +88,7 @@ fn to_engine_task(
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
+    log_file_writer: Box<LogFileWriter>,
 ) -> Result<Arc<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
@@ -105,6 +107,7 @@ fn to_engine_task(
                     logger,
                     metrics_registry,
                     qovery_api,
+                    Some(log_file_writer),
                 )))
             }
             TaskSelector::Environment => {
@@ -122,6 +125,7 @@ fn to_engine_task(
                     logger,
                     metrics_registry,
                     qovery_api,
+                    Some(log_file_writer),
                 )))
             }
         }
@@ -211,15 +215,31 @@ pub fn main() -> io::Result<()> {
     println!("{}", ASCII_BANNER);
 
     // Init tracing subscriber
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .fmt_fields(
-            tracing_subscriber::fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}"))
-                .delimited(", "),
+    let (log_file_writer, log_file_writer_inner) = LogFileWriter::new();
+    let (file_writer, _guard) = tracing_appender::non_blocking(log_file_writer_inner);
+
+    Registry::default()
+        .with(EnvFilter::from_default_env())
+        .with(
+            fmt::Layer::default()
+                .fmt_fields(
+                    fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}")).delimited(", "),
+                )
+                .with_ansi(true)
+                .with_thread_names(true)
+                .with_timer(UtcTime::rfc_3339())
+                .with_writer(std::io::stdout),
         )
-        .with_ansi(true)
-        .with_thread_names(true)
-        .with_timer(UtcTime::rfc_3339())
+        .with(
+            fmt::Layer::default()
+                .fmt_fields(
+                    fmt::format::debug_fn(|writer, field, value| write!(writer, "{field}: {value:?}")).delimited(", "),
+                )
+                .with_ansi(false)
+                .with_thread_names(true)
+                .with_timer(UtcTime::rfc_3339())
+                .with_writer(file_writer),
+        )
         .init();
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
@@ -364,7 +384,8 @@ pub fn main() -> io::Result<()> {
                                            deployment_info: &DeploymentInfo,
                                            grpc_client: &GrpcEngineClient,
                                            logger: Box<dyn Logger>,
-                                           metrics_registry: Box<dyn MetricsRegistry>|
+                                           metrics_registry: Box<dyn MetricsRegistry>,
+                                           log_file_writer: Box<LogFileWriter>|
               -> Result<Arc<dyn Task>, EngineEvent> {
             // make sure to clean configuration directories so engine task can start fresh
             clean_configuration_directories();
@@ -381,6 +402,7 @@ pub fn main() -> io::Result<()> {
                 grpc_client,
                 logger,
                 metrics_registry,
+                log_file_writer,
             );
 
             match ret {
@@ -416,8 +438,13 @@ pub fn main() -> io::Result<()> {
             }
         };
 
-        let mngr =
-            DeploymentManager::new(&task_selector, engine_client, should_shutdown, Box::new(payload_to_engine_task));
+        let mngr = DeploymentManager::new(
+            &task_selector,
+            engine_client,
+            should_shutdown,
+            Box::new(payload_to_engine_task),
+            Box::new(log_file_writer),
+        );
         mngr.run().await
     };
 

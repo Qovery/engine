@@ -23,6 +23,7 @@ use qovery_engine::engine_task::qovery_api::EngineServiceType::Engine;
 use qovery_engine::engine_task::Task;
 use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
 use qovery_engine::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
+use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use std::ops::DerefMut;
@@ -107,6 +108,7 @@ type MkEngineTask = Box<
             &GrpcEngineClient,
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
+            Box<LogFileWriter>,
         ) -> Result<Arc<dyn Task>, EngineEvent>
         + Send,
 >;
@@ -118,6 +120,7 @@ pub struct DeploymentManager {
     engine_client: GrpcEngineClient,
     should_shutdown: Arc<AtomicBool>,
     mk_engine_task: MkEngineTask,
+    log_file_writer: Box<LogFileWriter>,
 }
 
 impl DeploymentManager {
@@ -126,6 +129,7 @@ impl DeploymentManager {
         engine_client: GrpcEngineClient,
         should_shutdown: Arc<AtomicBool>,
         mk_engine_task: MkEngineTask,
+        log_file_writer: Box<LogFileWriter>,
     ) -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
         let deployment_request = match task_type {
@@ -144,6 +148,7 @@ impl DeploymentManager {
             engine_client,
             should_shutdown,
             mk_engine_task,
+            log_file_writer,
         }
     }
 
@@ -217,7 +222,7 @@ impl DeploymentManager {
 
         info!("Got new deployment for: {:?}", deployment_info);
         let next_state = DeploymentManagerState::ExecutingDeployment {
-            deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1)),
+            deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1), self.log_file_writer.clone()),
         };
 
         (next_state, None)
@@ -229,7 +234,7 @@ impl DeploymentManager {
         mut deployment: DeploymentContext,
     ) -> (DeploymentManagerState, Option<Duration>) {
         info!("Starting to execute deployment");
-        let (mut msg_stream, close_upstream_tx, logger, metrics_registry) = match deployment
+        let (mut msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer) = match deployment
             .execute_deployment(&mut self.engine_client)
             .await
         {
@@ -274,8 +279,8 @@ impl DeploymentManager {
                     match msg.request {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                             info!("Received new deployment task: {}", payload);
-                            let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone());
-                            let upstream = UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry);
+                            let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone(), log_file_writer.clone());
+                            let upstream = UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer);
                             match task {
                                 Ok(task) => {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
@@ -325,12 +330,18 @@ impl DeploymentManager {
     ) -> (DeploymentManagerState, Option<Duration>) {
         info!("Trying to resume connection with gateway");
         match deployment.execute_deployment(&mut self.engine_client).await {
-            Ok((msg_stream, close_upstream_tx, logger, metrics_registry)) => {
+            Ok((msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer)) => {
                 info!("Resumed connectivity with gtw");
                 let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                     deployment,
                     task,
-                    upstream_gtw: UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry),
+                    upstream_gtw: UpstreamGatewayContext::new(
+                        msg_stream,
+                        close_upstream_tx,
+                        logger,
+                        metrics_registry,
+                        log_file_writer,
+                    ),
                 };
                 (next_step, None)
             }
@@ -409,7 +420,7 @@ impl DeploymentManager {
                             match msg.request {
                                 Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                                     info!("Received new deployment task: {}", payload);
-                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry());
+                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry(), upstream.log_file_writer());
                                     match new_task {
                                         Ok(new_task) => {
                                             task.await_task_termination().await;
@@ -495,6 +506,7 @@ mod test {
     use qovery_engine::events;
     use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
     use qovery_engine::io_models::QoveryIdentifier;
+    use qovery_engine::log_file_writer::LogFileWriter;
     use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
     use qovery_engine::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
     use std::pin::Pin;
@@ -660,13 +672,13 @@ mod test {
 
         let task = TaskSelector::Environment;
         let should_shutdown = Arc::new(AtomicBool::new(false));
-        let mk_engine_task = |_, _: &_, _: &_, _, _| {
+        let mk_engine_task = |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
             Ok::<_, EngineEvent>(task)
         };
 
         let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task));
+            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task), Box::default());
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
         pin_mut!(fut);
@@ -719,14 +731,14 @@ mod test {
         let task_is_running = task.is_running.clone();
         let task_cancel = task.should_shutdown.clone();
 
-        let mk_engine_task = move |_, _: &_, _: &_, _, _| {
+        let mk_engine_task = move |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(task.clone());
             Ok::<_, EngineEvent>(task)
         };
 
         let task = TaskSelector::Environment;
         let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task));
+            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task), Box::default());
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
         let fut = deployment_mngr.run();

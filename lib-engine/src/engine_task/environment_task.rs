@@ -17,6 +17,7 @@ use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, St
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
+use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
@@ -45,6 +46,7 @@ pub struct EnvironmentTask {
     qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
+    log_file_writer: Option<Box<LogFileWriter>>,
 }
 
 impl EnvironmentTask {
@@ -56,6 +58,7 @@ impl EnvironmentTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
+        log_file_writer: Option<Box<LogFileWriter>>,
     ) -> Self {
         let span = info_span!(
             "environment_task",
@@ -79,6 +82,7 @@ impl EnvironmentTask {
                 let (tx, rx) = broadcast::channel(1);
                 (RwLock::new(Some(tx)), rx)
             },
+            log_file_writer,
         }
     }
 
@@ -465,6 +469,10 @@ impl Task for EnvironmentTask {
     }
 
     fn run(&self) {
+        if self.request.is_self_managed() {
+            super::enable_log_file_writer(&self.info_context(), &self.log_file_writer);
+        }
+
         let _span = self.span.enter();
         info!("environment task {} started", self.id());
 
@@ -607,6 +615,7 @@ impl Task for EnvironmentTask {
         // Uploading to S3 can take a lot of time, and might hit the core timeout
         // So we early drop the guard to notify core that the task is done
         drop(guard);
+        super::disable_log_file_writer(&self.log_file_writer);
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {

@@ -1,4 +1,5 @@
 use crate::grpc::engine::EngineMessageRx;
+use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use std::time::Duration;
@@ -11,6 +12,7 @@ pub struct UpstreamGatewayContext {
     pub close_upstream_tx: watch::Sender<()>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
+    log_file_writer: Box<LogFileWriter>,
 }
 
 impl UpstreamGatewayContext {
@@ -19,12 +21,14 @@ impl UpstreamGatewayContext {
         close_upstream_tx: watch::Sender<()>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
+        log_file_writer: Box<LogFileWriter>,
     ) -> Self {
         Self {
             msg_stream,
             close_upstream_tx,
             logger,
             metrics_registry,
+            log_file_writer,
         }
     }
 
@@ -34,6 +38,10 @@ impl UpstreamGatewayContext {
 
     pub fn metrics_registry(&self) -> Box<dyn MetricsRegistry> {
         self.metrics_registry.clone()
+    }
+
+    pub fn log_file_writer(&self) -> Box<LogFileWriter> {
+        self.log_file_writer.clone()
     }
 
     pub async fn await_termination(self) {

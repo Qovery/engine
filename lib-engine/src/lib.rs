@@ -24,6 +24,7 @@ pub mod fs;
 pub mod git;
 pub mod io_models;
 pub mod kubers_utils;
+pub mod log_file_writer;
 pub mod logger;
 pub mod metrics_registry;
 pub mod models;

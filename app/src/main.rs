@@ -196,6 +196,7 @@ pub fn using_json_path_parameter(
                 logger,
                 metrics_registry,
                 Box::new(FakeQoveryApi {}),
+                None,
             ))
         }
         TaskSelector::Infrastructure => {
@@ -216,6 +217,7 @@ pub fn using_json_path_parameter(
                 Box::new(StaticQoveryApi {
                     versions: get_qovery_app_version("api.qovery.com").unwrap(),
                 }),
+                None,
             ))
         }
     };

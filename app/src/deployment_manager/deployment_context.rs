@@ -7,6 +7,7 @@ use crate::logger::composite_logger::CompositeLogger;
 use futures_util::{stream, StreamExt};
 use qovery_engine::engine_task::Task;
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
+use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use std::error::Error;
@@ -34,10 +35,15 @@ pub struct DeploymentContext {
 
     // The last message we sent to the gateway, that we will re-emit in case of cnx resume
     last_msg_memento: Arc<Mutex<Option<EngineMessageTx>>>,
+    log_file_writer: Box<LogFileWriter>,
 }
 
 impl DeploymentContext {
-    pub fn new(deployment_info: DeploymentInfo, log_buffer_duration: Duration) -> Self {
+    pub fn new(
+        deployment_info: DeploymentInfo,
+        log_buffer_duration: Duration,
+        log_file_writer: Box<LogFileWriter>,
+    ) -> Self {
         let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
         let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
         Self {
@@ -51,6 +57,7 @@ impl DeploymentContext {
             // To keep the last message in case the cnx with upstream broke and that we need to re-emit the last message
             // on resume
             last_msg_memento: Arc::new(Mutex::new(None)),
+            log_file_writer,
         }
     }
 
@@ -79,6 +86,7 @@ impl DeploymentContext {
             watch::Sender<()>,
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
+            Box<LogFileWriter>,
         ),
         tonic::Status,
     > {
@@ -96,10 +104,15 @@ impl DeploymentContext {
         }])
         .chain(msg_stream);
 
-        engine_client
-            .exec_deployment(msg_stream)
-            .await
-            .map(|msg_stream| (msg_stream.into_inner(), abort_upstream_tx, logger_for_task, metrics_registry))
+        engine_client.exec_deployment(msg_stream).await.map(|msg_stream| {
+            (
+                msg_stream.into_inner(),
+                abort_upstream_tx,
+                logger_for_task,
+                metrics_registry,
+                self.log_file_writer.clone(),
+            )
+        })
     }
 
     pub fn set_last_message_id(&mut self, last_id: String) {
