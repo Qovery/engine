@@ -1066,7 +1066,9 @@ fn terraform_init(
     #[cfg(target_os = "macos")]
     terraform_providers_lock_args.push("-platform=darwin_arm64");
     #[cfg(target_os = "linux")]
-    terraform_providers_lock_args.push("-platform=linux_amd64", "-platform=linux_arm64");
+    terraform_providers_lock_args.push("-platform=linux_amd64");
+    #[cfg(target_os = "linux")]
+    terraform_providers_lock_args.push("-platform=linux_arm64");
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
