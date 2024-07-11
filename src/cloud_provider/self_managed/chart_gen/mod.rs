@@ -1003,7 +1003,7 @@ mod tests {
                     .unwrap();
 
                 assert!(
-                    contains_invalid_chars(&file_content),
+                    contains_only_valid_chars(&file_content),
                     "File {} contains invalid chars. No Jinja is allowed here.",
                     file_path.display()
                 );
@@ -1011,13 +1011,13 @@ mod tests {
         }
     }
 
-    pub fn contains_invalid_chars(content: &str) -> bool {
+    pub fn contains_only_valid_chars(content: &str) -> bool {
         let invalid_patterns = ["{{", "}}", "{%", "%}"];
         for pattern in &invalid_patterns {
             if content.contains(pattern) {
-                return true;
+                return false;
             }
         }
-        false
+        true
     }
 }
