@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use aws_types::SdkConfig;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
@@ -22,6 +23,7 @@ use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::models::abort::Abort;
+use crate::services::kube_client::QubeClient;
 
 pub mod aws;
 pub mod environment;
@@ -194,6 +196,18 @@ impl<'a> DeploymentTarget<'a> {
 
     pub fn env_logger(&self, service: &impl Service, step: EnvironmentStep) -> EnvLogger {
         EnvLogger::new(service, step, self.logger.clone())
+    }
+
+    pub fn qube_client(&self, event_details: EventDetails) -> Result<QubeClient, Box<EngineError>> {
+        QubeClient::new(
+            event_details,
+            Some(self.kubernetes.kubeconfig_local_file_path()),
+            self.cloud_provider
+                .credentials_environment_variables()
+                .iter()
+                .map(|(x, y)| (x.to_string(), y.to_string()))
+                .collect_vec(),
+        )
     }
 }
 

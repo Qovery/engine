@@ -11,7 +11,7 @@ use crate::cloud_provider::{kubernetes, service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
-use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::annotations_group::{Annotation, AnnotationsGroup};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
 use crate::io_models::labels_group::LabelsGroup;
@@ -172,6 +172,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) additionnal_annotations: Vec<Annotation>,
     pub(super) labels_group: LabelsGroupTeraContext,
 }
 
@@ -197,6 +198,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         options: T::DatabaseOptions,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
+        additionnal_annotations: Vec<Annotation>,
         labels_groups: Vec<LabelsGroup>,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
@@ -266,6 +268,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            additionnal_annotations,
             labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
@@ -451,6 +454,15 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("database_id", &self.id());
         context.insert("publicly_accessible", &container_database_publicly_accessible);
 
+        // NLB or ALB controller annotation
+        context.insert(
+            "aws_load_balancer_type",
+            match &kubernetes.advanced_settings().aws_eks_enable_alb_controller {
+                true => "external",
+                false => "nlb",
+            },
+        );
+
         context.insert(
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,
@@ -482,6 +494,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("node_affinity_key", &node_affinity_key);
         context.insert("node_affinity_values", &node_affinity_values);
         context.insert("annotations_group", &self.annotations_group);
+        context.insert("additional_annotations", &self.additionnal_annotations);
         context.insert("labels_group", &self.labels_group);
 
         Ok(context)

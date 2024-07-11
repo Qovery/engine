@@ -86,6 +86,7 @@ fn should_increase_db_storage_size() {
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
             vec![],
+            vec![],
         )
         .expect("Unable to create database");
 

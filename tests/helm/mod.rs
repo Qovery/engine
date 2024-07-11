@@ -120,6 +120,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 cloud_provider_container_registry_tags: HashMap::new(),
                 aws_vpc_flow_logs_retention_days: 1,
                 aws_cloudwatch_eks_logs_retention_days: 1,
+                aws_eks_enable_alb_controller: true,
                 ..Default::default()
             },
             None,
@@ -523,6 +524,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
         |transmitter| test_kube.context().get_event_details(transmitter),
         vec![],
         vec![],
+        vec![],
     )
     .unwrap()
 }
@@ -560,6 +562,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             publicly_accessible: true,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
         vec![],
         vec![],
     )

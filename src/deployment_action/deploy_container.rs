@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
@@ -17,7 +17,7 @@ use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{
-    delete_cached_image, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
+    delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
 };
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
@@ -111,6 +111,16 @@ where
                 None,
                 chart,
             );
+
+            if target.cloud_provider.kind() == Kind::Aws {
+                delete_nlb_or_alb_service(
+                    target.qube_client(event_details.clone())?,
+                    target.environment.namespace(),
+                    format!("qovery.com/service-id={}", self.long_id()).as_str(),
+                    target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,
+                    event_details.clone(),
+                )?;
+            }
 
             helm.on_create(target)?;
 

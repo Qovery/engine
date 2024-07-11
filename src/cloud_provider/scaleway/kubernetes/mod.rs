@@ -1920,20 +1920,35 @@ impl Kubernetes for Kapsule {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+    fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         // SCW doesn't support UDP loadbalancer
         // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
         // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
-        &[
+        vec![
             (
-                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
-                "leastconn",
+                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm".to_string(),
+                "leastconn".to_string(),
             ),
-            ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-protocol-http".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-health-check-type".to_string(),
+                "tcp".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-use-hostname".to_string(),
+                "false".to_string(),
+            ),
         ]
     }
 }

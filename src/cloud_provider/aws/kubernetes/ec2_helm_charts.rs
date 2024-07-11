@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::helm_charts::alb_controller::AwsLoadBalancerControllerChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
@@ -88,6 +88,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
+    pub alb_controller_already_deployed: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -203,7 +204,13 @@ pub fn ec2_aws_helm_charts(
         chart_prefix_path,
         qovery_terraform_config.aws_iam_alb_controller_arn,
         chart_config_prerequisites.cluster_name.clone(),
-    );
+        false, // no vpa on EC2
+        chart_config_prerequisites.alb_controller_already_deployed
+            && chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_eks_enable_alb_controller,
+    )
+    .to_common_helm_chart()?;
 
     let registry_creds = CommonChart {
         chart_info: ChartInfo {
@@ -347,6 +354,10 @@ pub fn ec2_aws_helm_charts(
         get_chart_override_fn.clone(),
         chart_config_prerequisites.managed_domain.clone(),
         kind_provider,
+        chart_config_prerequisites.organization_long_id.to_string(),
+        chart_config_prerequisites.organization_id.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string(),
+        chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Ec2,
         None,
         None,
@@ -543,6 +554,7 @@ pub fn ec2_aws_helm_charts(
     if chart_config_prerequisites
         .cluster_advanced_settings
         .aws_eks_enable_alb_controller
+        || chart_config_prerequisites.alb_controller_already_deployed
     {
         prepare_chats_to_deploy.push(Box::new(aws_load_balancer_controller));
     }

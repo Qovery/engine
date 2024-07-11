@@ -246,6 +246,8 @@ pub enum Tag {
     RouterBasicAuthEnvVarNotFound,
     ServiceInstantiationError,
     CannotGetRegistryCredentials,
+    K8sCannotDeleteService,
+    K8sGetWebHookConfigurationError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -285,6 +287,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sScaleReplicas => Tag::K8sScaleReplicas,
             errors::Tag::K8sLoadBalancerConfigurationIssue => Tag::K8sLoadBalancerConfigurationIssue,
             errors::Tag::K8sServiceError => Tag::K8sServiceError,
+            errors::Tag::K8sCannotDeleteService => Tag::K8sCannotDeleteService,
             errors::Tag::K8sGetLogs => Tag::K8sGetLogs,
             errors::Tag::K8sGetEvents => Tag::K8sGetEvents,
             errors::Tag::K8sDescribe => Tag::K8sDescribe,
@@ -293,6 +296,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sPodIsNotReady => Tag::K8sPodIsNotReady,
             errors::Tag::K8sGetPodError => Tag::K8sGetPodError,
             errors::Tag::K8sGetDeploymentError => Tag::K8sGetDeploymentError,
+            errors::Tag::K8sGetWebHookConfigurationError => Tag::K8sGetWebHookConfigurationError,
             errors::Tag::K8sDeleteDeploymentError => Tag::K8sDeleteDeploymentError,
             errors::Tag::K8sGetStatefulsetError => Tag::K8sGetStatefulsetError,
             errors::Tag::K8sDeleteStatefulsetError => Tag::K8sDeleteStatefulsetError,

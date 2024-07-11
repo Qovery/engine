@@ -391,7 +391,7 @@ pub trait Kubernetes: Send + Sync {
     fn is_karpenter_enabled(&self) -> bool;
 
     fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)];
+    fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
 }
 
 pub trait KubernetesNode {

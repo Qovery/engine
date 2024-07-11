@@ -245,7 +245,7 @@ impl<T: CloudProvider> Application<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
-            loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(),
+            loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
         };

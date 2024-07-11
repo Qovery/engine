@@ -1,0 +1,4 @@
+clusterName: set-by-engine-code
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: set-by-engine-code

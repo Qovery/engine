@@ -128,6 +128,7 @@ impl InfrastructureContext {
         let event_details = self
             .kubernetes()
             .get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources));
+
         let kubeconfig_path = {
             let kubeconfig_path = self.kubernetes().kubeconfig_local_file_path();
             if kubeconfig_path.exists() {

@@ -117,16 +117,6 @@ impl<'a> EnvironmentDeployment<'a> {
             .resource_expiration_in_seconds()
             .map(|ttl| Duration::from_secs(ttl as u64));
         let metrics_registry = target.metrics_registry.clone();
-        // let _qube_client = QubeClient::new(
-        //     event_details.clone(),
-        //     Some(target.kubernetes.kubeconfig_local_file_path()),
-        //     target
-        //         .cloud_provider
-        //         .credentials_environment_variables()
-        //         .iter()
-        //         .map(|(x, y)| (x.to_string(), y.to_string()))
-        //         .collect_vec(),
-        // )?;
 
         let should_abort = Self::should_abort_wrapper(target, &event_details);
         should_abort()?;
@@ -160,15 +150,6 @@ impl<'a> EnvironmentDeployment<'a> {
                     let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
                     move || {
                         queueing_record.stop(StepStatus::Success);
-
-                        // delete nlb if exists and alb controller enabled
-                        // if target.kubernetes.advanced_settings().aws_eks_enable_alb_controller {
-                        //     let x = block_on(qube_client.get_services(
-                        //         event_details,
-                        //         Some(target.environment.namespace()),
-                        //         SelectK8sResourceBy::LabelsSelector(format!("qovery.com/service-id={}", service_id)),
-                        //     ));
-                        // }
 
                         // creating services first
                         deployed_services.lock().unwrap().insert(service_id);

@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::helm_charts::alb_controller::AwsLoadBalancerControllerChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
@@ -110,6 +110,7 @@ pub struct EksChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
+    pub alb_controller_already_deployed: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -308,7 +309,13 @@ pub fn eks_aws_helm_charts(
         chart_prefix_path,
         qovery_terraform_config.aws_iam_alb_controller_arn,
         chart_config_prerequisites.cluster_name.clone(),
-    );
+        true,
+        chart_config_prerequisites.alb_controller_already_deployed
+            && chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_eks_enable_alb_controller,
+    )
+    .to_common_helm_chart()?;
 
     // External DNS
     let external_dns = ExternalDNSChart::new(
@@ -539,6 +546,10 @@ pub fn eks_aws_helm_charts(
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Aws,
+        chart_config_prerequisites.organization_long_id.to_string(),
+        chart_config_prerequisites.organization_id.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string(),
+        chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Eks,
         Some(
             chart_config_prerequisites
@@ -750,6 +761,7 @@ pub fn eks_aws_helm_charts(
     if chart_config_prerequisites
         .cluster_advanced_settings
         .aws_eks_enable_alb_controller
+        || chart_config_prerequisites.alb_controller_already_deployed
     {
         level_6.push(Box::new(aws_load_balancer_controller));
     }
