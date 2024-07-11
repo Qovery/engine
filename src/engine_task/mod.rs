@@ -1,7 +1,9 @@
 use crate::cloud_provider::aws::regions::AwsRegion;
 
+use crate::fs::workspace_directory;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
+use crate::log_file_writer::LogFileWriter;
 use crate::models::abort::Abort;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
@@ -79,5 +81,20 @@ fn upload_s3_file(
             warn!("Error while pushing archive to s3, {}", err);
             Err(err)
         }
+    }
+}
+
+fn enable_log_file_writer(context: &Context, log_file_writer: &Option<Box<LogFileWriter>>) {
+    if let Some(log_file_writer) = &log_file_writer {
+        let temp_dir = workspace_directory(context.workspace_root_dir(), context.execution_id(), "logs");
+        if let Ok(temp_dir) = temp_dir {
+            log_file_writer.enable(&temp_dir);
+        }
+    }
+}
+
+fn disable_log_file_writer(log_file_writer: &Option<Box<LogFileWriter>>) {
+    if let Some(log_file_writer) = log_file_writer {
+        log_file_writer.disable();
     }
 }

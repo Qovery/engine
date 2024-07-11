@@ -172,6 +172,19 @@ impl<T> EngineRequest<T> {
             is_infra_deployment,
         ))
     }
+
+    pub fn is_self_managed(&self) -> bool {
+        match self.kubernetes.kind {
+            cloud_provider::kubernetes::Kind::Eks => false,
+            cloud_provider::kubernetes::Kind::Ec2 => false,
+            cloud_provider::kubernetes::Kind::ScwKapsule => false,
+            cloud_provider::kubernetes::Kind::Gke => false,
+            cloud_provider::kubernetes::Kind::EksSelfManaged => true,
+            cloud_provider::kubernetes::Kind::GkeSelfManaged => true,
+            cloud_provider::kubernetes::Kind::ScwSelfManaged => true,
+            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged => true,
+        }
+    }
 }
 
 impl InfrastructureEngineRequest {
