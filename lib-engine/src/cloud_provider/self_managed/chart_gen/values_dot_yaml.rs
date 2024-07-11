@@ -61,6 +61,8 @@ pub struct ValuesFile {
     pub qovery_storage_class_scaleway: Option<ChartConfig>,
     #[serde(rename = "metrics-server", skip_serializing_if = "Option::is_none")]
     pub metrics_server: Option<ChartConfig>,
+    #[serde(rename = "aws-load-balancer-controller", skip_serializing_if = "Option::is_none")]
+    pub aws_load_balancer_controller: Option<ChartConfig>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -215,6 +217,8 @@ pub struct AwsServices {
     pub qovery_storage_class: ServiceEnabled,
     #[serde(rename = "aws-ebs-csi-driver")]
     pub aws_ebs_csi_driver: ServiceEnabled,
+    #[serde(rename = "aws-load-balancer-controller")]
+    pub aws_load_balancer_controller: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]

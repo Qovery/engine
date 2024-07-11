@@ -788,8 +788,10 @@ pub enum Tag {
     K8sErrorCopySecret,
     /// K8sCannotGetPVC: represents an error while executing a kubectl command to get PVCs
     K8sCannotGetPVCs,
-    /// K8sCannotGetServices: represents an error while executing a kubectl command to get Services
+    /// K8sCannotGetServices: represents an error while executing getting a Kubernetes services
     K8sCannotGetServices,
+    /// K8sCannotDeleteService: represents an error while deleting a Kubernetes service
+    K8sCannotDeleteService,
     /// K8sCannotBoundPVC: represents an error while trying to create a PVC and it can't be bound
     K8sCannotBoundPVC,
     /// K8sCannotOrphanDelete: represents an error while to perform an orphan deletion.
@@ -808,6 +810,8 @@ pub enum Tag {
     K8sGetPodError,
     /// K8sGetDeploymentError: Kubernetes get deployment error
     K8sGetDeploymentError,
+    /// K8sGetWebhookConfigurationError: Kubernetes get Webhook configuration error
+    K8sGetWebHookConfigurationError,
     /// K8sDeleteDeploymentError: Kubernetes delete deployment error
     K8sDeleteDeploymentError,
     /// K8sGetStatefulsetError: Kubernetes get statefulset error
@@ -3398,6 +3402,26 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
+    pub fn new_k8s_get_mutating_webhook_configuration_error(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sGetWebHookConfigurationError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
     pub fn new_k8s_delete_deployment_error(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(
             event_details,
@@ -3514,6 +3538,28 @@ impl EngineError {
             Some(error.clone()),
             None,
             Some(format!("K8s service for service can't be found: {error}")),
+        )
+    }
+
+    /// Create new error from Kubernetes API error
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Kubernetes API error.
+    /// * `user_message`: User message.
+    ///
+    pub fn new_k8s_delete_service_error(
+        event_details: EventDetails,
+        error: CommandError,
+        user_message: String,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotDeleteService,
+            user_message,
+            Some(error),
+            None,
+            None,
         )
     }
 

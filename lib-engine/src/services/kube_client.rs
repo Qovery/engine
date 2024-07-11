@@ -1,4 +1,5 @@
 use json_patch::PatchOperation;
+use k8s_openapi::api::admissionregistration::v1::MutatingWebhookConfiguration;
 use k8s_openapi::api::autoscaling::v1::Scale;
 use k8s_openapi::api::core::v1::{Node, Service};
 use k8s_openapi::api::{
@@ -14,7 +15,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::models::kubernetes::K8sDeployment;
+use crate::models::kubernetes::{K8sDeployment, K8sMutatingWebhookConfiguration};
 use crate::utilities::create_kube_client_in_cluster;
 use crate::{
     errors::{CommandError, EngineError},
@@ -283,6 +284,63 @@ impl QubeClient {
         }
     }
 
+    async fn get_mutating_webhook_configurations_from_api(
+        &self,
+        event_details: EventDetails,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Option<ObjectList<MutatingWebhookConfiguration>>, Box<EngineError>> {
+        let client: Api<MutatingWebhookConfiguration> = Api::all(self.client.clone());
+
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match select_resource {
+            SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
+                Ok(x) => Ok(Some(x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(None),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_mutating_webhook_configuration_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes mutating webhook configuration with labels `{labels}`. {e}"
+                    )),
+                ))),
+            },
+            SelectK8sResourceBy::Name(webhook) => match client.get(webhook.as_str()).await {
+                Ok(x) => Ok(Some(ObjectList::<MutatingWebhookConfiguration> {
+                    types: Default::default(),
+                    metadata: ListMeta::default(),
+                    items: vec![x],
+                })),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(None),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_mutating_webhook_configuration_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes mutating webhook configuration from {webhook}. {e}",
+                    )),
+                ))),
+            },
+        }
+    }
+
+    pub async fn get_mutating_webhook_configurations(
+        &self,
+        event_details: EventDetails,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sMutatingWebhookConfiguration>, Box<EngineError>> {
+        match Self::get_mutating_webhook_configurations_from_api(self, event_details.clone(), select_resource).await? {
+            Some(x) => Ok(
+                K8sMutatingWebhookConfiguration::from_k8s_mutating_webhook_configuration_objectlist(event_details, x),
+            ),
+            None => Ok(vec![]),
+        }
+    }
+
     pub async fn get_deployments(
         &self,
         event_details: EventDetails,
@@ -341,6 +399,24 @@ impl QubeClient {
             Err(e) => Err(Box::new(EngineError::new_k8s_delete_deployment_error(
                 event_details,
                 CommandError::new_from_safe_message(format!("Error while trying to delete kubernetes deployment. {e}")),
+            ))),
+        }
+    }
+
+    pub async fn delete_service_from_name(
+        &self,
+        event_details: EventDetails,
+        namespace: &str,
+        name: &str,
+    ) -> Result<(), Box<EngineError>> {
+        let client: Api<Service> = Api::namespaced(self.client.clone(), namespace);
+
+        match client.delete(name, &Default::default()).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(EngineError::new_k8s_delete_service_error(
+                event_details,
+                CommandError::new_from_safe_message(format!("Error while trying to delete kubernetes service. {e}")),
+                "Error while trying to delete kubernetes service".to_string(),
             ))),
         }
     }
@@ -502,6 +578,7 @@ mod tests {
 
     use crate::runtime::block_on;
     use crate::services::kube_client::SelectK8sResourceBy;
+
     use crate::{
         events::{EventDetails, Stage},
         io_models::QoveryIdentifier,

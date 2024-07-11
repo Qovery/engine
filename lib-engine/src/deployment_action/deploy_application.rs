@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
-use crate::cloud_provider::DeploymentTarget;
+use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
@@ -20,6 +20,8 @@ use crate::deployment_report::logger::EnvProgressLogger;
 use std::path::PathBuf;
 use std::time::Duration;
 use tera::Context;
+
+use super::utils::delete_nlb_or_alb_service;
 
 impl<T: CloudProvider> DeploymentAction for Application<T>
 where
@@ -77,6 +79,16 @@ where
                 None,
                 chart,
             );
+
+            if target.cloud_provider.kind() == Kind::Aws {
+                delete_nlb_or_alb_service(
+                    target.qube_client(event_details.clone())?,
+                    target.environment.namespace(),
+                    format!("qovery.com/service-id={}", self.long_id()).as_str(),
+                    target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,
+                    event_details,
+                )?;
+            }
 
             helm.on_create(target)?;
 

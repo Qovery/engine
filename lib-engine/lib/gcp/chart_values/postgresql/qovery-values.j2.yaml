@@ -56,6 +56,10 @@ primary:
     annotations:
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for annotations in additional_annotations %}
+      {{ annotations.key }}: |-
+          {{ annotations.value }}
+      {%- endfor %}
       {%- for key, value in annotations_group.service %}
       {{ key }}: |-
          {{ value }}

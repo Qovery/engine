@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{get_database_terraform_config, Action, Service};
-use crate::cloud_provider::Kind::Aws;
+use crate::cloud_provider::Kind::{self, Aws};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -40,6 +40,8 @@ use aws_sdk_rds::operation::describe_db_instances::{DescribeDBInstancesError, De
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
+
+use super::utils::delete_nlb_or_alb_service;
 
 const DB_READY_STATE: &str = "available";
 const DB_STOPPED_STATE: &str = "stopped";
@@ -755,6 +757,16 @@ where
                 Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
                 chart,
             );
+
+            if target.cloud_provider.kind() == Kind::Aws {
+                delete_nlb_or_alb_service(
+                    target.qube_client(event_details.clone())?,
+                    target.environment.namespace(),
+                    format!("qovery.com/service-id={}", self.long_id()).as_str(),
+                    target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,
+                    event_details.clone(),
+                )?;
+            }
 
             if let Err(e) = helm.on_create(target) {
                 return match e.tag() {

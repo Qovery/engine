@@ -116,6 +116,8 @@ pub enum SupportedCharts {
     QoveryScalewayStorageClass,
     #[display("aws-ebs-csi-driver")]
     AwsEbsCsiDriver,
+    #[display("aws-load-balancer-controller")]
+    AlbController,
     #[display("ingress-nginx")]
     IngressNginx,
     #[display("external-dns")]
@@ -345,6 +347,12 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
+                name: SupportedCharts::AlbController,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsBootstrapCharts,
+                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
+            },
+            ChartMeta {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -444,6 +452,12 @@ mod tests {
                 name: SupportedCharts::IngressNginx,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::AlbController,
+                category: ChartCategory::Aws,
+                source_path: ChartSourcePath::AwsBootstrapCharts,
                 values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
             },
             ChartMeta {

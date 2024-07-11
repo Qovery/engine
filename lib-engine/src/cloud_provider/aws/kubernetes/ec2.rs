@@ -564,13 +564,45 @@ impl Kubernetes for EC2 {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+    fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+        let lb_name = match cloud_provider_lb_name {
+            Some(x) => format!(",QoveryName={x}"),
+            None => "".to_string(),
+        };
         match self.advanced_settings().aws_eks_enable_alb_controller {
-            true => &[
-                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
-                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
-            ],
-            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+            // !!! IMPORTANT !!!
+            // Changing this may require destroy/recreate a load balancer (and so downtime)
+            true => {
+                vec![
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                        "external".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-scheme".to_string(),
+                        "internet-facing".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type".to_string(),
+                        "ip".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
+                        format!(
+                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
+                            self.context.organization_long_id(),
+                            self.context.organization_short_id(),
+                            self.as_kubernetes().long_id(),
+                            self.as_kubernetes().id(),
+                            lb_name
+                        ),
+                    ),
+                ]
+            }
+            false => vec![(
+                "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                "nlb".to_string(),
+            )],
         }
     }
 }

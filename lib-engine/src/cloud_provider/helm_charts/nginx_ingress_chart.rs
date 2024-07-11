@@ -52,6 +52,10 @@ pub struct NginxIngressChart {
     ff_metrics_history_enabled: bool,
     domain: Domain,
     cloud_provider: Kind,
+    organization_long_id: String,
+    organization_short_id: String,
+    cluster_long_id: String,
+    cluster_short_id: String,
     kubernetes_kind: KubernetesKind,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     nginx_hpa_minimum_replicas: Option<u32>,
@@ -73,6 +77,10 @@ impl NginxIngressChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         domain: Domain,
         cloud_provider: Kind,
+        organization_long_id: String,
+        organization_short_id: String,
+        cluster_long_id: String,
+        cluster_short_id: String,
         kubernetes_kind: KubernetesKind,
         nginx_hpa_minimum_replicas: Option<u32>,
         nginx_hpa_maximum_replicas: Option<u32>,
@@ -116,6 +124,10 @@ impl NginxIngressChart {
             domain,
             cloud_provider,
             kubernetes_kind,
+            organization_long_id,
+            organization_short_id,
+            cluster_long_id,
+            cluster_short_id,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             nginx_hpa_minimum_replicas,
             nginx_hpa_maximum_replicas,
@@ -268,12 +280,13 @@ defaultBackend:
         // custom cloud provider configuration
         match self.cloud_provider {
             Kind::Aws => {
+                // there is no LB deployed for EC2
                 if self.kubernetes_kind == KubernetesKind::Eks {
                     // common config
                     chart_set_values.push(ChartSetValue {
                         key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
                             .to_string(),
-                        value: "6".to_string(),
+                        value: "10".to_string(),
                     });
 
                     // alb controller VS native k8s nlb
@@ -284,10 +297,17 @@ defaultBackend:
                                 value: "true".to_string(),
                             });
                             chart_set_values.push(ChartSetValue {
-                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                            key:
+                                "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
                                     .to_string(),
-                                value: "external".to_string(),
-                            });
+                            value: format!("qovery-{}-nginx-ingress", self.cluster_short_id),
+                        });
+                            chart_set_values.push(ChartSetValue {
+                            key:
+                                "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                                    .to_string(),
+                            value: "external".to_string(),
+                        });
                             chart_set_values.push(ChartSetValue {
                                 key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
                                     .to_string(),
@@ -305,15 +325,28 @@ defaultBackend:
                                 key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-target-group-attributes".to_string(),
                                 value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
                             });
+                            chart_set_values.push(ChartSetValue {
+                            key:
+                                "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags"
+                                    .to_string(),
+                            value: format!(
+                                "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
+                                self.organization_long_id,
+                                self.organization_short_id,
+                                self.cluster_long_id,
+                                self.cluster_short_id,
+                            ),
+                        });
                         }
                         false => {
                             chart_set_values.push(ChartSetValue {
-                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                            key:
+                                "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
                                     .to_string(),
-                                value: "nlb".to_string(),
-                            });
+                            value: "nlb".to_string(),
+                        });
                         }
-                    }
+                    };
                 };
             }
             Kind::Scw => {
@@ -436,6 +469,10 @@ mod tests {
             get_nginx_ingress_chart_override(),
             get_domain().wildcarded(),
             Kind::Aws,
+            "00000000-0000-4000-8000-000000000000".to_string(),
+            "z00000000".to_string(),
+            "10000000-0000-4000-8000-000000000000".to_string(),
+            "z10000000".to_string(),
             KubernetesKind::Eks,
             Some(1),
             Some(10),
@@ -477,6 +514,10 @@ mod tests {
             get_nginx_ingress_chart_override(),
             get_domain().wildcarded(),
             Kind::Aws,
+            "00000000-0000-4000-8000-000000000000".to_string(),
+            "z00000000".to_string(),
+            "10000000-0000-4000-8000-000000000000".to_string(),
+            "z10000000".to_string(),
             KubernetesKind::Eks,
             Some(1),
             Some(10),
@@ -520,6 +561,10 @@ mod tests {
                 get_nginx_ingress_chart_override(),
                 get_domain().wildcarded(),
                 Kind::Aws,
+                "00000000-0000-4000-8000-000000000000".to_string(),
+                "z00000000".to_string(),
+                "10000000-0000-4000-8000-000000000000".to_string(),
+                "z10000000".to_string(),
                 KubernetesKind::Ec2,
                 None,
                 None,

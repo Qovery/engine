@@ -373,6 +373,7 @@ pub fn get_environment_test_kubernetes(
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
                         aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
+                        aws_eks_enable_alb_controller: true,
                         ..Default::default()
                     },
                     None,

@@ -334,6 +334,15 @@ where
         context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
 
+        // NLB or ALB controller annotation
+        context.insert(
+            "aws_load_balancer_type",
+            match &kubernetes.advanced_settings().aws_eks_enable_alb_controller {
+                true => "external",
+                false => "nlb",
+            },
+        );
+
         context.insert(
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,
