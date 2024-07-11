@@ -53,7 +53,7 @@ resource "aws_instance" "ec2_instance" {
   key_name = aws_key_pair.user_ssh_key.key_name
   {%- endif %}
 
-  # ebs csi driver
+  # ebs csi driver + alb controller
   iam_instance_profile = aws_iam_instance_profile.aws_ebs_csi_driver.name
 
   # k3s install
@@ -71,6 +71,10 @@ resource "aws_instance" "ec2_instance" {
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = var.ec2_metadata_imds_version
+    # https://github.com/kubernetes/autoscaler/issues/3592
+    # hop limit should be set to 2 for https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#using-the-amazon-ec2-instance-metadata-server-version-2-imdsv2
+    http_put_response_hop_limit = 2
+    instance_metadata_tags = "enabled"
   }
 
   depends_on = [

@@ -61,6 +61,7 @@ pub struct NginxIngressChart {
     loadbalancer_size: Option<String>,
     enable_real_ip: bool,
     log_format_escaping: LogFormatEscaping,
+    is_alb_enabled: bool,
 }
 
 impl NginxIngressChart {
@@ -80,6 +81,7 @@ impl NginxIngressChart {
         loadbalancer_size: Option<String>,
         enable_real_ip: bool,
         log_format_escaping: LogFormatEscaping,
+        is_alb_enabled: bool,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -122,6 +124,7 @@ impl NginxIngressChart {
             loadbalancer_size,
             enable_real_ip,
             log_format_escaping,
+            is_alb_enabled,
         }
     }
 
@@ -266,16 +269,51 @@ defaultBackend:
         match self.cloud_provider {
             Kind::Aws => {
                 if self.kubernetes_kind == KubernetesKind::Eks {
-                    chart_set_values.push(ChartSetValue {
-                        key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
-                            .to_string(),
-                        value: "nlb".to_string(),
-                    });
+                    // common config
                     chart_set_values.push(ChartSetValue {
                         key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
                             .to_string(),
                         value: "6".to_string(),
                     });
+
+                    // alb controller VS native k8s nlb
+                    match self.is_alb_enabled {
+                        true => {
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.config.use-proxy-protocol".to_string(),
+                                value: "true".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                                    .to_string(),
+                                value: "external".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
+                                    .to_string(),
+                                value: "internet-facing".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-proxy-protocol".to_string(),
+                                value: "*".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-nlb-target-type".to_string(),
+                                value: "ip".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-target-group-attributes".to_string(),
+                                value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
+                            });
+                        }
+                        false => {
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                                    .to_string(),
+                                value: "nlb".to_string(),
+                            });
+                        }
+                    }
                 };
             }
             Kind::Scw => {
@@ -406,6 +444,7 @@ mod tests {
             None,
             false,
             LogFormatEscaping::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -446,6 +485,7 @@ mod tests {
             None,
             false,
             LogFormatEscaping::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -487,7 +527,8 @@ mod tests {
                 HelmChartNamespaces::NginxIngress,
                 None,
                 false,
-                log_format_escaping.clone(),
+                LogFormatEscaping::Default,
+                false,
             );
 
             // execute:

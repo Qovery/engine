@@ -1684,6 +1684,10 @@ impl Kubernetes for Gke {
     fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
         None
     }
+
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

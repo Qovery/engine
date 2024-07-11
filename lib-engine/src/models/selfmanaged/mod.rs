@@ -36,10 +36,6 @@ impl CloudProvider for OnPremise {
     fn lib_directory_name() -> &'static str {
         "self-managed"
     }
-
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

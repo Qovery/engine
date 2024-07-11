@@ -1,7 +1,6 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
@@ -23,6 +22,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::logger::Logger;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::aws::models::QoveryAwsSdkConfigEks;
 use crate::services::kube_client::SelectK8sResourceBy;
 use async_trait::async_trait;
 use aws_sdk_eks::error::{
@@ -763,6 +763,16 @@ impl Kubernetes for EKS {
         }
 
         None
+    }
+
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+        match self.advanced_settings().aws_eks_enable_alb_controller {
+            true => &[
+                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
+                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
+            ],
+            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+        }
     }
 }
 

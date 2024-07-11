@@ -391,6 +391,7 @@ pub trait Kubernetes: Send + Sync {
     fn is_karpenter_enabled(&self) -> bool;
 
     fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)];
 }
 
 pub trait KubernetesNode {

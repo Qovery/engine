@@ -20,13 +20,13 @@ use crate::models::database::{
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::runtime::block_on;
+use crate::services::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use semver::Version;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};

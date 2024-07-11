@@ -11,6 +11,8 @@ controller:
   config:
     proxy-body-size: 100m
     server-tokens: "false"
+    # required for X-Forwarded-for to work with ALB controller
+    use-proxy-protocol: "false"
     # enable real IP (client IP)
     enable-real-ip: set-by-engine-code
     # customize log-format / set-by-engine-code

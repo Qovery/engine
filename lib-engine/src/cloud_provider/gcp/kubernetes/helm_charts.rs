@@ -394,6 +394,7 @@ pub fn gcp_helm_charts(
             .cluster_advanced_settings
             .nginx_controller_log_format_escaping
             .to_model(),
+        false, // only for AWS
     )
     .to_common_helm_chart()?;
 

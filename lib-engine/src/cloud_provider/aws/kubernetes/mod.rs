@@ -22,7 +22,6 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -61,6 +60,7 @@ use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
 };
+use crate::services::aws::models::{QoveryAwsSdkConfigEc2, QoveryAwsSdkConfigEks};
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
@@ -77,8 +77,6 @@ use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::object_storage::ObjectStorage;
-
-use super::models::QoveryAwsSdkConfigEks;
 
 mod addons;
 pub mod ec2;
@@ -2479,6 +2477,8 @@ mod tests {
                         name: "x".to_string(),
                         namespace: "x".to_string(),
                         termination_grace_period_seconds: Some(Duration::seconds(40)),
+                        labels: None,
+                        annotations: None,
                     },
                     status: K8sPodStatus {
                         phase: K8sPodPhase::Running,
@@ -2489,6 +2489,8 @@ mod tests {
                         name: "y".to_string(),
                         namespace: "z".to_string(),
                         termination_grace_period_seconds: Some(Duration::minutes(80)),
+                        labels: None,
+                        annotations: None,
                     },
                     status: K8sPodStatus {
                         phase: K8sPodPhase::Pending,
