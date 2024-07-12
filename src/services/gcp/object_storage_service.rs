@@ -490,6 +490,7 @@ impl ObjectStorageService {
             bucket_name: object.bucket.to_string(),
             key: object.name,
             value: object_content,
+            tags: vec![],
         })
     }
 

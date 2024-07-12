@@ -65,6 +65,7 @@ pub trait ObjectStorage {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError>;
     fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
 }
@@ -110,4 +111,5 @@ pub struct BucketObject {
     pub bucket_name: String,
     pub key: String,
     pub value: Vec<u8>,
+    pub tags: Vec<String>,
 }

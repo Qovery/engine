@@ -637,6 +637,7 @@ impl Task for EnvironmentTask {
                     &file,
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
+                    infra_context.context().partial_execution_id(),
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
