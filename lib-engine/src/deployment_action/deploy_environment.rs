@@ -11,7 +11,6 @@ use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::models::abort::Abort;
 use crate::models::router::RouterService;
 use crate::services::aws::load_balancers::clean_up_deleted_k8s_nlb;
-use crate::services::kube_client::QubeClient;
 use itertools::Itertools;
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
