@@ -22,8 +22,14 @@ pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
 }
 
 // check_versions_from will check (in file given in parameter) binaries versions
-// will assert an error if used version installed is not not the same than written in file
+// will assert an error if used version installed is not the same as written in file
+#[allow(dead_code)] // used by main for tests
 pub fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
+    fn read_lines<P: AsRef<Path>>(filename: P) -> io::Result<io::Lines<BufReader<File>>> {
+        let file = File::open(filename)?;
+        Ok(BufReader::new(file).lines())
+    }
+
     // please append this vector if you want to test more binaries
     let bin_to_check = ["terraform"];
 
@@ -60,12 +66,4 @@ pub fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
     }
 
     Ok(())
-}
-
-pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(BufReader::new(file).lines())
 }

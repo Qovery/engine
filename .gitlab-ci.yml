@@ -59,7 +59,7 @@ build-engine-ci-image:
   only:
     - merge_requests
 
-release-engine-image:
+release-image:
   stage: build-and-lint
   retry: 0
   before_script:
@@ -70,7 +70,10 @@ release-engine-image:
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx build --platform=linux/amd64,linux/arm64
+      --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache'
+      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache'
       --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
+      --target=run
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
       --push .
   tags:
@@ -85,6 +88,35 @@ release-engine-image:
       when: always
       allow_failure: false
 
+
+release-image-slim:
+  stage: build-and-lint
+  retry: 0
+  before_script:
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper docker_login_public_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
+  script:
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx build --platform=linux/amd64,linux/arm64
+      --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
+      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
+      --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
+      --target=run-slim
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim
+      --push .
+  tags:
+    - vm-1cpu-1gmem-0g
+  when: manual
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+      allow_failure: false
 #gitguardian:
 #  stage: build-and-lint
 #  image: gitguardian/ggshield:latest
@@ -741,7 +773,8 @@ quarantine:
   stage: deploy
   retry: 2
   dependencies:
-    - release-engine-image
+    - release-image
+    - release-image-slim
   script:
     - ./helper.sh set_release_ga
   tags:
@@ -755,7 +788,7 @@ quarantine:
   stage: deploy
   retry: 0
   dependencies:
-    - release-engine-image
+    - release-image
   script:
     - ./helper.sh deploy_engines_infra
   tags:
@@ -769,7 +802,7 @@ quarantine:
   stage: deploy
   retry: 0
   dependencies:
-    - release-engine-image
+    - release-image
   script:
     - ./helper.sh deploy_engines_envs
   tags:

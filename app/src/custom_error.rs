@@ -10,6 +10,7 @@ pub enum EngineInitError {
 pub enum ErrorKind {
     LibsPathsMissing,
     LibsDirEmpty,
+    #[allow(dead_code)]
     BinVersion,
 }
 

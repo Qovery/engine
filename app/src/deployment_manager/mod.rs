@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 mod deployment_context;
 mod engine_message_stream;
 mod task_context;
@@ -8,35 +6,23 @@ mod upstream_gtw_context;
 use crate::deployment_manager::deployment_context::DeploymentContext;
 use crate::deployment_manager::task_context::TaskContext;
 use crate::deployment_manager::upstream_gtw_context::UpstreamGatewayContext;
-use crate::grpc::engine::{engine_message_rx, EngineMessageRx};
-use crate::grpc::engine::{engine_message_tx, DeploymentInfo, DeploymentType, EngineMessageTx};
-use crate::grpc::engine::{CancelType, DeploymentRequest, Metrics};
+use crate::grpc::engine::engine_message_rx;
+use crate::grpc::engine::DeploymentRequest;
+use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::GrpcEngineClient;
-use crate::logger::composite_logger::CompositeLogger;
 use crate::metrics::METRICS_NB_RUNNING_TASKS;
 use crate::models::TaskSelector;
-use crate::tokio_utils;
-use chrono::Utc;
-use futures_util::{stream, Stream, StreamExt};
-use prost_types::Timestamp;
-use qovery_engine::engine_task::qovery_api::EngineServiceType::Engine;
+use futures_util::StreamExt;
 use qovery_engine::engine_task::Task;
-use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
-use qovery_engine::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
+use qovery_engine::events::EngineEvent;
 use qovery_engine::log_file_writer::LogFileWriter;
-use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
-use std::ops::DerefMut;
-use std::pin::Pin;
+use qovery_engine::logger::Logger;
+use qovery_engine::metrics_registry::MetricsRegistry;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::{mpsc, watch, Mutex, OwnedMutexGuard};
-use tokio::time::timeout;
-use tonic::{Code, Streaming};
-use tracing::{error, field, Instrument, Level, Span};
+use tonic::Code;
+use tracing::{error, field, Instrument, Level};
 
 //
 //
@@ -492,7 +478,7 @@ impl DeploymentManager {
 
 #[cfg(test)]
 mod test {
-    use crate::deployment_manager::{DeploymentContext, DeploymentManager};
+    use crate::deployment_manager::DeploymentManager;
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
         engine_message_rx, ClusterCredentialsUpdate, DeploymentInfo, DeploymentRequest, EngineMessageRx,
@@ -502,12 +488,9 @@ mod test {
     use crate::models::TaskSelector;
     use futures_util::{pin_mut, stream, Stream, StreamExt};
     use qovery_engine::engine_task::Task;
-    use qovery_engine::errors::EngineError;
-    use qovery_engine::events;
-    use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
-    use qovery_engine::io_models::QoveryIdentifier;
-    use qovery_engine::log_file_writer::LogFileWriter;
-    use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
+
+    use qovery_engine::events::EngineEvent;
+
     use qovery_engine::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, Ordering};

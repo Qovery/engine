@@ -5,12 +5,10 @@ use crate::grpc::engine::{engine_message_tx, DeploymentInfo, EngineMessageRx, En
 use crate::grpc::GrpcEngineClient;
 use crate::logger::composite_logger::CompositeLogger;
 use futures_util::{stream, StreamExt};
-use qovery_engine::engine_task::Task;
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
-use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;

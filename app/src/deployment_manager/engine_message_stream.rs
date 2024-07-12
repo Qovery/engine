@@ -5,14 +5,12 @@ use futures_util::{stream, Stream, StreamExt};
 use prost_types::Timestamp;
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload};
-use std::ops::DerefMut;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{watch, OwnedMutexGuard};
-use tokio::time::error::Elapsed;
 use tokio::time::Instant;
 use tracing::Span;
 use tracing_futures::Instrument;
@@ -213,32 +211,24 @@ impl Drop for EngineMessageStream {
 #[cfg(test)]
 mod test {
     use crate::deployment_manager::deployment_context::DeploymentContext;
-    use crate::deployment_manager::engine_message_stream::EngineMessageStream;
-    use crate::grpc::engine::engine_server::{Engine, EngineServer};
-    use crate::grpc::engine::{
-        engine_message_rx, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx, GitTokenRequest,
-        GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse,
-    };
-    use crate::grpc::test::new_engine_client_test;
-    use crate::models::TaskSelector;
-    use futures_util::{pin_mut, stream, Stream, StreamExt};
-    use qovery_engine::engine_task::Task;
+
+    use crate::grpc::engine::DeploymentInfo;
+
+    use futures_util::StreamExt;
+
     use qovery_engine::errors::EngineError;
     use qovery_engine::events;
     use qovery_engine::events::{EngineEvent, EngineMsg, EngineMsgPayload, EnvironmentStep, Stage, Transmitter};
     use qovery_engine::io_models::QoveryIdentifier;
-    use qovery_engine::log_file_writer::LogFileWriter;
+
     use qovery_engine::metrics_registry::{StepLabel, StepName, StepRecord};
-    use std::pin::Pin;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex, RwLock};
-    use std::thread;
+
+    use std::sync::Arc;
+
     use std::time::Duration;
-    use tokio::sync::broadcast;
-    use tokio::sync::broadcast::Receiver;
+
     use tokio::time::timeout;
-    use tonic::transport::Server;
-    use tonic::{Request, Response, Status, Streaming};
+
     use uuid::Uuid;
 
     #[tokio::test]

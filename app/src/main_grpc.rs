@@ -7,7 +7,6 @@ extern crate tracing;
 extern crate core;
 
 use std::net::TcpStream;
-use std::path::Path;
 
 use chrono::Utc;
 use clap::Parser;
@@ -42,7 +41,7 @@ use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::grpc::GrpcEngineClient;
 use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, check_versions_from};
+use crate::utils::check_libs_directory;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
@@ -228,7 +227,7 @@ pub fn main() -> io::Result<()> {
                 .with_ansi(true)
                 .with_thread_names(true)
                 .with_timer(UtcTime::rfc_3339())
-                .with_writer(std::io::stdout),
+                .with_writer(io::stdout),
         )
         .with(
             fmt::Layer::default()
@@ -275,25 +274,6 @@ pub fn main() -> io::Result<()> {
         Ok(_) => info!("Libs directory is not empty"),
         Err(e) => {
             error!("Error while initializing the Engine {}", e);
-            process::exit(1);
-        }
-    }
-
-    //checking if version file exist
-    match Path::new(&cli.version_file).exists() {
-        true => info!("Version file is accessible"),
-        _ => {
-            error!("Error while initializing the Engine, version file is not accessible");
-            process::exit(1);
-        }
-    }
-
-    // check all binaries version from version file
-    match check_versions_from(&cli.version_file) {
-        Ok(()) => info!("Binaries versions are checked"),
-        Err(e) => {
-            error!("Error while initializing the Engine {}", e);
-
             process::exit(1);
         }
     }

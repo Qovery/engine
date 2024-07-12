@@ -23,7 +23,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.79.0-2024-07-05T10-24-58 as engine_ci
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.79.0-2024-07-05T10-24-58 AS engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -42,7 +42,7 @@ ARG SKOPEO_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
-  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg \
+  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg binutils \
   skopeo=$SKOPEO_VERSION \
   docker-ce=$DOCKER_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
@@ -79,35 +79,70 @@ CMD ["/bin/sh"]
 #  ENGINE BUILDER IMAGE 
 #
 ###########################################
-FROM engine_ci as build
-
-
-ADD . .
+FROM engine_ci AS build
 
 ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
+ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
+ENV CARGO_FLAGS="--release --bin engine_grpc"
 
-# Init terraform providers
-RUN for i in $(find lib-engine/lib -name "tf-providers*") ; do \
-  provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/') ; \
-  mkdir -p docker/engine/providers/$provider ; \
-  cp $i docker/engine/providers/$provider/ ;  \
-  sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/* ; \
-  done && \
-  ./docker/download_terraform_plugins.sh
+RUN <<EOF
+  mkdir -p app/src
+  mkdir -p lib-engine/src
+EOF
+
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY lib-engine/Cargo.toml lib-engine/
+COPY lib-engine/Cargo.lock lib-engine/
+COPY app/Cargo.toml app/
+COPY app/build.rs app/
+COPY app/proto app/proto
+
+RUN <<EOF
+  set -e
+  echo "pub fn main() {}" > app/src/main_grpc.rs
+  echo "// dummy" > lib-engine/src/lib.rs
+  cargo build ${CARGO_FLAGS}
+EOF
+
+COPY . .
 
 # build engine
 # If sscache is set we set rustc wrapper
-RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"; \
-  if [ -z "${SCCACHE_REDIS}" ]; \
-  then \
-  unset SCCACHE_REDIS; \
-  cargo build --release; \
-  else \
-  echo "USING SSCACHE" ; \
-  export RUSTC_WRAPPER=/usr/bin/sccache; \
-  sccache --version && cargo build --release && sccache --show-stats; \
-  fi 
+RUN <<EOF
+  set -e
+  
+  touch app/src/main_grpc.rs
+  touch lib-engine/src/lib.rs
+
+  if [ -z "${SCCACHE_REDIS}" ];
+  then
+      unset SCCACHE_REDIS
+      cargo build ${CARGO_FLAGS}
+  else
+      echo "USING SSCACHE"
+      export RUSTC_WRAPPER=/usr/bin/sccache
+      sccache --version
+      sccache --show-stats
+  fi
+
+  cp /build/target/release/engine_grpc /build/target/release/engine_grpc_stripped
+  strip -s /build/target/release/engine_grpc_stripped
+EOF
+
+# Init terraform providers
+RUN <<EOF
+  set -e
+  for i in $(find lib-engine/lib -name "tf-providers*")
+  do
+      provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
+      mkdir -p docker/engine/providers/$provider
+      cp $i docker/engine/providers/$provider/
+      sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
+  done
+  ./docker/download_terraform_plugins.sh
+EOF
 
 
 
@@ -117,7 +152,7 @@ RUN export RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-fr
 #  ENGINE FINAL IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim as run
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim AS run
 
 ARG BIN_DEST_FOLDER
 
@@ -145,10 +180,12 @@ RUN apt-get update && apt-get install -y \
   curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
   curl https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
   curl https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
+  curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list && \
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
   apt-get update && \
   apt-get dist-upgrade -y && \
   apt-get install -y \
@@ -157,6 +194,7 @@ RUN apt-get update && apt-get install -y \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
+  google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
@@ -165,8 +203,6 @@ RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-archit
   unzip awscliv2.zip && \
   ./aws/install && \
   rm -rf awscliv2.zip aws
-
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin -y
 
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip terraform.zip && \
@@ -181,15 +217,11 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
-COPY --from=build /build/target/release/engine_grpc .
-COPY --from=build /build/docker/engine/run.sh $HOME_DIR
-COPY --from=build /build/docker/bin_versions $HOME_DIR
-COPY --from=build /root/.terraform.d $HOME_DIR/.terraform.d
-COPY --from=build $BIN_DEST_FOLDER/aws-iam-authenticator /usr/bin/aws-iam-authenticator
-
-RUN chown -Rf qovery:qovery . && \
-  chown qovery:qovery /usr/bin/aws-iam-authenticator && \
-  chmod 500 engine_grpc 
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc .
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
+COPY --from=build --chown=qovery:qovery /build/docker/bin_versions $HOME_DIR
+COPY --from=build --chown=qovery:qovery /root/.terraform.d $HOME_DIR/.terraform.d
+COPY --from=build --chown=qovery:qovery --chmod=500 $BIN_DEST_FOLDER/aws-iam-authenticator /usr/bin/aws-iam-authenticator
 
 USER qovery
 RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
@@ -197,7 +229,72 @@ RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databu
 
 # for local use only
 VOLUME /qovery_libs
-ENV LOCAL_DEPLOY false
+ENV LOCAL_DEPLOY=false
+
+ENV PATH="$HOME_DIR/binaries:${PATH}"
+ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
+
+CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
+
+
+
+###########################################
+#
+#  ENGINE SLIM FINAL IMAGE 
+#
+###########################################
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim AS run-slim
+
+ARG BIN_DEST_FOLDER
+
+ENV HOME_DIR="/home/qovery"
+ENV BIN_DIR=$HOME_DIR/binaries
+ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
+
+ARG HELM_VERSION
+ARG KUBECTL_VERSION
+ARG HELM_DIFF_VERSION
+ARG DOCKER_VERSION
+ARG BUILDX_VERSION
+ARG PACK_VERSION
+ARG CONTAINERD_VERSION
+ARG SKOPEO_VERSION
+
+RUN apt-get update && apt-get install -y \
+  apt-transport-https ca-certificates curl gnupg lsb-release && \
+  curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
+  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
+  curl https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+  apt-get update && \
+  apt-get dist-upgrade -y && \
+  apt-get install --no-install-recommends --no-install-suggests -y \
+  skopeo=$SKOPEO_VERSION \
+  docker-ce-cli=$DOCKER_VERSION \
+  docker-buildx-plugin=$BUILDX_VERSION \
+  helm=$HELM_VERSION \
+  kubectl=$KUBECTL_VERSION \
+  dumb-init git-lfs binutils && \
+  curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
+  apt-get clean && rm -rf /var/lib/apt/lists
+
+RUN groupadd -g 1000 qovery && \
+  useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery
+
+
+WORKDIR $HOME_DIR
+ADD lib-engine/lib $HOME_DIR/lib
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc_stripped engine_grpc 
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
+COPY --from=build /build/docker/bin_versions $HOME_DIR
+
+USER qovery
+RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff
+
+# for local use only
+ENV LOCAL_DEPLOY=false
 
 ENV PATH="$HOME_DIR/binaries:${PATH}"
 ENV BIN_VERSION_FILE="$HOME_DIR/bin_versions"
