@@ -11,7 +11,7 @@ atomic_enum = "0.3.0"
 bitflags = "2.4.0"
 chrono = "0.4.28"
 derivative = "2.2.0"
-git2 = { git = "https://github.com/Qovery/git2-rs", branch = "feat/support-server-timeouts" }
+git2 = "0.19.0"
 walkdir = "2.3.3"
 itertools = "0.11.0"
 base64 = "0.21.4"
