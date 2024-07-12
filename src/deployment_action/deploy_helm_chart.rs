@@ -895,7 +895,10 @@ controller:
             env_id,
             project_id,
             &envs,
-            &[],
+            &[
+                ("custom-annotation-1", "custom-value-1"),
+                ("custom-annotation-2", "custom-value-2"),
+            ],
         );
         assert!(ret.is_ok());
 
@@ -921,8 +924,8 @@ controller:
 
   loadBalancer:
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: nlb
-      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      custom-annotation-1: custom-value-1
+      custom-annotation-2: custom-value-2
 
   annotations:
     - qovery.com/service-version: 42
