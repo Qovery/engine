@@ -118,16 +118,16 @@ impl<'a> EnvironmentDeployment<'a> {
             .resource_expiration_in_seconds()
             .map(|ttl| Duration::from_secs(ttl as u64));
         let metrics_registry = target.metrics_registry.clone();
-        let _qube_client = QubeClient::new(
-            event_details.clone(),
-            Some(target.kubernetes.kubeconfig_local_file_path()),
-            target
-                .cloud_provider
-                .credentials_environment_variables()
-                .iter()
-                .map(|(x, y)| (x.to_string(), y.to_string()))
-                .collect_vec(),
-        )?;
+        // let _qube_client = QubeClient::new(
+        //     event_details.clone(),
+        //     Some(target.kubernetes.kubeconfig_local_file_path()),
+        //     target
+        //         .cloud_provider
+        //         .credentials_environment_variables()
+        //         .iter()
+        //         .map(|(x, y)| (x.to_string(), y.to_string()))
+        //         .collect_vec(),
+        // )?;
 
         let should_abort = Self::should_abort_wrapper(target, &event_details);
         should_abort()?;
