@@ -362,6 +362,7 @@ impl ObjectStorage for ScalewayOS {
                     bucket_name: bucket_name.to_string(),
                     key: object_key.to_string(),
                     value: body,
+                    tags: vec![],
                 })
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
@@ -377,6 +378,7 @@ impl ObjectStorage for ScalewayOS {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        _tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
@@ -399,6 +401,7 @@ impl ObjectStorage for ScalewayOS {
                 bucket_name: bucket_name.to_string(),
                 key: object_key.to_string(),
                 value: file_content.clone(),
+                tags: vec![],
             }),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),

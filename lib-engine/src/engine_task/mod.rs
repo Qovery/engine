@@ -7,7 +7,6 @@ use crate::log_file_writer::LogFileWriter;
 use crate::models::abort::Abort;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
-use std::borrow::Cow;
 use std::path::Path;
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -25,20 +24,13 @@ pub trait Task: Send + Sync {
     fn await_terminated(&self) -> broadcast::Receiver<()>;
 }
 
-fn basename(path: &str, sep: char) -> Cow<str> {
-    let pieces = path.split(sep);
-    match pieces.last() {
-        Some(p) => p.into(),
-        None => path.into(),
-    }
-}
-
 fn upload_s3_file(
     context: &Context,
     archive: Option<&Archive>,
     file_path: &Path,
     region: AwsRegion,
     _resource_ttl: Option<Duration>, // TODO(benjaminch): propagate TTL for object
+    object_name: &str,
 ) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,
@@ -48,11 +40,8 @@ fn upload_s3_file(
         }
     };
 
-    let object_key = format!(
-        "{}/{}",
-        context.organization_short_id(),
-        basename(file_path.to_str().unwrap_or_default(), '/')
-    );
+    let object_key = format!("{}.tgz", object_name);
+    let tags = Some(vec![format!("OrganizationLongId={}", context.organization_long_id())]);
 
     info!(
         "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
@@ -72,7 +61,7 @@ fn upload_s3_file(
         region,
     );
 
-    match s3.put_object(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
+    match s3.put_object(archive.bucket_name.as_str(), object_key.as_str(), file_path, tags) {
         Ok(_) => {
             info!("Archive successfully pushed to Qovery S3");
             Ok(())

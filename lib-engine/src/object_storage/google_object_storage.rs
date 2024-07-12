@@ -179,6 +179,7 @@ impl ObjectStorage for GoogleOS {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        _tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError> {
         let file_content = std::fs::read(file_path).map_err(|e| ObjectStorageError::CannotUploadFile {
             bucket_name: bucket_name.to_string(),
@@ -701,6 +702,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -718,7 +720,7 @@ mod tests {
 
         // execute:
         let added_object = object_storage
-            .put_object(bucket_name, object_key, &file_path)
+            .put_object(bucket_name, object_key, &file_path, None)
             .expect("Cannot get object from bucket");
 
         // verify:
@@ -758,7 +760,7 @@ mod tests {
         );
 
         // execute:
-        let added_object = object_storage.put_object(bucket_name, object_key, &file_path);
+        let added_object = object_storage.put_object(bucket_name, object_key, &file_path, None);
 
         // verify:
         assert_eq!(
@@ -784,6 +786,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -817,6 +820,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -865,6 +869,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use retry::delay::Fixed;
 use std::collections::HashMap;
 use std::io::Read;
@@ -12,8 +13,9 @@ use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
     DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketTaggingRequest, GetBucketVersioningRequest,
-    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
-    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3 as RusotoS3,
+    GetObjectRequest, GetObjectTaggingRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
+    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging,
+    S3 as RusotoS3,
 };
 
 use crate::models::ToCloudProviderFormat;
@@ -112,6 +114,24 @@ impl S3 {
         }
 
         Ok(())
+    }
+
+    fn get_tags(&self, bucket_name: &str, object_key: &str) -> Vec<String> {
+        let s3_client = self.get_s3_client();
+
+        match block_on(s3_client.get_object_tagging(GetObjectTaggingRequest {
+            bucket: bucket_name.to_string(),
+            key: object_key.to_string(),
+            expected_bucket_owner: None,
+            ..Default::default()
+        })) {
+            Ok(res) => res
+                .tag_set
+                .iter()
+                .map(|tag| format!("{}={}", tag.key, tag.value))
+                .collect_vec(),
+            Err(_) => vec![],
+        }
     }
 }
 
@@ -339,10 +359,16 @@ impl ObjectStorage for S3 {
                         raw_error_message: format!("Cannot read response body: {}", e).to_string(),
                     })?;
 
+                let tags = match res.tag_count {
+                    Some(tag_count) if tag_count > 0 => self.get_tags(bucket_name, object_key),
+                    _ => vec![],
+                };
+
                 Ok(BucketObject {
                     bucket_name: bucket_name.to_string(),
                     key: object_key.to_string(),
                     value: body,
+                    tags,
                 })
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
@@ -358,6 +384,7 @@ impl ObjectStorage for S3 {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
 
@@ -369,17 +396,21 @@ impl ObjectStorage for S3 {
             raw_error_message: e.to_string(),
         })?;
 
+        let tags = tags.map(|tags| tags.join("&"));
+
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
             body: Some(StreamingBody::from(file_content.clone())),
             expected_bucket_owner: None,
+            tagging: tags,
             ..Default::default()
         })) {
             Ok(_o) => Ok(BucketObject {
                 bucket_name: bucket_name.to_string(),
                 key: object_key.to_string(),
                 value: file_content.clone(),
+                tags: vec![],
             }),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),

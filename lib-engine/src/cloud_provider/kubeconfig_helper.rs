@@ -29,6 +29,7 @@ pub fn put_kubeconfig_file_to_object_storage(
         get_bucket_name(kube.long_id()).as_str(),
         get_kubeconfig_filename(kube.long_id()).as_str(),
         &kube.kubeconfig_local_file_path(),
+        None,
     ) {
         let event_details = kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));

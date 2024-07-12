@@ -766,6 +766,7 @@ fn test_list_objects_keys_only() {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -850,6 +851,7 @@ fn test_list_objects_keys_only_with_prefix() {
                 Uuid::new_v4()
             ),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -935,6 +937,7 @@ fn test_list_objects() {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -1019,6 +1022,7 @@ fn test_list_objects_with_prefix() {
                 Uuid::new_v4()
             ),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {

@@ -235,6 +235,7 @@ impl Task for InfrastructureTask {
                     &file,
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
+                    self.info_context().execution_id(),
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
