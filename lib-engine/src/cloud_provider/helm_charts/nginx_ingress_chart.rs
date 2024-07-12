@@ -527,7 +527,7 @@ mod tests {
                 HelmChartNamespaces::NginxIngress,
                 None,
                 false,
-                LogFormatEscaping::Default,
+                log_format_escaping.clone(),
                 false,
             );
 
