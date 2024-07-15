@@ -199,7 +199,7 @@ fn mirror_image(
     let result = thread::scope(|scope| {
         let waiting_thread = scope.spawn(|| {
             // making sure to pass the current span to the new thread not to lose any tracing info
-            let _ = current_span.enter();
+            let _span = current_span.enter();
             let mut iterations: u16 = 0;
             loop {
                 thread::sleep(Duration::from_secs(1));
@@ -216,7 +216,7 @@ fn mirror_image(
         });
         let docker_mirror_thread = scope.spawn(|| {
             // making sure to pass the current span to the new thread not to lose any tracing info
-            let _ = current_span.enter();
+            let _span = current_span.enter();
             if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
                 match target.docker.mirror(
                     &source_image,

@@ -631,7 +631,7 @@ fn deploy_parallel_charts(
             let current_span = tracing::Span::current();
             let handle = s.spawn(move || {
                 // making sure to pass the current span to the new thread not to lose any tracing info
-                let _ = current_span.enter();
+                let _span = current_span.enter();
                 chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
             });
 
