@@ -72,7 +72,6 @@ release-image:
     - docker buildx build --platform=linux/amd64,linux/arm64
       --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache'
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache'
-      --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
       --target=run
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
       --push .
@@ -102,7 +101,6 @@ release-image-slim:
     - docker buildx build --platform=linux/amd64,linux/arm64
       --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
-      --build-arg=SCCACHE_REDIS="${CI_SCCACHE_REDIS}"
       --target=run-slim
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim
       --push .
