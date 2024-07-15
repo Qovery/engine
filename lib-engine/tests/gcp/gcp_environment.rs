@@ -36,8 +36,10 @@ fn gcp_test_build_phase() {
         let context = context_for_resource(
             secrets
                 .GCP_TEST_ORGANIZATION_LONG_ID
-                .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
-            secrets.GCP_TEST_CLUSTER_LONG_ID.expect("GCP_TEST_CLUSTER_LONG_ID"),
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID  should be set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID  should be set"),
         );
         let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);

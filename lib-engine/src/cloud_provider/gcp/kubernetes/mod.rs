@@ -621,7 +621,7 @@ impl Gke {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        // TODO(benjaminch): to be removed, we are not supposed to get env from here!!
+        // TODO(ENG-1801): to be removed, we are not supposed to get env from here!!
         if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {
@@ -803,7 +803,7 @@ impl Gke {
         put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
         match check_workers_on_create(self, infra_ctx.cloud_provider()) {
@@ -930,7 +930,7 @@ impl Gke {
 
         if let Err(e) = GoogleAuthService::activate_service_account(self.options.gcp_json_credentials.clone()) {
             error!("Cannot activate service account: {}", e);
-            // TODO(benjaminch): introduce an EngineError for it and handle it properly
+            // TODO(ENG-1803): introduce an EngineError for it and handle it properly
         }
 
         let _ = QoveryCommand::new(
@@ -948,7 +948,7 @@ impl Gke {
                 .credentials_environment_variables()
                 .as_slice(),
         )
-        .exec(); // TODO(benjaminch): introduce an EngineError for it and handle it properly
+        .exec(); // TODO(ENG-1804): introduce an EngineError for it and handle it properly
 
         Ok(())
     }
@@ -1026,7 +1026,7 @@ impl Gke {
         let kubeconfig_path = self.kubeconfig_local_file_path();
         if !skip_kubernetes_step {
             // Configure kubectl to be able to connect to cluster
-            let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
+            let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -1288,7 +1288,7 @@ impl Gke {
 
     fn pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
         // avoid clippy yelling about `get_engine_location` not used
         let _ = self.get_engine_location();
@@ -1383,7 +1383,7 @@ impl Kubernetes for Gke {
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(benjaminch): add some checks eventually
+        Ok(()) // TODO(ENG-1805): add some checks eventually
     }
 
     fn is_network_managed_by_user(&self) -> bool {

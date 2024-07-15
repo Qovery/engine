@@ -92,7 +92,7 @@ impl ArtifactRegistryService {
                     ))
                     .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
                         raw_error_message: e.to_string(),
-                    })?, // TODO(benjaminch): properly handle error here
+                    })?,
                 ))
                 .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
                     raw_error_message: e.to_string(),
@@ -183,7 +183,7 @@ impl ArtifactRegistryService {
                     .blocking_lock_owned()
                     .borrow_mut()
                     .create_repository(
-                        // TODO(benjaminch): add repository TTL
+                        // TODO(ENG-1808): add repository TTL
                         CreateRepositoryRequest {
                             parent: format!(
                                 "projects/{}/locations/{}",
