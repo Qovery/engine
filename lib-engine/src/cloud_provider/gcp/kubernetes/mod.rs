@@ -1387,7 +1387,7 @@ impl Kubernetes for Gke {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        false // TODO(benjaminch): GKE integration, to be checked
+        matches!(self.options.vpc_mode, VpcMode::UserNetworkConfig { .. })
     }
 
     fn is_self_managed(&self) -> bool {
