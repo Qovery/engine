@@ -104,6 +104,9 @@ RUN <<EOF
   echo "pub fn main() {}" > app/src/main_grpc.rs
   echo "// dummy" > lib-engine/src/lib.rs
   cargo build ${CARGO_FLAGS}
+  rm app/src/main_grpc.rs
+  rm lib-engine/src/lib.rs
+  rm target/release/deps/engine*
 EOF
 
 COPY . .
