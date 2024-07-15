@@ -539,14 +539,19 @@ impl BuildPlatform for LocalDocker {
         let git_clone_record =
             metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::GitClone);
         if let Err(error) = retry::retry(retry::delay::Fixed::from_millis(10_000).take(3), || {
-            if let Err(err_git) = git::clone_at_commit(
+            if let Err(BuildError::GitError {
+                application: _,
+                git_cmd,
+                context,
+                raw_error,
+            }) = git::clone_at_commit(
                 &build.git_repository.url,
                 &build.git_repository.commit_id,
                 &repository_root_path,
                 &get_credentials,
             ) {
-                let message = err_git.message();
-                let git_error_class = err_git.class();
+                let message = raw_error.message();
+                let git_error_class = raw_error.class();
                 // Some errors can happen "randomly":
                 // - SSL error: syscall failure: Resource temporarily unavailable
                 // - Timeout on git clone
@@ -561,12 +566,16 @@ impl BuildPlatform for LocalDocker {
                     ));
                     OperationResult::Retry(BuildError::GitError {
                         application: build.image.service_id.clone(),
-                        raw_error: err_git,
+                        git_cmd,
+                        context,
+                        raw_error,
                     })
                 } else {
                     OperationResult::Err(BuildError::GitError {
                         application: build.image.service_id.clone(),
-                        raw_error: err_git,
+                        git_cmd,
+                        context,
+                        raw_error,
                     })
                 };
             }

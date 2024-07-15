@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use crate::build_platform::{BuildError, GitCmd};
 use git2::build::CheckoutBuilder;
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
@@ -34,18 +35,32 @@ pub fn clone_at_commit<P>(
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<(), Error>
+) -> Result<(), BuildError>
 where
     P: AsRef<Path>,
 {
-    let repo = fetch(repository_url, into_dir, get_credentials, commit_id)?;
-
+    let repo = fetch(repository_url, into_dir, get_credentials, commit_id).map_err(|error| BuildError::GitError {
+        application: "".to_string(),
+        git_cmd: GitCmd::Fetch,
+        context: format!("url: {}/ commit id: {}", repository_url, commit_id),
+        raw_error: error,
+    })?;
     // position the repo at the correct commit
-    let _ = checkout(&repo, commit_id)?;
+    let _ = checkout(&repo, commit_id).map_err(|error| BuildError::GitError {
+        application: "".to_string(),
+        git_cmd: GitCmd::Checkout,
+        context: commit_id.to_string(),
+        raw_error: error,
+    })?;
 
     // check submodules if needed
     {
-        let submodules = repo.submodules()?;
+        let submodules = repo.submodules().map_err(|error| BuildError::GitError {
+            application: "".to_string(),
+            git_cmd: GitCmd::SubmoduleUpdate,
+            context: "".to_string(),
+            raw_error: error,
+        })?;
         if !submodules.is_empty() {
             // for auth
             let mut callbacks = RemoteCallbacks::new();
@@ -59,7 +74,14 @@ where
 
             for mut submodule in submodules {
                 info!("getting submodule {:?} from {:?}", submodule.name(), submodule.url());
-                submodule.update(true, Some(&mut opts))?
+                submodule
+                    .update(true, Some(&mut opts))
+                    .map_err(|error| BuildError::GitError {
+                        application: "".to_string(),
+                        git_cmd: GitCmd::SubmoduleUpdate,
+                        context: submodule.name().unwrap_or("").to_string(),
+                        raw_error: error,
+                    })?
             }
         }
     }

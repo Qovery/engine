@@ -297,6 +297,14 @@ impl EnvironmentTask {
                 logger.send_error(build_result.clone());
                 Err(Box::new(build_result))
             }
+            Err(err @ BuildError::GitError { .. }) => {
+                let msg = format!("❌ Application {} failed to be cloned: {}", &service.name(), err);
+                info!("{}", err);
+                let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+                let build_result = build_platform::to_engine_error(event_details, err, msg);
+                logger.send_error(build_result.clone());
+                Err(Box::new(build_result))
+            }
             Err(err) => {
                 let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));

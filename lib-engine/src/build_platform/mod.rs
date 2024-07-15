@@ -24,6 +24,26 @@ use uuid::Uuid;
 pub mod dockerfile_utils;
 pub mod local_docker;
 
+#[derive(Debug)]
+pub enum GitCmd {
+    Fetch,
+    Checkout,
+    Submodule,
+    SubmoduleUpdate,
+}
+
+impl Display for GitCmd {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let msg = match self {
+            GitCmd::Fetch => "git fetch",
+            GitCmd::Checkout => "git checkout",
+            GitCmd::Submodule => "git submodule",
+            GitCmd::SubmoduleUpdate => "git submodule update",
+        };
+        f.write_str(msg)
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum BuildError {
     #[error("Cannot build Application {application:?} due to an invalid config: {raw_error_message:?}")]
@@ -32,9 +52,13 @@ pub enum BuildError {
         raw_error_message: String,
     },
 
-    #[error("Cannot build Application {application:?} due to an error with git: {raw_error:?}")]
+    #[error(
+        "Git error, the cmd '{git_cmd}' done for {context} has failed for {application} due to error: {raw_error:?}"
+    )]
     GitError {
         application: String,
+        git_cmd: GitCmd,
+        context: String,
         raw_error: git2::Error,
     },
 
