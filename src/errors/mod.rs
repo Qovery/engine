@@ -549,8 +549,16 @@ impl From<BuildError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
-            BuildError::GitError { application, raw_error } => CommandError::new(
-                format!("Build error, cannot build application `{application}` due to a git error"),
+            BuildError::GitError {
+                application,
+                git_cmd,
+                context,
+                raw_error,
+            } => CommandError::new(
+                format!(
+                    "Git error, the cmd '{}' done for {context} has failed for `{application}` due to error",
+                    git_cmd,
+                ),
                 Some(raw_error.to_string()),
                 None,
             ),
