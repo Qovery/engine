@@ -20,7 +20,9 @@ use kube::api::ListParams;
 use kube::Api;
 use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -192,32 +194,64 @@ fn mirror_image(
         vec![source.tag.to_string()],
     );
 
-    if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
-        // Not setting 10min timeout because we need to send at least a log every 10min
-        match target.docker.mirror(
-            &source_image,
-            dest_image,
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 9), target.abort),
-        ) {
-            Ok(ret) => OperationResult::Ok(ret),
-            Err(err) if err.is_aborted() => OperationResult::Err(err),
-            Err(err) => {
-                error!("docker mirror error: {:?}", err);
-                logger.info("🪞 Retrying Mirroring image due to error...".to_string());
-                OperationResult::Retry(err)
+    let should_abort_waiting_thread = AtomicBool::new(false);
+    let result = thread::scope(|scope| {
+        let waiting_thread = scope.spawn(|| {
+            let mut iterations: u16 = 0;
+            loop {
+                thread::sleep(Duration::from_secs(1));
+                if should_abort_waiting_thread.load(Ordering::Relaxed) {
+                    break;
+                }
+                iterations += 1;
+                // Send a message every minute to reassure user
+                if iterations % 60 == 0 {
+                    logger.info("🪞 Mirroring is still in progress...".to_string());
+                    iterations = 0;
+                }
             }
-        }
-    }) {
-        let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
-        logger.warning(msg.clone());
-        let user_err = EngineError::new_docker_error(event_details, err.error);
+        });
+        let docker_mirror_thread = scope.spawn(|| {
+            if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
+                match target.docker.mirror(
+                    &source_image,
+                    dest_image,
+                    &mut |line| info!("{}", line),
+                    &mut |line| warn!("{}", line),
+                    // Set timeout at 15min (arbitrary value)
+                    &CommandKiller::from(Duration::from_secs(60 * 15), target.abort),
+                ) {
+                    Ok(ret) => OperationResult::Ok(ret),
+                    Err(err) if err.is_aborted() => OperationResult::Err(err),
+                    Err(err) => {
+                        error!("docker mirror error: {:?}", err);
+                        logger.info("🪞 Retrying Mirroring image due to error...".to_string());
+                        OperationResult::Retry(err)
+                    }
+                }
+            }) {
+                let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
+                logger.warning(msg.clone());
+                let user_err = EngineError::new_docker_error(event_details, err.error);
 
-        return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
-    }
+                return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
+            }
 
-    Ok(())
+            Ok(())
+        });
+
+        // Wait docker mirror thread to finish
+        let result = docker_mirror_thread.join().unwrap();
+
+        // Release waiting thread
+        should_abort_waiting_thread.store(true, Ordering::Relaxed);
+        waiting_thread.join().unwrap();
+
+        // Return docker mirroring thread result
+        result
+    });
+
+    result
 }
 
 pub enum KubeObjectKind {
