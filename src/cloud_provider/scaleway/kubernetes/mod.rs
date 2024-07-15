@@ -600,6 +600,7 @@ impl Kapsule {
         // Vault
         context.insert("vault_auth_method", "none");
 
+        // TODO(ENG-1801): to be removed, we are not supposed to get env from here!!
         if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {

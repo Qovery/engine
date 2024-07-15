@@ -138,7 +138,7 @@ impl ObjectStorageService {
                 ))
                 .map_err(|e| ObjectStorageServiceError::CannotCreateService {
                     raw_error_message: e.to_string(),
-                })?, // TODO(benjaminch): properly handle error here
+                })?,
             ),
             write_bucket_rate_limiter: bucket_rate_limiter,
             write_object_rate_limiter: object_rate_limiter,
@@ -197,7 +197,7 @@ impl ObjectStorageService {
         })?;
 
         Bucket::try_from(gcp_bucket).map_err(|e| ObjectStorageServiceError::CannotGetBucket {
-            // TODO(benjaminch): introduce dedicated conversion error for bucket
+            // TODO(ENG-1813): introduce dedicated conversion error for bucket
             bucket_name: bucket_name.to_string(),
             raw_error_message: e.to_string(),
         })
@@ -416,7 +416,7 @@ impl ObjectStorageService {
                     for gcp_bucket in buckets_list_response.items {
                         buckets.push(Bucket::try_from(gcp_bucket).map_err(|e| {
                             ObjectStorageServiceError::CannotListBuckets {
-                                // TODO(benjaminch): introduce dedicated conversion error for bucket
+                                // TODO(ENG-1813): introduce dedicated conversion error for bucket
                                 raw_error_message: e.to_string(),
                             }
                         })?)
