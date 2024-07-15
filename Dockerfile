@@ -241,6 +241,9 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 ###########################################
 #
 #  ENGINE SLIM FINAL IMAGE 
+#  thats the same image than the release one
+#  but with terraform and other binary for infra install
+#  stripped down
 #
 ###########################################
 FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim AS run-slim
