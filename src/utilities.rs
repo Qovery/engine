@@ -27,6 +27,7 @@ pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
 pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     root_path: P,
     dockerfile_path: &Option<T>,
+    dockerfile_content: &Option<String>,
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
 ) -> String {
@@ -39,6 +40,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     // affect the build result even if user didn't change his code.
     root_path.hash(&mut hasher);
 
+    dockerfile_content.hash(&mut hasher);
     if dockerfile_path.is_some() {
         // only use when a Dockerfile is used to prevent build cache miss every single time
         // we redeploy an app with a env var changed with Buildpacks.
@@ -124,6 +126,7 @@ mod tests_utilities {
         let image_tag = compute_image_tag(
             "/".to_string(),
             &Some("Dockerfile".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -131,6 +134,7 @@ mod tests_utilities {
         let image_tag_2 = compute_image_tag(
             "/".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -140,6 +144,7 @@ mod tests_utilities {
         let image_tag_3 = compute_image_tag(
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -149,6 +154,7 @@ mod tests_utilities {
         let image_tag_3_2 = compute_image_tag(
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -158,6 +164,7 @@ mod tests_utilities {
         let image_tag_4 = compute_image_tag(
             "/".to_string(),
             &None as &Option<&str>,
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -168,11 +175,21 @@ mod tests_utilities {
         let image_tag_5 = compute_image_tag(
             "/".to_string(),
             &None as &Option<&str>,
+            &None,
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
 
         assert_eq!(image_tag_4, image_tag_5);
+
+        let image_tag_5 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+        );
+        assert_ne!(image_tag_4, image_tag_5);
     }
 
     #[test]
