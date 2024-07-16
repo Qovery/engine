@@ -282,7 +282,7 @@ RUN apt-get update && apt-get install -y \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   kubectl=$KUBECTL_VERSION \
-  dumb-init git-lfs binutils && \
+  dumb-init git-lfs && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
