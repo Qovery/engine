@@ -6,7 +6,6 @@ ARG HELM_VERSION="3.15.2-1"
 ARG TERRAFORM_VERSION="1.3.3"
 ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.8.1"
-ARG AWS_IAM_AUTHENTICATOR_VERSION="0.5.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:26.0.0-1~debian.12~bookworm"
@@ -16,6 +15,7 @@ ARG CONTAINERD_VERSION="1.6.28-2"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 
 ARG BIN_DEST_FOLDER="/binaries"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.79.0-2024-07-05T10-24-58"
 
 
 ###########################################
@@ -23,7 +23,7 @@ ARG BIN_DEST_FOLDER="/binaries"
 #  ENGINE CI IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.79.0-2024-07-05T10-24-58 AS engine_ci
+FROM $RUST_IMAGE AS engine_ci
 
 ARG BIN_DEST_FOLDER
 ENV TF_PLUGIN_CACHE_DIR=/root/.terraform.d/plugin-cache
@@ -56,12 +56,6 @@ RUN apt-get update && \
   mkdir /build ${BIN_DEST_FOLDER} && \
   mkdir -p $TF_PLUGIN_CACHE_DIR
 
-# TODO: Remove after migration to aws cli
-# Aws iam authenticator
-RUN curl -sLo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTHENTICATOR_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTHENTICATOR_VERSION}_linux_$(dpkg --print-architecture) && \
-  chmod +x aws-iam-authenticator && \
-  mv aws-iam-authenticator $BIN_DEST_FOLDER/aws-iam-authenticator
-
 # Hashicorp apt repository does not package terraform for arm64 ...
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip terraform.zip && \
@@ -79,16 +73,39 @@ CMD ["/bin/sh"]
 #  ENGINE BUILDER IMAGE 
 #
 ###########################################
-FROM engine_ci AS build
+FROM $RUST_IMAGE AS build
 
+ARG TERRAFORM_VERSION
 ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc"
 
+WORKDIR /build
+
+# Init terraform providers and DL deps for build
+COPY docker docker
 RUN <<EOF
   mkdir -p app/src
   mkdir -p lib-engine/src
+
+  apt-get update
+  apt-get -y install make cmake protobuf-compiler libprotobuf-dev binutils unzip apt-transport-https ca-certificates
+
+  curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip
+  unzip terraform.zip
+  mv terraform /usr/bin/
+  rm -rf terraform.zip
+
+  for i in $(find lib-engine/lib -name "tf-providers*")
+  do
+      provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
+      mkdir -p docker/engine/providers/$provider
+      cp $i docker/engine/providers/$provider/
+      sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
+  done
+  ./docker/download_terraform_plugins.sh
+
 EOF
 
 COPY Cargo.toml .
@@ -101,6 +118,8 @@ COPY app/proto app/proto
 
 RUN <<EOF
   set -e
+
+  # Use stub main.rs and lib.rs to build and cache dependencies
   echo "pub fn main() {}" > app/src/main_grpc.rs
   echo "// dummy" > lib-engine/src/lib.rs
   cargo build ${CARGO_FLAGS}
@@ -133,21 +152,6 @@ RUN <<EOF
   cp /build/target/release/engine_grpc /build/target/release/engine_grpc_stripped
   strip -s /build/target/release/engine_grpc_stripped
 EOF
-
-# Init terraform providers
-RUN <<EOF
-  set -e
-  for i in $(find lib-engine/lib -name "tf-providers*")
-  do
-      provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
-      mkdir -p docker/engine/providers/$provider
-      cp $i docker/engine/providers/$provider/
-      sed -ri 's/\{\{.+\}\}/flushed/g' docker/engine/providers/$provider/*
-  done
-  ./docker/download_terraform_plugins.sh
-EOF
-
-
 
 
 ###########################################
@@ -224,7 +228,6 @@ COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
 COPY --from=build --chown=qovery:qovery /build/docker/bin_versions $HOME_DIR
 COPY --from=build --chown=qovery:qovery /root/.terraform.d $HOME_DIR/.terraform.d
-COPY --from=build --chown=qovery:qovery --chmod=500 $BIN_DEST_FOLDER/aws-iam-authenticator /usr/bin/aws-iam-authenticator
 
 USER qovery
 RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
