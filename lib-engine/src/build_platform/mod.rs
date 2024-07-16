@@ -139,6 +139,7 @@ impl Build {
         self.image.tag = compute_image_tag(
             &self.git_repository.root_path,
             &self.git_repository.dockerfile_path,
+            &self.git_repository.dockerfile_content,
             &self.environment_variables,
             &self.git_repository.commit_id,
         );
