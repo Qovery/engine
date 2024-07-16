@@ -77,8 +77,11 @@ spec:
             {{ end }}
             {{ end }}
           livenessProbe:
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
             httpGet:
-              path: /metrics
+              path: /healthz
               port: {{ .Values.metrics.port }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
