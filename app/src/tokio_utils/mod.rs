@@ -31,13 +31,17 @@ static METRICS_PROMETHEUS_NB_CALLS: Lazy<IntCounter> = Lazy::new(|| {
 ///
 /// Use the static tokio runtime to start a webserver.
 /// Spawn a thread that block until the webserver stop (never)
-pub fn launch_http_server(listen_on: &str, shutdown_handle: Arc<AtomicBool>) -> JoinHandle<()> {
+pub fn launch_http_server(
+    listen_on: &str,
+    shutdown_handle: Arc<AtomicBool>,
+    is_connected_to_gtw: Arc<AtomicBool>,
+) -> JoinHandle<()> {
     let listen_on: SocketAddr = listen_on.parse().unwrap_or_else(|_| {
         panic!("Cannot parse webserver listen_on parameter, should be ip:port instead {listen_on}")
     });
 
     info!("Starting tokio runtime");
-    TOKIO_RUNTIME.spawn(launch_warp(listen_on, shutdown_handle))
+    TOKIO_RUNTIME.spawn(launch_warp(listen_on, shutdown_handle, is_connected_to_gtw))
 }
 
 pub fn launch_task<R: Send + 'static>(future: impl Future<Output = R> + Send + 'static) -> JoinHandle<R> {
@@ -55,14 +59,23 @@ pub fn block_on<R>(task: impl Future<Output = R>) -> R {
 /// Start warp webserver
 ///
 /// In most cast, only one should be started per application
-async fn launch_warp(listen_on: SocketAddr, shutdown_handle: Arc<AtomicBool>) {
+async fn launch_warp(listen_on: SocketAddr, shutdown_handle: Arc<AtomicBool>, is_connected_to_gtw: Arc<AtomicBool>) {
     let prometheus_srv = warp::path!("metrics").and(warp::get()).map(prometheus_service);
     let shutdown_srv = warp::path!("shutdown")
         .and(warp::get())
         .and(warp::addr::remote())
         .map(move |remote_addr| shutdown_service(remote_addr, &shutdown_handle));
 
-    let healthcheck_srv = warp::path!("healthz").and(warp::get()).map(|| warp::reply::html("OK"));
+    let healthcheck_srv = warp::path!("healthz").and(warp::get()).map(move || {
+        if is_connected_to_gtw.load(Ordering::Relaxed) {
+            warp::reply::with_status("OK", StatusCode::OK)
+        } else {
+            warp::reply::with_status(
+                "engine is not properly connected to the gateway",
+                StatusCode::SERVICE_UNAVAILABLE,
+            )
+        }
+    });
 
     let routes = prometheus_srv.or(healthcheck_srv).or(shutdown_srv);
 
@@ -116,7 +129,8 @@ mod tests {
     #[test]
     fn test_launch_webserver() {
         let shutdown_flag = Arc::new(AtomicBool::new(false));
-        let _handle = launch_http_server("127.0.0.1:8080", shutdown_flag.clone());
+        let is_running = Arc::new(AtomicBool::new(false));
+        let _handle = launch_http_server("127.0.0.1:8080", shutdown_flag.clone(), is_running.clone());
         let body = reqwest::blocking::get("http://127.0.0.1:8080/metrics")
             .unwrap()
             .text()

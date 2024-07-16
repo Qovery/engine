@@ -244,6 +244,7 @@ pub fn main() -> io::Result<()> {
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
+    let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
     let shutdown_callback = {
         let should_shutdown = should_shutdown.clone();
 
@@ -261,7 +262,7 @@ pub fn main() -> io::Result<()> {
         }
     };
     tokio_utils::launch_task(shutdown_callback);
-    tokio_utils::launch_http_server(&cli.http_listen_on, should_shutdown.clone());
+    tokio_utils::launch_http_server(&cli.http_listen_on, should_shutdown.clone(), is_connected_to_gtw.clone());
 
     info!(
         "running from current directory: {}",
@@ -422,6 +423,7 @@ pub fn main() -> io::Result<()> {
             &task_selector,
             engine_client,
             should_shutdown,
+            is_connected_to_gtw,
             Box::new(payload_to_engine_task),
             Box::new(log_file_writer),
         );

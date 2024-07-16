@@ -105,6 +105,7 @@ pub struct DeploymentManager {
     deployment_request: DeploymentRequest,
     engine_client: GrpcEngineClient,
     should_shutdown: Arc<AtomicBool>,
+    is_connected_to_gtw: Arc<AtomicBool>,
     mk_engine_task: MkEngineTask,
     log_file_writer: Box<LogFileWriter>,
 }
@@ -114,6 +115,7 @@ impl DeploymentManager {
         task_type: &TaskSelector,
         engine_client: GrpcEngineClient,
         should_shutdown: Arc<AtomicBool>,
+        is_connected_to_gtw: Arc<AtomicBool>,
         mk_engine_task: MkEngineTask,
         log_file_writer: Box<LogFileWriter>,
     ) -> Self {
@@ -133,6 +135,7 @@ impl DeploymentManager {
             deployment_request,
             engine_client,
             should_shutdown,
+            is_connected_to_gtw,
             mk_engine_task,
             log_file_writer,
         }
@@ -198,14 +201,17 @@ impl DeploymentManager {
             Ok(deployment_info) => deployment_info.into_inner(),
             Err(err) => {
                 if err.code() == Code::NotFound {
+                    self.is_connected_to_gtw.store(true, Ordering::Relaxed);
                     info!("No deployment found, waiting for a new one");
                 } else {
+                    self.is_connected_to_gtw.store(false, Ordering::Relaxed);
                     error!("Error while getting new deployment: {}", err);
                 }
                 return (DeploymentManagerState::SeekingNewDeployment {}, Some(self.default_wait_time));
             }
         };
 
+        self.is_connected_to_gtw.store(true, Ordering::Relaxed);
         info!("Got new deployment for: {:?}", deployment_info);
         let next_state = DeploymentManagerState::ExecutingDeployment {
             deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1), self.log_file_writer.clone()),
@@ -655,13 +661,20 @@ mod test {
 
         let task = TaskSelector::Environment;
         let should_shutdown = Arc::new(AtomicBool::new(false));
+        let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
         let mk_engine_task = |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
             Ok::<_, EngineEvent>(task)
         };
 
-        let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task), Box::default());
+        let mut deployment_mngr = DeploymentManager::new(
+            &task,
+            client,
+            should_shutdown.clone(),
+            is_connected_to_gtw.clone(),
+            Box::new(mk_engine_task),
+            Box::default(),
+        );
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
         pin_mut!(fut);
@@ -710,6 +723,7 @@ mod test {
         let client = new_engine_client_test(Some(client)).await;
 
         let should_shutdown = Arc::new(AtomicBool::new(false));
+        let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
         let task = EngineTaskTest::new();
         let task_is_running = task.is_running.clone();
         let task_cancel = task.should_shutdown.clone();
@@ -720,8 +734,14 @@ mod test {
         };
 
         let task = TaskSelector::Environment;
-        let mut deployment_mngr =
-            DeploymentManager::new(&task, client, should_shutdown.clone(), Box::new(mk_engine_task), Box::default());
+        let mut deployment_mngr = DeploymentManager::new(
+            &task,
+            client,
+            should_shutdown.clone(),
+            is_connected_to_gtw.clone(),
+            Box::new(mk_engine_task),
+            Box::default(),
+        );
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
         let fut = deployment_mngr.run();
@@ -729,6 +749,7 @@ mod test {
 
         assert!(timeout(Duration::from_secs(2), &mut fut).await.is_err());
         assert!(task_is_running.load(Ordering::Relaxed));
+        assert!(is_connected_to_gtw.load(Ordering::Relaxed));
 
         task_cancel.store(AbortStatus::Requested, Ordering::Relaxed);
         should_shutdown.store(true, Ordering::Relaxed);
