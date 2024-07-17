@@ -396,6 +396,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
+                use_cdn: false,
             };
 
             router.custom_domains = vec![cd];

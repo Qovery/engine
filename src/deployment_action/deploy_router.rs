@@ -42,11 +42,12 @@ where
             helm.on_create(target)?;
 
             // check non custom domains
-            let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
-                self.custom_domains.clone()
-            } else {
-                vec![]
-            };
+            let custom_domains_to_check = self
+                .custom_domains
+                .clone()
+                .into_iter()
+                .filter(|it| !it.use_cdn)
+                .collect::<Vec<CustomDomain>>();
 
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.default_domain.clone()],

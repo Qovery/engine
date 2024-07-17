@@ -56,6 +56,7 @@ pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
     pub generate_certificate: bool,
+    pub use_cdn: bool,
 }
 impl CustomDomain {
     const WILDCARD_PREFIX: &'static str = "*.";
