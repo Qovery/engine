@@ -19,6 +19,10 @@ fn default_generate_certificate() -> bool {
     true
 }
 
+fn default_use_cdn() -> bool {
+    false
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
     pub long_id: Uuid,
@@ -37,6 +41,8 @@ pub struct CustomDomain {
     pub target_domain: String,
     #[serde(default = "default_generate_certificate")]
     pub generate_certificate: bool,
+    #[serde(default = "default_use_cdn")]
+    pub use_cdn: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -57,10 +63,11 @@ impl Router {
         let custom_domains = self
             .custom_domains
             .iter()
-            .map(|x| crate::cloud_provider::models::CustomDomain {
-                domain: x.domain.clone(),
-                target_domain: x.target_domain.clone(),
-                generate_certificate: x.generate_certificate,
+            .map(|it| crate::cloud_provider::models::CustomDomain {
+                domain: it.domain.clone(),
+                target_domain: it.target_domain.clone(),
+                generate_certificate: it.generate_certificate,
+                use_cdn: it.use_cdn,
             })
             .collect::<Vec<_>>();
 

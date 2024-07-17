@@ -533,16 +533,19 @@ mod tests {
                 domain: "toto.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "cluster.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "titi.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: false,
+                use_cdn: true,
             },
         ];
 
@@ -597,6 +600,7 @@ mod tests {
             domain: "*.toto.cluster.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
         let port2 = Port {
             long_id: Default::default(),
@@ -646,6 +650,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";
@@ -702,11 +707,13 @@ mod tests {
                 domain: "super.mydomain.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "*.toto.mydomain.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
         ];
 
@@ -790,6 +797,7 @@ mod tests {
             domain: "toto.cluster.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "namespace1";
@@ -841,6 +849,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";
@@ -903,6 +912,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";
