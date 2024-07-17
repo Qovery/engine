@@ -8,10 +8,10 @@ ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.8.1"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
-ARG DOCKER_VERSION="5:26.0.0-1~debian.12~bookworm"
-ARG BUILDX_VERSION="0.13.1-1~debian.12~bookworm"
+ARG DOCKER_VERSION="5:27.0.3-1~debian.12~bookworm"
+ARG BUILDX_VERSION="0.15.1-1~debian.12~bookworm"
 ARG PACK_VERSION="0.33.1"
-ARG CONTAINERD_VERSION="1.6.28-2"
+ARG CONTAINERD_VERSION="1.7.18-1"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 
 ARG BIN_DEST_FOLDER="/binaries"
