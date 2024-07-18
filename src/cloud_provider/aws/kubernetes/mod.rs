@@ -1225,7 +1225,7 @@ fn create(
             )) {
                 let is_the_only_nodegroup_available =
                     match block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name())) {
-                        Ok(x) => matches!(x.nodegroups(), Some(n) if n.len() == 1),
+                        Ok(x) => matches!(x.nodegroups(), n if n.len() == 1),
                         Err(_) => false,
                     };
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
