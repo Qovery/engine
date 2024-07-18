@@ -19,14 +19,16 @@ use crate::models::database::DatabaseError;
 use crate::models::router::RouterError;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
-use aws_sdk_docdb::error::DescribeDBClustersError;
-use aws_sdk_docdb::types::SdkError as DocdbSdkError;
-use aws_sdk_ec2::error::{DescribeVolumesError, DetachVolumeError};
-use aws_sdk_ec2::types::SdkError as Ec2SdkError;
-use aws_sdk_elasticache::error::DescribeCacheClustersError;
-use aws_sdk_elasticache::types::SdkError as ElasticacheSdkError;
-use aws_sdk_rds::error::DescribeDBInstancesError;
-use aws_sdk_rds::types::SdkError as RdsSdkError;
+use aws_sdk_docdb::error::SdkError as DocdbSdkError;
+use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
+use aws_sdk_ec2::error::SdkError as Ec2SdkError;
+use aws_sdk_ec2::operation::describe_instances::DescribeInstancesError;
+use aws_sdk_ec2::operation::describe_volumes::DescribeVolumesError;
+use aws_sdk_ec2::operation::detach_volume::DetachVolumeError;
+use aws_sdk_elasticache::error::SdkError as ElasticacheSdkError;
+use aws_sdk_elasticache::operation::describe_cache_clusters::DescribeCacheClustersError;
+use aws_sdk_rds::error::SdkError as RdsSdkError;
+use aws_sdk_rds::operation::describe_db_instances::DescribeDBInstancesError;
 use derivative::Derivative;
 use kube::error::Error as KubeError;
 use kube::Resource;
@@ -338,13 +340,11 @@ impl DatabaseError {
         database_id: String,
     ) -> Self {
         let err = sdk_error.to_string();
-        match sdk_error.into_service_error().kind {
-            aws_sdk_rds::error::DescribeDBInstancesErrorKind::DbInstanceNotFoundFault(_) => {
-                DatabaseError::DatabaseNotFound {
-                    database_type,
-                    database_id,
-                }
-            }
+        match sdk_error.into_service_error() {
+            DescribeDBInstancesError::DbInstanceNotFoundFault(_) => DatabaseError::DatabaseNotFound {
+                database_type,
+                database_id,
+            },
             _ => DatabaseError::UnknownError(err),
         }
     }
@@ -357,13 +357,11 @@ impl DatabaseError {
         database_id: String,
     ) -> Self {
         let err = sdk_error.to_string();
-        match sdk_error.into_service_error().kind {
-            aws_sdk_elasticache::error::DescribeCacheClustersErrorKind::CacheClusterNotFoundFault(_) => {
-                DatabaseError::DatabaseNotFound {
-                    database_type,
-                    database_id,
-                }
-            }
+        match sdk_error.into_service_error() {
+            DescribeCacheClustersError::CacheClusterNotFoundFault(_) => DatabaseError::DatabaseNotFound {
+                database_type,
+                database_id,
+            },
             _ => DatabaseError::UnknownError(err),
         }
     }
@@ -376,13 +374,11 @@ impl DatabaseError {
         database_id: String,
     ) -> Self {
         let err = sdk_error.to_string();
-        match sdk_error.into_service_error().kind {
-            aws_sdk_docdb::error::DescribeDBClustersErrorKind::DbClusterNotFoundFault(_) => {
-                DatabaseError::DatabaseNotFound {
-                    database_type,
-                    database_id,
-                }
-            }
+        match sdk_error.into_service_error() {
+            DescribeDBClustersError::DbClusterNotFoundFault(_) => DatabaseError::DatabaseNotFound {
+                database_type,
+                database_id,
+            },
             _ => DatabaseError::UnknownError(err),
         }
     }
@@ -4134,7 +4130,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     pub fn new_aws_sdk_cannot_list_ec2_instances(
         event_details: EventDetails,
-        error: Ec2SdkError<aws_sdk_ec2::error::DescribeInstancesError>,
+        error: Ec2SdkError<DescribeInstancesError>,
         instance_id: Option<&str>,
     ) -> EngineError {
         let message = match instance_id {

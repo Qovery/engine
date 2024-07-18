@@ -56,7 +56,7 @@ use ::function_name::named;
 use base64::engine::general_purpose;
 use base64::Engine;
 use itertools::Itertools;
-use reqwest::{header, StatusCode};
+use reqwest::header;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
@@ -402,8 +402,9 @@ impl Kapsule {
                     Error::ResponseError(x) => {
                         let msg_with_error =
                             format!("Error code while getting node group: {}, API message: {} ", x.status, x.content);
-                        match x.status {
-                            StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
+                        match x.status.as_u16() {
+                            // TODO(ENG-1453): To be tested against StatusCode::NOT_FOUND once SCW will be bumped (it uses an old http version clashing with new one)
+                            404_u16 /*StatusCode::NOT_FOUND*/ => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                                 "No node pool found".to_string(),
                                 Some(msg_with_error),
                                 None,

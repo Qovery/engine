@@ -90,6 +90,7 @@ pub mod test {
             .unwrap()
             .connect_with_connector(service_fn(move |_: Uri| {
                 let client = client.take();
+
                 async move {
                     if let Some(client) = client {
                         Ok(hyper_util::rt::TokioIo::new(client))

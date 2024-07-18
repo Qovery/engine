@@ -4,9 +4,13 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
 use async_trait::async_trait;
-use aws_sdk_elasticloadbalancingv2::error::{DeleteLoadBalancerError, DescribeTagsError};
-use aws_sdk_elasticloadbalancingv2::model::{LoadBalancer, TagDescription};
-use aws_smithy_client::SdkError;
+use aws_sdk_elasticloadbalancingv2::error::SdkError;
+use aws_sdk_elasticloadbalancingv2::operation::delete_load_balancer::DeleteLoadBalancerError;
+use aws_sdk_elasticloadbalancingv2::operation::describe_load_balancers::{
+    DescribeLoadBalancersError, DescribeLoadBalancersOutput,
+};
+use aws_sdk_elasticloadbalancingv2::operation::describe_tags::DescribeTagsError;
+use aws_sdk_elasticloadbalancingv2::types::{LoadBalancer, TagDescription};
 use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::Service;
 
@@ -32,15 +36,13 @@ pub fn clean_up_deleted_k8s_nlb(
         )
     })?;
     // get tags from the aws load balancers
-    let load_balancers_tags = block_on(
-        conn.get_aws_load_balancers_tags(load_balancers.load_balancers().unwrap_or(&[]).to_vec()),
-    )
-    .map_err(|e| {
-        EngineError::new_cloud_provider_error_getting_load_balancer_tags(
-            event_details.clone(),
-            CommandError::new_from_safe_message(format!("Can't get load balancers tags {}", e)),
-        )
-    })?;
+    let load_balancers_tags = block_on(conn.get_aws_load_balancers_tags(load_balancers.load_balancers().to_vec()))
+        .map_err(|e| {
+            EngineError::new_cloud_provider_error_getting_load_balancer_tags(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!("Can't get load balancers tags {}", e)),
+            )
+        })?;
     // get only ones matching the current cluster
     let load_balancers_matching_current_cluster = filter_load_balancers_by_tag(
         Some(format!("kubernetes.io/cluster/{}", target.kubernetes.cluster_name()).as_str()),
@@ -76,7 +78,7 @@ pub fn find_aws_nlb_to_delete(aws_lbs: Vec<TagDescription>, k8s_lbs: Vec<Service
     let mut lbs_to_delete = Vec::new();
 
     for aws_lb in aws_lbs {
-        let aws_tags = aws_lb.tags().unwrap_or(&[]);
+        let aws_tags = aws_lb.tags();
         let mut k8s_namespace = None;
         let mut k8s_name = None;
         let mut load_balancer_found = false;
@@ -131,10 +133,7 @@ impl QoveryAwsSdkConfigLoadBalancer for SdkConfig {
     /// Get/list all load balancers in the account.
     async fn list_all_aws_load_balancers(
         &self,
-    ) -> Result<
-        aws_sdk_elasticloadbalancingv2::output::DescribeLoadBalancersOutput,
-        SdkError<aws_sdk_elasticloadbalancingv2::error::DescribeLoadBalancersError>,
-    > {
+    ) -> Result<DescribeLoadBalancersOutput, SdkError<DescribeLoadBalancersError>> {
         let client = aws_sdk_elasticloadbalancingv2::Client::new(self);
         // AWS API maximum per page size is 400
         client.describe_load_balancers().page_size(400).send().await
@@ -208,27 +207,25 @@ pub fn filter_load_balancers_by_tag(
     };
 
     for load_balancer in load_balancers_with_tags {
-        if let Some(tags_list) = load_balancer.tags() {
-            for tag in tags_list {
-                // check if key matches
-                let key_match = match tag_key {
-                    Some(x) => check_match(tag.key().unwrap_or(""), x),
-                    None => false,
-                };
+        for tag in load_balancer.tags() {
+            // check if key matches
+            let key_match = match tag_key {
+                Some(x) => check_match(tag.key().unwrap_or(""), x),
+                None => false,
+            };
 
-                // check if value matches
-                let value_match = match tag_value {
-                    Some(x) => check_match(tag.value().unwrap_or(""), x),
-                    None => false,
-                };
+            // check if value matches
+            let value_match = match tag_value {
+                Some(x) => check_match(tag.value().unwrap_or(""), x),
+                None => false,
+            };
 
-                if tag_key.is_some() && tag_value.is_some() {
-                    if key_match && value_match {
-                        matched_load_balancers.push(load_balancer.clone());
-                    }
-                } else if (tag_key.is_some() || tag_value.is_some()) && (key_match || value_match) {
+            if tag_key.is_some() && tag_value.is_some() {
+                if key_match && value_match {
                     matched_load_balancers.push(load_balancer.clone());
                 }
+            } else if (tag_key.is_some() || tag_value.is_some()) && (key_match || value_match) {
+                matched_load_balancers.push(load_balancer.clone());
             }
         }
     }
@@ -239,7 +236,7 @@ pub fn filter_load_balancers_by_tag(
 #[cfg(test)]
 mod tests {
     use super::{filter_load_balancers_by_tag, find_aws_nlb_to_delete};
-    use aws_sdk_elasticloadbalancingv2::model::{Tag, TagDescription};
+    use aws_sdk_elasticloadbalancingv2::types::{Tag, TagDescription};
     use k8s_openapi::api::core::v1::Service;
     use kube::core::ObjectMeta;
     use uuid::Uuid;
