@@ -1,7 +1,6 @@
 use super::Task;
 use crate::build_platform;
 use crate::build_platform::{BuildError, BuildPlatform};
-use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service;
 use crate::cloud_provider::service::Service;
@@ -635,7 +634,6 @@ impl Task for EnvironmentTask {
                     infra_context.context(),
                     self.request.archive.as_ref(),
                     &file,
-                    AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
                     infra_context.context().partial_execution_id(),
                 ) {
