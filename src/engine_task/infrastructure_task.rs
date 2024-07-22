@@ -1,5 +1,4 @@
 use super::Task;
-use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
 use crate::engine_task::qovery_api::QoveryApi;
@@ -233,7 +232,6 @@ impl Task for InfrastructureTask {
                     &self.info_context(),
                     self.request.archive.as_ref(),
                     &file,
-                    AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
                     self.request.kubernetes.advanced_settings.resource_ttl(),
                     self.info_context().execution_id(),
                 ) {

@@ -1,5 +1,4 @@
 use crate::cloud_provider::aws::regions::AwsRegion;
-
 use crate::fs::workspace_directory;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
@@ -8,6 +7,7 @@ use crate::models::abort::Abort;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::ObjectStorage;
 use std::path::Path;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::broadcast;
 
@@ -28,7 +28,6 @@ fn upload_s3_file(
     context: &Context,
     archive: Option<&Archive>,
     file_path: &Path,
-    region: AwsRegion,
     _resource_ttl: Option<Duration>, // TODO(benjaminch): propagate TTL for object
     object_name: &str,
 ) -> Result<(), ObjectStorageError> {
@@ -58,7 +57,7 @@ fn upload_s3_file(
         "archive-s3".to_string(),
         archive.access_key_id.to_string(),
         archive.secret_access_key.to_string(),
-        region,
+        AwsRegion::from_str(&archive.region).unwrap_or(AwsRegion::UsEast2),
     );
 
     match s3.put_object(archive.bucket_name.as_str(), object_key.as_str(), file_path, tags) {

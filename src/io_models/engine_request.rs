@@ -789,4 +789,5 @@ pub struct Archive {
     pub access_key_id: String,
     #[derivative(Debug = "ignore")]
     pub secret_access_key: String,
+    pub region: String,
 }
