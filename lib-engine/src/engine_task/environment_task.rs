@@ -630,13 +630,7 @@ impl Task for EnvironmentTask {
                 infra_context.context().workspace_root_dir(),
                 infra_context.context().execution_id(),
             ) {
-                Ok(file) => match super::upload_s3_file(
-                    infra_context.context(),
-                    self.request.archive.as_ref(),
-                    &file,
-                    self.request.kubernetes.advanced_settings.resource_ttl(),
-                    infra_context.context().partial_execution_id(),
-                ) {
+                Ok(file) => match super::upload_s3_file(self.request.archive.as_ref(), &file) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
                     }

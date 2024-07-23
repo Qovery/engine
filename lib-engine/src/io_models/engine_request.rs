@@ -785,9 +785,5 @@ where
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Archive {
-    pub bucket_name: String,
-    pub access_key_id: String,
-    #[derivative(Debug = "ignore")]
-    pub secret_access_key: String,
-    pub region: String,
+    pub upload_url: Url,
 }
