@@ -177,7 +177,11 @@ impl LocalDocker {
             });
 
             if let Err(err) = login_ret {
-                logger.send_warning(format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()));
+                logger.send_warning(format!(
+                    "❌ Failed to login to registry {} due to {}",
+                    url.host_str().unwrap_or_default(),
+                    err
+                ));
                 let err = BuildError::DockerError {
                     application: build.image.service_id.clone(),
                     raw_error: err.error,

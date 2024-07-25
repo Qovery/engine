@@ -3137,7 +3137,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRegistry,
-                format!("Container registry: cannot create registry: `{registry_name}`."),
+                format!("Container registry: cannot create registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3145,7 +3145,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRegistry,
-                format!("Container registry: cannot delete registry: `{registry_name}`."),
+                format!("Container registry: cannot delete registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3153,7 +3153,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteImage { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteImage,
-                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3161,7 +3161,7 @@ impl EngineError {
             ContainerRegistryError::ImageDoesntExistInRegistry { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryImageDoesntExist,
-                format!("Container registry: image `{image_name}` doesn't exist in repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: image `{image_name}` doesn't exist in repository `{repository_name}` in registry `{registry_name}`. "),
                 Some(error.into()),
                 None,
                 None,
@@ -3185,7 +3185,7 @@ impl EngineError {
             ContainerRegistryError::CannotLinkRegistryToCluster { ref registry_name, ref cluster_id, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotLinkRegistryToCluster,
-                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`."),
+                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3193,7 +3193,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRepository,
-                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3201,7 +3201,7 @@ impl EngineError {
             ContainerRegistryError::CannotGetRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotGetRepository,
-                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`."),
+                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3209,7 +3209,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRepository,
-                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`."),
+                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3217,14 +3217,14 @@ impl EngineError {
             ContainerRegistryError::CannotSetRepositoryLifecyclePolicy { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotSetRepositoryLifecycle,
-                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
             ),
             ContainerRegistryError::CannotSetRepositoryTags { ref registry_name, ref repository_name, .. } => EngineError::new(event_details,
             Tag::ContainerRegistryCannotSetRepositoryTags,
-            format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`."),
+            format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
             Some(error.into()),
                                                                                                                                None,
                                                                                                                                None,
@@ -3232,7 +3232,7 @@ impl EngineError {
             ContainerRegistryError::RepositoryNameNotValid {ref registry_name, ref repository_name, ..} => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryRepositoryNameInvalid,
-                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`."),
+                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
