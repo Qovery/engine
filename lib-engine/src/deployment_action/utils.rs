@@ -162,11 +162,12 @@ fn mirror_image(
 
         if let Err(err) = login_ret {
             let err = EngineError::new_docker_error(event_details, err.error);
-            let user_err = EngineError::new_engine_error(
-                err,
-                format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
-                None,
+            let msg = format!(
+                "❌ Failed to login to registry {} due to {}",
+                url.host_str().unwrap_or_default(),
+                err
             );
+            let user_err = EngineError::new_engine_error(err, msg, None);
             return Err(Box::new(user_err));
         }
     }
