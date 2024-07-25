@@ -403,13 +403,18 @@ pub fn main() -> io::Result<()> {
                         },
                         Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
                     );
-                    let msg =
-                        format!("Engine received an invalid deployment request for execution_id = {execution_id}");
+                    let msg = r#"
+Engine received an invalid deployment request. 
+If you are using a self-managed or demo cluster, update your engine to the latest version to fix the issue. 
+For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster install`
+                    "#
+                    .trim()
+                    .replace('\n', " ");
                     let message = EventMessage::new_from_safe(msg.to_string());
                     let err = EngineEvent::Error(
                         EngineError::new_invalid_engine_payload(
                             event_details.clone(),
-                            msg.as_str(),
+                            &msg,
                             Some(CommandError::new(msg.clone(), Some(format!("{err}")), None)),
                         ),
                         Some(message),
