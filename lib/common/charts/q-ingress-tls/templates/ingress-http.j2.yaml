@@ -14,7 +14,8 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   annotations:
     kubernetes.io/tls-acme: "true"
@@ -77,7 +78,8 @@ metadata:
       {%- endfor %}
       {%- endif %}
     {%- for key, value in annotations_group.ingress %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 
 spec:

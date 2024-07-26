@@ -17,7 +17,8 @@ commonLabels:
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
   {%- for key, value in labels_group.common %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}
 
 volumePermissions:
@@ -80,12 +81,14 @@ primary:
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
       {%- for key, value in annotations_group.service %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
     headless:
       annotations:
         {%- for key, value in annotations_group.service %}
-        {{ key }}: "{{ value }}"
+        {{ key }}: |-
+           {{ value }}
         {%- endfor %}
     {% endif %}
   persistence:
@@ -117,11 +120,13 @@ primary:
       cpu: "{{ cpu_limit_in_milli }}"
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 
 readReplicas:
@@ -133,7 +138,8 @@ readReplicas:
     karpenter.sh/do-not-disrupt: "true"
     cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 {%- if node_affinity %}
   affinity:

@@ -12,7 +12,8 @@ commonLabels:
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
   {%- for key, value in labels_group.common %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}
 
 image:
@@ -90,7 +91,8 @@ service:
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- for key, value in annotations_group.service %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   {% endif %}
 
@@ -136,43 +138,52 @@ hidden:
   service:
     annotations:
       {%- for key, value in annotations_group.service %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 
 arbiter:
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   service:
     annotations:
       {%- for key, value in annotations_group.service %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
     headless:
       annotations:
         {%- for key, value in annotations_group.service %}
-        {{ key }}: "{{ value }}"
+        {{ key }}: |-
+           {{ value }}
         {%- endfor %}
 
 podAnnotations:
   {%- for key, value in annotations_group.pods %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}
 
 annotations:
   {%- for key, value in annotations_group.stateful_set %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}

@@ -12,12 +12,14 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
     {%- for key, value in annotations_group.deployment %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 spec:
   {%- if service.min_instances == service.max_instances %}
@@ -60,7 +62,8 @@ spec:
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
         {%- for key, value in labels_group.common %}
-        {{ key }}: "{{ value }}"
+        {{ key }}: |-
+           {{ value }}
         {%- endfor %}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
@@ -70,7 +73,8 @@ spec:
         {%- endif %}
         qovery.com/service-version: {{ service.version }}
         {%- for key, value in annotations_group.pods %}
-        {{ key }}: "{{ value }}"
+        {{ key }}: |-
+           {{ value }}
         {%- endfor %}
     spec:
       {%- if service.tolerations %}
