@@ -11,11 +11,13 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.hpa %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
 spec:
   scaleTargetRef:

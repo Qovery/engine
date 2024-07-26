@@ -128,43 +128,52 @@ hidden:
   service:
     annotations:
       {%- for key, value in annotations_group.service %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 
 arbiter:
   annotations:
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
-    {{ key }}: "{{ value }}"
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
   service:
     annotations:
       {%- for key, value in annotations_group.service %}
-      {{ key }}: "{{ value }}"
+      {{ key }}: |-
+         {{ value }}
       {%- endfor %}
     headless:
       annotations:
         {%- for key, value in annotations_group.service %}
-        {{ key }}: "{{ value }}"
+        {{ key }}: |-
+           {{ value }}
         {%- endfor %}
 
 podAnnotations:
   {%- for key, value in annotations_group.pods %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}
 
 annotations:
   {%- for key, value in annotations_group.stateful_set %}
-  {{ key }}: "{{ value }}"
+  {{ key }}: |-
+     {{ value }}
   {%- endfor %}
