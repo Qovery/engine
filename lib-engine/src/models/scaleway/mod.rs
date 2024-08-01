@@ -94,7 +94,11 @@ impl FromStr for ScwRegion {
     type Err = ();
 
     fn from_str(s: &str) -> Result<ScwRegion, ()> {
-        match s {
+        if s.len() < "fr-par".len() {
+            return Err(());
+        }
+
+        match &s[..6] {
             "fr-par" => Ok(ScwRegion::Paris),
             "nl-ams" => Ok(ScwRegion::Amsterdam),
             "pl-waw" => Ok(ScwRegion::Warsaw),
@@ -187,6 +191,9 @@ mod tests {
         assert_eq!(ScwRegion::from_str("fr-par"), Ok(ScwRegion::Paris));
         assert_eq!(ScwRegion::from_str("nl-ams"), Ok(ScwRegion::Amsterdam));
         assert_eq!(ScwRegion::from_str("pl-waw"), Ok(ScwRegion::Warsaw));
+        assert_eq!(ScwRegion::from_str("fr-par-1"), Ok(ScwRegion::Paris));
+        assert_eq!(ScwRegion::from_str("nl-ams-1"), Ok(ScwRegion::Amsterdam));
+        assert_eq!(ScwRegion::from_str("pl-waw-1"), Ok(ScwRegion::Warsaw));
     }
 
     #[test]

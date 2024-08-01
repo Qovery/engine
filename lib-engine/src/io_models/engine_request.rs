@@ -34,7 +34,7 @@ use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::Domain;
 use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::models::gcp::JsonCredentials;
-use crate::models::scaleway::ScwZone;
+use crate::models::scaleway::{ScwRegion, ScwZone};
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
@@ -590,12 +590,8 @@ impl ContainerRegistry {
                     self.name.as_str(),
                     &options.scaleway_secret_key,
                     &options.scaleway_project_id,
-                    ScwZone::from_str(&options.region).map_err(|e| {
-                        anyhow!(
-                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone: {}",
-                            options.region,
-                            e
-                        )
+                    ScwRegion::from_str(&options.region).map_err(|_| {
+                        anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
                     })?,
                 )?))
             }
