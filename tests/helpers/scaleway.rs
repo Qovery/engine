@@ -71,7 +71,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
                 .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
                 .as_str(),
         )
-        .expect("Unknown SCW region"),
+        .expect("Unknown SCW region")
+        .region(),
     )
     .unwrap()
 }
@@ -264,7 +265,7 @@ pub fn clean_environments(
         "test",
         secret_token.as_str(),
         project_id.as_str(),
-        zone,
+        zone.region(),
     )?;
 
     // delete images created in registry

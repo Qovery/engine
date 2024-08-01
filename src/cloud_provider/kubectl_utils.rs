@@ -74,7 +74,7 @@ pub fn delete_crashlooping_pods(
         Ok(pods) => {
             for pod in pods {
                 if let Err(e) = kubectl_exec_delete_pod(
-                    &kube.kubeconfig_local_file_path(),
+                    kube.kubeconfig_local_file_path(),
                     pod.metadata.namespace.as_str(),
                     pod.metadata.name.as_str(),
                     envs.clone(),
