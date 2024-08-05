@@ -14,6 +14,8 @@ use uuid::Uuid;
 #[named]
 #[test]
 fn create_ecr_repository_with_tags() {
+    use qovery_engine::container_registry::RegistryTags;
+
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -43,7 +45,11 @@ fn create_ecr_repository_with_tags() {
         let repo_creation = container_registry.create_repository(
             repo_name.as_str(),
             AWS_QUICK_RESOURCE_TTL_IN_SECONDS,
-            Some(Duration::from_secs(AWS_QUICK_RESOURCE_TTL_IN_SECONDS as u64)),
+            RegistryTags {
+                environment_id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                resource_ttl: Some(Duration::from_secs(AWS_QUICK_RESOURCE_TTL_IN_SECONDS as u64)),
+            },
         );
         assert!(repo_creation.is_ok());
 

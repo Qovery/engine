@@ -37,6 +37,7 @@ resource "aws_s3_bucket_ownership_controls" "kubeconfig_bucket_ownership" {
 
 resource "aws_kms_key" "s3_kubeconfig_kms_encryption" {
   description             = "s3 kubeconfig encryption"
+  enable_key_rotation     = true
   tags = merge(
     local.tags_eks,
     {

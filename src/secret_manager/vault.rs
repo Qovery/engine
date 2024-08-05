@@ -76,6 +76,7 @@ impl QVaultClient {
             Transmitter::TaskManager(Uuid::new_v4(), "vault".to_string()),
         );
 
+        // TODO(ENG-1801): to be removed, we are not supposed to get env from here!!
         let vault_addr = Self::get_env_var("VAULT_ADDR", event_details.clone())?;
 
         let connection = match Self::detect_auth_type(event_details.clone()) {

@@ -6,6 +6,18 @@ metadata:
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 rules:
+{{- if eq .Values.rbac.clusterPermission "admin" }}
+  - apiGroups:
+      - '*'
+    resources:
+      - '*'
+    verbs:
+      - '*'
+  - nonResourceURLs:
+      - '*'
+    verbs:
+      - '*'
+{{- else if eq .Values.rbac.clusterPermission "deployer" }}
   - apiGroups:
       - ""
       - apps
@@ -14,6 +26,7 @@ rules:
       - pods/log
       - pods/exec
       - deployments
+      - configmaps
     verbs:
       - create
       - delete
@@ -22,4 +35,7 @@ rules:
       - get
       - list
       - watch
+{{- else }}
+    # empty
+{{- end }}
 {{- end }}

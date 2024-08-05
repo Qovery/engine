@@ -86,7 +86,7 @@ fn test_get_repository() {
                     "test_name".to_string(),
                     function_name!().to_string()
                 )])),
-                ttl: None, // TODO(benjaminch): proper TTL should be set
+                ttl: None, // TODO(ENG-1808): proper TTL should be set
                 uri: Some(format!(
                     "{}-docker.pkg.dev/{}/{}/",
                     GCP_REGION.to_cloud_provider_format(),
@@ -164,7 +164,7 @@ fn test_create_repository() {
                     "test_name".to_string(),
                     function_name!().to_string()
                 )])),
-                ttl: None, // TODO(benjaminch): proper TTL should be set
+                ttl: None, // TODO(ENG-1808): proper TTL should be set
                 uri: Some(format!(
                     "{}-docker.pkg.dev/{}/{}/",
                     GCP_REGION.to_cloud_provider_format(),
@@ -233,7 +233,7 @@ fn test_delete_repository() {
 
 #[cfg(feature = "test-quarantine")]
 #[test]
-// #[ignore = "docker login fails on the CI because of not TTY, TODO(): activate it in the CI"]
+// #[ignore = "docker login fails on the CI because of not TTY, TODO(ENG-1631): activate it in the CI"]
 #[named]
 fn test_get_docker_image() {
     // setup:
@@ -367,7 +367,7 @@ fn test_get_docker_image() {
 
 #[cfg(feature = "test-quarantine")]
 #[test]
-// #[ignore = "docker login fails on the CI because of not TTY, TODO(): activate it in the CI"]
+// #[ignore = "docker login fails on the CI because of not TTY, TODO(ENG-1631): activate it in the CI"]
 #[named]
 fn test_delete_docker_image() {
     // setup:

@@ -39,7 +39,6 @@ where
             mirror_image_if_necessary(
                 self.long_id(),
                 &self.source,
-                self.source.tag_for_mirror(self.long_id()),
                 target,
                 logger,
                 event_details.clone(),

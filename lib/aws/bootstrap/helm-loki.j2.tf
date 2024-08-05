@@ -51,6 +51,7 @@ resource "aws_iam_role_policy_attachment" "s3_loki_attachment" {
 
 resource "aws_kms_key" "s3_logs_kms_encryption" {
   description             = "s3 logs encryption"
+  enable_key_rotation     = true
   tags = merge(
     local.tags_eks,
     {

@@ -60,7 +60,7 @@ impl CoreDNSConfigChart {
                 force_upgrade: false,
                 recreate_pods: false,
                 reinstall_chart_if_installed_version_is_below_than: None,
-                timeout_in_seconds: 0,
+                timeout_in_seconds: 600,
                 dry_run: false,
                 wait: false,
                 values_files: vec![chart_values_path.to_string()],
@@ -295,7 +295,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
         // This is a verify basic check: make sure CoreDNS pod is running
         let pods: Api<Pod> = Api::all(kube_client.clone());
 
-        let result = retry::retry(Fixed::from_millis(5000).take(5), || {
+        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
             match block_on(pods.list(&ListParams::default().labels("k8s-app=kube-dns"))) {
                 Ok(coredns_pods_result) => {
                     let mut err = Ok(());

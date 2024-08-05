@@ -1,6 +1,22 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
+  name: aws-ebs-gp3-0
+  labels:
+    aws-type: "gp3"
+    qovery-type: "ssd"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
   name: aws-ebs-gp2-0
   labels:
     aws-type: "gp2"

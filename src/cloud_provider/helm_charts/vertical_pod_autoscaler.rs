@@ -16,7 +16,7 @@ pub struct VpaChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
-    recommended_resources: HelmChartResources,
+    recommender_resources: HelmChartResources,
     updater_resources: HelmChartResources,
     admission_controller_resources: HelmChartResources,
     enable_vpa: bool,
@@ -44,20 +44,20 @@ impl VpaChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 VpaChart::chart_name(),
             ),
-            recommended_resources: match recommended_resources {
+            recommender_resources: match recommended_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
                     request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             updater_resources: match updater_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
                     request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
@@ -66,7 +66,7 @@ impl VpaChart {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(500),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
                     limit_memory: KubernetesMemoryResourceUnit::MebiByte(500),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
@@ -93,19 +93,19 @@ impl ToCommonHelmChart for VpaChart {
                     // recommender
                     ChartSetValue {
                         key: "recommender.resources.requests.cpu".to_string(),
-                        value: self.recommended_resources.request_cpu.to_string(),
+                        value: self.recommender_resources.request_cpu.to_string(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.requests.memory".to_string(),
-                        value: self.recommended_resources.request_memory.to_string(),
+                        value: self.recommender_resources.request_memory.to_string(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.limits.cpu".to_string(),
-                        value: self.recommended_resources.limit_cpu.to_string(),
+                        value: self.recommender_resources.limit_cpu.to_string(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.limits.memory".to_string(),
-                        value: self.recommended_resources.limit_memory.to_string(),
+                        value: self.recommender_resources.limit_memory.to_string(),
                     },
                     // updater
                     ChartSetValue {
@@ -158,8 +158,8 @@ impl ToCommonHelmChart for VpaChart {
                             container_policy: VpaContainerPolicy::new(
                                 "*".to_string(),
                                 Some(KubernetesCpuResourceUnit::MilliCpu(100)),
-                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
-                                Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                             ),
                         },
@@ -172,9 +172,9 @@ impl ToCommonHelmChart for VpaChart {
                             container_policy: VpaContainerPolicy::new(
                                 "*".to_string(),
                                 Some(KubernetesCpuResourceUnit::MilliCpu(100)),
-                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
-                                Some(KubernetesMemoryResourceUnit::MebiByte(32)),
-                                Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                             ),
                         },
                         VpaConfig {
@@ -186,8 +186,8 @@ impl ToCommonHelmChart for VpaChart {
                             container_policy: VpaContainerPolicy::new(
                                 "*".to_string(),
                                 Some(KubernetesCpuResourceUnit::MilliCpu(100)),
-                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
-                                Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                             ),
                         },

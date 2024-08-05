@@ -1,6 +1,6 @@
 use base64::engine::general_purpose;
 use base64::{DecodeError, Engine};
-use kube::config::{KubeConfigOptions, Kubeconfig, KubeconfigError};
+use kube::config::{InClusterError, KubeConfigOptions, Kubeconfig, KubeconfigError};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
@@ -27,6 +27,7 @@ pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
 pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     root_path: P,
     dockerfile_path: &Option<T>,
+    dockerfile_content: &Option<String>,
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
 ) -> String {
@@ -39,6 +40,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     // affect the build result even if user didn't change his code.
     root_path.hash(&mut hasher);
 
+    dockerfile_content.hash(&mut hasher);
     if dockerfile_path.is_some() {
         // only use when a Dockerfile is used to prevent build cache miss every single time
         // we redeploy an app with a env var changed with Buildpacks.
@@ -91,6 +93,20 @@ pub async fn create_kube_client<P: AsRef<Path>>(
     Ok(kube_client)
 }
 
+pub async fn create_kube_client_in_cluster() -> Result<kube::Client, kube::Error> {
+    let to_err = |err: InClusterError| -> kube::Error {
+        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
+    };
+
+    // build kube client: the kube config must have already the good context selected
+    let kube_config = kube::Config::incluster().map_err(to_err)?;
+    let kube_client = kube::Client::try_from(kube_config)?;
+
+    // Try to contact the api to verify we are correctly connected
+    kube_client.apiserver_version().await?;
+    Ok(kube_client)
+}
+
 pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<String, DecodeError> {
     let decoded_value_byte = general_purpose::STANDARD.decode(multiple_credentials)?;
     let decoded_value = decoded_value_byte.iter().map(|c| *c as char).collect::<String>();
@@ -110,6 +126,7 @@ mod tests_utilities {
         let image_tag = compute_image_tag(
             "/".to_string(),
             &Some("Dockerfile".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -117,6 +134,7 @@ mod tests_utilities {
         let image_tag_2 = compute_image_tag(
             "/".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -126,6 +144,7 @@ mod tests_utilities {
         let image_tag_3 = compute_image_tag(
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -135,6 +154,7 @@ mod tests_utilities {
         let image_tag_3_2 = compute_image_tag(
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -144,6 +164,7 @@ mod tests_utilities {
         let image_tag_4 = compute_image_tag(
             "/".to_string(),
             &None as &Option<&str>,
+            &None,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -154,11 +175,21 @@ mod tests_utilities {
         let image_tag_5 = compute_image_tag(
             "/".to_string(),
             &None as &Option<&str>,
+            &None,
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
 
         assert_eq!(image_tag_4, image_tag_5);
+
+        let image_tag_5 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+        );
+        assert_ne!(image_tag_4, image_tag_5);
     }
 
     #[test]

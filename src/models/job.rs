@@ -1,19 +1,26 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, MountedFile};
+use crate::cloud_provider::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile,
+};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
-use crate::io_models::job::{JobAdvancedSettings, JobSchedule};
-use crate::models;
+use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
+use crate::io_models::labels_group::LabelsGroup;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{ClusterTeraContext, RegistryTeraContext};
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
+use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::utilities::to_short_id;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -43,10 +50,10 @@ pub struct Job<T: CloudProvider> {
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) force_trigger: bool,
-    pub(super) cpu_request_in_milli: u32,
-    pub(super) cpu_limit_in_milli: u32,
-    pub(super) ram_request_in_mib: u32,
-    pub(super) ram_limit_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) advanced_settings: JobAdvancedSettings,
@@ -55,6 +62,8 @@ pub struct Job<T: CloudProvider> {
     pub(super) lib_root_directory: String,
     pub(super) readiness_probe: Option<Probe>,
     pub(super) liveness_probe: Option<Probe>,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -84,28 +93,22 @@ impl<T: CloudProvider> Job<T> {
         liveness_probe: Option<Probe>,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Self, JobError> {
-        if cpu_request_in_milli > cpu_limit_in_milli {
-            return Err(JobError::InvalidConfig(
-                "cpu_request_in_mili must be less or equal to cpu_limit_in_mili".to_string(),
-            ));
-        }
-
-        if cpu_request_in_milli == 0 {
-            return Err(JobError::InvalidConfig(
-                "cpu_request_in_mili must be greater than 0".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib > ram_limit_in_mib {
-            return Err(JobError::InvalidConfig(
-                "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib == 0 {
-            return Err(JobError::InvalidConfig("ram_request_in_mib must be greater than 0".to_string()));
-        }
+        let service_resources = compute_service_requests_and_limits(
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            ram_request_in_mib,
+            ram_limit_in_mib,
+            advanced_settings.resources_override_limit_cpu_in_milli,
+            advanced_settings.resources_override_limit_ram_in_mib,
+            allow_service_cpu_overcommit,
+            allow_service_ram_overcommit,
+        )
+        .map_err(JobError::InvalidConfig)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -131,10 +134,10 @@ impl<T: CloudProvider> Job<T> {
             command_args,
             entrypoint,
             force_trigger,
-            cpu_request_in_milli,
-            cpu_limit_in_milli,
-            ram_request_in_mib,
-            ram_limit_in_mib,
+            cpu_request_in_milli: service_resources.cpu_request_in_milli,
+            cpu_limit_in_milli: service_resources.cpu_limit_in_milli,
+            ram_request_in_mib: service_resources.ram_request_in_mib,
+            ram_limit_in_mib: service_resources.ram_limit_in_mib,
             environment_variables,
             mounted_files,
             advanced_settings,
@@ -144,6 +147,8 @@ impl<T: CloudProvider> Job<T> {
             liveness_probe,
             lib_root_directory: context.lib_root_dir().to_string(),
             default_port,
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -184,20 +189,21 @@ impl<T: CloudProvider> Job<T> {
         let registry_info = target.container_registry.registry_info();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
-                let image_tag = source.tag_for_mirror(&self.long_id);
-                (
-                    format!(
-                        "{}/{}:{}",
-                        registry_info.endpoint.host_str().unwrap_or_default(),
-                        registry_info.get_image_name(&models::container::get_mirror_repository_name(
-                            self.long_id(),
-                            target.kubernetes.long_id(),
-                            &target.kubernetes.advanced_settings().registry_mirroring_mode,
-                        )),
-                        image_tag
-                    ),
-                    image_tag,
-                )
+                let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
+                    format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+                } else {
+                    registry_info.endpoint.host_str().unwrap_or_default().into()
+                };
+
+                let (_, image_name, image_tag, _) = source
+                    .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+                        self.long_id(),
+                        target.kubernetes.long_id(),
+                        &target.kubernetes.advanced_settings().registry_mirroring_mode,
+                        target.container_registry.registry_info(),
+                    );
+                let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+                (image_full, image_tag)
             }
             ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
         };
@@ -219,19 +225,20 @@ impl<T: CloudProvider> Job<T> {
                 image_tag,
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_milli: format!("{}m", self.cpu_request_in_milli),
-                cpu_limit_in_milli: format!("{}m", self.cpu_limit_in_milli),
-                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration.as_secs(),
+                with_rbac: matches!(self.schedule.lifecycle_type(), Some(LifecycleType::TERRAFORM)),
                 cronjob_schedule: match &self.schedule {
-                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => None,
                     JobSchedule::Cron { schedule, .. } => Some(schedule.clone()),
                 },
                 cronjob_timezone: match &self.schedule {
-                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => None,
                     JobSchedule::Cron { timezone, .. } => Some(timezone.clone()),
                 },
                 readiness_probe: self.readiness_probe.clone(),
@@ -248,6 +255,8 @@ impl<T: CloudProvider> Job<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
+            annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
         };
 
         ctx
@@ -379,21 +388,6 @@ impl<T: CloudProvider> Service for Job<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        if let ImageSource::Registry { source } = &self.image_source {
-            if let Some(password) = source.registry.get_url_with_credentials().password() {
-                let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
-
-                return if let Some(decoded) = decoded_password {
-                    vec![password.to_string(), decoded]
-                } else {
-                    vec![password.to_string()]
-                };
-            }
-        }
-        vec![]
-    }
 }
 
 pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
@@ -491,6 +485,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) default_port: Option<u16>,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: u64,
+    pub(super) with_rbac: bool,
     pub(super) cronjob_schedule: Option<String>,
     pub(super) cronjob_timezone: Option<String>,
     pub(super) readiness_probe: Option<Probe>,
@@ -511,4 +506,6 @@ pub(super) struct JobTeraContext {
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }

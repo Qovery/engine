@@ -5,9 +5,12 @@ use function_name::named;
 use qovery_engine::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
+use retry::delay::Fibonacci;
+use retry::OperationResult;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::time::Duration;
+use tracing::error;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on bucket / objects
@@ -18,6 +21,7 @@ struct BucketParams {
     bucket_location: GcpStorageRegion,
     bucket_ttl: Option<Duration>,
     bucket_labels: Option<HashMap<String, String>>,
+    bucket_versioning: bool,
 }
 
 impl BucketParams {
@@ -179,6 +183,7 @@ fn test_create_bucket_success() {
                     ("bucket_name".to_string(), "bucket_1".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
+                bucket_versioning: false,
             },
             description: "case 1 - create a simple bucket",
         },
@@ -192,12 +197,13 @@ fn test_create_bucket_success() {
                     ("bucket_name".to_string(), "bucket_2".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
+                bucket_versioning: false,
             },
             description: "case 2 - create a simple bucket with TTL < 1 day",
         },
         TestCase {
             input: BucketParams {
-                project_id: google_project_id,
+                project_id: google_project_id.to_string(),
                 bucket_name: format!("test-bucket-3-{}", Uuid::new_v4()),
                 bucket_location: GcpStorageRegion::EuropeWest9,
                 bucket_ttl: None,
@@ -205,8 +211,23 @@ fn test_create_bucket_success() {
                     ("bucket_name".to_string(), "bucket_3".to_string()),
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
+                bucket_versioning: false,
             },
             description: "case 3 - create a simple bucket without TTL",
+        },
+        TestCase {
+            input: BucketParams {
+                project_id: google_project_id,
+                bucket_name: format!("test-bucket-4-{}", Uuid::new_v4()),
+                bucket_location: GcpStorageRegion::EuropeWest9,
+                bucket_ttl: None,
+                bucket_labels: Some(HashMap::from([
+                    ("bucket_name".to_string(), "bucket_4".to_string()),
+                    ("test_name".to_string(), function_name!().to_string()),
+                ])),
+                bucket_versioning: true,
+            },
+            description: "case 4 - create a simple bucket with versioning",
         },
     ];
 
@@ -218,7 +239,7 @@ fn test_create_bucket_success() {
                 tc.input.bucket_name.as_str(),
                 tc.input.bucket_location.clone(),
                 tc.input.bucket_ttl,
-                false,
+                tc.input.bucket_versioning,
                 tc.input.bucket_labels.clone(),
             )
             .unwrap_or_else(|_| panic!("Cannot create bucket for test `{}`", tc.description));
@@ -238,7 +259,60 @@ fn test_create_bucket_success() {
 #[cfg(feature = "test-gcp-minimal")]
 #[test]
 #[named]
-fn test_delete_bucket_success() {
+fn test_update_bucket() {
+    // setup:
+    let secrets = FuncTestsSecrets::new();
+    let credentials = try_parse_json_credentials_from_str(
+        secrets
+            .GCP_CREDENTIALS
+            .as_ref()
+            .expect("GCP_CREDENTIALS is not set in secrets"),
+    )
+    .expect("Cannot parse GCP_CREDENTIALS");
+    let service = ObjectStorageService::new(
+        credentials,
+        Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
+        Some(GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER.clone()),
+    )
+    .expect("Cannot initialize google object storage service");
+
+    // create a bucket for the test
+    let existing_bucket = service
+        .create_bucket(
+            secrets
+                .GCP_PROJECT_NAME
+                .expect("GCP_PROJECT_NAME should be defined in secrets")
+                .as_str(),
+            format!("test-bucket-{}", Uuid::new_v4()).as_str(),
+            GcpStorageRegion::from(GCP_REGION),
+            Some(*GCP_RESOURCE_TTL),
+            false,
+            Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+        )
+        .expect("Cannot create bucket");
+    // stick a guard on the bucket to delete bucket after test
+    let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket.name, |bucket_name| {
+        // make sure to delete the bucket after test
+        service
+            .delete_bucket(bucket_name.as_str(), true)
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+    });
+
+    // Bucket versioning
+    for versioning in [true, false].iter() {
+        // execute:
+        match service.update_bucket(existing_bucket.name.as_str(), *versioning) {
+            // verify:
+            Ok(updated_bucket_result) => assert_eq!(versioning, &updated_bucket_result.versioning_activated),
+            Err(e) => panic!("Cannot update bucket versioning: {}", e),
+        }
+    }
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[test]
+#[named]
+fn test_delete_bucket_using_run_job() {
     // setup:
     let secrets = FuncTestsSecrets::new();
     let credentials = try_parse_json_credentials_from_str(
@@ -270,13 +344,30 @@ fn test_delete_bucket_success() {
         )
         .expect("Cannot create bucket")
         .name;
+    // stick a guard on the bucket to delete bucket after test
+    let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
+        // make sure to delete the bucket after test
+        service
+            .delete_bucket(bucket_name.as_str(), true)
+            .unwrap_or_else(|_| error!("Cannot delete test bucket `{}` after test", bucket_name));
+    });
 
     // execute:
-    let delete_result = service.delete_bucket(existing_bucket_name.as_str(), true);
+    let delete_result =
+        service.delete_bucket_non_blocking(existing_bucket_name.as_str(), GcpStorageRegion::from(GCP_REGION));
 
     // verify:
     assert!(delete_result.is_ok());
-    assert!(!service.bucket_exists(existing_bucket_name.as_str()));
+    // deletion job should be executed immediately, but there is a delay in the bucket deletion while job is being created and executed
+    // so we need to wait a bit before checking if the bucket is deleted
+    let bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        if service.bucket_exists(existing_bucket_name.as_str()) {
+            OperationResult::Retry("Bucket still exists")
+        } else {
+            OperationResult::Ok(())
+        }
+    });
+    assert!(bucket_exists_result.is_ok());
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -675,6 +766,7 @@ fn test_list_objects_keys_only() {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -759,6 +851,7 @@ fn test_list_objects_keys_only_with_prefix() {
                 Uuid::new_v4()
             ),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -844,6 +937,7 @@ fn test_list_objects() {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {
@@ -928,6 +1022,7 @@ fn test_list_objects_with_prefix() {
                 Uuid::new_v4()
             ),
             value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            tags: vec![],
         })
         .collect();
     for object_to_be_created in &object_to_be_created {

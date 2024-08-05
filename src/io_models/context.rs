@@ -76,6 +76,17 @@ impl Context {
         self.execution_id.as_str()
     }
 
+    pub fn partial_execution_id(&self) -> &str {
+        let delimiter = '-';
+        let execution_id = self.execution_id();
+
+        if let Some(pos) = execution_id.rfind(delimiter) {
+            return &execution_id[..pos];
+        }
+
+        execution_id
+    }
+
     pub fn workspace_root_dir(&self) -> &str {
         self.workspace_root_dir.as_str()
     }

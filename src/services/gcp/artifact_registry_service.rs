@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::Mutex;
+use tonic::Code;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ArtifactRegistryServiceError {
@@ -91,7 +92,7 @@ impl ArtifactRegistryService {
                     ))
                     .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
                         raw_error_message: e.to_string(),
-                    })?, // TODO(benjaminch): properly handle error here
+                    })?,
                 ))
                 .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
                     raw_error_message: e.to_string(),
@@ -182,7 +183,7 @@ impl ArtifactRegistryService {
                     .blocking_lock_owned()
                     .borrow_mut()
                     .create_repository(
-                        // TODO(benjaminch): add repository TTL
+                        // TODO(ENG-1808): add repository TTL
                         CreateRepositoryRequest {
                             parent: format!(
                                 "projects/{}/locations/{}",
@@ -246,7 +247,7 @@ impl ArtifactRegistryService {
             repository_name
         );
 
-        block_on(
+        let delete_repository_result = block_on(
             self.client
                 .clone()
                 .blocking_lock_owned()
@@ -257,11 +258,21 @@ impl ArtifactRegistryService {
                     },
                     None,
                 ),
-        )
-        .map_err(|e| ArtifactRegistryServiceError::CannotDeleteRepository {
-            repository_name: repository_identifier,
-            raw_error_message: e.to_string(),
-        })
+        );
+        match delete_repository_result {
+            Ok(_) => {}
+            Err(status) => {
+                let code = status.code();
+                if code != Code::NotFound {
+                    return Err(ArtifactRegistryServiceError::CannotDeleteRepository {
+                        repository_name: repository_identifier,
+                        raw_error_message: status.to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_docker_image(

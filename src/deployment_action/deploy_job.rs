@@ -2,7 +2,7 @@ use super::utils::delete_cached_image;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::kubectl::kubectl_get_job_pod_output;
+use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::utils::{get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind};
@@ -13,7 +13,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
-use crate::io_models::job::JobSchedule;
+use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
@@ -25,8 +25,10 @@ use kube::Api;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Duration;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
 where
@@ -36,14 +38,17 @@ where
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
 
         // Force job to run, if force trigger is requested
+        let default = JobSchedule::OnStart {
+            lifecycle_type: self.schedule().lifecycle_type().unwrap_or(LifecycleType::GENERIC),
+        };
         let job_schedule = if self.should_force_trigger() {
-            &JobSchedule::OnStart {}
+            &default
         } else {
             self.schedule()
         };
 
         match job_schedule {
-            JobSchedule::OnStart {} | JobSchedule::Cron { .. } => {
+            JobSchedule::OnStart { .. } | JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -53,7 +58,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Create), task)
             }
-            JobSchedule::OnPause {} | JobSchedule::OnDelete {} => {
+            JobSchedule::OnPause { .. } | JobSchedule::OnDelete { .. } => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Create);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
@@ -74,7 +79,7 @@ where
                 };
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnPause {} => {
+            JobSchedule::OnPause { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -84,7 +89,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnStart {} | JobSchedule::OnDelete {} => {
+            JobSchedule::OnStart { .. } | JobSchedule::OnDelete { .. } => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Pause);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                     Ok(())
@@ -96,7 +101,7 @@ where
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
-            JobSchedule::OnDelete {} => {
+            JobSchedule::OnDelete { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -111,7 +116,7 @@ where
                     task,
                 )
             }
-            JobSchedule::Cron { .. } | JobSchedule::OnStart {} | JobSchedule::OnPause {} => Ok(()),
+            JobSchedule::Cron { .. } | JobSchedule::OnStart { .. } | JobSchedule::OnPause { .. } => Ok(()),
         }?;
 
         let (pre_run, run, post_run) = delete_job(self, target, &event_details);
@@ -158,7 +163,6 @@ where
                 mirror_image_if_necessary(
                     job.long_id(),
                     source,
-                    source.tag_for_mirror(job.long_id()),
                     target,
                     logger,
                     event_details.clone(),
@@ -227,17 +231,53 @@ where
                     &job_pod_selector,
                     event_details,
                     &set_of_pods_already_processed,
+                    job.max_duration(),
                 )?;
                 set_of_pods_already_processed.insert(pod_name.clone());
 
+                let should_force_cancel = async {
+                    while !target.abort.status().should_force_cancel() {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                };
+
                 // Wait for the job container to be terminated
                 logger.info(format!("Waiting for the job container {} to be processed...", job.kube_name()));
-                let _ = block_on(await_condition(
-                    kube_pod_api.clone(),
-                    &pod_name,
-                    is_job_pod_container_terminated(job.kube_name()),
-                ));
+                block_on(async {
+                    tokio::select! {
+                        biased;
+                        _ = should_force_cancel => {},
+                        _ = await_condition(
+                            kube_pod_api.clone(),
+                            &pod_name,
+                            is_job_pod_container_terminated(job.kube_name()),
+                        ) => {},
+                    }
+                });
 
+                let status = target.abort.status();
+                // If abort is forced, we delete lifecycle jobs
+                if status.should_force_cancel() {
+                    // force delete lifecycle jobs
+                    for job in target.environment.jobs.iter().filter(|&j| j.job_schedule().is_job()) {
+                        info!("Trying to delete lifecycle jobs with label `{}`", job.kube_label_selector());
+                        match kubectl_exec_delete_job(
+                            &target.kube,
+                            job.kube_label_selector().as_str(),
+                            Some(target.environment.namespace()),
+                        ) {
+                            Ok(_) => {
+                                info!("Job with selector `{}` has been deleted", job.kube_label_selector());
+                                return Err(Box::new(EngineError::new_task_cancellation_requested(
+                                    event_details.clone(),
+                                )));
+                            }
+                            Err(_) => warn!("Cannot delete job with selector `{}`", job.kube_label_selector()),
+                        }
+                    }
+                }
+
+                info!("Get JSON output from shared volume");
                 // Get JSON output from shared volume
                 let result_json_output = kubectl_get_job_pod_output(
                     target.kubernetes.kubeconfig_local_file_path(),
@@ -284,6 +324,7 @@ where
                     }
                 };
 
+                info!("Write file in shared volume to let the waiting container terminate");
                 // Write file in shared volume to let the waiting container terminate
                 block_on(kube_pod_api.clone().exec(
                     &pod_name,
@@ -299,12 +340,23 @@ where
 
                 // wait for job to finish
                 let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+
+                // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
+                info!("Get Jobs");
+                block_on(jobs.get(job.kube_name())).map_err(|err| {
+                    EngineError::new_job_error(
+                        event_details.clone(),
+                        format!("Cannot get job {}: {}", job.kube_name(), err),
+                    )
+                })?;
+                info!("Wait for job to finish");
                 let ret = block_on(await_condition(jobs, job.kube_name(), is_job_terminated())).map_err(|_err| {
                     EngineError::new_job_error(
                         event_details.clone(),
                         format!("Cannot find job for terminated pod {}", &pod_name),
                     )
                 })?;
+
                 let job_status_result = match job_status(&ret.as_ref()) {
                     JobStatus::Success => return Ok(state),
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),
@@ -487,7 +539,7 @@ where
                     job.long_id(),
                     mirrored_image_tag,
                     state.last_deployed_image,
-                    false,
+                    true,
                     target,
                     logger,
                 ) {
@@ -559,9 +611,15 @@ fn get_active_job_pod_by_selector(
     job_pod_selector: &str,
     event_details: &EventDetails,
     set_of_pods_already_processed: &HashSet<String>,
+    job_max_duration: &Duration,
 ) -> Result<String, Box<EngineError>> {
+    // We wait at max 30 times 10 seconds (5min) for the pod to be running.
+    // If the job max duration is lower than 5min, we reduce the number of retries to clamp it to its maximum duration
+    let retry_fixed_delay =
+        retry::delay::Fixed::from_millis(10_000).take(min(30, job_max_duration.as_secs() as usize / 10));
+
     // Trying to get the pod name, letting it up to 5 minutes to be scheduled
-    let list_job_pods_result = retry::retry(retry::delay::Fixed::from_millis(10_000).take(30), || {
+    let list_job_pods_result = retry::retry(retry_fixed_delay, || {
         // List pods according to job label selector
         let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
             Ok(pods_list) => {
@@ -654,7 +712,9 @@ fn get_active_job_pod_by_selector(
 fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
     if let Some(pod) = job_pod {
         if let Some(pod_status) = &pod.status {
+            info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
             if let Some(pod_container_statuses) = &pod_status.container_statuses {
+                info!("{}", format!("Job pod {} container status", job_container_name));
                 let job_container_terminated = &pod_container_statuses
                     .iter()
                     .filter(|container_status| container_status.name == job_container_name)
@@ -664,6 +724,7 @@ fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_
             }
         }
     }
+    info!("{}", format!("Job pod container: {} is not terminated", job_container_name));
     false
 }
 
@@ -677,6 +738,7 @@ fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<P
 struct JobOutputVariable {
     pub value: String,
     pub sensitive: bool,
+    pub description: String,
 }
 
 impl Default for JobOutputVariable {
@@ -684,6 +746,7 @@ impl Default for JobOutputVariable {
         JobOutputVariable {
             value: String::new(),
             sensitive: true,
+            description: String::new(),
         }
     }
 }
@@ -704,14 +767,16 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
 
         // Get job output 'value' as string or any other type
         let job_output_value = if value.is_string() {
-            match value.as_str() {
-                None => "",
-                Some(value_as_str) => value_as_str,
-            }
-            .to_string()
+            value.as_str().unwrap_or_default().to_string()
         } else {
             value.to_string()
         };
+        let job_output_description = job_output_variable_hashmap
+            .get("description")
+            .unwrap_or(serde_value_default)
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
 
         job_output_variables.insert(
             key.to_string(),
@@ -722,6 +787,7 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
                     .unwrap_or(serde_value_default)
                     .as_bool()
                     .unwrap_or(false),
+                description: job_output_description,
             },
         );
     }
@@ -748,6 +814,7 @@ mod test {
             &JobOutputVariable {
                 value: "bar".to_string(),
                 sensitive: true,
+                description: "".to_string(),
             }
         );
         assert_eq!(
@@ -755,6 +822,7 @@ mod test {
             &JobOutputVariable {
                 value: "bar_2".to_string(),
                 sensitive: false,
+                description: "".to_string(),
             }
         );
     }
@@ -775,6 +843,7 @@ mod test {
             &JobOutputVariable {
                 value: "123".to_string(),
                 sensitive: true,
+                description: "".to_string(),
             }
         );
         assert_eq!(
@@ -782,6 +851,30 @@ mod test {
             &JobOutputVariable {
                 value: "123.456".to_string(),
                 sensitive: false,
+                description: "".to_string(),
+            }
+        );
+        let json_final = serde_json::to_string(&hashmap).unwrap();
+        println!("{json_final}");
+    }
+
+    #[test]
+    fn should_serialize_json_to_job_output_variable_with_description() {
+        // given
+        let json_output_with_numeric_values = r#"
+        {"foo": { "value": 123, "description": "a description" }}
+        "#;
+
+        // when
+        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+
+        // then
+        assert_eq!(
+            hashmap.get("foo").unwrap(),
+            &JobOutputVariable {
+                value: "123".to_string(),
+                sensitive: false,
+                description: "a description".to_string(),
             }
         );
         let json_final = serde_json::to_string(&hashmap).unwrap();

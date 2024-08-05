@@ -34,7 +34,7 @@ use crate::metrics_registry::MetricsRegistry;
 use crate::models::domain::Domain;
 use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::models::gcp::JsonCredentials;
-use crate::models::scaleway::ScwZone;
+use crate::models::scaleway::{ScwRegion, ScwZone};
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
@@ -78,11 +78,14 @@ impl<T> EngineRequest<T> {
         event_details: EventDetails,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
+        is_infra_deployment: bool,
     ) -> Result<InfrastructureContext, Box<EngineError>> {
-        let build_platform = self.build_platform.to_engine_build_platform(context);
+        let build_platform = self
+            .build_platform
+            .to_engine_build_platform(context, metrics_registry.clone_dyn());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
+            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind)
             .ok_or_else(|| {
                 Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
@@ -93,13 +96,20 @@ impl<T> EngineRequest<T> {
                     ),
                 ))
             })?;
-        let cloud_provider: Arc<dyn cloud_provider::CloudProvider> = Arc::from(cloud_provider);
 
+        let qovery_tags = HashMap::from([
+            ("ClusterId".to_string(), context.cluster_short_id().to_string()),
+            ("ClusterLongId".to_string(), context.cluster_long_id().to_string()),
+            ("OrganizationId".to_string(), context.organization_short_id().to_string()),
+            ("OrganizationLongId".to_string(), context.organization_long_id().to_string()),
+            ("Region".to_string(), cloud_provider.region()),
+        ]);
         let mut tags = self
             .kubernetes
             .advanced_settings
             .cloud_provider_container_registry_tags
             .clone();
+        tags.extend(qovery_tags);
         if let Some(ttl) = self.kubernetes.advanced_settings.resource_ttl() {
             tags.insert("ttl".to_string(), ttl.as_secs().to_string());
         };
@@ -139,14 +149,11 @@ impl<T> EngineRequest<T> {
                     ),
                 )
             })?;
-        let dns_provider: Arc<dyn dns_provider::DnsProvider> = Arc::from(dns_provider);
 
-        let kubernetes = match self.kubernetes.to_engine_kubernetes(
-            context,
-            cloud_provider.clone(),
-            dns_provider.clone(),
-            logger.clone(),
-        ) {
+        let kubernetes = match self
+            .kubernetes
+            .to_engine_kubernetes(context, cloud_provider.as_ref(), logger.clone())
+        {
             Ok(x) => x,
             Err(e) => {
                 error!("{:?}", e);
@@ -162,7 +169,21 @@ impl<T> EngineRequest<T> {
             dns_provider,
             kubernetes,
             metrics_registry,
+            is_infra_deployment,
         ))
+    }
+
+    pub fn is_self_managed(&self) -> bool {
+        match self.kubernetes.kind {
+            cloud_provider::kubernetes::Kind::Eks => false,
+            cloud_provider::kubernetes::Kind::Ec2 => false,
+            cloud_provider::kubernetes::Kind::ScwKapsule => false,
+            cloud_provider::kubernetes::Kind::Gke => false,
+            cloud_provider::kubernetes::Kind::EksSelfManaged => true,
+            cloud_provider::kubernetes::Kind::GkeSelfManaged => true,
+            cloud_provider::kubernetes::Kind::ScwSelfManaged => true,
+            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged => true,
+        }
     }
 }
 
@@ -212,11 +233,15 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(
+        &self,
+        context: &Context,
+        metrics_registry: Box<dyn MetricsRegistry>,
+    ) -> Box<dyn build_platform::BuildPlatform> {
         Box::new(match self.kind {
             build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
-                LocalDocker::new(context.clone(), self.long_id, self.name.as_str()).unwrap()
+                LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), metrics_registry).unwrap()
             }
         })
     }
@@ -244,6 +269,8 @@ impl CloudProvider {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
             secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
             region: self.terraform_state_credentials.region.clone(),
+            s3_bucket: self.terraform_state_credentials.s3_bucket.clone(),
+            dynamodb_table: self.terraform_state_credentials.dynamodb_table.clone(),
         };
 
         match self.kind {
@@ -289,7 +316,7 @@ impl CloudProvider {
                     terraform_state_credentials,
                 )))
             }
-            cloud_provider::Kind::SelfManaged => Some(Box::new(SelfManaged::new(
+            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(
                 context,
                 self.clone().long_id,
                 self.name.clone(),
@@ -304,6 +331,9 @@ pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub region: String,
+    pub s3_bucket: String,
+    #[serde(alias = "dynamo_db_table")]
+    pub dynamodb_table: String,
 }
 
 pub type ChartValuesOverrideName = String;
@@ -333,11 +363,10 @@ impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
-        cloud_provider: Arc<dyn cloud_provider::CloudProvider>,
-        dns_provider: Arc<dyn dns_provider::DnsProvider>,
+        cloud_provider: &dyn cloud_provider::CloudProvider,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
-        let event_details = event_details(&*cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
+        let event_details = event_details(cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
         let temp_dir = workspace_directory(
             context.workspace_root_dir(),
@@ -386,7 +415,6 @@ impl Kubernetes {
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 cloud_provider.zones().clone(),
                 cloud_provider,
-                dns_provider,
                 serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
@@ -412,7 +440,6 @@ impl Kubernetes {
                     )
                 }),
                 cloud_provider,
-                dns_provider,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
@@ -446,7 +473,6 @@ impl Kubernetes {
                     AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                     cloud_provider.zones().clone(),
                     cloud_provider,
-                    dns_provider,
                     serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                         .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
@@ -481,8 +507,6 @@ impl Kubernetes {
                             self.region.as_str()
                         )
                     }),
-                    cloud_provider,
-                    dns_provider,
                     options,
                     logger,
                     self.advanced_settings.clone(),
@@ -494,7 +518,8 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
-            cloud_provider::kubernetes::Kind::EksSelfManaged
+            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged
+            | cloud_provider::kubernetes::Kind::EksSelfManaged
             | cloud_provider::kubernetes::Kind::GkeSelfManaged
             | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
                 match cloud_provider::self_managed::kubernetes::SelfManaged::new(
@@ -502,6 +527,7 @@ impl Kubernetes {
                     self.id.to_string(),
                     self.long_id,
                     self.name.to_string(),
+                    self.kind,
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     cloud_provider,
@@ -564,9 +590,9 @@ impl ContainerRegistry {
                     self.name.as_str(),
                     &options.scaleway_secret_key,
                     &options.scaleway_project_id,
-                    ScwZone::from_str(&options.region).unwrap_or_else(|_| {
-                        panic!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
-                    }),
+                    ScwRegion::from_str(&options.region).map_err(|_| {
+                        anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
+                    })?,
                 )?))
             }
             container_registry::Kind::GcpArtifactRegistry => {
@@ -595,7 +621,7 @@ impl ContainerRegistry {
                             Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                             Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                         )
-                        .unwrap_or_else(|_| panic!("cannot instantiate ArtifactRegistryService",)),
+                        .with_context(|| "cannot instantiate ArtifactRegistryService")?,
                     ),
                 )?))
             }
@@ -609,7 +635,8 @@ impl ContainerRegistry {
                     options.url.clone(),
                     options.skip_tls_verify,
                     options.repository_name.clone(),
-                    options.login.and_then(|l| options.password.map(|p| (l, p))),
+                    options.username.and_then(|l| options.password.map(|p| (l, p))),
+                    options.url.host_str().unwrap_or("") != "qovery-registry.lan",
                 )?))
             }
         }
@@ -717,7 +744,7 @@ pub struct ScwCrOptions {
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GenericCrOptions {
     pub url: Url,
-    pub login: Option<String>,
+    pub username: Option<String>,
     #[derivative(Debug = "ignore")]
     pub password: Option<String>,
     pub skip_tls_verify: bool,
@@ -754,8 +781,5 @@ where
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Archive {
-    pub bucket_name: String,
-    pub access_key_id: String,
-    #[derivative(Debug = "ignore")]
-    pub secret_access_key: String,
+    pub upload_url: Url,
 }

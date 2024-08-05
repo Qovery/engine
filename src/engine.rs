@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::sync::Arc;
+use std::sync::Mutex;
 use thiserror::Error;
 
 use crate::build_platform::BuildPlatform;
@@ -8,8 +8,11 @@ use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
+use crate::events::Stage::Infrastructure;
 use crate::io_models::context::Context;
 use crate::metrics_registry::MetricsRegistry;
+use crate::services::kube_client::QubeClient;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineConfigError {
@@ -38,10 +41,12 @@ pub struct InfrastructureContext {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
+    cloud_provider: Box<dyn CloudProvider>,
+    dns_provider: Box<dyn DnsProvider>,
     kubernetes: Box<dyn Kubernetes>,
     metrics_registry: Box<dyn MetricsRegistry>,
+    is_infra_deployment: bool,
+    kube_client: Mutex<Option<QubeClient>>,
 }
 
 impl InfrastructureContext {
@@ -49,10 +54,11 @@ impl InfrastructureContext {
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
+        cloud_provider: Box<dyn CloudProvider>,
+        dns_provider: Box<dyn DnsProvider>,
         kubernetes: Box<dyn Kubernetes>,
         metrics_registry: Box<dyn MetricsRegistry>,
+        is_infra_deployment: bool,
     ) -> InfrastructureContext {
         InfrastructureContext {
             context,
@@ -62,6 +68,8 @@ impl InfrastructureContext {
             dns_provider,
             kubernetes,
             metrics_registry,
+            is_infra_deployment,
+            kube_client: Mutex::new(None),
         }
     }
 
@@ -109,5 +117,41 @@ impl InfrastructureContext {
         }
 
         Ok(())
+    }
+
+    // The kubeconfig file may not exist yet on disk, so we create the client lazily
+    pub fn mk_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
+        if let Some(client) = self.kube_client.lock().unwrap().borrow().as_ref() {
+            return Ok(client.clone());
+        }
+
+        let event_details = self
+            .kubernetes()
+            .get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources));
+        let kubeconfig_path = {
+            let kubeconfig_path = self.kubernetes().kubeconfig_local_file_path();
+            if kubeconfig_path.exists() {
+                Some(kubeconfig_path)
+            } else if self.is_infra_deployment {
+                // Infra deployment must have a kubeconfig file, we cant upgrade infra within the cluster
+                return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                    event_details.clone(),
+                )));
+            } else {
+                None
+            }
+        };
+
+        let kube_credentials: Vec<(String, String)> = self
+            .cloud_provider
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        let client = QubeClient::new(event_details, kubeconfig_path, kube_credentials)?;
+
+        *self.kube_client.lock().unwrap() = Some(client.clone());
+        Ok(client)
     }
 }

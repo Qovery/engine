@@ -1,34 +1,43 @@
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
+use std::marker::PhantomData;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use serde::Serialize;
+use uuid::Uuid;
+
 use crate::build_platform::Build;
 use crate::cloud_provider::io::RegistryMirroringMode;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage, StorageDataTemplate,
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
+use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
-use itertools::Itertools;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use serde::Serialize;
-use std::collections::BTreeSet;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::time::Duration;
-use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ContainerError {
@@ -47,15 +56,15 @@ pub struct Container<T: CloudProvider> {
     pub source: RegistryImageSource,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request_in_mili: u32,
-    pub(super) cpu_limit_in_mili: u32,
-    pub(super) ram_request_in_mib: u32,
-    pub(super) ram_limit_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
-    pub(super) storages: Vec<Storage<T::StorageTypes>>,
+    pub(super) storages: Vec<Storage>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) readiness_probe: Option<Probe>,
@@ -64,6 +73,8 @@ pub struct Container<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 pub fn get_mirror_repository_name(
@@ -108,15 +119,15 @@ impl<T: CloudProvider> Container<T> {
         registry_image_source: RegistryImageSource,
         command_args: Vec<String>,
         entrypoint: Option<String>,
-        cpu_request_in_mili: u32,
-        cpu_limit_in_mili: u32,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
         ram_request_in_mib: u32,
         ram_limit_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
         public_domain: String,
         ports: Vec<Port>,
-        storages: Vec<Storage<T::StorageTypes>>,
+        storages: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
         readiness_probe: Option<Probe>,
@@ -124,6 +135,10 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -137,29 +152,17 @@ impl<T: CloudProvider> Container<T> {
             ));
         }
 
-        if cpu_request_in_mili > cpu_limit_in_mili {
-            return Err(ContainerError::InvalidConfig(
-                "cpu_request_in_mili must be less or equal to cpu_limit_in_mili".to_string(),
-            ));
-        }
-
-        if cpu_request_in_mili == 0 {
-            return Err(ContainerError::InvalidConfig(
-                "cpu_request_in_mili must be greater than 0".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib > ram_limit_in_mib {
-            return Err(ContainerError::InvalidConfig(
-                "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
-            ));
-        }
-
-        if ram_request_in_mib == 0 {
-            return Err(ContainerError::InvalidConfig(
-                "ram_request_in_mib must be greater than 0".to_string(),
-            ));
-        }
+        let service_resources = compute_service_requests_and_limits(
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            ram_request_in_mib,
+            ram_limit_in_mib,
+            advanced_settings.resources_override_limit_cpu_in_milli,
+            advanced_settings.resources_override_limit_ram_in_mib,
+            allow_service_cpu_overcommit,
+            allow_service_ram_overcommit,
+        )
+        .map_err(ContainerError::InvalidConfig)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -181,10 +184,10 @@ impl<T: CloudProvider> Container<T> {
             source: registry_image_source,
             command_args,
             entrypoint,
-            cpu_request_in_mili,
-            cpu_limit_in_mili,
-            ram_request_in_mib,
-            ram_limit_in_mib,
+            cpu_request_in_milli: service_resources.cpu_request_in_milli,
+            cpu_limit_in_milli: service_resources.cpu_limit_in_milli,
+            ram_request_in_mib: service_resources.ram_request_in_mib,
+            ram_limit_in_mib: service_resources.ram_limit_in_mib,
             min_instances,
             max_instances,
             public_domain,
@@ -198,6 +201,8 @@ impl<T: CloudProvider> Container<T> {
             _extra_settings: extra_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -224,14 +229,37 @@ impl<T: CloudProvider> Container<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
-        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+        let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
         );
+
+        let mut tolerations = BTreeMap::<String, String>::new();
+        let is_stateful_set = !self.storages.is_empty();
+        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set) {
+            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations, is_stateful_set);
+        }
+
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
+        let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
+            format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+        } else {
+            registry_info.endpoint.host_str().unwrap_or_default().into()
+        };
+
+        let (_, image_name, image_tag, _) = self
+            .source
+            .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+                self.long_id(),
+                target.kubernetes.long_id(),
+                &target.kubernetes.advanced_settings().registry_mirroring_mode,
+                target.container_registry.registry_info(),
+            );
+        let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
@@ -246,24 +274,15 @@ impl<T: CloudProvider> Container<T> {
                 name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 // FIXME: We mirror images to cluster private registry
-                image_full: format!(
-                    "{}/{}:{}",
-                    registry_info.endpoint.host_str().unwrap_or_default(),
-                    registry_info.get_image_name(&get_mirror_repository_name(
-                        self.long_id(),
-                        kubernetes.long_id(),
-                        &kubernetes.advanced_settings().registry_mirroring_mode,
-                    )),
-                    self.source.tag_for_mirror(&self.long_id)
-                ),
-                image_tag: self.source.tag_for_mirror(&self.long_id),
+                image_full,
+                image_tag,
                 version: self.service_version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
-                cpu_limit_in_mili: format!("{}m", self.cpu_limit_in_mili),
-                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -279,13 +298,26 @@ impl<T: CloudProvider> Container<T> {
                     vec
                 },
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
-                storages: vec![],
+                storages: self
+                    .storages
+                    .iter()
+                    .map(|s| StorageDataTemplate {
+                        id: s.id.clone(),
+                        long_id: s.long_id,
+                        name: s.name.clone(),
+                        storage_type: s.storage_class.0.clone(),
+                        size_in_gib: s.size_in_gib,
+                        mount_point: s.mount_point.clone(),
+                        snapshot_retention_in_days: s.snapshot_retention_in_days,
+                    })
+                    .collect(),
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings,
                 legacy_deployment_matchlabels: false,
                 legacy_volumeclaim_template: false,
                 legacy_deployment_from_scaleway: false,
+                tolerations,
             },
             registry: registry_info
                 .registry_docker_json_config
@@ -297,7 +329,9 @@ impl<T: CloudProvider> Container<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
-            loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
+            loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(),
+            annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
         };
 
         ctx
@@ -400,20 +434,6 @@ impl<T: CloudProvider> Service for Container<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        if let Some(password) = self.source.registry.get_url_with_credentials().password() {
-            let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
-
-            if let Some(decoded) = decoded_password {
-                vec![password.to_string(), decoded]
-            } else {
-                vec![password.to_string()]
-            }
-        } else {
-            vec![]
-        }
-    }
 }
 
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
@@ -424,6 +444,14 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use tera::Context as TeraContext;
+
+impl<T: CloudProvider> ToTeraContext for Container<T> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
+        let context = self.default_tera_context(target);
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
+    }
+}
 impl<T: CloudProvider> ContainerService for Container<T>
 where
     Container<T>: Service + ToTeraContext + DeploymentAction,
@@ -506,8 +534,8 @@ pub(super) struct ServiceTeraContext {
     pub(super) version: String,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request_in_mili: String,
-    pub(super) cpu_limit_in_mili: String,
+    pub(super) cpu_request_in_milli: String,
+    pub(super) cpu_limit_in_milli: String,
     pub(super) ram_request_in_mib: String,
     pub(super) ram_limit_in_mib: String,
     pub(super) min_instances: u32,
@@ -523,6 +551,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) legacy_deployment_matchlabels: bool,
     pub(super) legacy_volumeclaim_template: bool,
     pub(super) legacy_deployment_from_scaleway: bool,
+    pub(super) tolerations: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -545,6 +574,8 @@ pub(super) struct ContainerTeraContext {
     pub(super) mounted_files: Vec<MountedFile>,
     pub(super) resource_expiration_in_seconds: Option<i32>,
     pub(super) loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 pub fn get_container_with_invalid_storage_size<T: CloudProvider>(

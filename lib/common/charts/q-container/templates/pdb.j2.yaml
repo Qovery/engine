@@ -11,7 +11,11 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: "{{ value }}"
+    {%- endfor %}
 spec:
+  unhealthyPodEvictionPolicy: AlwaysAllow
   maxUnavailable: 10%
   selector:
     matchLabels:

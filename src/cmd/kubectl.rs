@@ -1,4 +1,6 @@
+use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
+use kube::api::{DeleteParams, PropagationPolicy};
 use kube::core::params::ListParams;
 use kube::{Api, Client};
 use std::fmt::Debug;
@@ -74,7 +76,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
@@ -319,7 +324,10 @@ where
     }
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -341,7 +349,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -364,7 +375,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -387,7 +401,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -411,7 +428,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -466,7 +486,10 @@ where
     P: AsRef<Path>,
 {
     let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
-    environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        environment_variables.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
     kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| {
@@ -656,7 +679,10 @@ where
     P: AsRef<Path>,
 {
     let mut environment_variables = envs;
-    environment_variables.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        environment_variables.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
 
     let arg_namespace = match namespace {
         Some(n) => format!("-n {n}"),
@@ -750,7 +776,10 @@ where
     let kind_with_name = format!("{kind_formatted}/{name}");
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -816,7 +845,10 @@ where
     };
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs.clone());
 
     kubectl_exec_with_output(
@@ -869,7 +901,10 @@ where
     );
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
-    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        complete_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     complete_envs.extend(envs);
 
     kubectl_exec_with_output(
@@ -1021,7 +1056,10 @@ where
         };
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
-    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        complete_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     complete_envs.extend(envs);
 
     match kubectl_exec_with_output(
@@ -1047,7 +1085,10 @@ where
     T: DeserializeOwned,
 {
     let mut extended_envs = Vec::with_capacity(envs.len() + 1);
-    extended_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        extended_envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     extended_envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -1093,7 +1134,10 @@ where
     P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    let kubernetes_config = kubernetes_config.as_ref();
+    if kubernetes_config.exists() {
+        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
+    }
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
@@ -1357,6 +1401,38 @@ pub fn kubectl_get_secret(kube_client: Client, fields_selector: &str) -> Result<
         }
         Err(e) => Err(CommandError::new(
             format!("Error trying to get Secret for fields selector `{fields_selector}`"),
+            Some(e.to_string()),
+            None,
+        )),
+    }
+}
+
+/// kubectl_exec_delete_job: allow to delete a k8s job if exists.
+///
+/// Arguments
+///
+/// * `kube_client`: kubernetes API client.
+/// * `job_selector`: job's selector.
+pub fn kubectl_exec_delete_job(
+    kube_client: &Client,
+    job_selector: &str,
+    namespace: Option<&str>,
+) -> Result<(), CommandError> {
+    let jobs_api: Api<Job> = match namespace {
+        Some(ns) => Api::namespaced(kube_client.clone(), ns),
+        None => Api::all(kube_client.clone()),
+    };
+
+    match block_on(jobs_api.delete_collection(
+        &DeleteParams {
+            propagation_policy: Some(PropagationPolicy::Foreground), // deletes linked pods
+            ..Default::default()
+        },
+        &ListParams::default().labels(job_selector),
+    )) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(CommandError::new(
+            format!("Error while trying to delete job with selector`{job_selector}`"),
             Some(e.to_string()),
             None,
         )),

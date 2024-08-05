@@ -14,18 +14,16 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
 };
-use crate::cloud_provider::models::CpuArchitecture;
+use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
-use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::Helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply, TerraformError};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
@@ -34,21 +32,27 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
+use crate::cmd::terraform_validators::TerraformValidators;
+use crate::engine::InfrastructureContext;
 use crate::models::domain::ToHelmString;
 use crate::models::gcp::JsonCredentials;
 use crate::models::third_parties::LetsEncryptConfig;
+use crate::models::types::Percentage;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::google_object_storage::GoogleOS;
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use crate::runtime::block_on;
-use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
+use crate::{cloud_provider, secret_manager};
 use base64::engine::general_purpose;
+
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use base64::Engine;
 use function_name::named;
 use governor::{Quota, RateLimiter};
@@ -56,6 +60,8 @@ use ipnet::IpNet;
 use itertools::Itertools;
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -64,6 +70,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{env, fs};
 use tera::Context as TeraContext;
 use time::{format_description, Time};
@@ -146,6 +153,7 @@ pub struct GkeOptions {
     // Network
     // VPC
     pub vpc_mode: VpcMode,
+    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: Time,
@@ -168,6 +176,7 @@ impl GkeOptions {
         qovery_engine_location: EngineLocation,
         gcp_json_credentials: JsonCredentials,
         vpc_mode: VpcMode,
+        vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
         tls_email_report: String,
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
@@ -184,6 +193,7 @@ impl GkeOptions {
             qovery_engine_location,
             gcp_json_credentials,
             vpc_mode,
+            vpc_qovery_network_mode,
             tls_email_report,
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,
@@ -201,8 +211,6 @@ pub struct Gke {
     version: KubernetesVersion,
     region: GcpRegion,
     template_directory: String,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
     object_storage: GoogleOS,
     options: GkeOptions,
     logger: Box<dyn Logger>,
@@ -220,8 +228,6 @@ impl Gke {
         name: &str,
         version: KubernetesVersion,
         region: GcpRegion,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
         options: GkeOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
@@ -230,7 +236,7 @@ impl Gke {
         temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = EventDetails::new(
-            Some(cloud_provider.kind()),
+            Some(cloud_provider::Kind::Gcp),
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.borrow().execution_id().to_string(),
@@ -238,33 +244,43 @@ impl Gke {
             Transmitter::Kubernetes(long_id, name.to_string()),
         );
 
+        let object_storage_service_client = retry::retry(Fixed::from(Duration::from_secs(20)).take(3), || {
+            match ObjectStorageService::new(
+                options.gcp_json_credentials.clone(),
+                // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
+                // Max default quotas are 0.5 RPS
+                // more info here https://cloud.google.com/storage/quotas?hl=fr
+                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32))))),
+                // A rate limiter making sure to keep the QPS under quotas while bucket objects writes requests
+                // Max default quotas are 1 RPS
+                // more info here https://cloud.google.com/storage/quotas?hl=fr
+                Some(Arc::from(RateLimiter::direct(Quota::per_second(nonzero!(1_u32))))),
+            ) {
+                Ok(client) => OperationResult::Ok(client),
+                Err(error) => {
+                    let object_storage_error = EngineError::new_object_storage_error(
+                        event_details.clone(),
+                        ObjectStorageError::CannotInstantiateClient {
+                            raw_error_message: error.to_string(),
+                        },
+                    );
+                    // Only retry if the operation timed out (no other way than looking in raw_error content)
+                    if error.get_raw_error_message().contains("operation timed out") {
+                        OperationResult::Retry(object_storage_error)
+                    } else {
+                        OperationResult::Err(object_storage_error)
+                    }
+                }
+            }
+        })
+        .map_err(|error| Box::new(error.error))?;
         let google_object_storage = GoogleOS::new(
             id,
             long_id,
             name,
             &options.gcp_json_credentials.project_id.to_string(),
             GcpStorageRegion::from(region.clone()),
-            Arc::new(
-                ObjectStorageService::new(
-                    options.gcp_json_credentials.clone(),
-                    // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
-                    // Max default quotas are 0.5 RPS
-                    // more info here https://cloud.google.com/storage/quotas?hl=fr
-                    Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32))))),
-                    // A rate limiter making sure to keep the QPS under quotas while bucket objects writes requests
-                    // Max default quotas are 1 RPS
-                    // more info here https://cloud.google.com/storage/quotas?hl=fr
-                    Some(Arc::from(RateLimiter::direct(Quota::per_second(nonzero!(1_u32))))),
-                )
-                .map_err(|e| {
-                    Box::new(EngineError::new_object_storage_error(
-                        event_details.clone(),
-                        ObjectStorageError::CannotInstantiateClient {
-                            raw_error_message: e.to_string(),
-                        },
-                    ))
-                })?,
-            ),
+            Arc::new(object_storage_service_client),
         );
 
         let cluster = Self {
@@ -275,8 +291,6 @@ impl Gke {
             version,
             region,
             template_directory: format!("{}/gcp/bootstrap", context.lib_root_dir()),
-            cloud_provider,
-            dns_provider,
             object_storage: google_object_storage,
             options,
             logger,
@@ -311,13 +325,16 @@ impl Gke {
         format!("qovery-logs-{}", self.id)
     }
 
-    fn tera_context(&self) -> Result<TeraContext, Box<EngineError>> {
+    fn tera_context(&self, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
         // Qovery
-        context.insert("organization_id", self.cloud_provider.organization_id());
-        context.insert("organization_long_id", &self.cloud_provider.organization_long_id().to_string());
+        context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
+        context.insert(
+            "organization_long_id",
+            &infra_ctx.cloud_provider().organization_long_id().to_string(),
+        );
         context.insert("object_storage_kubeconfig_bucket", &self.kubeconfig_bucket_name());
         context.insert("object_storage_logs_bucket", &self.logs_bucket_name());
         // Qovery features
@@ -418,6 +435,26 @@ impl Gke {
 
         // Network
         // VPC
+        match &self.options.vpc_qovery_network_mode {
+            Some(mode) => {
+                context.insert(
+                    "cluster_is_private",
+                    &match mode {
+                        VpcQoveryNetworkMode::WithNatGateways => true,
+                        VpcQoveryNetworkMode::WithoutNatGateways => false,
+                    },
+                ); // cluster is made private when requires static IP
+                context.insert("vpc_network_mode", &mode.to_string());
+            }
+            None => {
+                context.insert("cluster_is_private", &false); // cluster is public unless requires static IP
+                context.insert(
+                    "vpc_network_mode",
+                    VpcQoveryNetworkMode::WithoutNatGateways.to_string().as_str(),
+                );
+            }
+        }
+
         match &self.options.vpc_mode {
             VpcMode::Automatic {
                 custom_cluster_ipv4_cidr_block,
@@ -443,6 +480,18 @@ impl Gke {
                 context.insert("ip_range_pods", "");
                 context.insert("ip_range_services", "");
                 context.insert("additional_ip_range_pods", "");
+
+                // VPC log flow (won't be set for user provided VPC)
+                context.insert("vpc_enable_flow_logs", &self.advanced_settings.gcp_vpc_enable_flow_logs);
+                context.insert(
+                    "vpc_flow_logs_sampling",
+                    &self
+                        .advanced_settings
+                        .gcp_vpc_flow_logs_sampling
+                        .as_ref()
+                        .unwrap_or(&Percentage::min())
+                        .as_f64(),
+                );
             }
             VpcMode::UserNetworkConfig {
                 vpc_project_id,
@@ -482,43 +531,61 @@ impl Gke {
                     "additional_ip_range_pods",
                     &additional_ip_range_pods_names.clone().unwrap_or_default(),
                 );
+
+                // VPC log flow (won't be set for user provided VPC)
+                context.insert("vpc_enable_flow_logs", &false);
+                context.insert("vpc_flow_logs_sampling", &Percentage::min().as_f64());
             }
         }
 
         // AWS S3 tfstates storage
         context.insert(
             "aws_access_key_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.access_key_id.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_secret_key_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.secret_access_key.as_str(),
                 None => "",
             },
         );
         context.insert(
             "aws_region_tfstates_account",
-            match self.cloud_provider.terraform_state_credentials() {
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
                 Some(x) => x.region.as_str(),
                 None => "",
             },
         );
-        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
-        context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+        context.insert(
+            "aws_terraform_backend_bucket",
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.s3_bucket.as_str(),
+                None => "",
+            },
+        );
+        context.insert(
+            "aws_terraform_backend_dynamodb_table",
+            match infra_ctx.cloud_provider().terraform_state_credentials() {
+                Some(x) => x.dynamodb_table.as_str(),
+                None => "",
+            },
+        );
 
         // DNS
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
-        let managed_dns_domains_root_helm_format = vec![self.dns_provider.domain().root_domain().to_string()];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
+        let managed_dns_list = vec![infra_ctx.dns_provider().name()];
+        let managed_dns_domains_helm_format = vec![infra_ctx.dns_provider().domain().to_string()];
+        let managed_dns_domains_root_helm_format = vec![infra_ctx.dns_provider().domain().root_domain().to_string()];
+        let managed_dns_domains_terraform_format =
+            terraform_list_format(vec![infra_ctx.dns_provider().domain().to_string()]);
         let managed_dns_domains_root_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
+            terraform_list_format(vec![infra_ctx.dns_provider().domain().root_domain().to_string()]);
         let managed_dns_resolvers_terraform_format = terraform_list_format(
-            self.dns_provider
+            infra_ctx
+                .dns_provider()
                 .resolvers()
                 .iter()
                 .map(|x| x.clone().to_string())
@@ -539,7 +606,7 @@ impl Gke {
         );
 
         // add specific DNS fields
-        self.dns_provider.insert_into_teracontext(&mut context);
+        infra_ctx.dns_provider().insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -554,7 +621,7 @@ impl Gke {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        // TODO(benjaminch): to be removed, we are not supposed to get env from here!!
+        // TODO(ENG-1801): to be removed, we are not supposed to get env from here!!
         if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {
@@ -585,10 +652,16 @@ impl Gke {
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
         context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
 
+        if let Some(nginx_controller_log_format_upstream) =
+            &self.advanced_settings().nginx_controller_log_format_upstream
+        {
+            context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
+        }
+
         Ok(context)
     }
 
-    fn create(&self) -> Result<(), Box<EngineError>> {
+    fn create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
 
         self.logger.log(EngineEvent::Info(
@@ -601,13 +674,13 @@ impl Gke {
             match is_kubernetes_upgrade_required(
                 self.kubeconfig_local_file_path(),
                 self.version.clone(),
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
                 Ok(kubernetes_upgrade_status) => {
                     if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                        self.upgrade_with_status(kubernetes_upgrade_status)?;
+                        self.upgrade_with_status(infra_ctx, kubernetes_upgrade_status)?;
                     } else {
                         self.logger().log(EngineEvent::Info(
                             event_details.clone(),
@@ -632,7 +705,7 @@ impl Gke {
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+        let context = self.tera_context(infra_ctx)?;
 
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
@@ -680,32 +753,44 @@ impl Gke {
             event_details.clone(),
             EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
         ));
-        if let Err(e) = self.object_storage.create_bucket(
-            self.kubeconfig_bucket_name().as_str(),
-            self.advanced_settings.resource_ttl(),
-            false,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
-        }
-
-        // Logs bucket
-        if let Err(e) = self.object_storage.create_bucket(
-            self.logs_bucket_name().as_str(),
-            self.advanced_settings.resource_ttl(),
-            false,
-        ) {
-            let error = EngineError::new_object_storage_error(event_details, e);
-            self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(Box::new(error));
+        for bucket_name in [self.kubeconfig_bucket_name().as_str(), self.logs_bucket_name().as_str()] {
+            match self
+                .object_storage
+                .create_bucket(bucket_name, self.advanced_settings.resource_ttl(), true)
+            {
+                Ok(existing_bucket) => {
+                    self.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!("Object storage bucket {bucket_name} created")),
+                    ));
+                    // Update set versioning to true if not activated on the bucket (bucket created before this option was enabled)
+                    // This can be removed at some point in the future, just here to handle legacy GCP buckets
+                    // TODO(ENG-1736): remove this update once all existing buckets have versioning activated
+                    if !existing_bucket.versioning_activated {
+                        self.object_storage.update_bucket(bucket_name, true).map_err(|e| {
+                            let error = EngineError::new_object_storage_error(event_details.clone(), e);
+                            self.logger().log(EngineEvent::Error(error.clone(), None));
+                            error
+                        })?;
+                    }
+                }
+                Err(e) => {
+                    let error = EngineError::new_object_storage_error(event_details, e);
+                    self.logger().log(EngineEvent::Error(error.clone(), None));
+                    return Err(Box::new(error));
+                }
+            }
         }
 
         // Terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+            &TerraformValidators::Default,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
@@ -718,10 +803,10 @@ impl Gke {
         put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
-        match check_workers_on_create(self, self.cloud_provider.as_ref()) {
+        match check_workers_on_create(self, infra_ctx.cloud_provider()) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -750,11 +835,11 @@ impl Gke {
             Some(kubeconfig_b64),
             Some(qovery_terraform_config.gke_cluster_public_hostname),
             self.kind(),
-            self.cloud_provider.name().to_string(),
+            infra_ctx.cloud_provider().name().to_string(),
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
-            self.cloud_provider.organization_long_id().to_string(),
+            infra_ctx.cloud_provider().organization_long_id().to_string(),
             self.context().is_test_cluster(),
         ));
         // vault config is not blocking
@@ -766,8 +851,8 @@ impl Gke {
         }
 
         // kubernetes helm deployments on the cluster
-        let credentials_environment_variables: Vec<(String, String)> = self
-            .cloud_provider
+        let credentials_environment_variables: Vec<(String, String)> = infra_ctx
+            .cloud_provider()
             .credentials_environment_variables()
             .into_iter()
             .map(|x| (x.0.to_string(), x.1.to_string()))
@@ -779,8 +864,8 @@ impl Gke {
         ));
 
         let charts_prerequisites = helm_charts::ChartsConfigPrerequisites::new(
-            self.cloud_provider.organization_id().to_string(),
-            self.cloud_provider.organization_long_id(),
+            infra_ctx.cloud_provider().organization_id().to_string(),
+            infra_ctx.cloud_provider().organization_long_id(),
             self.id().to_string(),
             self.long_id,
             self.region.clone(),
@@ -793,19 +878,20 @@ impl Gke {
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
             self.context.is_feature_enabled(&Features::Grafana),
-            self.dns_provider.domain().root_domain().to_string(),
-            self.dns_provider.domain().to_helm_format_string(),
+            infra_ctx.dns_provider().domain().root_domain().to_string(),
+            infra_ctx.dns_provider().domain().to_helm_format_string(),
             terraform_list_format(
-                self.dns_provider
+                infra_ctx
+                    .dns_provider()
                     .resolvers()
                     .iter()
                     .map(|x| x.clone().to_string())
                     .collect(),
             ),
-            self.dns_provider.domain().root_domain().to_helm_format_string(),
-            self.dns_provider.provider_name().to_string(),
+            infra_ctx.dns_provider().domain().root_domain().to_helm_format_string(),
+            infra_ctx.dns_provider().provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
-            self.dns_provider.provider_configuration(),
+            infra_ctx.dns_provider().provider_configuration(),
             qovery_terraform_config.loki_logging_service_account_email,
             self.logs_bucket_name(),
             self.options.clone(),
@@ -820,12 +906,12 @@ impl Gke {
             &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
-            self.dns_provider.domain(),
+            infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            self.kube_client(self.cloud_provider.as_ref())?.client(),
+            infra_ctx.mk_kube_client()?.client(),
             &kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -838,25 +924,14 @@ impl Gke {
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }
 
-    fn configure_gcloud_for_cluster(&self) -> Result<(), Box<EngineError>> {
+    fn configure_gcloud_for_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
-        // Get credentials file path
-        let temp_dir = self.temp_dir();
-        let gcp_credentials_file_path = format!("{}/gcp-credentials.json", temp_dir.to_string_lossy());
-
-        let _ = QoveryCommand::new(
-            "gcloud",
-            &[
-                "auth",
-                "activate-service-account",
-                &self.options.gcp_json_credentials.client_email,
-                format!("--key-file={}", gcp_credentials_file_path).as_str(),
-            ],
-            self.cloud_provider.credentials_environment_variables().as_slice(),
-        )
-        .exec(); // TODO(benjaminch): introduce an EngineError for it and handle it properly
+        if let Err(e) = GoogleAuthService::activate_service_account(self.options.gcp_json_credentials.clone()) {
+            error!("Cannot activate service account: {}", e);
+            // TODO(ENG-1803): introduce an EngineError for it and handle it properly
+        }
 
         let _ = QoveryCommand::new(
             "gcloud",
@@ -868,14 +943,17 @@ impl Gke {
                 format!("--region={}", self.region.to_cloud_provider_format()).as_str(),
                 format!("--project={}", self.options.gcp_json_credentials.project_id).as_str(),
             ],
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
         )
-        .exec(); // TODO(benjaminch): introduce an EngineError for it and handle it properly
+        .exec(); // TODO(ENG-1804): introduce an EngineError for it and handle it properly
 
         Ok(())
     }
 
-    fn delete(&self) -> Result<(), Box<EngineError>> {
+    fn delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let skip_kubernetes_step = false;
 
@@ -887,7 +965,7 @@ impl Gke {
         let temp_dir = self.temp_dir();
 
         // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+        let context = self.tera_context(infra_ctx)?;
 
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
@@ -932,7 +1010,11 @@ impl Gke {
         if let Err(e) = terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+            &TerraformValidators::None,
         ) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
@@ -944,7 +1026,7 @@ impl Gke {
         let kubeconfig_path = self.kubeconfig_local_file_path();
         if !skip_kubernetes_step {
             // Configure kubectl to be able to connect to cluster
-            let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
+            let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -957,7 +1039,7 @@ impl Gke {
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubeconfig_path,
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
             );
 
             match all_namespaces {
@@ -977,7 +1059,7 @@ impl Gke {
                         match kubectl_exec_delete_namespace(
                             &kubeconfig_path,
                             namespace_to_delete,
-                            self.cloud_provider.credentials_environment_variables(),
+                            infra_ctx.cloud_provider().credentials_environment_variables(),
                         ) {
                             Ok(_) => self.logger().log(EngineEvent::Info(
                                 event_details.clone(),
@@ -1021,13 +1103,16 @@ impl Gke {
             self.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
-                .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
+            let helm = Helm::new(
+                Some(&kubeconfig_path),
+                &infra_ctx.cloud_provider().credentials_environment_variables(),
+            )
+            .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
 
             // required to avoid namespace stuck on deletion
             if let Err(e) = uninstall_cert_manager(
                 &kubeconfig_path,
-                self.cloud_provider.credentials_environment_variables(),
+                infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
             ) {
@@ -1079,7 +1164,7 @@ impl Gke {
                 let deletion = kubectl_exec_delete_namespace(
                     &kubeconfig_path,
                     qovery_namespace,
-                    self.cloud_provider.credentials_environment_variables(),
+                    infra_ctx.cloud_provider().credentials_environment_variables(),
                 );
                 match deletion {
                     Ok(_) => self.logger().log(EngineEvent::Info(
@@ -1143,7 +1228,11 @@ impl Gke {
         if let Err(err) = terraform_init_validate_destroy(
             temp_dir.to_string_lossy().as_ref(),
             false,
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+            &TerraformValidators::None,
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
         }
@@ -1178,10 +1267,8 @@ impl Gke {
                 ),
             ))
         }
-        if let Err(e) = self
-            .object_storage
-            .delete_bucket(&self.logs_bucket_name(), BucketDeleteStrategy::HardDelete)
-        {
+        // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
+        if let Err(e) = self.object_storage.delete_bucket_non_blocking(&self.logs_bucket_name()) {
             self.logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
@@ -1199,9 +1286,9 @@ impl Gke {
         Ok(())
     }
 
-    fn pause(&self) -> Result<(), Box<EngineError>> {
+    fn pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
-        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
+        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
         // avoid clippy yelling about `get_engine_location` not used
         let _ = self.get_engine_location();
@@ -1296,11 +1383,11 @@ impl Kubernetes for Gke {
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(benjaminch): add some checks eventually
+        Ok(()) // TODO(ENG-1805): add some checks eventually
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        false // TODO(benjaminch): GKE integration, to be checked
+        matches!(self.options.vpc_mode, VpcMode::UserNetworkConfig { .. })
     }
 
     fn is_self_managed(&self) -> bool {
@@ -1313,20 +1400,24 @@ impl Kubernetes for Gke {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
-            self.cloud_provider.kind().to_string().to_lowercase().as_str(),
+            infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || self.create())
+        send_progress_on_long_task(self, Action::Create, || self.create(infra_ctx))
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
@@ -1334,7 +1425,7 @@ impl Kubernetes for Gke {
         ));
         let temp_dir = self.temp_dir();
         // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context()?;
+        let mut context = self.tera_context(infra_ctx)?;
         context.insert(
             "kubernetes_cluster_version",
             format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
@@ -1398,9 +1489,9 @@ impl Kubernetes for Gke {
             EventMessage::new_from_safe("Checking clusters content health".to_string()),
         ));
 
-        let _ = self.configure_gcloud_for_cluster(); // TODO(benjaminch): properly handle this error
-                                                     // disable all replicas with issues to avoid upgrade failures
-        let kube_client = self.kube_client(self.cloud_provider.as_ref())?;
+        let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
+                                                              // disable all replicas with issues to avoid upgrade failures
+        let kube_client = infra_ctx.mk_kube_client()?;
         let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
         for deploy in deployments {
             let status = match deploy.status {
@@ -1474,7 +1565,7 @@ impl Kubernetes for Gke {
             None,
             None,
             Some(3),
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(*e.clone(), None));
@@ -1483,7 +1574,7 @@ impl Kubernetes for Gke {
 
         if let Err(e) = delete_completed_jobs(
             self,
-            self.cloud_provider.credentials_environment_variables(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
             Some(GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES.to_vec()),
         ) {
@@ -1505,9 +1596,13 @@ impl Kubernetes for Gke {
         match terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+            &TerraformValidators::Default,
         ) {
-            Ok(_) => match check_control_plane_on_upgrade(self, self.cloud_provider.as_ref(), kubernetes_version) {
+            Ok(_) => match check_control_plane_on_upgrade(self, infra_ctx.cloud_provider(), kubernetes_version) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(
                         event_details,
@@ -1533,31 +1628,31 @@ impl Kubernetes for Gke {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
-            self.cloud_provider.kind().to_string().to_lowercase().as_str(),
+            infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Pause, || self.pause())
+        send_progress_on_long_task(self, Action::Pause, || self.pause(infra_ctx))
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), Box<EngineError>> {
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
-            self.cloud_provider.kind().to_string().to_lowercase().as_str(),
+            infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
             function_name!(),
             self.name(),
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Delete, || self.delete())
+        send_progress_on_long_task(self, Action::Delete, || self.delete(infra_ctx))
     }
 
     fn temp_dir(&self) -> &Path {
@@ -1580,6 +1675,18 @@ impl Kubernetes for Gke {
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         self.customer_helm_charts_override.clone()
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        None
+    }
+
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
     }
 }
 

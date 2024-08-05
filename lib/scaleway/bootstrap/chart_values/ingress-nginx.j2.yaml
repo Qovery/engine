@@ -15,6 +15,18 @@ controller:
     server-tokens: "false"
     # required for X-Forwarded-for to work
     use-proxy-protocol: "true"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-engine-code
+    # customize log-format / set-by-engine-code
+    # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
+    # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
+    {%- if nginx_controller_log_format_upstream %}
+    log-format-upstream: >
+      {{ nginx_controller_log_format_upstream }}
+    {%- endif %}
+    log-format-escaping-json: "false" # set-by-engine-code
+    log-format-escaping-none: "false" # set-by-engine-code
+
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:
@@ -23,7 +35,11 @@ controller:
   updateStrategy:
     rollingUpdate:
       # set the minimum acceptable number of unavailable pods during a rolling update
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
+
+  readinessProbe:
+    initialDelaySeconds: 15
 
   # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
@@ -37,6 +53,17 @@ controller:
   publishService:
     enabled: true
 
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
+
   # set a load balancer if you want your Nginx to be publicly accessible
   service:
     enabled: true
@@ -46,10 +73,26 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
+      # cant enable http checks due to missing annotations to enable proxy protocol on checks
+      # https://console.scaleway.com/support/tickets/1423150
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-delay: "2s"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-timeout: "2s"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-max-retries: "2"
+      service.beta.kubernetes.io/scw-loadbalancer-redispatch-attempt-count: "1"
+      service.beta.kubernetes.io/scw-loadbalancer-timeout-server: "30s"
       # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-GP-S, LB-GP-M, LB-GP-L, LB-GP-XL)
       service.beta.kubernetes.io/scw-loadbalancer-type: "LB-GP-S" # set-by-engine-code
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
       external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
     externalTrafficPolicy: "Local"
+
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule

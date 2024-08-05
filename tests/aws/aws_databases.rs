@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{
     test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db, StorageSize,
@@ -20,6 +20,7 @@ use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::Action;
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use std::thread::sleep;
@@ -64,7 +65,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
-            AWS_DATABASE_DISK_TYPE,
+            &AwsStorageType::GP2.to_k8s_storage_class(),
             Kind::Aws,
         );
 
@@ -118,7 +119,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
-            AWS_DATABASE_DISK_TYPE,
+            &AwsStorageType::GP2.to_k8s_storage_class(),
             Kind::Aws,
         );
 
@@ -182,7 +183,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             &context,
             test_domain.as_str(),
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
-            AWS_DATABASE_DISK_TYPE,
+            &AwsStorageType::GP2.to_k8s_storage_class(),
             Kind::Aws,
         );
         //let env_to_check = environment.clone();
@@ -190,7 +191,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             &context_for_deletion,
             test_domain.as_str(),
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
-            AWS_DATABASE_DISK_TYPE,
+            &AwsStorageType::GP2.to_k8s_storage_class(),
             Kind::Aws,
         );
 
@@ -272,28 +273,32 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             name: database_db_name.clone(),
             kube_name: database_db_name.clone(),
             created_at: Utc::now(),
-            version: "11.8.0".to_string(),
+            version: "11.22.0".to_string(),
             fqdn_id: database_host.clone(),
             fqdn: database_host.clone(),
             port: database_port,
             username: database_username.clone(),
             password: database_password.to_string(),
-            total_cpus: "500m".to_string(),
-            total_ram_in_mib: 512,
+            cpu_request_in_milli: 500,
+            cpu_limit_in_milli: 500,
+            ram_request_in_mib: 512,
+            ram_limit_in_mib: 512,
             disk_size_in_gib: 10,
-            database_disk_type: "gp2".to_string(),
+            database_disk_type: AwsStorageType::GP2.to_k8s_storage_class(),
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
             mode: CONTAINER,
             database_instance_type: None,
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
         environment.applications = environment
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = app_name.clone();
+                app.branch.clone_from(&app_name);
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.ports = vec![Port {
                     long_id: Default::default(),
@@ -506,7 +511,7 @@ pub fn test_postgresql_pause(
             version,
             test_name,
             DatabaseKind::Postgresql,
-            kubernetes_kind.clone(),
+            kubernetes_kind,
             database_mode.clone(),
             is_public,
             ClusterDomain::Default {
@@ -831,6 +836,20 @@ fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
 #[test]
 fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 //

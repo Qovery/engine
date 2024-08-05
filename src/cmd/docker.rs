@@ -2,9 +2,8 @@ use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
-use std::collections::BTreeSet;
+use std::cmp::max;
 use std::fmt::{Display, Formatter};
-use std::fs;
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -12,8 +11,10 @@ use std::process::ExitStatus;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
+use std::{fs, thread};
 use tempfile::TempDir;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DockerError {
@@ -43,6 +44,7 @@ impl DockerError {
 // We use a mutex that will force serialization of logins in order to avoid that
 // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
 static LOGIN_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static DEFAULT_BUILDER_NAME: &str = "qovery-engine";
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Architecture {
@@ -158,9 +160,21 @@ enum BuilderLocation {
     Kubernetes {
         namespace: String,
         builder_prefix: String,
-        builder_name: String,
-        supported_architectures: BTreeSet<Architecture>,
+        supported_architectures: Vec<Architecture>,
+        enable_rootless: bool,
     },
+}
+
+impl BuilderLocation {
+    fn supported_architectures(&self) -> &[Architecture] {
+        match self {
+            BuilderLocation::Local => &[],
+            BuilderLocation::Kubernetes {
+                supported_architectures,
+                ..
+            } => supported_architectures,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -174,7 +188,7 @@ pub struct Docker {
 pub struct BuilderHandle {
     config_path: PathBuf,
     pub nb_builder: NonZeroUsize,
-    builder_name: Option<String>,
+    pub builder_name: Option<String>,
 }
 
 impl Drop for BuilderHandle {
@@ -261,15 +275,14 @@ impl Docker {
             "buildx",
             "create",
             "--name",
-            "qovery-engine",
+            DEFAULT_BUILDER_NAME,
             "--buildkitd-flags",
-            "--debug --allow-insecure-entitlement security.insecure",
+            "--debug",
             "--driver-opt",
             "network=host",
             "--bootstrap",
             "--use",
         ];
-        println!("{:?}", args);
         let _ = docker_exec(
             &args,
             &docker.get_all_envs(&[]),
@@ -287,15 +300,15 @@ impl Docker {
         namespace: String,
         builder_prefix: String,
         args: Vec<(String, String)>,
+        enable_rootless: bool,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
-        let builder_name = "engine-builder";
         docker.builder_location = BuilderLocation::Kubernetes {
             namespace,
             builder_prefix,
-            builder_name: builder_name.to_string(),
-            supported_architectures: BTreeSet::from_iter(supported_architectures.iter().cloned()),
+            supported_architectures: supported_architectures.iter().dedup().cloned().collect_vec(),
+            enable_rootless,
         };
         docker.common_envs.extend(args);
 
@@ -305,11 +318,15 @@ impl Docker {
     pub fn spawn_builder(
         &self,
         exec_id: &str,
+        builder_name: &str,
         nb_builder: NonZeroUsize,
         requested_architectures: &[Architecture],
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
         (memory_request_gib, memory_limit_gib): (u32, u32),
         should_abort: &CommandKiller,
+        http_registries: &[&str],
+        tls_invalid_registries: &[&str],
+        bootstrap_builder: bool,
     ) -> Result<BuilderHandle, DockerError> {
         match &self.builder_location {
             // For local builder, we have at max 1 builder available
@@ -320,9 +337,9 @@ impl Docker {
             }),
             BuilderLocation::Kubernetes {
                 namespace,
-                builder_name,
                 builder_prefix,
                 supported_architectures,
+                enable_rootless,
             } => {
                 let available_architectures = requested_architectures
                     .iter()
@@ -337,49 +354,74 @@ impl Docker {
                 }
 
                 // We create build handle here to force the drop to run if some operation fail
+                let builder_name = format!("qovery-{}", builder_name);
                 let build_handle = BuilderHandle {
                     config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
-                    builder_name: Some(builder_name.to_string()),
+                    builder_name: Some(builder_name.clone()),
+                };
+
+                info!("docker spawn builder {:?} {:?}", builder_name, requested_architectures);
+                let buildkitd_cfg_arg = {
+                    let cfg_path = self.config_path.path().join("buildkitd.toml");
+                    let mut cfg_file = String::new();
+                    for http in http_registries {
+                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  http = true\n", http));
+                    }
+                    for tls in tls_invalid_registries {
+                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  insecure = true\n", tls));
+                    }
+                    info!("Docker buildkitd config {}", &cfg_file);
+                    let _ = fs::write(&cfg_path, cfg_file);
+
+                    format!("--buildkitd-config={}", cfg_path.to_string_lossy())
                 };
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
-                for arch in requested_architectures {
+                for (ix, arch) in requested_architectures.iter().enumerate() {
                     let mut node_name = format!("{builder_prefix}{exec_id}-{arch}");
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
-                    let driver_opt = format!(concat!(
+                    let mut driver_opt = format!(concat!(
                     "--driver-opt=",
                     "\"namespace={}\",",
                     "\"replicas={}\",",
+                    "\"loadbalance=random\",",
                     "\"nodeselector=kubernetes.io/arch={}\",",
                     "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
-                    "\"labels=qovery.com/no-kill=true\",",
+                    "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
                     "\"requests.cpu={}m\",",
                     "\"limits.cpu={}m\",",
                     "\"requests.memory={}Gi\",",
                     "\"limits.memory={}Gi\""
                     ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
-                    let args = vec![
+                    if *enable_rootless {
+                        driver_opt.push_str(",\"rootless=true\"");
+                    }
+
+                    let mut args = vec![
                         "--config",
                         self.config_path.path().to_str().unwrap_or(""),
                         "buildx",
                         "create",
-                        "--append",
+                        if ix == 0 { "" } else { "--append" },
                         "--name",
-                        builder_name,
+                        &builder_name,
                         "--platform",
                         &platform,
                         "--node",
                         node_name,
                         "--buildkitd-flags",
-                        "--debug --allow-insecure-entitlement security.insecure",
+                        "--debug",
+                        &buildkitd_cfg_arg,
                         "--driver=kubernetes",
                         &driver_opt,
-                        "--bootstrap",
-                        "--use",
                     ];
+                    if bootstrap_builder {
+                        args.push("--bootstrap");
+                    }
+
                     docker_exec(
                         &args,
                         &self.get_all_envs(&[]),
@@ -461,7 +503,7 @@ impl Docker {
             Err(err) => {
                 return Err(DockerError::InvalidConfig {
                     raw_error_message: format!("Cannot decode username due to: {}", err),
-                })
+                });
             }
         };
         info!("Docker login {} as user {}", registry, username);
@@ -497,7 +539,7 @@ impl Docker {
             Err(err) => {
                 return Err(DockerError::InvalidConfig {
                     raw_error_message: format!("Cannot decode username due to: {}", err),
-                })
+                });
             }
         };
         info!("Docker login {} as user {}", registry, username);
@@ -552,15 +594,23 @@ impl Docker {
     pub fn does_image_exist_remotely(&self, image: &ContainerImage) -> Result<bool, DockerError> {
         info!("Docker check remotely image exist {:?}", image);
 
+        let builder = self.configure_builder_for_http_registries(image);
+        let image_name = image.image_name();
+        let mut args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
+            "buildx",
+            "imagetools",
+            "inspect",
+            &image_name,
+        ];
+        if let Some(builder_name) = &builder.as_ref().and_then(|b| b.builder_name.as_deref()) {
+            args.push("--builder");
+            args.push(builder_name)
+        }
+
         let ret = docker_exec(
-            &[
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "buildx",
-                "imagetools",
-                "inspect",
-                &image.image_name(),
-            ],
+            &args,
             &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
@@ -603,6 +653,7 @@ impl Docker {
 
     pub fn build<Stdout, Stderr>(
         &self,
+        builder_name: &Option<&str>,
         dockerfile: &Path,
         context: &Path,
         image_to_build: &ContainerImage,
@@ -632,6 +683,7 @@ impl Docker {
         }
 
         self.build_with_buildkit(
+            builder_name,
             dockerfile,
             context,
             image_to_build,
@@ -647,6 +699,7 @@ impl Docker {
 
     fn build_with_buildkit<Stdout, Stderr>(
         &self,
+        builder_name: &Option<&str>,
         dockerfile: &Path,
         context: &Path,
         image_to_build: &ContainerImage,
@@ -669,22 +722,30 @@ impl Docker {
             self.config_path.path().to_str().unwrap_or("").to_string(),
             "buildx".to_string(),
             "build".to_string(),
+            if let Some(builder_name) = builder_name {
+                format!("--builder={}", builder_name)
+            } else {
+                format!("--builder={}", DEFAULT_BUILDER_NAME)
+            },
             "--progress=plain".to_string(),
             if push_after_build {
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
-            //"--allow=security.insecure".to_string(),
             "--cache-from".to_string(),
             format!("type=registry,ref={}", cache.image_name()),
-            // Disabled for now, because private ECR does not support it ...
-            // https://github.com/aws/containers-roadmap/issues/876
-            // "--cache-to".to_string(),
-            // format!("type=registry,ref={}", cache.image_name()),
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        if push_after_build {
+            args_string.push("--cache-to".to_string());
+            args_string.push(format!(
+                "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
+                cache.image_name()
+            ));
+        }
 
         // Build for all requested architectures, if empty build for the current architecture the engine is running on
         if !architectures.is_empty() {
@@ -703,16 +764,50 @@ impl Docker {
             args_string.push("--build-arg".to_string());
             args_string.push(format!("{k}={v}"));
         }
-
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        docker_exec(
-            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&[]),
-            stdout_output,
-            stderr_output,
-            should_abort,
-        )
+        // Hack
+        // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
+        let mut nb_retry = 3;
+        let started_at = std::time::Instant::now();
+        let ret = loop {
+            let mut transient_error = false;
+            let ret = {
+                let mut stderr_output = |line: String| {
+                    if line.contains("ERROR: listing workers for Build")
+                        || line.contains("use of closed network connection")
+                        || line.contains("i/o timeout")
+                    {
+                        transient_error = true;
+                    }
+
+                    stderr_output(line);
+                };
+                docker_exec(
+                    &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+                    &self.get_all_envs(&[]),
+                    stdout_output,
+                    &mut stderr_output,
+                    should_abort,
+                )
+            };
+
+            if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
+                if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
+                    info!("Docker buildkit build failed with a transient error, but we already retried for too long, aborting ...");
+                    break ret;
+                }
+
+                nb_retry = max(nb_retry - 1, 0);
+                info!("Docker buildkit build failed with a transient error, retrying ...");
+                thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+
+            break ret;
+        };
+
+        ret
     }
 
     pub fn push<Stdout, Stderr>(
@@ -796,22 +891,25 @@ impl Docker {
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
+        let builder = self.configure_builder_for_http_registries(image);
         let image_tag = image.image_name();
         info!("Docker create manifest {} with digests {:?}", image_tag, digests);
+        let mut args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
+            "buildx",
+            "imagetools",
+            "create",
+            "-t",
+            image_tag.as_str(),
+        ];
+        if let Some(builder_name) = &builder.as_ref().and_then(|b| b.builder_name.as_deref()) {
+            args.push("--builder");
+            args.push(builder_name)
+        }
+
         docker_exec(
-            &[
-                &[
-                    "--config",
-                    self.config_path.path().to_str().unwrap_or(""),
-                    "buildx",
-                    "imagetools",
-                    "create",
-                    "-t",
-                    image_tag.as_str(),
-                ],
-                digests,
-            ]
-            .concat(),
+            &[&args, digests].concat(),
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
@@ -819,69 +917,35 @@ impl Docker {
         )
     }
 
-    pub fn prune_images(&self) -> Result<(), DockerError> {
-        info!("Docker prune images");
-
-        let all_prunes_commands = vec![
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "buildx",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "container",
-                "prune",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "image",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "builder",
-                "prune",
-                "-a",
-                "-f",
-            ],
-            vec![
-                "--config",
-                self.config_path.path().to_str().unwrap_or(""),
-                "volume",
-                "prune",
-                "-f",
-            ],
-        ];
-
-        let mut errored_commands = vec![];
-        for prune in all_prunes_commands {
-            let ret = docker_exec(
-                &prune,
-                &self.get_all_envs(&[]),
-                &mut |_| {},
-                &mut |_| {},
-                &CommandKiller::never(),
+    fn configure_builder_for_http_registries(&self, image: &ContainerImage) -> Option<BuilderHandle> {
+        // If the registry is HTTP, we need to create a new buildx config to allow HTTP registry
+        let mut builder = None;
+        if image.registry.scheme() == "http" {
+            let http_registries = format!(
+                "{}:{}",
+                image.registry.host_str().unwrap_or(""),
+                image.registry.port_or_known_default().unwrap_or(80)
             );
-            if let Err(e) = ret {
-                errored_commands.push(e);
-            }
-        }
 
-        if !errored_commands.is_empty() {
-            return Err(errored_commands.remove(0));
-        }
+            info!("Docker configure builder for HTTP registry {:?}", http_registries);
+            let now = format!("{}", Uuid::new_v4());
+            builder = self
+                .spawn_builder(
+                    &now,
+                    &now,
+                    NonZeroUsize::new(1).unwrap(),
+                    self.builder_location.supported_architectures(),
+                    (0, 0),
+                    (0, 0),
+                    &CommandKiller::never(),
+                    &[http_registries.as_str()],
+                    &[],
+                    false,
+                )
+                .ok();
+        };
 
-        Ok(())
+        builder
     }
 }
 
@@ -925,6 +989,11 @@ mod tests {
     fn private_registry_url() -> Url {
         Url::parse("http://localhost:5000").unwrap()
     }
+
+    #[cfg(target_arch = "x86_64")]
+    static CPU_ARCHITECTURE: &[Architecture] = &[Architecture::AMD64];
+    #[cfg(target_arch = "aarch64")]
+    static CPU_ARCHITECTURE: &[Architecture] = &[Architecture::ARM64];
 
     #[test]
     fn test_pull() {
@@ -987,13 +1056,14 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1002,13 +1072,14 @@ mod tests {
         assert!(ret.is_ok());
 
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1035,13 +1106,14 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &None,
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
             &image_cache,
             false,
-            &[Architecture::AMD64],
+            CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
@@ -1133,16 +1205,21 @@ mod tests {
             "default".to_string(),
             "builder-".to_string(),
             args,
+            true,
         )
         .unwrap();
-        let _builder = docker
+        let builder = docker
             .spawn_builder(
                 Uuid::new_v4().to_string().as_str(),
+                "builder",
                 NonZeroUsize::new(1).unwrap(),
-                &[Architecture::AMD64],
+                CPU_ARCHITECTURE,
                 (0, 1000),
                 (0, 1),
                 &CommandKiller::never(),
+                &[],
+                &[],
+                true,
             )
             .unwrap();
 
@@ -1159,6 +1236,7 @@ mod tests {
 
         // It should work
         let ret = docker.build_with_buildkit(
+            &builder.builder_name.as_deref(),
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,

@@ -44,6 +44,9 @@ podAnnotations: {}
 podDisruptionBudget:
   name: karpenter
   maxUnavailable: 1
+# -- SecurityContext for the pod.
+podSecurityContext:
+  fsGroup: 65532
 # -- PriorityClass name for the pod.
 priorityClassName: system-cluster-critical
 # -- Override the default termination grace period for the pod.
@@ -52,7 +55,7 @@ terminationGracePeriodSeconds:
 # This is required when using a custom CNI.
 hostNetwork: false
 # -- Configure the DNS Policy for the pod
-dnsPolicy: Default
+dnsPolicy: ClusterFirst
 # -- Configure DNS Config for the pod
 dnsConfig: {}
 #  options:
@@ -96,9 +99,9 @@ controller:
     # -- Repository path to the controller image.
     repository: public.ecr.aws/karpenter/controller
     # -- Tag of the controller image.
-    tag: v0.33.2
+    tag: 0.36.2
     # -- SHA256 digest of the controller image.
-    digest: sha256:c7d934b8a1cacaa15f595929dff7eab147507b3d0262130504e0a2a6df12fe3e
+    digest: sha256:858faf3c7236659ef344cfbca0a1052f9b6c2636125daeab6e2cb427b4aed6d1
   # -- Additional environment variables for the controller pod.
   env: []
   # - name: AWS_REGION
@@ -199,3 +202,6 @@ settings:
     # Setting drift to false disables the drift disruption method to watch for drift between currently deployed nodes
     # and the desired state of nodes set in nodepools and nodeclasses
     drift: true
+    # -- spotToSpotConsolidation is ALPHA and is disabled by default.
+    # Setting this to true will enable spot replacement consolidation for both single and multi-node consolidation.
+    spotToSpotConsolidation: false

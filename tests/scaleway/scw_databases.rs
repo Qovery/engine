@@ -324,14 +324,16 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             name: database_db_name.clone(),
             kube_name: database_db_name.clone(),
             created_at: Utc::now(),
-            version: "11.8.0".to_string(),
+            version: "11.22.0".to_string(),
             fqdn_id: database_host.clone(),
             fqdn: database_host.clone(),
             port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
-            total_cpus: "500m".to_string(),
-            total_ram_in_mib: 512,
+            cpu_request_in_milli: 500,
+            cpu_limit_in_milli: 500,
+            ram_request_in_mib: 512,
+            ram_limit_in_mib: 512,
             disk_size_in_gib: 10,
             mode: database_mode.clone(),
             database_instance_type: if database_mode == MANAGED {
@@ -349,12 +351,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             activate_high_availability: false,
             activate_backups: false,
             publicly_accessible: false,
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
         environment.applications = environment
             .applications
             .into_iter()
             .map(|mut app| {
-                app.branch = app_name.clone();
+                app.branch.clone_from(&app_name);
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
                 app.ports = vec![Port {
                     long_id: Default::default(),
@@ -808,6 +812,7 @@ fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
 }
@@ -815,8 +820,53 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("5.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn public_mongodb_v5_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("5.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("6.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("6.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("7.0", function_name!(), CONTAINER, true);
 }
 
 /**

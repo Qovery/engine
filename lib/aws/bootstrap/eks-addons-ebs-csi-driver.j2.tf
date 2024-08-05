@@ -5,7 +5,7 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
 
   # Pick the recommended version for the k8s version or override if set
   addon_version            = "{{ eks_addon_ebs_csi.version }}"
-  resolve_conflicts        = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 
   tags                     = local.tags_eks
 

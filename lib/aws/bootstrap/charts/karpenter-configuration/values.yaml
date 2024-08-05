@@ -8,9 +8,12 @@ securityGroupId: ""
 
 diskSizeInGib: 0
 
+capacity_type: []
+explicitSubnetIds: []
+
 tags:
-  clusterId: ""
-  clusterLongId: ""
-  organizationId: ""
-  organizationLongId: ""
-  region: ""
+  ClusterId: ""
+  ClusterLongId: ""
+  OrganizationId: ""
+  OrganizationLongId: ""
+  Region: ""

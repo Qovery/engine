@@ -6,16 +6,17 @@ use crate::cmd::docker;
 use crate::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
 use crate::io_models::context::Context;
-use crate::models::scaleway::ScwZone;
+use crate::models::scaleway::ScwRegion;
 use crate::runtime::block_on_with_timeout;
 use base64::engine::general_purpose;
 use base64::Engine;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use std::collections::HashSet;
-use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
+
+use super::RegistryTags;
 
 pub struct ScalewayCR {
     context: Context,
@@ -24,7 +25,7 @@ pub struct ScalewayCR {
     name: String,
     default_project_id: String,
     secret_token: String,
-    zone: ScwZone,
+    region: ScwRegion,
     registry_info: ContainerRegistryInfo,
 }
 
@@ -36,12 +37,12 @@ impl ScalewayCR {
         name: &str,
         secret_token: &str,
         default_project_id: &str,
-        zone: ScwZone,
+        region: ScwRegion,
     ) -> Result<ScalewayCR, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "nologin".to_string();
         let secret_token = secret_token.to_string();
-        let registry_raw_url = format!("https://rg.{}.scw.cloud", zone.region());
+        let registry_raw_url = format!("https://rg.{}.scw.cloud", region.as_str());
 
         let mut registry = Url::parse(&registry_raw_url).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
             registry_url: registry_raw_url,
@@ -56,11 +57,8 @@ impl ScalewayCR {
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
             registry_name: name.to_string(),
-            registry_docker_json_config: Some(Self::get_docker_json_config_raw(
-                &login,
-                &secret_token,
-                zone.region().as_str(),
-            )),
+            registry_docker_json_config: Some(Self::get_docker_json_config_raw(&login, &secret_token, region.as_str())),
+            insecure_registry: false,
             get_image_name: Box::new(move |img_name| format!("{img_name}/{img_name}")),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
@@ -72,7 +70,7 @@ impl ScalewayCR {
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
             secret_token,
-            zone,
+            region,
             registry_info,
         };
 
@@ -112,7 +110,7 @@ impl ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
         let scaleway_images = match block_on_with_timeout(scaleway_api_rs::apis::images_api::list_images(
             &self.get_configuration(),
-            self.zone.region().to_string().as_str(),
+            self.region.as_str(),
             None,
             None,
             None,
@@ -145,23 +143,62 @@ impl ScalewayCR {
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
-        let image_to_delete = self.get_image(image);
-        if image_to_delete.is_none() {
-            return Err(ContainerRegistryError::ImageDoesntExistInRegistry {
+        let image_to_delete = match self.get_image(image) {
+            Some(image_to_delete) => image_to_delete,
+            None => {
+                return Err(ContainerRegistryError::ImageDoesntExistInRegistry {
+                    registry_name: self.name.to_string(),
+                    repository_name: image.registry_name.to_string(),
+                    image_name: image.name.to_string(),
+                })
+            }
+        };
+
+        let tags = match block_on_with_timeout(scaleway_api_rs::apis::tags_api::list_tags(
+            &self.get_configuration(),
+            self.region.as_str(),
+            image_to_delete.id.as_deref().unwrap_or_default(),
+            None,
+            None,
+            None,
+            None,
+        )) {
+            Ok(Ok(tags)) => Ok(tags),
+            Ok(Err(e)) => Err(ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
                 repository_name: image.registry_name.to_string(),
                 image_name: image.name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+            Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }?;
+
+        let Some(tag_to_delete) = tags
+            .tags
+            .unwrap_or_default()
+            .into_iter()
+            .find(|t| t.name.as_deref().unwrap_or_default() == image.tag)
+        else {
+            return Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+                raw_error_message: "Tag not found".to_string(),
             });
-        }
+        };
 
-        let image_to_delete = image_to_delete.unwrap();
-
-        match block_on_with_timeout(scaleway_api_rs::apis::images_api::delete_image(
+        match block_on_with_timeout(scaleway_api_rs::apis::tags_api::delete_tag(
             &self.get_configuration(),
-            self.zone.region().to_string().as_str(),
-            image_to_delete.id.unwrap().as_str(),
+            self.region.as_str(),
+            tag_to_delete.id.as_deref().unwrap_or_default(),
+            Some(true),
         )) {
-            Ok(Ok(res)) => Ok(res),
+            Ok(Ok(_)) => Ok(image_to_delete),
             Ok(Err(e)) => Err(ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
                 repository_name: image.registry_name.to_string(),
@@ -189,7 +226,7 @@ impl ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
-            self.zone.region().to_string().as_str(),
+            self.region.as_str(),
             scaleway_api_rs::models::inline_object_29::InlineObject29 {
                 name: namespace_name.to_string(),
                 description: None,
@@ -283,7 +320,7 @@ impl ContainerRegistry for ScalewayCR {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
-        _resource_ttl: Option<Duration>,
+        _registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         self.get_or_create_registry_namespace(name)
     }
@@ -293,7 +330,7 @@ impl ContainerRegistry for ScalewayCR {
         let scaleway_registry_namespaces =
             match block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::list_namespaces(
                 &self.get_configuration(),
-                self.zone.region().to_string().as_str(),
+                self.region.as_str(),
                 None,
                 None,
                 None,
@@ -353,7 +390,7 @@ impl ContainerRegistry for ScalewayCR {
 
         match block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::delete_namespace(
             &self.get_configuration(),
-            self.zone.region().to_string().as_str(),
+            self.region.as_str(),
             repository_to_delete.registry_id.as_str(),
         )) {
             Ok(Ok(_res)) => Ok(()),

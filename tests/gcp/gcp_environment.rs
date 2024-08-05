@@ -7,6 +7,7 @@ use crate::helpers::utilities::{
 use function_name::named;
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::router::CustomDomain;
@@ -35,8 +36,10 @@ fn gcp_test_build_phase() {
         let context = context_for_resource(
             secrets
                 .GCP_TEST_ORGANIZATION_LONG_ID
-                .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
-            secrets.GCP_TEST_CLUSTER_LONG_ID.expect("GCP_TEST_CLUSTER_LONG_ID"),
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID  should be set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID  should be set"),
         );
         let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -91,7 +94,23 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
         let context_for_delete = context.clone_not_same_execution_id();
         let infra_ctx_for_delete =
             gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
-        let environment = helpers::environment::working_minimal_environment(&context);
+        let annotations_group_id = Uuid::new_v4();
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+        // environment.applications.first().unwrap().annotations_group_ids = btreemap! { annotations_group_id };
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -289,6 +308,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
+                use_cdn: false,
             };
 
             router.custom_domains = vec![cd];

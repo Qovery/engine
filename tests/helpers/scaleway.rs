@@ -30,7 +30,7 @@ use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_28 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -71,7 +71,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
                 .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
                 .as_str(),
         )
-        .expect("Unknown SCW region"),
+        .expect("Unknown SCW region")
+        .region(),
     )
     .unwrap()
 }
@@ -126,15 +127,14 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider: Arc<dyn CloudProvider> =
-            Arc::from(Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>);
-        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider_qoverydns(context, cluster_domain));
+        let cloud_provider: Box<dyn CloudProvider> =
+            Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>;
+        let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
         let cluster = get_environment_test_kubernetes(
             context,
-            cloud_provider.clone(),
+            cloud_provider.as_ref(),
             kubernetes_version,
-            dns_provider.clone(),
             logger.clone(),
             localisation,
             vpc_network_mode,
@@ -152,6 +152,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             dns_provider,
             cluster,
             metrics_registry,
+            true,
         )
     }
 
@@ -188,7 +189,11 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 secret_access_key: secrets
                     .TERRAFORM_AWS_SECRET_ACCESS_KEY
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
-                region: "eu-west-3".to_string(),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
+                s3_bucket: secrets.TERRAFORM_AWS_BUCKET.expect("TERRAFORM_AWS_BUCKET is not set"),
+                dynamodb_table: secrets
+                    .TERRAFORM_AWS_DYNAMODB_TABLE
+                    .expect("TERRAFORM_AWS_DYNAMODB_TABLE is not set"),
             },
         ))
     }
@@ -210,6 +215,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> KapsuleOptions {
         KapsuleOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
@@ -259,7 +265,7 @@ pub fn clean_environments(
         "test",
         secret_token.as_str(),
         project_id.as_str(),
-        zone,
+        zone.region(),
     )?;
 
     // delete images created in registry

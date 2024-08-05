@@ -1,8 +1,9 @@
+use crate::cloud_provider::aws::kubernetes::helm_charts::alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
-use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, UpdateStrategy,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -12,7 +13,8 @@ use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAge
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
+    ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -33,6 +35,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_c
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -49,6 +52,8 @@ use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
+use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
@@ -77,6 +82,7 @@ pub struct AwsEksQoveryTerraformConfig {
     pub loki_storage_config_aws_s3: String,
     pub karpenter_controller_aws_role_arn: String,
     pub cluster_security_group_id: String,
+    pub aws_iam_alb_controller_arn: String,
 }
 
 pub struct EksChartsConfigPrerequisites {
@@ -107,7 +113,8 @@ pub struct EksChartsConfigPrerequisites {
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
-    pub disk_size_in_gib: Option<i32>,
+    pub is_karpenter_enabled: bool,
+    pub karpenter_parameters: Option<KarpenterParameters>,
 }
 
 pub fn eks_aws_helm_charts(
@@ -162,9 +169,7 @@ pub fn eks_aws_helm_charts(
         || chart_config_prerequisites
             .cluster_advanced_settings
             .aws_iam_user_mapper_group_enabled
-        || chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter
+        || chart_config_prerequisites.is_karpenter_enabled
     {
         aws_iam_eks_user_mapper = Some(
             AwsIamEksUserMapperChart::new(
@@ -202,10 +207,7 @@ pub fn eks_aws_helm_charts(
                     },
                     false => SSOConfig::Disabled,
                 },
-                match chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .aws_enable_karpenter
-                {
+                match chart_config_prerequisites.is_karpenter_enabled {
                     true => KarpenterConfig::Enabled {
                         aws_account_id: qovery_terraform_config.aws_account_id,
                         cluster_name: chart_config_prerequisites.cluster_name.clone(),
@@ -220,7 +222,9 @@ pub fn eks_aws_helm_charts(
     }
 
     // AWS nodes term handler
-    let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart()?;
+    let aws_node_term_handler =
+        AwsNodeTermHandlerChart::new(chart_prefix_path, chart_config_prerequisites.is_karpenter_enabled)
+            .to_common_helm_chart()?;
 
     // AWS UI view
     let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
@@ -240,10 +244,21 @@ pub fn eks_aws_helm_charts(
     let karpenter = KarpenterChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
+        qovery_terraform_config.karpenter_controller_aws_role_arn.clone(),
+        chart_config_prerequisites.is_karpenter_enabled,
+        false,
+    )
+    .to_common_helm_chart()?;
+
+    // Karpenter CRD
+    let karpenter_crd = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
+
+    let karpenter_with_monitoring = KarpenterChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cluster_name.to_string(),
         qovery_terraform_config.karpenter_controller_aws_role_arn,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -251,16 +266,16 @@ pub fn eks_aws_helm_charts(
     let karpenter_configuration = KarpenterConfigurationChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
         qovery_terraform_config.cluster_security_group_id,
-        chart_config_prerequisites.disk_size_in_gib,
         &chart_config_prerequisites.cluster_id,
         chart_config_prerequisites.cluster_long_id,
         &chart_config_prerequisites.organization_id,
         chart_config_prerequisites.organization_long_id,
         chart_config_prerequisites.region.to_cloud_provider_format(),
+        chart_config_prerequisites.karpenter_parameters.clone(),
+        chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
+        chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
     )
     .to_common_helm_chart()?;
 
@@ -273,9 +288,7 @@ pub fn eks_aws_helm_charts(
         qovery_terraform_config.aws_iam_cluster_autoscaler_role_arn.to_string(),
         prometheus_namespace,
         chart_config_prerequisites.ff_metrics_history_enabled,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_enable_karpenter,
+        chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
 
@@ -288,6 +301,13 @@ pub fn eks_aws_helm_charts(
             .managed_dns_resolvers_terraform_format
             .to_string(),
         HelmChartNamespaces::KubeSystem,
+    );
+
+    // ALB controller
+    let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
+        chart_prefix_path,
+        qovery_terraform_config.aws_iam_alb_controller_arn,
+        chart_config_prerequisites.cluster_name.clone(),
     );
 
     // External DNS
@@ -342,7 +362,10 @@ pub fn eks_aws_helm_charts(
                 }),
                 get_chart_override_fn.clone(),
                 true,
+                None,
                 HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartTimeout::ChartDefault,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
@@ -374,7 +397,6 @@ pub fn eks_aws_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
-                Kind::Aws,
             )
             .to_common_helm_chart()?,
         ),
@@ -423,8 +445,13 @@ pub fn eks_aws_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_override_fn.clone())
-                .to_common_helm_chart()?,
+            KubeStateMetricsChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Prometheus,
+                true,
+                get_chart_override_fn.clone(),
+            )
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -529,6 +556,16 @@ pub fn eks_aws_helm_charts(
         ),
         HelmChartNamespaces::NginxIngress,
         None,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_log_format_escaping
+            .to_model(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_enable_alb_controller,
     )
     .to_common_helm_chart()?;
 
@@ -570,6 +607,14 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
+    )
+    .to_common_helm_chart()?;
+
+    // Qovery priority class
+    let q_priority_class_chart = QoveryPriorityClassChart::new(
+        chart_prefix_path,
+        HashSet::from_iter(vec![QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
+        HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
     )
     .to_common_helm_chart()?;
 
@@ -672,43 +717,22 @@ pub fn eks_aws_helm_charts(
     };
 
     // chart deployment order matters!!!
+    let mut level_0: Vec<Box<dyn HelmChart>> = vec![
+        // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
+        Box::new(q_priority_class_chart),
+    ];
+
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
-
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_1.push(Box::new(coredns_config.clone()));
-    }
-
     // If IAM settings are set and activated
     if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
         level_1.push(Box::new(aws_iam_eks_user_mapper));
     }
 
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_1.push(Box::new(karpenter));
-    }
-
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(aws_ui_view), Box::new(vpa)];
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_2.push(Box::new(karpenter_configuration));
-    }
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
-    if !chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_enable_karpenter
-    {
-        level_3.push(Box::new(coredns_config));
-    }
-    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
@@ -716,15 +740,22 @@ pub fn eks_aws_helm_charts(
         level_5.push(Box::new(qovery_webhook));
     }
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(metrics_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
     ];
 
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_eks_enable_alb_controller
+    {
+        level_6.push(Box::new(aws_load_balancer_controller));
+    }
+
     let level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let level_8: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_8: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(cluster_agent),
         Box::new(qovery_shell_agent),
@@ -752,8 +783,39 @@ pub fn eks_aws_helm_charts(
         level_3.push(Box::new(grafana_chart))
     }
 
+    // pdb infra
+    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
+        let pdb_infra = QoveryPdbInfraChart::new(
+            chart_prefix_path,
+            HelmChartNamespaces::Qovery,
+            HelmChartNamespaces::Prometheus,
+            HelmChartNamespaces::Logging,
+        )
+        .to_common_helm_chart()?;
+
+        level_8.push(Box::new(pdb_infra));
+    }
+
+    // karpenter
+    if chart_config_prerequisites.is_karpenter_enabled {
+        level_0.push(Box::new(karpenter_crd));
+
+        level_1.push(Box::new(coredns_config.clone()));
+        level_1.push(Box::new(karpenter));
+
+        level_2.push(Box::new(karpenter_configuration));
+
+        if chart_config_prerequisites.ff_metrics_history_enabled {
+            level_4.push(Box::new(karpenter_with_monitoring))
+        }
+    } else {
+        level_3.push(Box::new(coredns_config));
+    }
+
     info!("charts configuration preparation finished");
-    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8])
+    Ok(vec![
+        level_0, level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8,
+    ])
 }
 
 pub fn get_qovery_terraform_config(

@@ -3,7 +3,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol, StorageType};
+use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -14,7 +14,7 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
 use url::Url;
 use uuid::Uuid;
@@ -72,11 +72,12 @@ pub fn working_environment(
                 service_name: None,
                 namespace: None,
             }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
             min_instances: 1,
             max_instances: 1,
-            cpu_burst: "100m".to_string(),
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Http {
                     path: "/".to_string(),
@@ -101,12 +102,16 @@ pub fn working_environment(
             advanced_settings: settings,
             public_domain: format!("{}.{}", application_id.to_uuid(), test_domain),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     if with_router {
@@ -139,6 +144,7 @@ pub fn working_minimal_environment_with_router(context: &Context, test_domain: &
 pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
     context: &Context,
     mounted_file: &MountedFile,
+    storage_class: &str,
 ) -> EnvironmentRequest {
     let mut environment = working_environment(context, "", false, false);
 
@@ -187,7 +193,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     let mut statefulset = application.clone();
     let statefulset_id = QoveryIdentifier::new_random();
     statefulset.name = statefulset_id.short().to_string();
-    statefulset.kube_name = statefulset.name.clone();
+    statefulset.kube_name.clone_from(&statefulset.name);
     statefulset.long_id = statefulset_id.to_uuid();
     statefulset.liveness_probe = None;
     statefulset.readiness_probe = None;
@@ -196,7 +202,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
         id: storage_id.short().to_string(),
         long_id: storage_id.to_uuid(),
         name: storage_id.short().to_string(),
-        storage_type: StorageType::Ssd,
+        storage_class: storage_class.to_string(),
         size_in_gib: 10,
         mount_point: format!("/tmp/{}", storage_id.short()),
         snapshot_retention_in_days: 1,
@@ -244,14 +250,16 @@ pub fn environment_2_app_2_routers_1_psql(
             name: database_name.clone(),
             kube_name: database_name.clone(),
             created_at: Utc::now(),
-            version: "11.8.0".to_string(),
+            version: "11.22.0".to_string(),
             fqdn_id: fqdn.clone(),
             fqdn: fqdn.clone(),
             port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 512,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 512,
+            ram_limit_in_mib: 512,
             disk_size_in_gib: 10,
             database_instance_type: database_instance_type.map(|i| i.to_cloud_provider_format()),
             database_disk_type: database_disk_type.to_string(),
@@ -260,6 +268,8 @@ pub fn environment_2_app_2_routers_1_psql(
             activate_backups: false,
             publicly_accessible: false,
             mode: CONTAINER,
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }],
         applications: vec![
             Application {
@@ -295,11 +305,12 @@ pub fn environment_2_app_2_routers_1_psql(
                     service_name: None,
                     namespace: None,
                 }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {
@@ -324,6 +335,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 }),
                 public_domain: format!("{}.{}", application_id1, test_domain),
                 container_registries: Vec::new(),
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             },
             Application {
                 long_id: application_id2,
@@ -359,11 +372,12 @@ pub fn environment_2_app_2_routers_1_psql(
                     service_name: None,
                     namespace: None,
                 }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {
@@ -387,6 +401,8 @@ pub fn environment_2_app_2_routers_1_psql(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             },
         ],
         containers: vec![],
@@ -422,6 +438,8 @@ pub fn environment_2_app_2_routers_1_psql(
         max_parallel_build: 1,
         max_parallel_deploy: 1,
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -488,11 +506,12 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
                 service_name: None,
                 namespace: None,
             }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
             min_instances: 1,
             max_instances: 1,
-            cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Http {
@@ -516,6 +535,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
                 failure_threshold: 5,
             }),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
@@ -534,6 +555,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         }],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -595,11 +618,12 @@ pub fn environment_only_http_server(
                 service_name: None,
                 namespace: None,
             }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
             min_instances: 1,
             max_instances: 1,
-            cpu_burst: "100m".to_string(),
             advanced_settings: settings,
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Http {
@@ -623,12 +647,16 @@ pub fn environment_only_http_server(
                 failure_threshold: 5,
             }),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     if with_router {

@@ -132,9 +132,9 @@ singleBinary:
     enabled: false
   extraVolumes:
     - name: data
-      emptyDir: {}
+      emptyDir: { }
     - name: storage
-      emptyDir: {}
+      emptyDir: { }
   extraVolumeMounts:
     - name: data
       mountPath: /data
@@ -145,4 +145,4 @@ singleBinary:
   #   storageClass: set-by-engine-code
 
 serviceAccount:
-  annotations: {}
+  annotations: { }

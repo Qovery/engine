@@ -1,3 +1,5 @@
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping as LogFormatEscapingModel;
+use crate::models::types::Percentage;
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -12,6 +14,10 @@ pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
 
 fn default_registry_mirroring_mode() -> RegistryMirroringMode {
     RegistryMirroringMode::Service
+}
+
+fn default_nginx_controller_log_format_escaping() -> LogFormatEscaping {
+    LogFormatEscaping::Default
 }
 
 #[derive(Deserialize, Serialize)]
@@ -30,7 +36,7 @@ impl From<KindModel> for Kind {
             KindModel::Aws => Kind::Aws,
             KindModel::Scw => Kind::Scw,
             KindModel::Gcp => Kind::Gcp,
-            KindModel::SelfManaged => Kind::SelfManaged,
+            KindModel::OnPremise => Kind::SelfManaged,
         }
     }
 }
@@ -49,6 +55,26 @@ pub enum RegistryMirroringMode {
     #[serde(alias = "service", alias = "SERVICE")]
     #[serde(other)]
     Service,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub enum LogFormatEscaping {
+    #[serde(alias = "default")]
+    Default,
+    #[serde(alias = "none")]
+    None,
+    #[serde(alias = "json", alias = "Json")]
+    JSON,
+}
+
+impl LogFormatEscaping {
+    pub fn to_model(&self) -> LogFormatEscapingModel {
+        match &self {
+            LogFormatEscaping::Default => LogFormatEscapingModel::Default,
+            LogFormatEscaping::None => LogFormatEscapingModel::None,
+            LogFormatEscaping::JSON => LogFormatEscapingModel::JSON,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -74,12 +100,16 @@ pub struct ClusterAdvancedSettings {
     pub aws_enable_karpenter: bool,
     #[serde(alias = "aws.karpenter.max_node_drain_in_sec")]
     pub aws_karpenter_max_node_drain_in_sec: Option<i32>,
+    #[serde(alias = "aws.karpenter.enable_spot")]
+    pub aws_karpenter_enable_spot: bool,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
     pub aws_vpc_flow_logs_retention_days: u32,
+    #[serde(alias = "aws.eks.enable_alb_controller")]
+    pub aws_eks_enable_alb_controller: bool,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -116,15 +146,35 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_cpu_utilization_percentage_threshold: u32,
     #[serde(alias = "nginx.hpa.min_number_instances")]
     pub nginx_hpa_min_number_instances: u32,
+    #[serde(alias = "nginx.controller.enable_client_ip")]
+    pub nginx_controller_enable_client_ip: bool,
+    #[serde(alias = "nginx.controller.log_format_upstream")]
+    pub nginx_controller_log_format_upstream: Option<String>,
+    #[serde(
+        alias = "nginx.controller.log_format_escaping",
+        default = "default_nginx_controller_log_format_escaping"
+    )]
+    pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
+    #[serde(alias = "infra.pdb.enabled", default)]
+    pub infra_pdb_enabled: bool,
+    #[serde(alias = "gcp.vpc.enable_flow_logs")]
+    pub gcp_vpc_enable_flow_logs: bool,
+    #[serde(alias = "gcp.vpc.flow_logs_sampling")]
+    pub gcp_vpc_flow_logs_sampling: Option<Percentage>,
+    #[serde(alias = "allow_service_cpu_overcommit")]
+    pub allow_service_cpu_overcommit: bool,
+    #[serde(alias = "allow_service_ram_overcommit")]
+    pub allow_service_ram_overcommit: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
     fn default() -> Self {
         let default_database_cirds = vec!["0.0.0.0/0".to_string()];
+
         ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time_sec: 31536000,
@@ -138,6 +188,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_ec2_metadata_imds: AwsEc2MetadataImds::Optional,
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
+            aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
             database_postgresql_deny_public_access: false,
             database_postgresql_allowed_cidrs: default_database_cirds.clone(),
@@ -155,10 +206,19 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_cpu_utilization_percentage_threshold: 50,
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
+            nginx_controller_enable_client_ip: false,
+            nginx_controller_log_format_upstream: None,
+            nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             aws_enable_karpenter: false,
             aws_karpenter_max_node_drain_in_sec: None,
+            aws_karpenter_enable_spot: false,
+            infra_pdb_enabled: false,
+            gcp_vpc_enable_flow_logs: false,
+            gcp_vpc_flow_logs_sampling: None,
+            allow_service_cpu_overcommit: false,
+            allow_service_ram_overcommit: false,
         }
     }
 }
@@ -213,7 +273,7 @@ impl CustomerHelmChartsOverrideEncoded {
 mod tests {
     use uuid::Uuid;
 
-    use crate::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
+    use crate::cloud_provider::io::{ClusterAdvancedSettings, LogFormatEscaping, RegistryMirroringMode};
     use crate::{
         cloud_provider::io::validate_aws_cloudwatch_eks_logs_retention_days,
         events::{EventDetails, Stage, Transmitter},
@@ -305,6 +365,12 @@ mod tests {
         assert_eq!(cluster_advanced_settings.nginx_hpa_cpu_utilization_percentage_threshold, 50);
         assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
         assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
+        assert!(!cluster_advanced_settings.nginx_controller_enable_client_ip);
+        assert_eq!(cluster_advanced_settings.nginx_controller_log_format_upstream, None);
+        assert_eq!(
+            cluster_advanced_settings.nginx_controller_log_format_escaping,
+            LogFormatEscaping::Default
+        );
     }
 
     #[test]

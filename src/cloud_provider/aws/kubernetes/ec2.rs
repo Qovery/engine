@@ -1,7 +1,6 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
-use crate::cloud_provider::aws::kubernetes::Options;
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
+use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, force_fetch_kubeconfig};
@@ -15,7 +14,7 @@ use crate::cloud_provider::utilities::{print_action, wait_until_port_is_open, Tc
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::terraform::terraform_init_validate_plan_apply;
-use crate::dns_provider::DnsProvider;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
@@ -25,6 +24,7 @@ use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
+use crate::services::aws::models::QoveryAwsSdkConfigEc2;
 use async_trait::async_trait;
 use aws_sdk_ec2::model::{Filter, VolumeState};
 use aws_sdk_ec2::types::SdkError;
@@ -42,7 +42,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
+
+use crate::cmd::terraform_validators::TerraformValidators;
 use uuid::Uuid;
 
 use super::ec2_helm_charts::{get_aws_ec2_qovery_terraform_config, AwsEc2QoveryTerraformConfig};
@@ -56,8 +57,6 @@ pub struct EC2 {
     version: KubernetesVersion,
     region: AwsRegion,
     zones: Vec<AwsZone>,
-    cloud_provider: Arc<dyn CloudProvider>,
-    dns_provider: Arc<dyn DnsProvider>,
     s3: S3,
     template_directory: String,
     options: Options,
@@ -78,8 +77,7 @@ impl EC2 {
         version: KubernetesVersion,
         region: AwsRegion,
         zones: Vec<String>,
-        cloud_provider: Arc<dyn CloudProvider>,
-        dns_provider: Arc<dyn DnsProvider>,
+        cloud_provider: &dyn CloudProvider,
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
@@ -88,12 +86,12 @@ impl EC2 {
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
-        let event_details = event_details(&*cloud_provider, long_id, name.to_string(), &context);
+        let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
-        let s3 = mk_s3(&region, &*cloud_provider);
+        let s3 = mk_s3(&region, cloud_provider);
         match AwsInstancesType::from_str(instance.instance_type.as_str()) {
             Err(e) => {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
@@ -118,8 +116,6 @@ impl EC2 {
             version,
             region,
             zones: aws_zones,
-            cloud_provider,
-            dns_provider,
             s3,
             options,
             instance,
@@ -134,10 +130,6 @@ impl EC2 {
         fetch_kubeconfig(&cluster, &cluster.s3)?;
 
         Ok(cluster)
-    }
-
-    fn cloud_provider_name(&self) -> &str {
-        "aws"
     }
 
     fn struct_name(&self) -> &str {
@@ -303,10 +295,10 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), Box<EngineError>> {
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -315,9 +307,10 @@ impl Kubernetes for EC2 {
         );
         send_progress_on_long_task(self, Action::Create, || {
             kubernetes::create(
+                infra_ctx,
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 &self.s3,
                 self.long_id,
                 self.template_directory.as_str(),
@@ -328,7 +321,11 @@ impl Kubernetes for EC2 {
         })
     }
 
-    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        _kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
 
         self.logger().log(EngineEvent::Info(
@@ -341,8 +338,8 @@ impl Kubernetes for EC2 {
         // generate terraform files and copy them into temp dir
         let context = kubernetes::tera_context(
             self,
-            self.cloud_provider.as_ref(),
-            self.dns_provider.as_ref(),
+            infra_ctx.cloud_provider(),
+            infra_ctx.dns_provider(),
             &self.zones,
             &[NodeGroupsWithDesiredState::new_from_node_groups(
                 &self.node_group_from_instance_type(),
@@ -383,7 +380,11 @@ impl Kubernetes for EC2 {
         terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
             self.context.is_dry_run_deploy(),
-            self.cloud_provider.credentials_environment_variables().as_slice(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+            &TerraformValidators::Default,
         )
         .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
@@ -397,9 +398,9 @@ impl Kubernetes for EC2 {
         let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
             .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-            self.cloud_provider.access_key_id(),
+            infra_ctx.cloud_provider().access_key_id(),
             self.region().to_string(),
-            self.cloud_provider.secret_access_key(),
+            infra_ctx.cloud_provider().secret_access_key(),
             None,
             Some(qovery_terraform_config.aws_ec2_public_hostname),
             self.kind(),
@@ -407,7 +408,7 @@ impl Kubernetes for EC2 {
             self.long_id().to_string(),
             self.options.grafana_admin_user.clone(),
             self.options.grafana_admin_password.clone(),
-            self.cloud_provider.organization_long_id().to_string(),
+            infra_ctx.cloud_provider().organization_long_id().to_string(),
             self.context().is_test_cluster(),
         ));
 
@@ -435,10 +436,10 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), Box<EngineError>> {
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -447,9 +448,10 @@ impl Kubernetes for EC2 {
         );
         send_progress_on_long_task(self, Action::Pause, || {
             kubernetes::pause(
+                infra_ctx,
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 self.template_directory.as_str(),
                 &self.zones,
                 &[],
@@ -459,10 +461,10 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), Box<EngineError>> {
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
-            self.cloud_provider_name(),
+            infra_ctx.cloud_provider().name(),
             self.struct_name(),
             function_name!(),
             self.name(),
@@ -471,9 +473,10 @@ impl Kubernetes for EC2 {
         );
         send_progress_on_long_task(self, Action::Delete, || {
             kubernetes::delete(
+                infra_ctx,
                 self,
-                self.cloud_provider.as_ref(),
-                self.dns_provider.as_ref(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.dns_provider(),
                 &self.s3,
                 self.template_directory.as_str(),
                 &self.zones,
@@ -548,6 +551,24 @@ impl Kubernetes for EC2 {
 
     fn as_kubernetes(&self) -> &dyn Kubernetes {
         self
+    }
+
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        None
+    }
+
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+        match self.advanced_settings().aws_eks_enable_alb_controller {
+            true => &[
+                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
+                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
+            ],
+            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+        }
     }
 }
 

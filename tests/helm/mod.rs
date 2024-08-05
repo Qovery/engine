@@ -1,5 +1,4 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -15,7 +14,7 @@ use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{
-    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage,
+    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage, StorageClass,
 };
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
@@ -23,11 +22,14 @@ use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::fs::workspace_directory;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
+use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
+use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
@@ -41,7 +43,6 @@ use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::string::ToString;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 use tera::Context as TeraContext;
@@ -103,14 +104,8 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 AwsZone::UsEast2B.to_string(),
                 AwsZone::UsEast2C.to_string(),
             ],
-            Arc::from(cloud_provider),
-            Arc::from(dns_provider_qoverydns(
-                &context,
-                &ClusterDomain::Default {
-                    cluster_id: cluster_id.to_string(),
-                },
-            )),
-            AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide),
+            cloud_provider.as_ref(),
+            AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide, None),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
             ClusterAdvancedSettings {
@@ -173,12 +168,12 @@ fn test_port() -> Port {
     }
 }
 
-fn test_storage() -> Storage<AwsStorageType> {
+fn test_storage() -> Storage {
     Storage {
         id: "my_storage_id".to_string(),
         long_id: Uuid::new_v4(),
         name: "my_storage_name".to_string(),
-        storage_type: AwsStorageType::GP2,
+        storage_class: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
         size_in_gib: 1,
         mount_point: "my_mount_point".to_string(),
         snapshot_retention_in_days: 2,
@@ -212,6 +207,7 @@ fn test_custom_domain() -> CustomDomain {
         domain: "my_custom_domain".to_string(),
         target_domain: "my_target_domain".to_string(),
         generate_certificate: true,
+        use_cdn: false,
     }
 }
 
@@ -233,9 +229,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         "my-application-name".to_string(),
         format!("{}.{}", long_id, domain),
         vec![test_port()],
-        "1".to_string(),
-        "2".to_string(),
-        3,
         4,
         5,
         Build {
@@ -249,6 +242,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 }],
                 commit_id: "my_commit_id".to_string(),
                 dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
+                dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
                 buildpack_language: Some("my_language".to_string()),
             },
@@ -262,6 +256,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 registry_name: "my_image_registry_name".to_string(),
                 registry_docker_json_config: Some("my_image_registry_docker_json_config".to_string()),
                 registry_url: Url::parse("https://my_image_registry_url.com").unwrap(),
+                registry_insecure: false,
                 repository_name: "my_image_repository_name".to_string(),
             },
             environment_variables: BTreeMap::new(),
@@ -307,6 +302,8 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             build_timeout_max_sec: 2,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
@@ -319,7 +316,8 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_ingress_keepalive_time_seconds: 4,
             network_ingress_keepalive_timeout_seconds: 5,
             network_ingress_send_timeout_seconds: 6,
-            network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 7,
             network_ingress_proxy_send_timeout_seconds: 8,
             network_ingress_proxy_read_timeout_seconds: 9,
@@ -332,11 +330,22 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 31,
+            hpa_memory_average_utilization_percent: None,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
+        get_labels_group(),
+        1,
+        2,
+        3,
+        3,
+        false,
+        false,
     )
     .unwrap()
 }
@@ -401,6 +410,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 11,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
@@ -410,7 +421,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_keepalive_time_seconds: 12,
             network_ingress_keepalive_timeout_seconds: 13,
             network_ingress_send_timeout_seconds: 14,
-            network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 15,
             network_ingress_proxy_send_timeout_seconds: 16,
             network_ingress_proxy_read_timeout_seconds: 17,
@@ -423,14 +435,63 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 41,
+            hpa_memory_average_utilization_percent: None,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
+        get_labels_group(),
+        false,
+        false,
     )
     .unwrap()
+}
+
+fn get_annotations_group_for_app() -> Vec<AnnotationsGroup> {
+    vec![AnnotationsGroup {
+        annotations: vec![Annotation {
+            key: "annotation_key".to_string(),
+            value: "annotation_value".to_string(),
+        }],
+        scopes: vec![
+            AnnotationsGroupScope::Deployments,
+            AnnotationsGroupScope::StatefulSets,
+            AnnotationsGroupScope::Services,
+            AnnotationsGroupScope::Hpa,
+            AnnotationsGroupScope::Secrets,
+            AnnotationsGroupScope::Pods,
+        ],
+    }]
+}
+
+fn get_labels_group() -> Vec<LabelsGroup> {
+    vec![LabelsGroup {
+        labels: vec![Label {
+            key: "label_key".to_string(),
+            value: "label_value".to_string(),
+            propagate_to_cloud_provider: true,
+        }],
+    }]
+}
+
+fn get_annotations_group_for_job() -> Vec<AnnotationsGroup> {
+    vec![AnnotationsGroup {
+        annotations: vec![Annotation {
+            key: "annotation_key".to_string(),
+            value: "annotation_value".to_string(),
+        }],
+        scopes: vec![
+            AnnotationsGroupScope::Jobs,
+            AnnotationsGroupScope::CronJobs,
+            AnnotationsGroupScope::Secrets,
+            AnnotationsGroupScope::Pods,
+        ],
+    }]
 }
 
 pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Managed, PostgresSQL> {
@@ -444,7 +505,9 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
         Utc::now(),
         "my_managed_db_fqdn",
         "my_managed_db_fqdn_id",
-        "my_managed_db_total_cpus".to_string(),
+        1,
+        1,
+        1,
         1,
         42,
         Some(Box::new(AwsDatabaseInstanceType::DB_T3_MICRO)),
@@ -464,6 +527,8 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
             publicly_accessible: true,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
+        vec![],
     )
     .unwrap()
 }
@@ -479,7 +544,9 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
         Utc::now(),
         "my_container_db_fqdn",
         "my_container_db_fqdn_id",
-        "my_container_db_total_cpus".to_string(),
+        1,
+        1,
+        1,
         1,
         42,
         None,
@@ -499,6 +566,8 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             publicly_accessible: true,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
+        vec![],
     )
     .unwrap()
 }
@@ -522,6 +591,8 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
             basic_auth: None,
         },
         |transmitter| test_kube.context().get_event_details(transmitter),
+        vec![],
+        vec![],
     )
     .unwrap()
 }
@@ -574,6 +645,8 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         },
         Some(Probe {
             r#type: ProbeType::Http {
@@ -598,6 +671,10 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         }),
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_job(),
+        get_labels_group(),
+        false,
+        false,
     )
     .unwrap()
 }
@@ -622,7 +699,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
 }
 
 fn deployment_target<'a>(test_env: &'a Environment, infra_ctx: &'a InfrastructureContext) -> DeploymentTarget<'a> {
-    DeploymentTarget::new(infra_ctx, test_env, &|| false)
+    DeploymentTarget::new(infra_ctx, test_env, &|| AbortStatus::None)
         .unwrap_or_else(|e| panic!("Unable to create deployment target: {e}"))
 }
 

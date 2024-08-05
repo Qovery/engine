@@ -11,8 +11,16 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {% endfor %}
 spec:
   replicas: {{ service.min_instances }}
   serviceName: {{ service.name }}
@@ -39,6 +47,10 @@ spec:
         qovery.com/service-type: {{ service.type }}
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
@@ -46,14 +58,26 @@ spec:
         appCommitId: {{ service.version }}
         {%- endif %}
         qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.pods %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
     spec:
+      {%- if service.tolerations %}
+      tolerations:
+      {%- for key, value in service.tolerations %}
+        - key: "{{ key }}"
+          operator: "Exists"
+          effect: "{{ value }}"
+      {%- endfor %}
+      {%- endif %}
       affinity:
         {%- if service.advanced_settings.deployment_affinity_node_required %}
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
             - matchExpressions:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
               - key: "{{ key }}"
                 operator: In
                 values:
@@ -181,11 +205,22 @@ spec:
             readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
-              cpu: {{ service.cpu_limit_in_mili }}
+              cpu: {{ service.cpu_limit_in_milli }}
               memory: {{ service.ram_limit_in_mib }}
             requests:
-              cpu: {{ service.cpu_request_in_mili }}
+              cpu: {{ service.cpu_request_in_milli }}
               memory: {{ service.ram_request_in_mib }}
+          lifecycle:
+            {% if service.advanced_settings.deployment_lifecycle_post_start_exec_command | length > 0 %}
+            postStart:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_post_start_exec_command }}
+            {%- endif %}
+            {% if service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | length > 0 %}
+            preStop:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_pre_stop_exec_command }}
+            {%- endif %}
           volumeMounts:
 {%- for s in service.storages %}
             {%- if service.legacy_volumeclaim_template %}

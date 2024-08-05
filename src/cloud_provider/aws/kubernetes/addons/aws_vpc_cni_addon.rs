@@ -20,7 +20,7 @@ impl AwsVpcCniAddon {
                 KubernetesVersion::V1_25 { .. } => "v1.13.2-eksbuild.1",
                 KubernetesVersion::V1_26 { .. } => "v1.13.2-eksbuild.1",
                 KubernetesVersion::V1_27 { .. } => "v1.15.1-eksbuild.1",
-                KubernetesVersion::V1_28 { .. } => "v1.15.1-eksbuild.1",
+                KubernetesVersion::V1_28 { .. } => "v1.18.0-eksbuild.1",
             }
             .to_string(),
         }

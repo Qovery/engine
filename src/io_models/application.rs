@@ -1,12 +1,27 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::str;
+use std::sync::Arc;
+use std::time::Duration;
+
+use base64::engine::general_purpose;
+use base64::Engine;
+use chrono::{DateTime, Utc};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use url::Url;
+use uuid::Uuid;
+
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable};
+use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable, StorageClass};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
@@ -14,23 +29,13 @@ use crate::io_models::{
 };
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
-use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
-use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
-use crate::models::gcp::{GcpAppExtraSettings, GcpStorageType};
-use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
-use crate::models::selfmanaged::SelfManagedAppExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::aws::AwsAppExtraSettings;
+use crate::models::aws_ec2::AwsEc2AppExtraSettings;
+use crate::models::gcp::GcpAppExtraSettings;
+use crate::models::scaleway::ScwAppExtraSettings;
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
-use base64::engine::general_purpose;
-use base64::Engine;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
-use std::str;
-use std::sync::Arc;
-use std::time::Duration;
-use url::Url;
-use uuid::Uuid;
 
 use super::{PodAntiAffinity, UpdateStrategy};
 
@@ -104,6 +109,10 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
+    pub deployment_lifecycle_post_start_exec_command: Vec<String>,
+    #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
+    pub deployment_lifecycle_pre_stop_exec_command: Vec<String>,
 
     // Build
     #[serde(alias = "build.timeout_max_sec")]
@@ -132,8 +141,10 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_keepalive_timeout_seconds: u32,
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
-    #[serde(alias = "network.ingress.extra_headers")]
-    pub network_ingress_extra_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.add_headers")]
+    pub network_ingress_add_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.proxy_set_headers")]
+    pub network_ingress_proxy_set_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
@@ -161,6 +172,13 @@ pub struct ApplicationAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+    #[serde(alias = "hpa.memory.average_utilization_percent")]
+    pub hpa_memory_average_utilization_percent: Option<u8>,
+
+    #[serde(alias = "resources.override.limit.cpu_in_milli")]
+    pub resources_override_limit_cpu_in_milli: Option<u32>,
+    #[serde(alias = "resources.override.limit.ram_in_mib")]
+    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -176,6 +194,8 @@ impl Default for ApplicationAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
@@ -188,7 +208,8 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_keepalive_time_seconds: 3600,
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
-            network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
             network_ingress_proxy_send_timeout_seconds: 60,
             network_ingress_proxy_read_timeout_seconds: 60,
@@ -201,6 +222,9 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            hpa_memory_average_utilization_percent: None,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -220,6 +244,8 @@ impl ApplicationAdvancedSettings {
                 .deployment_update_strategy_rolling_update_max_surge_percent,
             deployment_affinity_node_required: self.deployment_affinity_node_required.clone(),
             deployment_antiaffinity_pod: self.deployment_antiaffinity_pod.clone(),
+            deployment_lifecycle_post_start_exec_command: self.deployment_lifecycle_post_start_exec_command.clone(),
+            deployment_lifecycle_pre_stop_exec_command: self.deployment_lifecycle_pre_stop_exec_command.clone(),
             network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
             network_ingress_cors_enable: self.network_ingress_cors_enable,
             network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,
@@ -229,7 +255,8 @@ impl ApplicationAdvancedSettings {
             network_ingress_keepalive_time_seconds: self.network_ingress_keepalive_time_seconds,
             network_ingress_keepalive_timeout_seconds: self.network_ingress_keepalive_timeout_seconds,
             network_ingress_send_timeout_seconds: self.network_ingress_send_timeout_seconds,
-            network_ingress_extra_headers: self.network_ingress_extra_headers.clone(),
+            network_ingress_add_headers: self.network_ingress_add_headers.clone(),
+            network_ingress_proxy_set_headers: self.network_ingress_proxy_set_headers.clone(),
             network_ingress_proxy_connect_timeout_seconds: self.network_ingress_proxy_connect_timeout_seconds,
             network_ingress_proxy_send_timeout_seconds: self.network_ingress_proxy_send_timeout_seconds,
             network_ingress_proxy_read_timeout_seconds: self.network_ingress_proxy_read_timeout_seconds,
@@ -242,6 +269,9 @@ impl ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
+            hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
+            resources_override_limit_cpu_in_milli: self.resources_override_limit_cpu_in_milli,
+            resources_override_limit_ram_in_mib: self.resources_override_limit_ram_in_mib,
         }
     }
 }
@@ -264,9 +294,10 @@ pub struct Application {
     pub root_path: String,
     pub public_domain: String,
     pub ports: Vec<Port>,
-    pub total_cpus: String,
-    pub cpu_burst: String,
-    pub total_ram_in_mib: u32,
+    pub cpu_request_in_milli: u32,
+    pub cpu_limit_in_milli: u32,
+    pub ram_request_in_mib: u32,
+    pub ram_limit_in_mib: u32,
     pub min_instances: u32,
     pub max_instances: u32,
     pub storage: Vec<Storage>,
@@ -281,6 +312,10 @@ pub struct Application {
     #[serde(default)]
     pub advanced_settings: ApplicationAdvancedSettings,
     pub container_registries: Vec<Registry>,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 fn default_root_path_value() -> String {
@@ -293,8 +328,25 @@ impl Application {
         context: &Context,
         build: Build,
         cloud_provider: &dyn CloudProvider,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
+            .cloned()
+            .collect_vec();
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -310,15 +362,12 @@ impl Application {
                         self.kube_name,
                         self.public_domain,
                         self.ports,
-                        self.total_cpus,
-                        self.cpu_burst,
-                        self.total_ram_in_mib,
                         self.min_instances,
                         self.max_instances,
                         build,
                         self.command_args,
                         self.entrypoint,
-                        self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -329,6 +378,14 @@ impl Application {
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -339,15 +396,12 @@ impl Application {
                         self.kube_name,
                         self.public_domain,
                         self.ports,
-                        self.total_cpus,
-                        self.cpu_burst,
-                        self.total_ram_in_mib,
                         self.min_instances,
                         self.max_instances,
                         build,
                         self.command_args,
                         self.entrypoint,
-                        self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
+                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -358,6 +412,14 @@ impl Application {
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?))
                 }
             }
@@ -369,15 +431,12 @@ impl Application {
                 self.kube_name,
                 self.public_domain,
                 self.ports,
-                self.total_cpus,
-                self.cpu_burst,
-                self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
                 build,
                 self.command_args,
                 self.entrypoint,
-                self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -388,6 +447,14 @@ impl Application {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -397,15 +464,12 @@ impl Application {
                 self.kube_name,
                 self.public_domain,
                 self.ports,
-                self.total_cpus,
-                self.cpu_burst,
-                self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
                 build,
                 self.command_args,
                 self.entrypoint,
-                self.storage.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -416,8 +480,16 @@ impl Application {
                 self.advanced_settings,
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
-            CPKind::SelfManaged => Ok(Box::new(models::application::Application::<SelfManaged>::new(
+            CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
                 self.long_id,
                 self.action.to_service_action(),
@@ -425,15 +497,12 @@ impl Application {
                 self.kube_name,
                 self.public_domain,
                 self.ports,
-                self.total_cpus,
-                self.cpu_burst,
-                self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
                 build,
                 self.command_args,
                 self.entrypoint,
-                vec![],
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -442,8 +511,16 @@ impl Application {
                 self.readiness_probe.map(|p| p.to_domain()),
                 self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
-                SelfManagedAppExtraSettings {},
+                OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?)),
         }
     }
@@ -458,6 +535,7 @@ impl Application {
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
+            registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
             repository_name: cr_info.get_repository_name(&self.name),
         }
@@ -491,6 +569,7 @@ impl Application {
                 ssh_keys,
                 commit_id: self.commit_id.clone(),
                 dockerfile_path,
+                dockerfile_content: None,
                 root_path,
                 buildpack_language: self.buildpack_language.clone(),
             },
@@ -532,80 +611,19 @@ pub struct Storage {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub storage_type: StorageType,
+    pub storage_class: String,
     pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum StorageType {
-    SlowHdd,
-    Hdd,
-    Ssd,
-    FastSsd,
-}
-
 impl Storage {
-    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage<AwsStorageType> {
+    pub fn to_storage(&self) -> crate::cloud_provider::models::Storage {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),
-            storage_type: match self.storage_type {
-                StorageType::SlowHdd => AwsStorageType::SC1,
-                StorageType::Hdd => AwsStorageType::ST1,
-                StorageType::Ssd => AwsStorageType::GP2,
-                StorageType::FastSsd => AwsStorageType::IO1,
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage<AwsEc2StorageType> {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_type: match self.storage_type {
-                StorageType::SlowHdd => AwsEc2StorageType::SC1,
-                StorageType::Hdd => AwsEc2StorageType::ST1,
-                StorageType::Ssd => AwsEc2StorageType::GP2,
-                StorageType::FastSsd => AwsEc2StorageType::IO1,
-            },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage<ScwStorageType> {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_type: ScwStorageType::BlockSsd, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_gcp_storage(&self) -> crate::cloud_provider::models::Storage<GcpStorageType> {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_type: GcpStorageType::SSD, // TODO(benjaminch ENG-1671): use the correct storage type sent by control plane
-            // storage_type: match self.storage_type {
-            //     StorageType::SlowHdd => GcpStorageType::Standard,
-            //     StorageType::Hdd => GcpStorageType::Balanced,
-            //     StorageType::Ssd => GcpStorageType::SSD,
-            //     StorageType::FastSsd => GcpStorageType::Extreme,
-            // },
+            storage_class: StorageClass(self.storage_class.clone()),
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,

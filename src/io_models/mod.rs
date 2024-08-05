@@ -13,6 +13,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+pub mod annotations_group;
 pub mod application;
 pub mod container;
 pub mod context;
@@ -21,8 +22,10 @@ pub mod engine_request;
 pub mod environment;
 pub mod helm_chart;
 pub mod job;
+pub mod labels_group;
 pub mod probe;
 pub mod router;
+mod types;
 pub mod variable_utils;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug, Default)]

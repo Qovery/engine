@@ -10,6 +10,15 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
 spec:
   type: ClusterIP
   ports:
@@ -36,11 +45,19 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "{{ l4_ports.hostnames | join(sep=",") }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- for annotation in loadbalancer_l4_annotations %}
     {{ annotation | first }}: "{{ annotation | last }}"
+    {%- endfor %}
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
     {%- endfor %}
 spec:
   type: LoadBalancer

@@ -41,7 +41,6 @@ pub struct Secrets {
 #[serde(rename_all = "camelCase")]
 pub struct SecretsMetadata {
     pub resource_version: String,
-    pub self_link: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]

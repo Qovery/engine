@@ -5,7 +5,7 @@ use crate::cloud_provider::helm::{
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::cloud_provider::models::{
@@ -54,7 +54,10 @@ pub struct LokiChart {
     loki_object_bucket_configuration: LokiObjectBucketConfiguration,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
+    vpa_min_mcpu: Option<u32>,
     chart_resources: HelmChartResources,
+    additional_char_path: Option<HelmChartValuesFilePath>,
+    chart_timeout: HelmChartTimeout,
 }
 
 impl LokiChart {
@@ -66,7 +69,10 @@ impl LokiChart {
         loki_object_bucket_configuration: LokiObjectBucketConfiguration,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
+        vpa_min_mcpu: Option<u32>,
         chart_resources: HelmChartResourcesConstraintType,
+        chart_timeout: HelmChartTimeout,
+        karpenter_enabled: bool,
     ) -> Self {
         LokiChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -86,6 +92,7 @@ impl LokiChart {
             loki_object_bucket_configuration,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
+            vpa_min_mcpu,
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(300),
@@ -95,6 +102,15 @@ impl LokiChart {
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "loki_with_karpenter".to_string(),
+                )),
+                false => None,
+            },
+            chart_timeout,
         }
     }
 
@@ -118,14 +134,22 @@ impl ToCommonHelmChart for LokiChart {
             LokiObjectBucketConfiguration::GCS(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
         };
 
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: LokiChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: self.chart_namespace,
-                timeout_in_seconds: 900,
+                timeout_in_seconds: match self.chart_timeout {
+                    HelmChartTimeout::ChartDefault => 900,
+                    HelmChartTimeout::Custom(t) => t.whole_seconds(),
+                },
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values: vec![
                     ChartSetValue {
                         key: "kubectlImage.registry".to_string(),
@@ -283,7 +307,7 @@ impl ToCommonHelmChart for LokiChart {
                         ),
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(self.vpa_min_mcpu.unwrap_or(200))),
                             Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(512)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(4)),
@@ -330,7 +354,7 @@ mod tests {
     };
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
+        HelmChartResourcesConstraintType, HelmChartTimeout, HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use std::env;
@@ -357,7 +381,10 @@ mod tests {
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
+            None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -389,7 +416,10 @@ mod tests {
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
+            None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -425,7 +455,10 @@ mod tests {
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
+            None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartTimeout::ChartDefault,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

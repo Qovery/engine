@@ -1,6 +1,5 @@
 use base64::engine::general_purpose;
 use base64::Engine;
-use std::time::Duration;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
@@ -13,6 +12,8 @@ use crate::cmd::skopeo::Skopeo;
 use url::Url;
 use uuid::Uuid;
 
+use super::RegistryTags;
+
 pub struct GenericCr {
     context: Context,
     long_id: Uuid,
@@ -22,6 +23,10 @@ pub struct GenericCr {
     _repository_name: String,
     skopeo: Skopeo,
     cr_info: ContainerRegistryInfo,
+    // Only used for the demo mode, which does not support delete operations on its registry.
+    // And skopeo does not return the same error with ARM version. On AMD64 it works fine.
+    // https://github.com/k3d-io/k3d/issues/1090
+    support_delete: bool,
 }
 
 impl GenericCr {
@@ -33,6 +38,7 @@ impl GenericCr {
         skip_tls_verification: bool,
         repository_name: String,
         credentials: Option<(String, String)>,
+        support_delete: bool,
     ) -> Result<Self, ContainerRegistryError> {
         let mut registry_docker_json_config = None;
         if let Some((user, pass)) = &credentials {
@@ -61,6 +67,7 @@ impl GenericCr {
             endpoint: url.clone(),
             registry_name: name.to_string(),
             registry_docker_json_config,
+            insecure_registry: skip_tls_verification,
             get_image_name: Box::new({
                 let repository = repository_name.clone();
                 move |name| format!("{}/{}", repository, name)
@@ -75,11 +82,16 @@ impl GenericCr {
             context,
             long_id,
             name: name.to_string(),
+            skip_tls_verification: if url.scheme() == "http" {
+                true
+            } else {
+                skip_tls_verification
+            },
             url,
-            skip_tls_verification,
             _repository_name: repository_name,
             skopeo,
             cr_info: container_registry_info,
+            support_delete,
         };
 
         Ok(cr)
@@ -137,7 +149,7 @@ impl ContainerRegistry for GenericCr {
         &self,
         name: &str,
         _image_retention_time_in_seconds: u32,
-        _resource_ttl: Option<Duration>,
+        _registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // Nothing to do, local registry create automatically new repositories
         Ok((
@@ -168,6 +180,10 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        if !self.support_delete {
+            return Ok(());
+        }
+
         let container =
             ContainerImage::new(self.cr_info.endpoint.clone(), repository_name.to_string(), vec!["".to_string()]);
         let tags = self
@@ -194,6 +210,10 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+        if !self.support_delete {
+            return Ok(());
+        }
+
         let container = ContainerImage::new(self.cr_info.endpoint.clone(), image.name.clone(), vec![image.tag.clone()]);
         self.skopeo
             .delete_image(&container, !self.skip_tls_verification)

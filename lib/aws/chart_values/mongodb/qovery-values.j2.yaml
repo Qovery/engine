@@ -11,6 +11,10 @@ commonLabels:
   qovery.com/service-type: "database"
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
 
 image:
   registry: {{ registry_name}}
@@ -27,11 +31,11 @@ auth:
 
 resources:
   requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
   limits:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
 
 # on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
 # otherwise customize the default probes timers, because with minimal resources it takes time to start
@@ -87,10 +91,14 @@ service:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   {% endif %}
 
 persistence:
-  storageClass: "aws-ebs-gp2-0"
+  storageClass: "{{ database_disk_type }}"
   size: "{{ database_disk_size_in_gib }}Gi"
   labels:
     # app label required for legacy chart (installed before 01/06/23)
@@ -126,3 +134,129 @@ volumePermissions:
   image:
     registry: {{ registry_name }}
     repository: {{ repository_name_minideb }}
+
+nodeAffinityPreset:
+  type: "{{ node_affinity_type }}"
+  key: "{{ node_affinity_key }}"
+  values: {{ node_affinity_values }}
+
+tolerations:
+{%- for key, value in toleration %}
+  - key: "{{ key }}"
+    operator: Exists
+    effect: "{{ value }}"
+{%- endfor %}
+
+{%- if node_affinity %}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+
+hidden:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+
+arbiter:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
+  tolerations:
+{%- for key, value in toleration %}
+    - key: "{{ key }}"
+      operator: Exists
+      effect: "{{ value }}"
+{%- endfor %}
+{%- if node_affinity %}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{% endif %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+annotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}

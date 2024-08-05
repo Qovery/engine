@@ -18,7 +18,6 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::ToCloudProviderFormat;
 use std::str::FromStr;
-use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
 
@@ -28,13 +27,12 @@ use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_28 {
     prefix: None,
     patch: None,
     suffix: None,
 };
 pub const AWS_DATABASE_INSTANCE_TYPE: AwsDatabaseInstanceType = AwsDatabaseInstanceType::DB_T3_MICRO;
-pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 pub const AWS_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
 
@@ -119,13 +117,10 @@ impl Cluster<AWS, Options> for AWS {
         let cloud_provider: Box<dyn CloudProvider> = AWS::cloud_provider(context, kubernetes_kind, region);
         let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
-        let cloud_provider: Arc<dyn CloudProvider> = Arc::from(cloud_provider);
-        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider);
         let kubernetes = get_environment_test_kubernetes(
             context,
-            cloud_provider.clone(),
+            cloud_provider.as_ref(),
             kubernetes_version,
-            dns_provider.clone(),
             logger.clone(),
             region,
             vpc_network_mode,
@@ -143,6 +138,7 @@ impl Cluster<AWS, Options> for AWS {
             dns_provider,
             kubernetes,
             metrics_registry,
+            true,
         )
     }
 
@@ -196,7 +192,11 @@ impl Cluster<AWS, Options> for AWS {
                 secret_access_key: secrets
                     .TERRAFORM_AWS_SECRET_ACCESS_KEY
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set"),
-                region: "eu-west-3".to_string(),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
+                s3_bucket: secrets.TERRAFORM_AWS_BUCKET.expect("TERRAFORM_AWS_BUCKET is not set"),
+                dynamodb_table: secrets
+                    .TERRAFORM_AWS_DYNAMODB_TABLE
+                    .expect("TERRAFORM_AWS_DYNAMODB_TABLE is not set"),
             },
         ))
     }
@@ -217,6 +217,7 @@ impl Cluster<AWS, Options> for AWS {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> Options {
         Options {
             ec2_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
@@ -267,6 +268,10 @@ impl Cluster<AWS, Options> for AWS {
             elasticache_zone_a_subnet_blocks: vec!["10.0.172.0/23".to_string(), "10.0.174.0/23".to_string()],
             elasticache_zone_b_subnet_blocks: vec!["10.0.176.0/23".to_string(), "10.0.178.0/23".to_string()],
             elasticache_zone_c_subnet_blocks: vec!["10.0.180.0/23".to_string(), "10.0.182.0/23".to_string()],
+            fargate_profile_zone_a_subnet_blocks: vec!["10.0.166.0/24".to_string()],
+            fargate_profile_zone_b_subnet_blocks: vec!["10.0.168.0/24".to_string()],
+            fargate_profile_zone_c_subnet_blocks: vec!["10.0.170.0/24".to_string()],
+            eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: vec!["10.0.132.0/22".to_string()],
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
@@ -306,6 +311,7 @@ impl Cluster<AWS, Options> for AWS {
             aws_addon_kube_proxy_version_override: None,
             aws_addon_coredns_version_override: None,
             ec2_exposed_port: Some(9876),
+            karpenter_parameters: None,
         }
     }
 }

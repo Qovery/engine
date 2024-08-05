@@ -7,8 +7,12 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{Port, Protocol};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
 use crate::utilities::to_short_id;
@@ -87,6 +91,8 @@ pub struct Router<T: CloudProvider> {
     pub(crate) advanced_settings: RouterAdvancedSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 impl<T: CloudProvider> Router<T> {
@@ -102,6 +108,8 @@ impl<T: CloudProvider> Router<T> {
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
     ) -> Result<Self, RouterError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -127,6 +135,8 @@ impl<T: CloudProvider> Router<T> {
             advanced_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -231,6 +241,9 @@ impl<T: CloudProvider> Router<T> {
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
+
+        context.insert("annotations_group", &self.annotations_group);
+        context.insert("labels_group", &self.labels_group);
 
         let lets_encrypt_url = match target.is_test_cluster {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
@@ -471,10 +484,6 @@ impl<T: CloudProvider> Service for Router<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         vec![]
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        vec![]
-    }
 }
 
 pub trait RouterService: Service + DeploymentAction + ToTeraContext + Send {
@@ -524,16 +533,19 @@ mod tests {
                 domain: "toto.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "cluster.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "titi.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: false,
+                use_cdn: true,
             },
         ];
 
@@ -588,6 +600,7 @@ mod tests {
             domain: "*.toto.cluster.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
         let port2 = Port {
             long_id: Default::default(),
@@ -637,6 +650,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";
@@ -693,11 +707,13 @@ mod tests {
                 domain: "super.mydomain.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
             CustomDomain {
                 domain: "*.toto.mydomain.com".to_string(),
                 target_domain: "".to_string(),
                 generate_certificate: true,
+                use_cdn: true,
             },
         ];
 
@@ -781,6 +797,7 @@ mod tests {
             domain: "toto.cluster.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "namespace1";
@@ -832,6 +849,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";
@@ -894,6 +912,7 @@ mod tests {
             domain: "*.toto.mydomain.com".to_string(),
             target_domain: "".to_string(),
             generate_certificate: true,
+            use_cdn: true,
         }];
 
         let namespace = "env_namespace";

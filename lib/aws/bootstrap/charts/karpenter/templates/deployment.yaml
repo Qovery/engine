@@ -36,6 +36,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "karpenter.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}
@@ -55,8 +59,8 @@ spec:
       containers:
         - name: controller
           securityContext:
-            runAsUser: 65536
-            runAsGroup: 65536
+            runAsUser: 65532
+            runAsGroup: 65532
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
@@ -99,7 +103,7 @@ spec:
                   divisor: "0"
                   resource: limits.memory
             - name: FEATURE_GATES
-              value: "Drift={{ .Values.settings.featureGates.drift }}"
+              value: "Drift={{ .Values.settings.featureGates.drift }},SpotToSpotConsolidation={{ .Values.settings.featureGates.spotToSpotConsolidation }}"
           {{- with .Values.settings.batchMaxDuration }}
             - name: BATCH_MAX_DURATION
               value: "{{ . }}"

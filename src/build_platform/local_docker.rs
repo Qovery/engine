@@ -1,21 +1,24 @@
 #![allow(clippy::redundant_closure)]
 
 use std::io::{Error, ErrorKind};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{env, fs};
+use std::{fs, thread};
 
-use git2::{Cred, CredentialType};
+use git2::{Cred, CredentialType, ErrorClass};
 use retry::delay::Fibonacci;
-use sysinfo::{DiskExt, RefreshKind, SystemExt};
+use retry::OperationResult;
+use time::Instant;
 use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::docker::{Architecture, ContainerImage};
+use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
@@ -25,6 +28,7 @@ use crate::git;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
+use crate::models::abort::Abort;
 use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
@@ -35,25 +39,42 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
     //"paketobuildpacks/builder:base",
 ];
 
+const DOCKER_IGNORE: &str = r#"
+# Ignore all logs
+*.log
+
+# Ignore git repository files
+.git
+.gitignore
+"#;
+
 /// use Docker in local
-#[derive(Clone)]
 pub struct LocalDocker {
     context: Context,
     id: String,
     long_id: Uuid,
     name: String,
+    builder_counter: AtomicUsize,
+    metrics_registry: Box<dyn MetricsRegistry>,
 }
 
 const MAX_GIT_LFS_SIZE_GB: u64 = 5;
 const MAX_GIT_LFS_SIZE_KB: u64 = MAX_GIT_LFS_SIZE_GB * 1024 * 1024; // 5GB
 
 impl LocalDocker {
-    pub fn new(context: Context, long_id: Uuid, name: &str) -> Result<Self, BuildError> {
+    pub fn new(
+        context: Context,
+        long_id: Uuid,
+        name: &str,
+        metrics_registry: Box<dyn MetricsRegistry>,
+    ) -> Result<Self, BuildError> {
         Ok(LocalDocker {
             context,
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
+            builder_counter: AtomicUsize::new(0),
+            metrics_registry,
         })
     }
 
@@ -65,55 +86,6 @@ impl LocalDocker {
         }
     }
 
-    fn reclaim_space_if_needed(&self) {
-        // ensure there is enough disk space left before building a new image
-        // For CI, we should skip this job
-        if env::var_os("CI").is_some() {
-            info!("CI environment detected, skipping reclaim space job (docker prune)");
-            return;
-        }
-
-        // arbitrary percentage that should make the job anytime
-        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 40;
-        let mount_points_to_check = [Path::new("/var/lib/docker"), Path::new("/")];
-        let mut disk_free_space_percent: u64 = 100;
-
-        let sys_info = sysinfo::System::new_with_specifics(RefreshKind::new().with_disks().with_disks_list());
-        let should_reclaim_space = sys_info.disks().iter().any(|disk| {
-            // Check disk own the mount point we are interested in
-            if !mount_points_to_check.contains(&disk.mount_point()) {
-                return false;
-            }
-
-            // Check if we have hit our threshold regarding remaining disk space
-            disk_free_space_percent = disk.available_space() * 100 / disk.total_space();
-            if disk_free_space_percent <= DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE {
-                return true;
-            }
-
-            false
-        });
-
-        if !should_reclaim_space {
-            debug!(
-                "Docker skipping image purge, still {} % disk free space",
-                disk_free_space_percent
-            );
-            return;
-        }
-
-        let msg = format!(
-            "Purging docker images to reclaim disk space. Only {disk_free_space_percent} % disk free space, This may take some time"
-        );
-        info!("{}", msg);
-
-        // Request a purge if a disk is being low on space
-        if let Err(err) = self.context.docker.prune_images() {
-            let msg = format!("Error while purging docker images: {err}");
-            error!("{}", msg);
-        }
-    }
-
     fn build_image_with_docker(
         &self,
         build: &mut Build,
@@ -121,7 +93,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        is_task_canceled: &dyn Fn() -> bool,
+        abort: &dyn Abort,
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
@@ -156,7 +128,7 @@ impl LocalDocker {
         );
 
         let image_cache =
-            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["latest".to_string()]);
+            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["cache".to_string()]);
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
@@ -182,7 +154,11 @@ impl LocalDocker {
                 continue;
             }
 
-            let url = registry.get_url_with_credentials();
+            let url = registry
+                .get_url_with_credentials()
+                .map_err(|_| BuildError::CannotGetCredentials {
+                    raw_error_message: "Cannot get the registry credentials".to_string(),
+                })?;
             if url.password().is_none() {
                 continue;
             }
@@ -201,7 +177,11 @@ impl LocalDocker {
             });
 
             if let Err(err) = login_ret {
-                logger.send_warning(format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()));
+                logger.send_warning(format!(
+                    "❌ Failed to login to registry {} due to {}",
+                    url.host_str().unwrap_or_default(),
+                    err
+                ));
                 let err = BuildError::DockerError {
                     application: build.image.service_id.clone(),
                     raw_error: err.error,
@@ -222,7 +202,12 @@ impl LocalDocker {
             .iter()
             .map(|arch| docker::Architecture::from(arch))
             .collect();
+
+        let builder_handle =
+            self.provision_builder(build, |line| logger.send_progress(line), &CommandKiller::from_cancelable(abort))?;
+
         let exit_status = self.context.docker.build(
+            &builder_handle.builder_name.as_deref(),
             Path::new(dockerfile_complete_path),
             Path::new(into_dir_docker_style),
             &image_to_build,
@@ -232,7 +217,7 @@ impl LocalDocker {
             &arch,
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
-            &CommandKiller::from(build.timeout, is_task_canceled),
+            &CommandKiller::from(build.timeout, abort),
         );
 
         if let Err(err) = exit_status {
@@ -243,13 +228,117 @@ impl LocalDocker {
         Ok(())
     }
 
+    fn provision_builder(
+        &self,
+        build: &Build,
+        env_logger: impl Fn(String),
+        should_abort: &CommandKiller,
+    ) -> Result<BuilderHandle, BuildError> {
+        let (max_cpu, max_ram) = (build.max_cpu_in_milli, build.max_ram_in_gib);
+
+        env_logger(format!(
+            "🧑‍🏭 Provisioning docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
+        ));
+        // Docker has a hardcoded timeout of 1 minute for the builder creation
+        // it may be too short for us, so retry until we reach our deadline
+        // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
+        let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
+
+        // We need to do special handling for insecure registries or http ones.
+        let cr = &build.image.registry_url;
+        let http_registries = if cr.scheme() == "http" {
+            vec![format!(
+                "{}:{}",
+                cr.host_str().unwrap_or(""),
+                cr.port_or_known_default().unwrap_or(80)
+            )]
+        } else {
+            vec![]
+        };
+        let insecure_registries = if build.image.registry_insecure {
+            vec![format!(
+                "{}:{}",
+                cr.host_str().unwrap_or(""),
+                cr.port_or_known_default().unwrap_or(443)
+            )]
+        } else {
+            vec![]
+        };
+
+        let arch: Vec<Architecture> = build
+            .architectures
+            .iter()
+            .map(|arch| docker::Architecture::from(arch))
+            .collect();
+
+        let provision_builder = self.metrics_registry.start_record(
+            build.image.service_long_id,
+            StepLabel::Service,
+            StepName::ProvisionBuilder,
+        );
+
+        let exec_id = self
+            .context
+            .execution_id()
+            .rsplit_once('-')
+            .unwrap_or((self.context.execution_id(), ""))
+            .0;
+        let builder_handle = loop {
+            match self.context.docker.spawn_builder(
+                &format!("{}-{}", exec_id, self.builder_counter.fetch_add(1, Ordering::Relaxed)),
+                build.image.service_long_id.to_string().as_str(),
+                NonZeroUsize::new(1).unwrap(),
+                &arch,
+                (max_cpu, max_cpu),
+                (max_ram, max_ram),
+                should_abort,
+                http_registries
+                    .iter()
+                    .map(String::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                insecure_registries
+                    .iter()
+                    .map(String::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                true,
+            ) {
+                Ok(build_handle) => break build_handle,
+                Err(err) => {
+                    error!("cannot provision docker builder: {}", err);
+                    if should_abort.should_abort().is_some() {
+                        provision_builder.stop(StepStatus::Cancel);
+                        return Err(BuildError::Aborted {
+                            application: build.image.service_id.clone(),
+                        });
+                    }
+
+                    if err.is_aborted() || Instant::now() >= deadline {
+                        provision_builder.stop(StepStatus::Error);
+                        return Err(BuildError::DockerError {
+                            application: build.image.service_id.clone(),
+                            raw_error: err,
+                        });
+                    }
+
+                    env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        };
+        provision_builder.stop(StepStatus::Success);
+
+        Ok(builder_handle)
+    }
+
     fn build_image_with_buildpacks(
         &self,
         build: &Build,
         into_dir_docker_style: &str,
         use_build_cache: bool,
         logger: &EnvLogger,
-        is_task_canceled: &dyn Fn() -> bool,
+        abort: &dyn Abort,
     ) -> Result<(), BuildError> {
         const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
@@ -333,7 +422,7 @@ impl LocalDocker {
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
             cmd.set_kill_grace_period(Duration::from_secs(0));
-            let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
+            let cmd_killer = CommandKiller::from(build.timeout, abort);
             exit_status = cmd.exec_with_abort(
                 &mut |line| logger.send_progress(line),
                 &mut |line| logger.send_progress(line),
@@ -394,10 +483,10 @@ impl BuildPlatform for LocalDocker {
         build: &mut Build,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        is_task_canceled: &dyn Fn() -> bool,
+        abort: &dyn Abort,
     ) -> Result<(), BuildError> {
         // check if we should already abort the task
-        if is_task_canceled() {
+        if abort.status().should_cancel() {
             return Err(BuildError::Aborted {
                 application: build.image.service_id.clone(),
             });
@@ -453,17 +542,51 @@ impl BuildPlatform for LocalDocker {
         // Do the real git clone
         let git_clone_record =
             metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::GitClone);
-        if let Err(clone_error) = git::clone_at_commit(
-            &build.git_repository.url,
-            &build.git_repository.commit_id,
-            &repository_root_path,
-            &get_credentials,
-        ) {
+        if let Err(error) = retry::retry(retry::delay::Fixed::from_millis(10_000).take(3), || {
+            if let Err(BuildError::GitError {
+                application: _,
+                git_cmd,
+                context,
+                raw_error,
+            }) = git::clone_at_commit(
+                &build.git_repository.url,
+                &build.git_repository.commit_id,
+                &repository_root_path,
+                &get_credentials,
+            ) {
+                let message = raw_error.message();
+                let git_error_class = raw_error.class();
+                // Some errors can happen "randomly":
+                // - SSL error: syscall failure: Resource temporarily unavailable
+                // - Timeout on git clone
+                debug!("Error on git clone: git_error_class={:?}, message={}", git_error_class, message);
+                return if git_error_class == ErrorClass::Os
+                    || (git_error_class == ErrorClass::Net && message.contains("timed out"))
+                {
+                    debug!("Retrying git clone...");
+                    logger.send_warning(format!(
+                        "⚠️ Retrying cloning your git repository, due to following error: {}",
+                        message
+                    ));
+                    OperationResult::Retry(BuildError::GitError {
+                        application: build.image.service_id.clone(),
+                        git_cmd,
+                        context,
+                        raw_error,
+                    })
+                } else {
+                    OperationResult::Err(BuildError::GitError {
+                        application: build.image.service_id.clone(),
+                        git_cmd,
+                        context,
+                        raw_error,
+                    })
+                };
+            }
+            OperationResult::Ok(())
+        }) {
             git_clone_record.stop(StepStatus::Error);
-            return Err(BuildError::GitError {
-                application: build.image.service_id.clone(),
-                raw_error: clone_error,
-            });
+            return Err(error.error);
         }
         git_clone_record.stop(StepStatus::Success);
 
@@ -472,15 +595,11 @@ impl BuildPlatform for LocalDocker {
             let _ = fs::remove_dir_all(path);
         });
 
-        if is_task_canceled() {
+        if abort.status().should_cancel() {
             return Err(BuildError::Aborted {
                 application: build.image.service_id.clone(),
             });
         }
-
-        // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
-        // ex: this cause regular cleanup on CI, leading to random tests errors
-        self.reclaim_space_if_needed();
 
         let app_id = build.image.service_id.clone();
 
@@ -490,7 +609,7 @@ impl BuildPlatform for LocalDocker {
         } else {
             GitLfs::default()
         };
-        let cmd_killer = CommandKiller::from_cancelable(is_task_canceled);
+        let cmd_killer = CommandKiller::from_cancelable(abort);
         let size_estimate_kb = git_lfs
             .files_size_estimate_in_kb(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
             .unwrap_or(0);
@@ -563,6 +682,25 @@ impl BuildPlatform for LocalDocker {
 
             let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
 
+            // if the dockerfile content is provided, write it to the file before building
+            if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
+                fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
+                    application: app_id.clone(),
+                    action_description: "writing dockerfile content".to_string(),
+                    raw_error: err,
+                })?;
+
+                if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
+                    let docker_ignore_path = dockerfile_directory.join(".dockerignore");
+
+                    fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
+                        application: app_id.clone(),
+                        action_description: "writing .dockerignore content".to_string(),
+                        raw_error: err,
+                    })?;
+                }
+            }
+
             // If the dockerfile does not exist, abort
             if !dockerfile_absolute_path.is_file() {
                 return Err(BuildError::InvalidConfig {
@@ -580,7 +718,7 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 logger,
                 metrics_registry.clone(),
-                is_task_canceled,
+                abort,
             )
         } else {
             // build container with Buildpacks
@@ -591,7 +729,7 @@ impl BuildPlatform for LocalDocker {
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
                 logger,
-                is_task_canceled,
+                abort,
             );
             build_record.stop(if build_result.is_ok() {
                 StepStatus::Success

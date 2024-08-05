@@ -1,34 +1,41 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::marker::PhantomData;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use uuid::Uuid;
+
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, MountedFile, Storage,
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{get_service_statefulset_name_and_volumes, Action, Service, ServiceType};
-use crate::deployment_action::DeploymentAction;
-use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::{ApplicationAdvancedSettings, Port};
-use crate::io_models::context::Context;
-use std::collections::BTreeSet;
-
 use crate::cloud_provider::DeploymentTarget;
 use crate::cloud_provider::Kind::Scw;
+use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
+use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
+use crate::io_models::application::{ApplicationAdvancedSettings, Port};
+use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::container::{
     to_public_l4_ports, ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext,
 };
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
+use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
-use itertools::Itertools;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::time::Duration;
-use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ApplicationError {
@@ -46,15 +53,16 @@ pub struct Application<T: CloudProvider> {
     pub(super) kube_name: String,
     pub(super) public_domain: String,
     pub(super) ports: Vec<Port>,
-    pub(super) total_cpus: String,
-    pub(super) cpu_burst: String,
-    pub(super) total_ram_in_mib: u32,
+    pub(super) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(super) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(super) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(super) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) build: Build,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) storage: Vec<Storage<T::StorageTypes>>,
+    pub(super) storages: Vec<Storage>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) mounted_files: BTreeSet<MountedFile>,
     pub(super) readiness_probe: Option<Probe>,
@@ -63,6 +71,8 @@ pub struct Application<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 // Here we define the common behavior among all providers
@@ -75,15 +85,12 @@ impl<T: CloudProvider> Application<T> {
         kube_name: String,
         public_domain: String,
         ports: Vec<Port>,
-        total_cpus: String,
-        cpu_burst: String,
-        total_ram_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
         build: Build,
         command_args: Vec<String>,
         entrypoint: Option<String>,
-        storage: Vec<Storage<T::StorageTypes>>,
+        storages: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
         readiness_probe: Option<Probe>,
@@ -91,8 +98,28 @@ impl<T: CloudProvider> Application<T> {
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
+        ram_request_in_mib: u32,
+        ram_limit_in_mib: u32,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
+
+        let service_resources = compute_service_requests_and_limits(
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            ram_request_in_mib,
+            ram_limit_in_mib,
+            advanced_settings.resources_override_limit_cpu_in_milli,
+            advanced_settings.resources_override_limit_ram_in_mib,
+            allow_service_cpu_overcommit,
+            allow_service_ram_overcommit,
+        )
+        .map_err(ApplicationError::InvalidConfig)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -113,15 +140,16 @@ impl<T: CloudProvider> Application<T> {
             kube_name,
             public_domain,
             ports,
-            total_cpus,
-            cpu_burst,
-            total_ram_in_mib,
+            cpu_request_in_milli: service_resources.cpu_request_in_milli,
+            cpu_limit_in_milli: service_resources.cpu_limit_in_milli,
+            ram_request_in_mib: service_resources.ram_request_in_mib,
+            ram_limit_in_mib: service_resources.ram_limit_in_mib,
             min_instances,
             max_instances,
             build,
             command_args,
             entrypoint,
-            storage,
+            storages,
             environment_variables,
             mounted_files,
             readiness_probe,
@@ -130,6 +158,8 @@ impl<T: CloudProvider> Application<T> {
             _extra_settings: extra_settings,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -148,10 +178,17 @@ impl<T: CloudProvider> Application<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
-        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+        let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
         );
+
+        let mut tolerations = BTreeMap::<String, String>::new();
+        let is_stateful_set = !self.storages.is_empty();
+        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set) {
+            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations, is_stateful_set);
+        }
+
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
         let registry_info = target.container_registry.registry_info();
@@ -173,10 +210,10 @@ impl<T: CloudProvider> Application<T> {
                 version: self.version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_mili: self.total_cpus.clone(),
-                cpu_limit_in_mili: self.total_cpus.clone(),
-                ram_request_in_mib: format!("{}Mi", self.total_ram_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.total_ram_in_mib),
+                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                ram_request_in_mib: self.ram_request_in_mib.to_string(),
+                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -192,13 +229,26 @@ impl<T: CloudProvider> Application<T> {
                     vec
                 },
                 default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
-                storages: vec![],
+                storages: self
+                    .storages
+                    .iter()
+                    .map(|s| StorageDataTemplate {
+                        id: s.id.clone(),
+                        long_id: s.long_id,
+                        name: s.name.clone(),
+                        storage_type: s.storage_class.0.clone(),
+                        size_in_gib: s.size_in_gib,
+                        mount_point: s.mount_point.clone(),
+                        snapshot_retention_in_days: s.snapshot_retention_in_days,
+                    })
+                    .collect(),
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings: advanced_settings.to_container_advanced_settings(),
                 legacy_deployment_matchlabels: true,
                 legacy_volumeclaim_template: true,
                 legacy_deployment_from_scaleway: T::cloud_provider() == Scw,
+                tolerations,
             },
             registry: registry_info
                 .registry_docker_json_config
@@ -210,14 +260,16 @@ impl<T: CloudProvider> Application<T> {
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
-            loadbalancer_l4_annotations: T::loadbalancer_l4_annotations(),
+            loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(),
+            annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
         };
 
         ctx
     }
 
     pub fn is_stateful(&self) -> bool {
-        !self.storage.is_empty()
+        !self.storages.is_empty()
     }
 
     pub fn service_type(&self) -> ServiceType {
@@ -238,18 +290,6 @@ impl<T: CloudProvider> Application<T> {
 
     pub fn action(&self) -> &Action {
         &self.action
-    }
-
-    pub fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    pub fn cpu_burst(&self) -> String {
-        self.cpu_burst.to_string()
-    }
-
-    pub fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
     }
 
     pub fn min_instances(&self) -> u32 {
@@ -361,10 +401,6 @@ impl<T: CloudProvider> Service for Application<T> {
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         self.environment_variables.clone()
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        vec![]
-    }
 }
 
 pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send {
@@ -374,6 +410,14 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+}
+
+use tera::Context as TeraContext;
+impl<T: CloudProvider> ToTeraContext for Application<T> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
+        let context = self.default_tera_context(target);
+        Ok(TeraContext::from_serialize(context).unwrap_or_default())
+    }
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>
@@ -460,7 +504,8 @@ pub fn get_application_with_invalid_storage_size<T: CloudProvider>(
                                 ))
                             })?;
 
-                            if let Some(storage) = application.storage.iter().find(|storage| volume_name == &storage.id)
+                            if let Some(storage) =
+                                application.storages.iter().find(|storage| volume_name == &storage.id)
                             {
                                 if storage.size_in_gib > size {
                                     // if volume size in request is bigger than effective size we get related PVC to get its infos

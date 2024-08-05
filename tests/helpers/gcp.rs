@@ -1,12 +1,15 @@
-use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::get_environment_test_kubernetes;
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use time::Time;
+use uuid::Uuid;
+
 use qovery_engine::cloud_provider::gcp::kubernetes::{Gke, GkeOptions, VpcMode};
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::gcp::Google;
@@ -26,11 +29,11 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use qovery_engine::models::gcp::{GcpStorageType, JsonCredentials};
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use time::Time;
-use uuid::Uuid;
+
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::dns::dns_provider_qoverydns;
+use crate::helpers::kubernetes::get_environment_test_kubernetes;
+use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
@@ -41,7 +44,7 @@ pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed D
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
-pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_27 {
+pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_28 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -62,18 +65,18 @@ pub static GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
 > = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
 
 /// A rate limiter making sure we do not send too many bucket write requests while testing
-/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 10 seconds)
+/// Max default quotas are 0.5 RPS, let's take some room and use 10x less (1 per 12 seconds)
 /// more info here https://cloud.google.com/storage/quotas?hl=fr
 pub static GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER: Lazy<
     Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(5_u32)))));
 
 /// A rate limiter making sure we do not send too many object write requests while testing
-/// Max default quotas are 1 RPS, let's take some room and use 10x less (1 per 5 seconds)
+/// Max default quotas are 1 RPS, let's take some room and use 10x less (1 per 6 seconds)
 /// more info here https://cloud.google.com/storage/quotas?hl=fr
 pub static GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER: Lazy<
     Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
-> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(20_u32)))));
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
 
 pub fn gcp_container_registry(context: &Context) -> GoogleArtifactRegistry {
     let secrets = FuncTestsSecrets::new();
@@ -169,18 +172,17 @@ impl Cluster<Google, GkeOptions> for Gke {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Google
-        let cloud_provider: Arc<dyn CloudProvider> =
-            Arc::from(Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>);
+        let cloud_provider: Box<dyn CloudProvider> =
+            Self::cloud_provider(context, kubernetes_kind, localisation) as Box<dyn CloudProvider>;
 
         // use Qovery DNS provider
-        let dns_provider: Arc<dyn DnsProvider> = Arc::from(dns_provider_qoverydns(context, cluster_domain));
+        let dns_provider: Box<dyn DnsProvider> = dns_provider_qoverydns(context, cluster_domain);
 
         // GKE cluster
         let cluster = get_environment_test_kubernetes(
             context,
-            cloud_provider.clone(),
+            cloud_provider.as_ref(),
             kubernetes_version,
-            dns_provider.clone(),
             logger.clone(),
             localisation,
             vpc_network_mode,
@@ -198,6 +200,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             dns_provider,
             cluster,
             metrics_registry,
+            true,
         )
     }
 
@@ -226,7 +229,11 @@ impl Cluster<Google, GkeOptions> for Gke {
                 secret_access_key: secrets
                     .TERRAFORM_AWS_SECRET_ACCESS_KEY
                     .expect("TERRAFORM_AWS_SECRET_ACCESS_KEY is not set in secrets"),
-                region: "eu-west-3".to_string(),
+                region: secrets.TERRAFORM_AWS_REGION.expect("TERRAFORM_AWS_REGION is not set"),
+                s3_bucket: secrets.TERRAFORM_AWS_BUCKET.expect("TERRAFORM_AWS_BUCKET is not set"),
+                dynamodb_table: secrets
+                    .TERRAFORM_AWS_DYNAMODB_TABLE
+                    .expect("TERRAFORM_AWS_DYNAMODB_TABLE is not set"),
             },
         ))
     }
@@ -239,6 +246,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         secrets: FuncTestsSecrets,
         _cluster_id: Option<String>,
         engine_location: EngineLocation,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> GkeOptions {
         let credentials = try_parse_json_credentials_from_str(
             secrets
@@ -270,6 +278,7 @@ impl Cluster<Google, GkeOptions> for Gke {
                 custom_cluster_ipv4_cidr_block: None,
                 custom_services_ipv4_cidr_block: None,
             },
+            vpc_network_mode,
             secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),

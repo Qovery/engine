@@ -12,10 +12,11 @@ use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 use url::Url;
@@ -62,6 +63,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                &AwsStorageType::GP2.to_k8s_storage_class(),
             );
 
         let mut environment_delete = environment.clone();
@@ -85,8 +87,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -179,8 +180,8 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                 ),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -230,6 +231,8 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo { value:  general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -250,8 +253,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -321,7 +323,9 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -329,6 +333,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -370,6 +375,8 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -390,8 +397,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),

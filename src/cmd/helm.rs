@@ -8,7 +8,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{
-    CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist,
+    CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
 use crate::cmd::helm_utils::ChartYAML;
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
@@ -69,11 +69,16 @@ pub enum HelmError {
 
     #[error("Invalid Helm Repository Config: {0}")]
     InvalidRepositoryConfig(String),
+
+    #[error("Error: releaseContent: Release name is invalid: {0}")]
+    ReleaseNameInvalid(String),
+
+    #[error("Cannot get credentials error.")]
+    CannotGetCredentials(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Helm {
-    kubernetes_config: PathBuf,
     common_envs: Vec<(String, String)>,
 }
 
@@ -126,34 +131,27 @@ impl Helm {
         all_envs
     }
 
-    pub fn new<P: AsRef<Path>>(kubernetes_config: P, common_envs: &[(&str, &str)]) -> Result<Helm, HelmError> {
+    pub fn new<P: AsRef<Path>>(kubernetes_config: Option<P>, common_envs: &[(&str, &str)]) -> Result<Helm, HelmError> {
+        let mut common_envs: Vec<_> = common_envs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
         // Check kube config file is valid
-        let kubernetes_config = kubernetes_config.as_ref().to_path_buf();
-        if !kubernetes_config.exists() || !kubernetes_config.is_file() {
-            return Err(InvalidKubeConfig(kubernetes_config));
+        if let Some(kubernetes_config) = kubernetes_config.as_ref() {
+            let kubernetes_config = kubernetes_config.as_ref().to_path_buf();
+            if !kubernetes_config.exists() || !kubernetes_config.is_file() {
+                return Err(InvalidKubeConfig(kubernetes_config));
+            }
+            common_envs.push(("KUBECONFIG".to_string(), kubernetes_config.to_string_lossy().to_string()));
         }
 
-        Ok(Helm {
-            kubernetes_config,
-            common_envs: common_envs
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        })
+        Ok(Helm { common_envs })
     }
 
     pub fn check_release_exist(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<ReleaseStatus, HelmError> {
         let namespace = chart.get_namespace_string();
-        let args = vec![
-            "status",
-            &chart.name,
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
-            "--namespace",
-            &namespace,
-            "-o",
-            "json",
-        ];
+        let args = vec!["status", &chart.name, "--namespace", &namespace, "-o", "json"];
 
         let mut stdout = String::new();
         let mut stderr = String::new();
@@ -165,6 +163,7 @@ impl Helm {
             &CommandKiller::never(),
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
+            Err(_) if stderr.contains("Release name is invalid") => Err(ReleaseNameInvalid(chart.name.clone())),
             Err(err) => {
                 stderr.push_str(err.to_string().as_str());
                 Err(CmdError(chart.name.clone(), STATUS, err.into()))
@@ -186,8 +185,6 @@ impl Helm {
         let args = vec![
             "rollback",
             &chart.name,
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
             "--namespace",
             &namespace,
             "--timeout",
@@ -230,7 +227,10 @@ impl Helm {
         // If the release does not exist, we do not return an error
         match self.check_release_exist(chart, envs) {
             Ok(_) => {}
-            Err(ReleaseDoesNotExist(_)) => return Ok(()),
+            Err(ReleaseDoesNotExist(x)) => {
+                info!("Helm release `{x}` does not exist. Nothing to do");
+                return Ok(());
+            }
             Err(err) => return Err(err),
         }
 
@@ -239,8 +239,6 @@ impl Helm {
         let args = vec![
             "uninstall",
             &chart.name,
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
             "--namespace",
             &namespace,
             "--timeout",
@@ -291,14 +289,7 @@ impl Helm {
     /// * `envs` - environment variables required for kubernetes connection
     /// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
     pub fn list_release(&self, namespace: Option<&str>, envs: &[(&str, &str)]) -> Result<Vec<HelmChart>, HelmError> {
-        let mut helm_args = vec![
-            "list",
-            "-a",
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
-            "-o",
-            "json",
-        ];
+        let mut helm_args = vec!["list", "-a", "-o", "json"];
         match namespace {
             Some(ns) => helm_args.append(&mut vec!["-n", ns]),
             None => helm_args.push("-A"),
@@ -431,7 +422,9 @@ impl Helm {
         // So use same target dir, to avoid issues
         let tmpdir = Self::get_temp_dir(target_directory, chart_name, PULL)?;
 
-        let url_with_credentials = engine_helm_registry.get_url_with_credentials();
+        let url_with_credentials = engine_helm_registry
+            .get_url_with_credentials()
+            .map_err(|_| HelmError::CannotGetCredentials("Cannot get the OCI registy credentials".to_string()))?;
         if let Some((registry_url, username, password)) =
             Self::get_registry_with_username_password(&url_with_credentials)
         {
@@ -760,8 +753,6 @@ impl Helm {
         let mut args_string: Vec<String> = vec![
             "diff".to_string(),
             "upgrade".to_string(),
-            "--kubeconfig".to_string(),
-            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--install".to_string(),
             "--namespace".to_string(),
             chart.get_namespace_string(),
@@ -848,8 +839,6 @@ impl Helm {
 
         let mut args_string: Vec<String> = vec![
             "upgrade".to_string(),
-            "--kubeconfig".to_string(),
-            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--create-namespace".to_string(),
             "--cleanup-on-fail".to_string(),
             "--install".to_string(),
@@ -1239,18 +1228,10 @@ impl Helm {
         STDERR: FnMut(String),
     {
         let chart_path = chart_path.to_string_lossy();
-        let args: Vec<&str> = [
-            "template",
-            release_name,
-            chart_path.as_ref(),
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
-            "-n",
-            namespace,
-        ]
-        .into_iter()
-        .chain(args.iter().copied())
-        .collect();
+        let args: Vec<&str> = ["template", release_name, chart_path.as_ref(), "-n", namespace]
+            .into_iter()
+            .chain(args.iter().copied())
+            .collect();
 
         let mut stdout = String::new();
         let mut stderr_msg = String::new();
@@ -1312,8 +1293,6 @@ impl Helm {
             "upgrade",
             release_name,
             chart_path.as_ref(),
-            "--kubeconfig",
-            self.kubernetes_config.to_str().unwrap_or_default(),
             "--install",
             "-n",
             namespace,
@@ -1386,8 +1365,6 @@ impl Helm {
             "template".to_string(),
             "--validate".to_string(),
             "--debug".to_string(),
-            "--kubeconfig".to_string(),
-            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--namespace".to_string(),
             chart.get_namespace_string(),
         ];
@@ -1685,7 +1662,7 @@ mod tests {
             )];
             let mut kube_config = dirs::home_dir().unwrap();
             kube_config.push(".kube/config");
-            let helm = Helm::new(kube_config.to_str().unwrap(), &[]).unwrap();
+            let helm = Helm::new(Some(kube_config.to_str().unwrap()), &[]).unwrap();
 
             let cleanup = HelmTestCtx { helm, charts };
             cleanup.cleanup();
@@ -1709,7 +1686,7 @@ mod tests {
             &mut |_line| {},
             &CommandKiller::never(),
         );
-        assert!(output.contains("Version:\"v3.12.3\""));
+        assert!(output.contains("Version:\"v3.15.2\""));
     }
 
     #[test]

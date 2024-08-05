@@ -50,18 +50,22 @@ pub trait ObjectStorage {
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
     ) -> Result<Bucket, ObjectStorageError>;
+    fn update_bucket(&self, bucket_name: &str, bucket_versioning_activated: bool)
+        -> Result<Bucket, ObjectStorageError>;
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError>;
     fn delete_bucket(
         &self,
         bucket_name: &str,
         bucket_delete_strategy: BucketDeleteStrategy,
     ) -> Result<(), ObjectStorageError>;
+    fn delete_bucket_non_blocking(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError>;
     fn put_object(
         &self,
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError>;
     fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
 }
@@ -107,4 +111,5 @@ pub struct BucketObject {
     pub bucket_name: String,
     pub key: String,
     pub value: Vec<u8>,
+    pub tags: Vec<String>,
 }

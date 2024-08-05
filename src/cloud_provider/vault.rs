@@ -256,7 +256,7 @@ impl ClusterSecrets {
         let mount = get_vault_mount_name(is_test_cluster);
         let err = |e| {
             Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
-                event_details,
+                event_details.clone(),
                 CommandError::new(
                     format!("Vault secret couldn't be retrieved ({cloud_provider}/{cluster_id})"),
                     Some(format!("{e}")),
@@ -282,6 +282,14 @@ impl ClusterSecrets {
                 Ok(x) => Ok(ClusterSecrets::Gke(x)),
                 Err(e) => Err(err(e)),
             },
+            Kind::OnPremiseSelfManaged => Err(Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
+                event_details,
+                CommandError::new(
+                    format!("Vault secret couldn't be retrieved ({cloud_provider}/{cluster_id})"),
+                    Some("On Premise cluster does not have credentials".to_string()),
+                    None,
+                ),
+            ))),
         }
     }
 

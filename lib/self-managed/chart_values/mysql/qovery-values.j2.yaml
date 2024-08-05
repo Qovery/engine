@@ -1,0 +1,68 @@
+image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
+  tag: "{{ version }}"
+
+# -master is required to keep compatibility with previous installed versions
+nameOverride: "{{ sanitized_name }}-master"
+fullnameOverride: "{{ sanitized_name }}-master"
+
+commonLabels:
+  # app label required for legacy chart (installed before 15/06/23)
+  envId: "{{ environment_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
+auth:
+  rootPassword: "{{ database_password }}"
+  username: "qovery"
+  password: "{{ database_password }}"
+  database: "{{ sanitized_name }}"
+
+primary:
+  podLabels:
+    envId: "{{ environment_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  resources:
+    requests:
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
+    limits:
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"
+  persistence:
+    storageClass: "{{ database_disk_type }}"
+    size: "{{ database_disk_size_in_gib }}Gi"
+    labels:
+      envId: "{{ environment_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+    annotations:
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+  service:
+    name: {{ service_name }}
+    type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+    {% if publicly_accessible -%}
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+
+rbac:
+  create: true
+
+volumePermissions:
+  enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_bitnami_shell }}

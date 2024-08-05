@@ -1,3 +1,15 @@
+locals {
+  tags_alb_controller = {
+    "kubernetes.io/role/elb" = 1,
+    "kubernetes.io/role/internal-elb" = ""
+  }
+
+  tags_subnets = merge(
+    local.tags_ec2,
+    local.tags_alb_controller
+  )
+}
+
 # Public subnets
 resource "aws_subnet" "ec2_zone_a" {
   count = length(var.ec2_subnets_zone_a_private)
@@ -7,7 +19,7 @@ resource "aws_subnet" "ec2_zone_a" {
   vpc_id = aws_vpc.ec2.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_ec2_vpc
+  tags = local.tags_subnets
 }
 
 resource "aws_subnet" "ec2_zone_b" {
@@ -18,7 +30,7 @@ resource "aws_subnet" "ec2_zone_b" {
   vpc_id = aws_vpc.ec2.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_ec2_vpc
+  tags = local.tags_subnets
 }
 
 resource "aws_subnet" "ec2_zone_c" {
@@ -29,7 +41,7 @@ resource "aws_subnet" "ec2_zone_c" {
   vpc_id = aws_vpc.ec2.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_ec2_vpc
+  tags = local.tags_subnets
 }
 
 resource "aws_route_table" "ec2_instance" {

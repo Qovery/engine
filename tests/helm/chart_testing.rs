@@ -28,7 +28,7 @@ fn generate_template(chart_info: &ChartInfo, temp_dir: &str, service_type_folder
         let _ = fs::create_dir_all(template_dir.clone());
     }
 
-    let helm = Helm::new(kubeconfig_path(), &[]).unwrap_or_else(|_| panic!("Unable to generate Helm struct"));
+    let helm = Helm::new(Some(kubeconfig_path()), &[]).unwrap_or_else(|_| panic!("Unable to generate Helm struct"));
     helm.template_validate(chart_info, &[], Some(template_dir.as_str()))
         .expect("Unable to generate Helm template");
     template_dir
@@ -165,6 +165,12 @@ fn q_container_test() {
         &test_info,
         &uuid,
     );
+    for resource in resources.values() {
+        assert!(resource.metadata.annotations.is_some());
+        let annotations = resource.clone().metadata.annotations.unwrap();
+        assert_eq!(annotations.get("annotation_key"), Some(&"annotation_value".to_string()));
+    }
+
     assert!(!resources.is_empty());
 }
 
@@ -209,6 +215,12 @@ fn q_application_test() {
         &test_info,
         &uuid,
     );
+    for resource in resources.values() {
+        assert!(resource.metadata.annotations.is_some());
+        let annotations = resource.clone().metadata.annotations.unwrap();
+        assert_eq!(annotations.get("annotation_key"), Some(&"annotation_value".to_string()));
+    }
+
     assert!(!resources.is_empty());
 }
 
@@ -338,5 +350,10 @@ fn q_job_test() {
         &test_info,
         &uuid,
     );
+    for resource in resources.values() {
+        assert!(resource.metadata.annotations.is_some());
+        let annotations = resource.clone().metadata.annotations.unwrap();
+        assert_eq!(annotations.get("annotation_key"), Some(&"annotation_value".to_string()));
+    }
     assert!(!resources.is_empty());
 }

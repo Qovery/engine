@@ -1,23 +1,20 @@
 use crate::cloud_provider::Kind;
 use crate::models::types::CloudProvider;
-use crate::models::types::SelfManaged;
-mod application;
-mod container;
+use crate::models::types::OnPremise;
+mod database;
 mod job;
 mod router;
 
-pub struct SelfManagedAppExtraSettings {}
-pub struct SelfManagedDbExtraSettings {}
-pub struct SelfManagedRouterExtraSettings {}
+pub struct OnPremiseAppExtraSettings {}
+pub struct OnPremiseDbExtraSettings {}
+pub struct OnPremiseRouterExtraSettings {}
 
-impl CloudProvider for SelfManaged {
-    type AppExtraSettings = SelfManagedAppExtraSettings;
-    type DbExtraSettings = SelfManagedDbExtraSettings;
-    type RouterExtraSettings = SelfManagedRouterExtraSettings;
-    type StorageTypes = SelfManagedStorageType;
-
+impl CloudProvider for OnPremise {
+    type AppExtraSettings = OnPremiseAppExtraSettings;
+    type DbExtraSettings = OnPremiseDbExtraSettings;
+    type RouterExtraSettings = OnPremiseRouterExtraSettings;
     fn cloud_provider() -> Kind {
-        Kind::SelfManaged
+        Kind::OnPremise
     }
 
     fn short_name() -> &'static str {
@@ -37,13 +34,20 @@ impl CloudProvider for SelfManaged {
     }
 
     fn lib_directory_name() -> &'static str {
-        "selfmanaged"
-    }
-
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        &[]
+        "self-managed"
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum SelfManagedStorageType {}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OnPremiseStorageType {
+    Local,
+}
+
+impl OnPremiseStorageType {
+    pub fn to_k8s_storage_class(&self) -> String {
+        match self {
+            OnPremiseStorageType::Local => "local-path",
+        }
+        .to_string()
+    }
+}

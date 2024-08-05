@@ -40,13 +40,15 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::database::DatabaseInstanceType;
 
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
+use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::types::VersionsNumber;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -81,13 +83,14 @@ impl Infrastructure for EnvironmentRequest {
 
         let ret = EnvironmentTask::build_and_push_services(
             environment.long_id,
+            environment.project_long_id,
             services_to_build,
             &deployment_option,
             infra_ctx,
             1,
             |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
-            &|| false,
+            &|| AbortStatus::None,
         );
         ret.unwrap();
 
@@ -109,7 +112,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -131,7 +134,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -153,7 +156,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -175,7 +178,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(err),
@@ -279,11 +282,12 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                 }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {
@@ -307,6 +311,8 @@ pub fn environment_3_apps_3_databases(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -341,11 +347,12 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                 }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {
@@ -370,6 +377,8 @@ pub fn environment_3_apps_3_databases(
                 }),
                 public_domain: format!("{}.example.com", app_id),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -407,11 +416,12 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                 }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {
@@ -435,6 +445,8 @@ pub fn environment_3_apps_3_databases(
                     failure_threshold: 5,
                 }),
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: BTreeSet::new(),
             },
         ],
         containers: vec![],
@@ -448,14 +460,16 @@ pub fn environment_3_apps_3_databases(
                 name: database_name.clone(),
                 kube_name: database_name,
                 created_at: Utc::now(),
-                version: "11.8.0".to_string(),
+                version: "11.22.0".to_string(),
                 fqdn_id: fqdn.clone(),
                 fqdn,
                 port: database_port,
                 username: database_username,
                 password: database_password.clone(),
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 512,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 512,
+                ram_limit_in_mib: 512,
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
@@ -464,6 +478,8 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -472,14 +488,16 @@ pub fn environment_3_apps_3_databases(
                 name: database_name_2.clone(),
                 kube_name: database_name_2,
                 created_at: Utc::now(),
-                version: "11.8.0".to_string(),
+                version: "11.22.0".to_string(),
                 fqdn_id: fqdn_2.clone(),
                 fqdn: fqdn_2,
                 port: database_port,
                 username: database_username_2,
                 password: database_password,
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 512,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 512,
+                ram_limit_in_mib: 512,
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
@@ -488,6 +506,8 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -502,8 +522,10 @@ pub fn environment_3_apps_3_databases(
                 port: database_port_mongo,
                 username: database_username_mongo,
                 password: database_password_mongo,
-                total_cpus: "500m".to_string(),
-                total_ram_in_mib: 512,
+                cpu_request_in_milli: 500,
+                cpu_limit_in_milli: 500,
+                ram_request_in_mib: 512,
+                ram_limit_in_mib: 512,
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
@@ -512,9 +534,13 @@ pub fn environment_3_apps_3_databases(
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             },
         ],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -551,22 +577,27 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             ports: vec![],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
             min_instances: 1,
             max_instances: 1,
-            cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
             readiness_probe: None,
             liveness_probe: None,
             public_domain: format!("{}.example.com", Uuid::new_v4()),
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -604,21 +635,26 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             branch: "basic-app-deploy".to_string(),
             public_domain: format!("{}.example.com", Uuid::new_v4()),
             ports: vec![],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
             min_instances: 1,
             max_instances: 1,
-            cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
             readiness_probe: None,
             liveness_probe: None,
             container_registries: Vec::new(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     }
 }
 
@@ -717,8 +753,10 @@ pub fn test_db(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "500m".to_string(),
-        total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
+        cpu_request_in_milli: 500,
+        cpu_limit_in_milli: 500,
+        ram_request_in_mib: 512,
+        ram_limit_in_mib: 512,
         disk_size_in_gib: disk_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
@@ -727,6 +765,8 @@ pub fn test_db(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
+        labels_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db.clone()];
@@ -738,8 +778,8 @@ pub fn test_db(
         .map(|mut app| {
             app.long_id = app_id;
             app.name = to_short_id(&app_id);
-            app.branch = app_name.clone();
-            app.commit_id = db_infos.app_commit.clone();
+            app.branch.clone_from(&app_name);
+            app.commit_id.clone_from(&db_infos.app_commit);
             app.ports = vec![Port {
                 long_id: Default::default(),
                 port: 1234,
@@ -772,6 +812,7 @@ pub fn test_db(
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
+        KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -835,6 +876,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx
         }
@@ -971,6 +1013,7 @@ pub fn test_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx_for_delete
         }
@@ -1068,8 +1111,10 @@ pub fn test_pause_managed_db(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "250m".to_string(),
-        total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
+        cpu_request_in_milli: 250,
+        cpu_limit_in_milli: 250,
+        ram_request_in_mib: 512,
+        ram_limit_in_mib: 512,
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
@@ -1078,6 +1123,8 @@ pub fn test_pause_managed_db(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
+        labels_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db];
@@ -1106,7 +1153,7 @@ pub fn test_pause_managed_db(
             SCW_KUBERNETES_VERSION,
         ),
         Kind::Gcp => todo!(),
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -1160,6 +1207,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx
         }
@@ -1272,6 +1320,7 @@ pub fn test_pause_managed_db(
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
             &computed_infra_ctx_for_delete
         }
@@ -1351,8 +1400,10 @@ pub fn test_db_on_upgrade(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "50m".to_string(),
-        total_ram_in_mib: 256,
+        cpu_request_in_milli: 50,
+        cpu_limit_in_milli: 50,
+        ram_request_in_mib: 256,
+        ram_limit_in_mib: 256,
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
@@ -1361,6 +1412,8 @@ pub fn test_db_on_upgrade(
         activate_backups: false,
         publicly_accessible: is_public,
         mode: database_mode.clone(),
+        annotations_group_ids: btreeset! {},
+        labels_group_ids: btreeset! {},
     };
 
     environment.databases = vec![db];
@@ -1372,8 +1425,8 @@ pub fn test_db_on_upgrade(
         .map(|mut app| {
             app.long_id = app_id;
             app.name = to_short_id(&app_id);
-            app.branch = app_name.clone();
-            app.commit_id = db_infos.app_commit.clone();
+            app.branch.clone_from(&app_name);
+            app.commit_id.clone_from(&db_infos.app_commit);
             app.ports = vec![Port {
                 long_id: Default::default(),
                 port: 1234,
@@ -1413,7 +1466,7 @@ pub fn test_db_on_upgrade(
             SCW_KUBERNETES_VERSION,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let infra_ctx = match provider_kind {
@@ -1450,7 +1503,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let ret = environment.deploy_environment(&ea, &infra_ctx);
@@ -1539,7 +1592,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);

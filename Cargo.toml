@@ -7,10 +7,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+atomic_enum = "0.3.0"
 bitflags = "2.4.0"
 chrono = "0.4.28"
 derivative = "2.2.0"
-git2 = "0.18.1"
+git2 = "0.19.0"
 walkdir = "2.3.3"
 itertools = "0.11.0"
 base64 = "0.21.4"
@@ -76,6 +77,7 @@ serde = "1.0.188"
 serde_json = "1.0.105"
 serde_derive = "1.0.188"
 serde_yaml = "0.9.32"
+schemars = "0.8.16"
 
 # Secrets manager
 vaultrs = "0.7.0"
@@ -98,6 +100,7 @@ aws-sdk-elasticache = "0.24.0"
 aws-sdk-docdb = "0.24.0"
 aws-sdk-ec2 = "0.24.0"
 aws-types = "0.54.1"
+aws-sdk-iam = "0.24.0"
 aws-smithy-client = { version = "0.54.4", features = ["rt-tokio"] }
 aws-smithy-async = { version = "0.54.4", features = ["rt-tokio"] }
 
@@ -109,6 +112,9 @@ google-cloud-auth = "0.13.0"
 google-cloud-storage = "0.14.0"
 google-cloud-artifact-registry = "0.1.0"
 google-cloud-googleapis = "0.11.0"
+
+# GRPC
+tonic = "0.9.2"
 
 [dev-dependencies]
 bstr = "1.6.2"

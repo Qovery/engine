@@ -2,18 +2,22 @@ use crate::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use crate::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::Action;
 use crate::models;
 use crate::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
+use crate::models::types::{AWSEc2, OnPremise, VersionsNumber, AWS, SCW};
 use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -37,8 +41,10 @@ pub struct Database {
     pub port: u16,
     pub username: String,
     pub password: String,
-    pub total_cpus: String,
-    pub total_ram_in_mib: u32,
+    pub cpu_request_in_milli: u32,
+    pub cpu_limit_in_milli: u32,
+    pub ram_request_in_mib: u32,
+    pub ram_limit_in_mib: u32,
     pub disk_size_in_gib: u32,
     pub database_instance_type: Option<String>,
     pub database_disk_type: String,
@@ -49,6 +55,10 @@ pub struct Database {
     pub activate_backups: bool,
     pub publicly_accessible: bool,
     pub mode: DatabaseMode,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 impl Database {
@@ -56,6 +66,8 @@ impl Database {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
     ) -> Result<Box<dyn DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
@@ -70,6 +82,19 @@ impl Database {
             activate_backups: self.activate_backups,
             publicly_accessible: self.publicly_accessible,
         };
+
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
+            .cloned()
+            .collect_vec();
 
         let version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
@@ -88,7 +113,7 @@ impl Database {
                     Err(e) => return Err(e),
                 },
                 Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
-                Kind::SelfManaged => None,
+                Kind::OnPremise => None,
             },
         };
 
@@ -108,14 +133,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, PostgresSQL>::new(
@@ -128,14 +157,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -154,14 +187,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, PostgresSQL>::new(
@@ -174,14 +211,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -201,14 +242,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MySQL>::new(
@@ -221,14 +266,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -247,14 +296,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MySQL>::new(
@@ -267,14 +320,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -293,14 +350,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, Redis>::new(
@@ -313,14 +374,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -339,14 +404,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, Redis>::new(
@@ -359,14 +428,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -385,14 +458,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MongoDB>::new(
@@ -405,14 +482,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         database_instance_type,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -431,14 +512,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MongoDB>::new(
@@ -451,14 +536,18 @@ impl Database {
                         self.created_at,
                         self.fqdn.as_str(),
                         self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
                         database_options.disk_size_in_gib,
                         None,
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -474,14 +563,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     database_instance_type,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -497,14 +590,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -520,14 +617,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     database_instance_type,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -543,14 +644,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -566,14 +671,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -589,14 +698,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -609,31 +722,132 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
-            (CPKind::SelfManaged, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
-            ),
-            (CPKind::SelfManaged, DatabaseKind::Redis, DatabaseMode::CONTAINER) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, SCW::full_name().to_string()),
-            ),
+            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                Err(DatabaseError::UnsupportedManagedMode(
+                    service::DatabaseType::PostgreSQL,
+                    OnPremise::full_name().to_string(),
+                ))
+            }
+            (CPKind::OnPremise, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                )?;
 
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MySQL, OnPremise::full_name().to_string()),
+            ),
+            (CPKind::OnPremise, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                Err(DatabaseError::UnsupportedManagedMode(
+                    service::DatabaseType::MongoDB,
+                    OnPremise::full_name().to_string(),
+                ))
+            }
+            (CPKind::OnPremise, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::Redis, OnPremise::full_name().to_string()),
+            ),
+            (CPKind::OnPremise, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<OnPremise, Container, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                )?;
+
+                Ok(Box::new(db))
+            }
             (CPKind::Gcp, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<GCP, Container, PostgresSQL>::new(
                     context,
@@ -645,14 +859,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -668,14 +886,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -691,14 +913,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))
@@ -714,14 +940,18 @@ impl Database {
                     self.created_at,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
                     database_options.disk_size_in_gib,
                     None,
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?;
 
                 Ok(Box::new(db))

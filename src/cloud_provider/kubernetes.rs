@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
 use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
@@ -30,6 +31,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_version, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
@@ -38,7 +40,6 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
-use crate::services::kube_client::QubeClient;
 
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
@@ -346,23 +347,6 @@ pub trait Kubernetes: Send + Sync {
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
     fn is_self_managed(&self) -> bool;
-    // this method should replace kube_client
-    fn kube_client(&self, cloud_provider: &dyn CloudProvider) -> Result<QubeClient, Box<EngineError>> {
-        // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
-        let kubeconfig_path = self.kubeconfig_local_file_path();
-        let kube_credentials: Vec<(String, String)> = cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-
-        QubeClient::new(
-            self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-            kubeconfig_path,
-            kube_credentials,
-        )
-    }
-
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -382,10 +366,14 @@ pub trait Kubernetes: Send + Sync {
             .join(format!("{}.yaml", self.id()))
     }
 
-    fn on_create(&self) -> Result<(), Box<EngineError>>;
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
-    fn on_pause(&self) -> Result<(), Box<EngineError>>;
-    fn on_delete(&self) -> Result<(), Box<EngineError>>;
+    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn upgrade_with_status(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    ) -> Result<(), Box<EngineError>>;
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
 
     fn update_vault_config(
@@ -399,6 +387,11 @@ pub trait Kubernetes: Send + Sync {
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
 
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
+
+    fn is_karpenter_enabled(&self) -> bool;
+
+    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
+    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)];
 }
 
 pub trait KubernetesNode {
@@ -406,7 +399,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, EnumIter)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumIter)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
@@ -416,6 +409,7 @@ pub enum Kind {
     EksSelfManaged,
     GkeSelfManaged,
     ScwSelfManaged,
+    OnPremiseSelfManaged,
 }
 
 impl Kind {
@@ -424,6 +418,7 @@ impl Kind {
             Kind::Eks | Kind::EksSelfManaged | Kind::Ec2 => CloudProviderKind::Aws,
             Kind::ScwKapsule | Kind::ScwSelfManaged => CloudProviderKind::Scw,
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
+            Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
         }
     }
 }
@@ -438,6 +433,7 @@ impl Display for Kind {
             Kind::EksSelfManaged => "EKS Self Managed",
             Kind::GkeSelfManaged => "GKE Self Managed",
             Kind::ScwSelfManaged => "Scw Self Managed",
+            Kind::OnPremiseSelfManaged => "On Premise Self Managed",
         })
     }
 }
@@ -1178,7 +1174,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
     let mut set_cpu_burst = cpu_burst;
 
     if cpu_burst_float < total_cpu_float {
-        set_cpu_burst = total_cpu.clone();
+        set_cpu_burst.clone_from(&total_cpu);
     }
 
     Ok(CpuLimits {

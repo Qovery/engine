@@ -32,6 +32,18 @@ charts:
     dest: aws-bootstrap
     version: 9.32.1
     comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
+  - name: aws-load-balancer-controller
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 1.8.0
+    comment: |
+      This chart should be replaced by the EKS addon once it will be out
+      https://github.com/aws/eks-charts/tree/gh-pages
+  - name: aws-load-balancer-controller
+    repo_name: aws
+    dest: aws-ec2-bootstrap
+    version: 1.8.0
+    comment: https://github.com/aws/eks-charts/tree/gh-pages
   - name: registry-creds
     repo_name: kir4h
     dest: aws-ec2-bootstrap
@@ -62,7 +74,7 @@ charts:
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana
-    version: 6.15.3
+    version: 6.15.3    # Remove the Tag override in the helm chart values
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
   - name: mongodb
     repo_name: bitnami
@@ -118,7 +130,12 @@ charts:
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: v0.33.2
+    version: 0.36.2
+  - name: karpenter-crd
+    dest_folder_override: karpenter-crd
+    repo_name: oci://public.ecr.aws/karpenter
+    dest: aws-bootstrap
+    version: 0.36.2
 
 repos:
   - name: stable

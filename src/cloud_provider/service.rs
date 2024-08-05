@@ -44,7 +44,6 @@ pub trait Service: Send {
     fn build(&self) -> Option<&Build>;
     fn build_mut(&mut self) -> Option<&mut Build>;
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable>;
-    fn get_passwords(&self) -> Vec<String>;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
@@ -89,14 +88,15 @@ pub enum DatabaseType {
     Redis,
 }
 
-impl ToString for DatabaseType {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for DatabaseType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
             DatabaseType::PostgreSQL => "PostgreSQL".to_string(),
             DatabaseType::MongoDB => "MongoDB".to_string(),
             DatabaseType::MySQL => "MySQL".to_string(),
             DatabaseType::Redis => "Redis".to_string(),
-        }
+        };
+        write!(f, "{}", str)
     }
 }
 
@@ -112,20 +112,20 @@ pub enum ServiceType {
 
 impl ServiceType {
     pub fn name(&self) -> String {
-        match self {
-            ServiceType::Application => "Application".to_string(),
-            ServiceType::Database(db_type) => format!("{} database", db_type.to_string()),
-            ServiceType::Router => "Router".to_string(),
-            ServiceType::Container => "Container".to_string(),
-            ServiceType::Job => "Job".to_string(),
-            ServiceType::HelmChart => "HelmChart".to_string(),
-        }
+        self.to_string()
     }
 }
 
-impl ToString for ServiceType {
-    fn to_string(&self) -> String {
-        self.name()
+impl Display for ServiceType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ServiceType::Application => f.write_str("Application"),
+            ServiceType::Database(db_type) => write!(f, "{} database", db_type),
+            ServiceType::Router => f.write_str("Router"),
+            ServiceType::Container => f.write_str("Container"),
+            ServiceType::Job => f.write_str("Job"),
+            ServiceType::HelmChart => f.write_str("HelmChart"),
+        }
     }
 }
 

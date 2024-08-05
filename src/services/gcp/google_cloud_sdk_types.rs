@@ -69,7 +69,7 @@ impl TryFrom<GcpBucket> for Bucket {
     }
 }
 
-// TODO(benjaminch): stick a test
+// TODO(ENG-1811): stick a test
 pub fn from_gcp_repository(
     project_id: &str,
     location: GcpRegion,
@@ -108,7 +108,7 @@ pub fn from_gcp_repository(
             project_id,
             repository_name
         )),
-        ttl: None, // TODO(benjaminch): TTL to be added
+        ttl: None, // TODO(ENG-1808): TTL to be added
         labels: Some(gcp_repository.labels),
     })
 }
@@ -149,7 +149,7 @@ impl TryFrom<GcpDockerImage> for DockerImage {
             tag: match gcp_docker_image.tags.first() {
                 Some(t) => t.to_string(),
                 None => "".to_string(),
-            }, // TODO(benjaminch): improve this
+            }, // TODO(ENG-1812): improve this
         })
     }
 }
@@ -187,7 +187,7 @@ impl TryFrom<GcpPackage> for DockerImage {
         Ok(DockerImage {
             repository_id: repository_identifier,
             name: docker_image_name,
-            tag: "".to_string(), // TODO(benjaminch): improve this
+            tag: "".to_string(), // TODO(ENG-1812): improve this
         })
     }
 }

@@ -5,6 +5,7 @@ replicaCount: 1
 
 environmentVariables:
   RUST_BACKTRACE: full
+  RUST_LIB_BACKTRACE: "0"
   RUST_LOG: h2::codec::framed_write=INFO,INFO
   GRPC_SERVER: set-by-engine-code
   CLUSTER_JWT_TOKEN: set-by-engine-code

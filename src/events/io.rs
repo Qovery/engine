@@ -142,6 +142,7 @@ pub enum InfrastructureStep {
     Restarted,
     RestartedError,
     CannotProcessRequest,
+    GlobalError,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -170,6 +171,7 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Restarted => InfrastructureStep::Restarted,
             events::InfrastructureStep::RestartedError => InfrastructureStep::RestartedError,
             events::InfrastructureStep::CannotProcessRequest => InfrastructureStep::CannotProcessRequest,
+            events::InfrastructureStep::GlobalError => InfrastructureStep::GlobalError,
         }
     }
 }
@@ -198,6 +200,7 @@ pub enum EnvironmentStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
     UnderMigration,
+    GlobalError,
     JobOutput,
     DatabaseOutput,
     Recap,
@@ -237,6 +240,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
             events::EnvironmentStep::DatabaseOutput => EnvironmentStep::DatabaseOutput,
             events::EnvironmentStep::Recap => EnvironmentStep::Recap,
+            events::EnvironmentStep::GlobalError => EnvironmentStep::GlobalError,
         }
     }
 }

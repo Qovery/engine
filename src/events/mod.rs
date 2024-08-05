@@ -68,16 +68,20 @@ impl EngineEvent {
     pub fn obfuscate(&mut self, transformer: impl Fn(String) -> String) {
         match self {
             EngineEvent::Debug(_, event_message) => {
+                event_message.safe_message = transformer(std::mem::take(&mut event_message.safe_message));
                 event_message.full_details = event_message.full_details.take().map(transformer)
             }
             EngineEvent::Info(_, event_message) => {
+                event_message.safe_message = transformer(std::mem::take(&mut event_message.safe_message));
                 event_message.full_details = event_message.full_details.take().map(transformer)
             }
             EngineEvent::Warning(_, event_message) => {
+                event_message.safe_message = transformer(std::mem::take(&mut event_message.safe_message));
                 event_message.full_details = event_message.full_details.take().map(transformer)
             }
             EngineEvent::Error(engine_error, Some(event_message)) => {
                 engine_error.obfuscate(&transformer);
+                event_message.safe_message = transformer(std::mem::take(&mut event_message.safe_message));
                 event_message.full_details = event_message.full_details.take().map(transformer)
             }
             EngineEvent::Error(engine_error, None) => {
@@ -295,6 +299,8 @@ pub enum InfrastructureStep {
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
     RetrieveClusterResources,
+    /// GlobalError: used to identify an error happening during a deployment step which is not linked to a specific deployment error step
+    GlobalError,
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
@@ -363,6 +369,7 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Restarted => "restarted",
                 InfrastructureStep::RestartedError => "restart-error",
                 InfrastructureStep::CannotProcessRequest => "cannot-process-request",
+                InfrastructureStep::GlobalError => "global-error",
             },
         )
     }
@@ -372,6 +379,11 @@ impl Display for InfrastructureStep {
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
     // general steps
+    /// Deployment has started. It is the first message sent by the engine.
+    Start,
+    /// Deployment is terminated. It is the terminal message sent by the engine
+    Terminated,
+
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
     LoadConfiguration,
     /// ValidateApiInput: validating Engine's API input
@@ -384,10 +396,8 @@ pub enum EnvironmentStep {
     RetrieveClusterResources,
     /// UnderMigration: error migration hasn't been completed yet.
     UnderMigration,
-    /// Deployment has started. It is the first message sent by the engine.
-    Start,
-    /// Deployment is terminated. It is the terminal message sent by the engine
-    Terminated,
+    /// GlobalError: used to identify an error happening during a deployment step which is not linked to a specific deployment error step
+    GlobalError,
 
     // Env specific steps
     /// Build: building an application (docker or build packs).
@@ -487,6 +497,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::JobOutput => "job-output",
                 EnvironmentStep::DatabaseOutput => "database-output",
                 EnvironmentStep::Recap => "recap",
+                EnvironmentStep::GlobalError => "global-error",
             },
         )
     }
@@ -624,7 +635,8 @@ impl EventDetails {
                 | InfrastructureStep::ValidateSystemRequirements
                 | InfrastructureStep::RetrieveClusterConfig
                 | InfrastructureStep::RetrieveClusterResources
-                | InfrastructureStep::Start
+                | InfrastructureStep::GlobalError => Stage::Infrastructure(InfrastructureStep::GlobalError),
+                InfrastructureStep::Start
                 | InfrastructureStep::Terminated
                 | InfrastructureStep::CreateError
                 | InfrastructureStep::PauseError
@@ -649,7 +661,8 @@ impl EventDetails {
                 | EnvironmentStep::RetrieveClusterConfig
                 | EnvironmentStep::RetrieveClusterResources
                 | EnvironmentStep::UnderMigration
-                | EnvironmentStep::Start
+                | EnvironmentStep::GlobalError => Stage::Environment(EnvironmentStep::GlobalError),
+                EnvironmentStep::Start
                 | EnvironmentStep::Terminated
                 | EnvironmentStep::BuiltError
                 | EnvironmentStep::Cancel
@@ -894,7 +907,7 @@ mod tests {
     fn test_obfuscate_debug_event() {
         // setup:
         let txt_with_secret = "a txt with secret";
-        let safe_message = "a txt without secret";
+        let safe_message = "a txt with secret";
 
         let event_message = EventMessage::new_with_env_vars(
             safe_message.to_string(),
@@ -927,7 +940,89 @@ mod tests {
         if let EngineEvent::Debug(details, event) = engine_event {
             assert_eq!(details, event_details);
             assert_eq!(event.full_details, Some("xxx".to_string()));
-            assert_eq!(event.safe_message, event_message.safe_message);
+            assert_eq!(event.safe_message, "xxx");
+        }
+    }
+
+    #[test]
+    fn test_obfuscate_info_event() {
+        // setup:
+        let txt_with_secret = "a txt with secret";
+        let safe_message = "a txt with secret";
+
+        let event_message = EventMessage::new_with_env_vars(
+            safe_message.to_string(),
+            Some(txt_with_secret.to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        let event_details = EventDetails {
+            provider_kind: Some(Kind::Aws),
+            organisation_id: QoveryIdentifier::new(Uuid::new_v4()),
+            cluster_id: QoveryIdentifier::new(Uuid::new_v4()),
+            execution_id: "ex".to_string(),
+            stage: Stage::Environment(EnvironmentStep::Build),
+            transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+        };
+
+        let mut engine_event = EngineEvent::Info(event_details.clone(), event_message.clone());
+
+        // execute:
+        engine_event.obfuscate(|txt| {
+            if txt == *txt_with_secret {
+                "xxx".to_string()
+            } else {
+                txt
+            }
+        });
+
+        // verify:
+        assert!(matches!(engine_event, EngineEvent::Info(_, _)));
+        if let EngineEvent::Info(details, event) = engine_event {
+            assert_eq!(details, event_details);
+            assert_eq!(event.full_details, Some("xxx".to_string()));
+            assert_eq!(event.safe_message, "xxx".to_string());
+        }
+    }
+
+    #[test]
+    fn test_obfuscate_warning_event() {
+        // setup:
+        let txt_with_secret = "a txt with secret";
+        let safe_message = "a txt with secret";
+
+        let event_message = EventMessage::new_with_env_vars(
+            safe_message.to_string(),
+            Some(txt_with_secret.to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        let event_details = EventDetails {
+            provider_kind: Some(Kind::Aws),
+            organisation_id: QoveryIdentifier::new(Uuid::new_v4()),
+            cluster_id: QoveryIdentifier::new(Uuid::new_v4()),
+            execution_id: "ex".to_string(),
+            stage: Stage::Environment(EnvironmentStep::Build),
+            transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+        };
+
+        let mut engine_event = EngineEvent::Warning(event_details.clone(), event_message.clone());
+
+        // execute:
+        engine_event.obfuscate(|txt| {
+            if txt == *txt_with_secret {
+                "xxx".to_string()
+            } else {
+                txt
+            }
+        });
+
+        // verify:
+        assert!(matches!(engine_event, EngineEvent::Warning(_, _)));
+        if let EngineEvent::Warning(details, event) = engine_event {
+            assert_eq!(details, event_details);
+            assert_eq!(event.full_details, Some("xxx".to_string()));
+            assert_eq!(event.safe_message, "xxx".to_string());
         }
     }
 
@@ -935,7 +1030,7 @@ mod tests {
     fn test_obfuscate_error_event() {
         // setup:
         let txt_with_secret = "a txt with secret";
-        let safe_message = "a txt without secret";
+        let safe_message = "a txt with secret";
 
         let event_message = EventMessage::new_with_env_vars(
             safe_message.to_string(),
@@ -979,7 +1074,7 @@ mod tests {
         assert!(matches!(engine_event, EngineEvent::Error(_, _)));
         if let EngineEvent::Error(engine_error, Some(event)) = engine_event {
             assert_eq!(event.full_details, Some("xxx".to_string()));
-            assert_eq!(event.safe_message, event_message.safe_message);
+            assert_eq!(event.safe_message, "xxx");
 
             assert_eq!(engine_error.hint_message().clone().unwrap_or_default(), "xxx".to_string());
             assert_eq!(engine_error.user_log_message().to_string(), "xxx".to_string());

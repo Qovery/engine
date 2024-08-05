@@ -25,8 +25,6 @@ pub enum HelmChartError {
     InvalidConfig(String),
 }
 
-// TODO (helm): Remove this when we will have a real implementation of helm chart services
-#[allow(dead_code)]
 pub struct HelmChart<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
@@ -48,7 +46,6 @@ pub struct HelmChart<T: CloudProvider> {
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: PathBuf,
     pub(super) chart_workspace_directory: PathBuf,
-    pub(super) lib_root_directory: String,
     pub(super) ports: Vec<Port>,
 }
 
@@ -125,7 +122,6 @@ impl<T: CloudProvider> HelmChart<T> {
             _extra_settings: extra_settings,
             chart_workspace_directory: workspace_directory.join("chart"),
             workspace_directory,
-            lib_root_directory: context.lib_root_dir().to_string(),
             ports,
         })
     }
@@ -248,6 +244,10 @@ impl<T: CloudProvider> HelmChart<T> {
             ])
             .chain(self.command_args.iter().map(|v| Cow::from(v.as_str())))
     }
+
+    pub fn admission_controller_config_map_name(&self) -> String {
+        format!("{}-admission-controller-config-map", self.id())
+    }
 }
 
 impl<T: CloudProvider> Service for HelmChart<T> {
@@ -312,27 +312,6 @@ impl<T: CloudProvider> Service for HelmChart<T> {
                 is_secret: variable_infos.is_secret,
             })
             .collect()
-    }
-
-    fn get_passwords(&self) -> Vec<String> {
-        if let HelmChartSource::Repository {
-            engine_helm_registry,
-            skip_tls_verify: _,
-            chart_name: _,
-            chart_version: _,
-        } = &self.chart_source
-        {
-            if let Some(password) = engine_helm_registry.get_url_with_credentials().password() {
-                let decoded_password = urlencoding::decode(password).ok().map(|decoded| decoded.to_string());
-
-                return if let Some(decoded) = decoded_password {
-                    vec![password.to_string(), decoded]
-                } else {
-                    vec![password.to_string()]
-                };
-            }
-        }
-        vec![]
     }
 }
 

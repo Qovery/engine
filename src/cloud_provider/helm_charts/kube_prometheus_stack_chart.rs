@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
-    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    HelmChartNamespaces, QoveryPriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -10,7 +11,6 @@ use crate::cloud_provider::helm_charts::{
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
-use crate::cloud_provider::Kind;
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::errors::CommandError;
 use kube::Client;
@@ -21,7 +21,7 @@ pub type StorageClassName = String;
 pub struct KubePrometheusStackChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
-    chart_values_paths: Vec<HelmChartValuesFilePath>,
+    chart_values_path: HelmChartValuesFilePath,
     storage_class_name: StorageClassName,
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
@@ -39,13 +39,7 @@ impl KubePrometheusStackChart {
         kubelet_service_monitor_resource_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
-        provider_kind: Kind,
     ) -> Self {
-        let mut values_locations = vec![HelmChartDirectoryLocation::CommonFolder];
-        if provider_kind == Kind::Aws {
-            values_locations.push(HelmChartDirectoryLocation::CloudProviderFolder)
-        }
-
         KubePrometheusStackChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -53,16 +47,11 @@ impl KubePrometheusStackChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 KubePrometheusStackChart::chart_name(),
             ),
-            chart_values_paths: values_locations
-                .into_iter()
-                .map(|values_location| {
-                    HelmChartValuesFilePath::new(
-                        chart_prefix_path,
-                        values_location,
-                        KubePrometheusStackChart::chart_name(),
-                    )
-                })
-                .collect(),
+            chart_values_path: HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                KubePrometheusStackChart::chart_name(),
+            ),
             storage_class_name,
             prometheus_internal_url,
             prometheus_namespace,
@@ -104,7 +93,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                         "monitoring.coreos.com_thanosrulers.yaml".to_string(),
                     ]
                 }),
-                values_files: self.chart_values_paths.iter().map(|chart_values_path| chart_values_path.to_string()).collect(),
+                values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName".to_string(),
@@ -117,6 +106,10 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     ChartSetValue {
                         key: "kubelet.serviceMonitor.resource".to_string(),
                         value: self.kubelet_service_monitor_resource_enabled.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "prometheus-node-exporter.priorityClassName".to_string(),
+                        value: QoveryPriorityClass::HighPriority.to_string(),
                     },
                 ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
@@ -228,8 +221,8 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
-    use crate::cloud_provider::Kind;
     use std::env;
     use std::sync::Arc;
 
@@ -253,7 +246,6 @@ mod tests {
             true,
             get_prometheus_chart_override(),
             false,
-            Kind::SelfManaged,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -285,17 +277,19 @@ mod tests {
             true,
             get_prometheus_chart_override(),
             false,
-            Kind::Gcp,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
-        for chart_values_path in chart.chart_values_paths {
+        for provider_kind in [KubernetesKind::Eks, KubernetesKind::Gke, KubernetesKind::ScwKapsule] {
             let chart_values_path = format!(
                 "{}/lib/{}/bootstrap/chart_values/{}.yaml",
                 current_directory
                     .to_str()
                     .expect("Impossible to convert current directory to string"),
-                get_helm_path_kubernetes_provider_sub_folder_name(chart_values_path.helm_path(), HelmChartType::Shared),
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::CloudProviderSpecific(provider_kind)
+                ),
                 KubePrometheusStackChart::chart_name(),
             );
 
@@ -303,7 +297,11 @@ mod tests {
             let values_file = std::fs::File::open(&chart_values_path);
 
             // verify:
-            assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
+            assert!(
+                values_file.is_ok(),
+                "Chart values {} file should exist: `{chart_values_path}`",
+                provider_kind
+            );
         }
     }
 
@@ -320,26 +318,25 @@ mod tests {
             true,
             get_prometheus_chart_override(),
             false,
-            Kind::Scw,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
-        for chart_values_path in chart.chart_values_paths {
+        for provider_kind in [KubernetesKind::Eks, KubernetesKind::Gke, KubernetesKind::ScwKapsule] {
             let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
                 common_chart.clone(),
                 format!(
                     "/lib/{}/bootstrap/chart_values/{}.yaml",
                     get_helm_path_kubernetes_provider_sub_folder_name(
-                        chart_values_path.helm_path(),
-                        HelmChartType::Shared
+                        chart.chart_values_path.helm_path(),
+                        HelmChartType::CloudProviderSpecific(provider_kind)
                     ),
                     KubePrometheusStackChart::chart_name()
                 ),
             );
 
             // verify:
-            assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+            assert!(missing_fields.is_none(), "Some fields are missing in values {} file, add those (make sure they still exist in chart values), fields: {}", provider_kind, missing_fields.unwrap_or_default().join(","));
         }
     }
 }

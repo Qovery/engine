@@ -27,11 +27,14 @@ pub struct MountedFile {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
-pub struct Storage<T> {
+pub struct StorageClass(pub String);
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct Storage {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub storage_type: T,
+    pub storage_class: StorageClass,
     pub size_in_gib: u32,
     pub mount_point: String,
     pub snapshot_retention_in_days: u16,
@@ -53,6 +56,7 @@ pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,
     pub generate_certificate: bool,
+    pub use_cdn: bool,
 }
 impl CustomDomain {
     const WILDCARD_PREFIX: &'static str = "*.";
@@ -83,7 +87,7 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VpcQoveryNetworkMode {
     WithNatGateways,
     WithoutNatGateways,
@@ -192,7 +196,7 @@ pub struct InvalidPVCStorage {
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-cpu
 ///
 /// TODO(benjaminch): Implement From<String> for KubernetesCpuResourceUnit
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub enum KubernetesCpuResourceUnit {
     /// Milli CPU
     MilliCpu(u32),
@@ -213,7 +217,7 @@ impl Display for KubernetesCpuResourceUnit {
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory
 ///
 /// TODO(benjaminch): Implement From<String> for KubernetesMemoryResourceUnit
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub enum KubernetesMemoryResourceUnit {
     /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1,048,576 bytes.
     MebiByte(u32),

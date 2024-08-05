@@ -1,7 +1,9 @@
+use crate::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
 use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
+use crate::services::gcp::cloud_job_service::CloudJobService;
 use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_storage::client::{Client, ClientConfig};
@@ -11,6 +13,7 @@ use google_cloud_storage::http::buckets::insert::{BucketCreationConfig, InsertBu
 use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, Condition};
 use google_cloud_storage::http::buckets::lifecycle::Rule;
 use google_cloud_storage::http::buckets::list::ListBucketsRequest;
+use google_cloud_storage::http::buckets::patch::{BucketPatchConfig, PatchBucketRequest};
 use google_cloud_storage::http::buckets::Lifecycle;
 use google_cloud_storage::http::buckets::{Bucket as GcpBucket, Versioning};
 use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
@@ -22,9 +25,11 @@ use google_cloud_storage::http::objects::Object as GcpObject;
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, RateLimiter};
+
 use reqwest::Body;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -35,6 +40,11 @@ pub enum ObjectStorageServiceError {
     CannotCreateService { raw_error_message: String },
     #[error("Cannot create bucket `{bucket_name}`: {raw_error_message:?}")]
     CannotCreateBucket {
+        bucket_name: String,
+        raw_error_message: String,
+    },
+    #[error("Cannot update bucket `{bucket_name}`: {raw_error_message:?}")]
+    CannotUpdateBucket {
         bucket_name: String,
         raw_error_message: String,
     },
@@ -77,6 +87,24 @@ pub enum ObjectStorageServiceError {
     AdmissionControlCannotProceedAfterSeveralTries,
 }
 
+impl ObjectStorageServiceError {
+    pub fn get_raw_error_message(self) -> String {
+        match self {
+            ObjectStorageServiceError::CannotCreateService { raw_error_message } => raw_error_message,
+            ObjectStorageServiceError::CannotCreateBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotUpdateBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotGetBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotDeleteBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotDeleteObject { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotListBuckets { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotListObjects { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotPutObjectToBucket { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::CannotGetObject { raw_error_message, .. } => raw_error_message,
+            ObjectStorageServiceError::AdmissionControlCannotProceedAfterSeveralTries => "".to_string(),
+        }
+    }
+}
+
 enum StorageResourceKind {
     Bucket,
     Object,
@@ -85,8 +113,11 @@ enum StorageResourceKind {
 #[cfg_attr(test, faux::create)]
 pub struct ObjectStorageService {
     client: Client,
+    client_email: String,
+    project_id: String,
     write_bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     write_object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+    cloud_job_service: Arc<CloudJobService>,
 }
 
 #[cfg_attr(test, faux::methods)]
@@ -99,7 +130,7 @@ impl ObjectStorageService {
         Ok(Self {
             client: Client::new(
                 block_on(ClientConfig::default().with_credentials(
-                    new_gcp_credentials_file_from_credentials(google_credentials).map_err(|e| {
+                    new_gcp_credentials_file_from_credentials(google_credentials.clone()).map_err(|e| {
                         ObjectStorageServiceError::CannotCreateService {
                             raw_error_message: e.to_string(),
                         }
@@ -107,16 +138,23 @@ impl ObjectStorageService {
                 ))
                 .map_err(|e| ObjectStorageServiceError::CannotCreateService {
                     raw_error_message: e.to_string(),
-                })?, // TODO(benjaminch): properly handle error here
+                })?,
             ),
             write_bucket_rate_limiter: bucket_rate_limiter,
             write_object_rate_limiter: object_rate_limiter,
+            client_email: google_credentials.client_email.to_string(),
+            project_id: google_credentials.project_id.to_string(),
+            cloud_job_service: Arc::from(CloudJobService::new(google_credentials).map_err(|e| {
+                ObjectStorageServiceError::CannotCreateService {
+                    raw_error_message: e.to_string(),
+                }
+            })?),
         })
     }
 
     fn wait_for_a_slot_in_admission_control(
         &self,
-        timeout: std::time::Duration,
+        timeout: Duration,
         resource_kind: StorageResourceKind,
     ) -> Result<(), ObjectStorageServiceError> {
         if let Some(rate_limiter) = match resource_kind {
@@ -131,7 +169,7 @@ impl ObjectStorageService {
                 }
 
                 if rate_limiter.check().is_err() {
-                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    std::thread::sleep(Duration::from_secs(3));
                     continue;
                 }
 
@@ -159,7 +197,7 @@ impl ObjectStorageService {
         })?;
 
         Bucket::try_from(gcp_bucket).map_err(|e| ObjectStorageServiceError::CannotGetBucket {
-            // TODO(benjaminch): introduce dedicated conversion error for bucket
+            // TODO(ENG-1813): introduce dedicated conversion error for bucket
             bucket_name: bucket_name.to_string(),
             raw_error_message: e.to_string(),
         })
@@ -174,7 +212,7 @@ impl ObjectStorageService {
         bucket_versioning_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageServiceError> {
-        // Minimal TTL is 1 day for google storage
+        // Minimal TTL is 1 day for Google storage
         let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::from_secs(60 * 60 * 24)));
 
         let mut create_bucket_request = InsertBucketRequest {
@@ -218,10 +256,7 @@ impl ObjectStorageService {
             });
         }
 
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Bucket,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
         match block_on(self.client.insert_bucket(&create_bucket_request)) {
             Ok(created_bucket) => {
                 Bucket::try_from(created_bucket).map_err(|e| ObjectStorageServiceError::CannotCreateBucket {
@@ -230,6 +265,37 @@ impl ObjectStorageService {
                 })
             }
             Err(e) => Err(ObjectStorageServiceError::CannotCreateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
+    }
+
+    pub fn update_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageServiceError> {
+        let patch_bucket_request = PatchBucketRequest {
+            bucket: bucket_name.to_string(),
+            metadata: Some(BucketPatchConfig {
+                versioning: Some(Versioning {
+                    enabled: bucket_versioning_activated,
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
+        match block_on(self.client.patch_bucket(&patch_bucket_request)) {
+            Ok(updated_bucket) => {
+                Bucket::try_from(updated_bucket).map_err(|e| ObjectStorageServiceError::CannotUpdateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
+            }
+            Err(e) => Err(ObjectStorageServiceError::CannotUpdateBucket {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
             }),
@@ -245,10 +311,7 @@ impl ObjectStorageService {
             self.empty_bucket(bucket_name)?;
         }
 
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Bucket,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
         block_on(self.client.delete_bucket(&DeleteBucketRequest {
             bucket: bucket_name.to_string(),
             param: Default::default(),
@@ -260,10 +323,7 @@ impl ObjectStorageService {
     }
 
     pub fn delete_object(&self, bucket_name: &str, object_id: &str) -> Result<(), ObjectStorageServiceError> {
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Object,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
         block_on(self.client.delete_object(&DeleteObjectRequest {
             bucket: bucket_name.to_string(),
             object: object_id.to_string(),
@@ -276,13 +336,59 @@ impl ObjectStorageService {
         })
     }
 
+    /// This to handle buckets having big / lot of objects deletion as it can be very long and might lead to timeout
+    /// On cluster deletion, a job is created on Google side to handle the bucket deletion asynchronously.
+    /// Note: there is no way as of today to setup a lifetime on bucket to set a TTL, hence need to handle it manually.
+    pub fn delete_bucket_non_blocking(
+        &self,
+        bucket_name: &str,
+        bucket_location: GcpStorageRegion,
+    ) -> Result<(), ObjectStorageServiceError> {
+        match self.cloud_job_service.create_job(
+            format!("delete-bucket-{}", bucket_name).as_str(),
+            "gcr.io/google.com/cloudsdktool/google-cloud-cli:latest",
+            "gcloud",
+            &[
+                "storage",
+                "rm",
+                "--recursive",
+                format!("gs://{bucket_name}", bucket_name = bucket_name).as_str(),
+            ],
+            self.client_email.as_str(),
+            self.project_id.as_str(),
+            GcpCloudJobRegion::from_str(bucket_location.to_cloud_provider_format()).map_err(|_| {
+                ObjectStorageServiceError::CannotDeleteBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: format!(
+                        "Cannot create run job to delete the bucket, invalid region: {}",
+                        bucket_location.to_cloud_provider_format()
+                    ),
+                }
+            })?,
+            true,
+            Some(HashMap::from([
+                // Tags keys rule: Only hyphens (-), underscores (_), lowercase characters, and numbers are allowed.
+                // Keys must start with a lowercase character. International characters are allowed.
+                ("action".to_string(), "bucket-deletion-async".to_string()),
+                ("bucket_name".to_string(), bucket_name.to_string()),
+                (
+                    "bucket_location".to_string(),
+                    bucket_location.to_cloud_provider_format().to_lowercase(),
+                ),
+            ])),
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ObjectStorageServiceError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Cannot create run job to delete the bucket: {e}"),
+            }),
+        }
+    }
+
     pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageServiceError> {
         let objects: Vec<BucketObject> = self.list_objects(bucket_name, None)?;
         for object in objects {
-            self.wait_for_a_slot_in_admission_control(
-                std::time::Duration::from_secs(10 * 60),
-                StorageResourceKind::Object,
-            )?;
+            self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
             self.delete_object(bucket_name, object.key.as_str())?;
         }
 
@@ -310,7 +416,7 @@ impl ObjectStorageService {
                     for gcp_bucket in buckets_list_response.items {
                         buckets.push(Bucket::try_from(gcp_bucket).map_err(|e| {
                             ObjectStorageServiceError::CannotListBuckets {
-                                // TODO(benjaminch): introduce dedicated conversion error for bucket
+                                // TODO(ENG-1813): introduce dedicated conversion error for bucket
                                 raw_error_message: e.to_string(),
                             }
                         })?)
@@ -337,10 +443,7 @@ impl ObjectStorageService {
         object_key: &str,
         content: Vec<u8>,
     ) -> Result<BucketObject, ObjectStorageServiceError> {
-        self.wait_for_a_slot_in_admission_control(
-            std::time::Duration::from_secs(10 * 60),
-            StorageResourceKind::Object,
-        )?;
+        self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Object)?;
         match block_on(self.client.upload_object(
             &UploadObjectRequest {
                 bucket: bucket_name.to_string(),
@@ -387,6 +490,7 @@ impl ObjectStorageService {
             bucket_name: object.bucket.to_string(),
             key: object.name,
             value: object_content,
+            tags: vec![],
         })
     }
 

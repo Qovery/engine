@@ -13,7 +13,8 @@ use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::types::{AWSEc2, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -54,8 +55,10 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_keepalive_timeout_seconds: u32,
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
-    #[serde(alias = "network.ingress.extra_headers")]
-    pub network_ingress_extra_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.add_headers")]
+    pub network_ingress_add_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.proxy_set_headers")]
+    pub network_ingress_proxy_set_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
@@ -95,7 +98,8 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_keepalive_time_seconds: 3600,
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
-            network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
             network_ingress_proxy_send_timeout_seconds: 60,
             network_ingress_proxy_read_timeout_seconds: 60,
@@ -364,6 +368,31 @@ impl HelmChart {
                     self.ports,
                 )?)
             }
+            kubernetes::Kind::OnPremiseSelfManaged => Box::new(models::helm_chart::HelmChart::<OnPremise>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                Self::to_chart_source_domain(
+                    self.chart_source.clone(),
+                    &ssh_keys,
+                    context.qovery_api.clone(),
+                    self.long_id,
+                ),
+                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
+                self.set_values,
+                self.set_string_values,
+                self.set_json_values,
+                self.command_args,
+                std::time::Duration::from_secs(self.timeout_sec),
+                self.allow_cluster_wide_resources,
+                environment_variables_with_info,
+                self.advanced_settings,
+                OnPremiseAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                self.ports,
+            )?),
         };
 
         Ok(service)

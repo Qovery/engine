@@ -59,7 +59,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: IGNORE_DOCKER_HOST_CHECK
-              value: "{{ if .Values.buildContainer.enabled }}false{{ else }}true{{ end }}"
+              value: "true"
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"
               valueFrom:
@@ -77,8 +77,11 @@ spec:
             {{ end }}
             {{ end }}
           livenessProbe:
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
             httpGet:
-              path: /metrics
+              path: /healthz
               port: {{ .Values.metrics.port }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
@@ -86,44 +89,6 @@ spec:
           volumeMounts:
             - name: qovery-workspace
               mountPath: /home/qovery/.qovery-workspace
-        - name: docker-build
-          image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext:
-          {{- toYaml .Values.securityContext | nindent 12 }}
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-            {{ range $key, $value := .Values.environmentVariables -}}
-            - name: "{{ $key }}"
-              valueFrom:
-                secretKeyRef:
-                  name: qovery-engine
-                  key: {{ $key }}
-            {{ end }}
-          livenessProbe:
-            exec:
-              command: [ "docker", "info" ]
-            initialDelaySeconds: 15
-            periodSeconds: 30
-          lifecycle:
-            preStop:
-              exec:
-                # Check if prometheus is shutdown before shutting down docker builder. DO NOT REMOVE.
-                # If we don't check it, processes like docker are hard kill and it generates issues.
-                command:
-                - "/bin/sh"
-                - "-c"
-                - |
-                  echo 'Kube asked docker container to be stopped' > /proc/1/fd/1
-                  echo 'Triggering and waiting for the engine to shutdown first' > /proc/1/fd/1
-                  while $(wget -qS -T 10 --spider http://localhost:8080/shutdown 2>&1 | grep -q 'HTTP/1.1 200 OK')
-                  do 
-                    echo 'waiting for engine to shutdown' > /proc/1/fd/1
-                    sleep 10
-                  done
-                  echo 'Stopping docker container now...' > /proc/1/fd/1
-
       volumes:
         - name: qovery-workspace
           emptyDir: {}

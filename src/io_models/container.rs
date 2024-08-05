@@ -1,9 +1,12 @@
 use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ecr::ECR;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::ContainerRegistry;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{Action, MountedFile};
@@ -14,8 +17,9 @@ use crate::models::container::{ContainerError, ContainerService};
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::SelfManagedAppExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
+use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -124,7 +128,7 @@ impl Registry {
     }
 
     // Does some network calls for AWS/ECR
-    pub fn get_url_with_credentials(&self) -> Url {
+    pub fn get_url_with_credentials(&self) -> Result<Url, ContainerRegistryError> {
         let url = match self {
             Registry::DockerHub { url, credentials, .. } => {
                 let mut url = url.clone();
@@ -162,8 +166,7 @@ impl Registry {
                 let region = Region::from_str(region).unwrap_or_default();
                 let ecr_client =
                     EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
-
-                let credentials = ECR::get_credentials(&ecr_client).unwrap();
+                let credentials = ECR::get_credentials(&ecr_client)?;
                 let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
                 let _ = url.set_username(&credentials.access_token);
                 let _ = url.set_password(Some(&credentials.password));
@@ -186,7 +189,7 @@ impl Registry {
             }
         };
 
-        url
+        Ok(url)
     }
 
     pub(crate) fn get_url(&self) -> Url {
@@ -228,6 +231,10 @@ pub struct ContainerAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
+    pub deployment_lifecycle_post_start_exec_command: Vec<String>,
+    #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
+    pub deployment_lifecycle_pre_stop_exec_command: Vec<String>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -248,8 +255,10 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_keepalive_timeout_seconds: u32,
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
-    #[serde(alias = "network.ingress.extra_headers")]
-    pub network_ingress_extra_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.add_headers")]
+    pub network_ingress_add_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.ingress.proxy_set_headers")]
+    pub network_ingress_proxy_set_headers: BTreeMap<String, String>,
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
@@ -277,6 +286,13 @@ pub struct ContainerAdvancedSettings {
     // Pod autoscaler
     #[serde(alias = "hpa.cpu.average_utilization_percent")]
     pub hpa_cpu_average_utilization_percent: u8,
+    #[serde(alias = "hpa.memory.average_utilization_percent")]
+    pub hpa_memory_average_utilization_percent: Option<u8>,
+
+    #[serde(alias = "resources.override.limit.cpu_in_milli")]
+    pub resources_override_limit_cpu_in_milli: Option<u32>,
+    #[serde(alias = "resources.override.limit.ram_in_mib")]
+    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for ContainerAdvancedSettings {
@@ -292,6 +308,8 @@ impl Default for ContainerAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_lifecycle_post_start_exec_command: vec![],
+            deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
@@ -301,7 +319,8 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_keepalive_time_seconds: 3600,
             network_ingress_keepalive_timeout_seconds: 60,
             network_ingress_send_timeout_seconds: 60,
-            network_ingress_extra_headers: BTreeMap::new(),
+            network_ingress_add_headers: BTreeMap::new(),
+            network_ingress_proxy_set_headers: BTreeMap::new(),
             network_ingress_proxy_connect_timeout_seconds: 60,
             network_ingress_proxy_send_timeout_seconds: 60,
             network_ingress_proxy_read_timeout_seconds: 60,
@@ -314,6 +333,9 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
+            hpa_memory_average_utilization_percent: None,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -329,8 +351,8 @@ pub struct Container {
     pub tag: String,
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
-    pub cpu_request_in_mili: u32,
-    pub cpu_limit_in_mili: u32,
+    pub cpu_request_in_milli: u32,
+    pub cpu_limit_in_milli: u32,
     pub ram_request_in_mib: u32,
     pub ram_limit_in_mib: u32,
     pub min_instances: u32,
@@ -348,6 +370,10 @@ pub struct Container {
     pub liveness_probe: Option<Probe>,
     #[serde(default)]
     pub advanced_settings: ContainerAdvancedSettings,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 impl Container {
@@ -357,6 +383,10 @@ impl Container {
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
@@ -373,6 +403,19 @@ impl Container {
             tag: self.tag,
             registry_mirroring_mode: cluster.advanced_settings().registry_mirroring_mode.clone(),
         };
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
+            .cloned()
+            .collect_vec();
+
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
             CPKind::Aws => {
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
@@ -385,15 +428,15 @@ impl Container {
                         image_source,
                         self.command_args,
                         self.entrypoint,
-                        self.cpu_request_in_mili,
-                        self.cpu_limit_in_mili,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
                         self.min_instances,
                         self.max_instances,
                         self.public_domain,
                         self.ports,
-                        self.storages.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -404,6 +447,10 @@ impl Container {
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 } else {
                     Box::new(models::container::Container::<AWSEc2>::new(
@@ -415,15 +462,15 @@ impl Container {
                         image_source,
                         self.command_args,
                         self.entrypoint,
-                        self.cpu_request_in_mili,
-                        self.cpu_limit_in_mili,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
                         self.ram_request_in_mib,
                         self.ram_limit_in_mib,
                         self.min_instances,
                         self.max_instances,
                         self.public_domain,
                         self.ports,
-                        self.storages.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
+                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -434,6 +481,10 @@ impl Container {
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 }
             }
@@ -446,15 +497,15 @@ impl Container {
                 image_source,
                 self.command_args,
                 self.entrypoint,
-                self.cpu_request_in_mili,
-                self.cpu_limit_in_mili,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                self.storages.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -465,6 +516,10 @@ impl Container {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -475,15 +530,15 @@ impl Container {
                 image_source,
                 self.command_args,
                 self.entrypoint,
-                self.cpu_request_in_mili,
-                self.cpu_limit_in_mili,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                self.storages.iter().map(|s| s.to_gcp_storage()).collect::<Vec<_>>(),
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -494,8 +549,12 @@ impl Container {
                 self.advanced_settings,
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
-            CPKind::SelfManaged => Box::new(models::container::Container::<SelfManaged>::new(
+            CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
                 self.long_id,
                 self.name,
@@ -504,15 +563,15 @@ impl Container {
                 image_source,
                 self.command_args,
                 self.entrypoint,
-                self.cpu_request_in_mili,
-                self.cpu_limit_in_mili,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
                 self.ram_request_in_mib,
                 self.ram_limit_in_mib,
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
                 self.ports,
-                vec![],
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -521,8 +580,12 @@ impl Container {
                 self.readiness_probe.map(|p| p.to_domain()),
                 self.liveness_probe.map(|p| p.to_domain()),
                 self.advanced_settings,
-                SelfManagedAppExtraSettings {},
+                OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
         };
 

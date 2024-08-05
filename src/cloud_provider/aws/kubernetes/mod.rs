@@ -2,7 +2,6 @@ use k8s_openapi::api::apps::v1::DaemonSet;
 use kube::api::{Patch, PatchParams};
 use kube::Api;
 
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -23,9 +22,8 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
-use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEc2;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, HelmChartNamespaces};
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
@@ -55,10 +53,14 @@ use crate::models::third_parties::LetsEncryptConfig;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
 };
+use crate::services::aws::models::{QoveryAwsSdkConfigEc2, QoveryAwsSdkConfigEks};
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
@@ -71,10 +73,10 @@ use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
 use self::ec2::EC2;
 use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cmd::command::CommandKiller;
+use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
+use crate::engine::InfrastructureContext;
 use crate::object_storage::ObjectStorage;
-
-use super::models::QoveryAwsSdkConfigEks;
 
 mod addons;
 pub mod ec2;
@@ -112,6 +114,14 @@ pub struct Options {
     pub elasticache_zone_a_subnet_blocks: Vec<String>,
     pub elasticache_zone_b_subnet_blocks: Vec<String>,
     pub elasticache_zone_c_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_a_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_b_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub fargate_profile_zone_c_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: Vec<String>,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
@@ -150,6 +160,16 @@ pub struct Options {
     pub aws_addon_coredns_version_override: Option<String>,
     #[serde(default)]
     pub ec2_exposed_port: Option<u16>,
+    #[serde(default)]
+    pub karpenter_parameters: Option<KarpenterParameters>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterParameters {
+    pub spot_enabled: bool,
+    pub max_node_drain_time_in_secs: Option<i32>,
+    pub disk_size_in_gib: i32,
+    pub default_service_architecture: CpuArchitecture,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,6 +193,11 @@ pub struct UserNetworkConfig {
     pub eks_subnets_zone_a_ids: Vec<String>,
     pub eks_subnets_zone_b_ids: Vec<String>,
     pub eks_subnets_zone_c_ids: Vec<String>,
+
+    // karpenter
+    pub eks_karpenter_fargate_subnets_zone_a_ids: Vec<String>,
+    pub eks_karpenter_fargate_subnets_zone_b_ids: Vec<String>,
+    pub eks_karpenter_fargate_subnets_zone_c_ids: Vec<String>,
 }
 
 impl ProviderOptions for Options {}
@@ -261,6 +286,19 @@ fn tera_context(
         context.insert("eks_subnets_zone_a_ids", &user_network_cfg.eks_subnets_zone_a_ids);
         context.insert("eks_subnets_zone_b_ids", &user_network_cfg.eks_subnets_zone_b_ids);
         context.insert("eks_subnets_zone_c_ids", &user_network_cfg.eks_subnets_zone_c_ids);
+
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_a_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_a_ids,
+        );
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_b_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_b_ids,
+        );
+        context.insert(
+            "eks_karpenter_fargate_subnets_zone_c_ids",
+            &user_network_cfg.eks_karpenter_fargate_subnets_zone_c_ids,
+        );
     }
 
     let format_ips =
@@ -274,6 +312,12 @@ fn tera_context(
     let mut eks_zone_a_subnet_blocks_private = format_ips(&options.eks_zone_a_subnet_blocks);
     let mut eks_zone_b_subnet_blocks_private = format_ips(&options.eks_zone_b_subnet_blocks);
     let mut eks_zone_c_subnet_blocks_private = format_ips(&options.eks_zone_c_subnet_blocks);
+
+    if let Some(nginx_controller_log_format_upstream) =
+        &kubernetes.advanced_settings().nginx_controller_log_format_upstream
+    {
+        context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
+    }
 
     context.insert(
         "aws_enable_vpc_flow_logs",
@@ -345,6 +389,24 @@ fn tera_context(
     let elasticache_zone_a_subnet_blocks = format_ips(&options.elasticache_zone_a_subnet_blocks);
     let elasticache_zone_b_subnet_blocks = format_ips(&options.elasticache_zone_b_subnet_blocks);
     let elasticache_zone_c_subnet_blocks = format_ips(&options.elasticache_zone_c_subnet_blocks);
+
+    let fargate_profile_zone_a_subnet_blocks = match options.fargate_profile_zone_a_subnet_blocks.is_empty() {
+        true => format_ips(&vec!["10.0.166.0/24".to_string()]),
+        false => format_ips(&options.fargate_profile_zone_a_subnet_blocks),
+    };
+    let fargate_profile_zone_b_subnet_blocks = match options.fargate_profile_zone_b_subnet_blocks.is_empty() {
+        true => format_ips(&vec!["10.0.168.0/24".to_string()]),
+        false => format_ips(&options.fargate_profile_zone_b_subnet_blocks),
+    };
+    let fargate_profile_zone_c_subnet_blocks = match options.fargate_profile_zone_c_subnet_blocks.is_empty() {
+        true => format_ips(&vec!["10.0.170.0/24".to_string()]),
+        false => format_ips(&options.fargate_profile_zone_c_subnet_blocks),
+    };
+    let eks_zone_a_nat_gw_for_fargate_subnet_blocks_public =
+        match options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public.is_empty() {
+            true => format_ips(&vec!["10.0.132.0/22".to_string()]),
+            false => format_ips(&options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public),
+        };
 
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
@@ -422,8 +484,15 @@ fn tera_context(
     context.insert("aws_secret_key", &cloud_provider.secret_access_key());
 
     // Karpenter
-    context.insert("enable_karpenter", &kubernetes.advanced_settings().aws_enable_karpenter);
+    context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
     context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
+    context.insert("fargate_profile_zone_a_subnet_blocks", &fargate_profile_zone_a_subnet_blocks);
+    context.insert("fargate_profile_zone_b_subnet_blocks", &fargate_profile_zone_b_subnet_blocks);
+    context.insert("fargate_profile_zone_c_subnet_blocks", &fargate_profile_zone_c_subnet_blocks);
+    context.insert(
+        "eks_zone_a_nat_gw_for_fargate_subnet_blocks_public",
+        &eks_zone_a_nat_gw_for_fargate_subnet_blocks_public,
+    );
 
     // AWS S3 tfstate storage
     context.insert(
@@ -448,10 +517,22 @@ fn tera_context(
             None => "",
         },
     );
+    context.insert(
+        "aws_terraform_backend_bucket",
+        match cloud_provider.terraform_state_credentials() {
+            Some(x) => x.s3_bucket.as_str(),
+            None => "",
+        },
+    );
+    context.insert(
+        "aws_terraform_backend_dynamodb_table",
+        match cloud_provider.terraform_state_credentials() {
+            Some(x) => x.dynamodb_table.as_str(),
+            None => "",
+        },
+    );
 
     context.insert("aws_region", &kubernetes.region());
-    context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
-    context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
     context.insert("vpc_cidr_block", &vpc_cidr_block);
     context.insert("vpc_custom_routing_table", &options.vpc_custom_routing_table);
     context.insert("s3_kubeconfig_bucket", &format!("qovery-kubeconfigs-{}", kubernetes.id()));
@@ -865,6 +946,7 @@ fn define_cluster_upgrade_timeout(
 }
 
 fn create(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -913,19 +995,19 @@ fn create(
 
     let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
         // don't create node groups if karpenter is enabled
-        let applied_node_groups = if kubernetes.advanced_settings().aws_enable_karpenter {
+        let applied_node_groups = if kubernetes.is_karpenter_enabled() {
             node_groups_when_karpenter_is_enabled(
                 kubernetes,
+                infra_ctx,
                 node_groups,
                 &event_details,
                 kubernetes_action,
-                cloud_provider,
-            )
+            )?
         } else {
             node_groups
         };
 
-        let bootstrap_on_fargate = if kubernetes.advanced_settings().aws_enable_karpenter {
+        let bootstrap_on_fargate = if kubernetes.is_karpenter_enabled() {
             bootstrap_on_fargate_when_karpenter_is_enabled(kubernetes, kubernetes_action)
         } else {
             false
@@ -941,7 +1023,7 @@ fn create(
 
         // in case error, this should no be a blocking error
         let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+        if let Ok(kube_client) = infra_ctx.mk_kube_client() {
             let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
                 .unwrap_or(Vec::with_capacity(0));
 
@@ -1010,6 +1092,7 @@ fn create(
                 temp_dir.to_string_lossy().as_ref(),
                 kubernetes.context().is_dry_run_deploy(),
                 cloud_provider.credentials_environment_variables().as_slice(),
+                &TerraformValidators::Default,
             ) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
@@ -1032,6 +1115,7 @@ fn create(
                                 format!("aws_s3_bucket.{terraform_resource_name}").as_str(),
                                 bucket_name,
                                 cloud_provider.credentials_environment_variables().as_slice(),
+                                &TerraformValidators::Default,
                             ) {
                                 Ok(_) => {
                                     kubernetes.logger().log(EngineEvent::Info(
@@ -1089,6 +1173,7 @@ fn create(
                                     &event_details,
                                     kubernetes.context().is_dry_run_deploy(),
                                     cloud_provider.credentials_environment_variables().as_slice(),
+                                    &TerraformValidators::None, // no validator for now, it's likely to introduce a destructive change
                                 ) {
                                     return OperationResult::Err(Box::new(EngineError::new_terraform_error(
                                         event_details.clone(),
@@ -1159,7 +1244,7 @@ fn create(
             Ok(x) => {
                 if x.required_upgrade_on.is_some() {
                     // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
-                    let res = kubernetes.upgrade_with_status(x);
+                    let res = kubernetes.upgrade_with_status(infra_ctx, x);
                     // push endpoint to Vault for EC2
                     if kubernetes.kind() == Kind::Ec2 {
                         let qovery_terraform_config =
@@ -1252,20 +1337,22 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    if kubernetes.advanced_settings().aws_enable_karpenter
-        && karpenter_is_deployed(kubernetes, cloud_provider, &event_details)
-        && !karpenter_pods_is_running(kubernetes, cloud_provider, &event_details)
-    {
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
-            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
+    if kubernetes.is_karpenter_enabled() {
+        if let Some(karpenter_parameters) = &kubernetes.get_karpenter_parameters() {
+            if karpenter_parameters.spot_enabled {
+                block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
+            }
+        }
 
+        if Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
+            let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::restart(
                 kubernetes,
                 cloud_provider,
-                kube_client,
+                &kube_client,
                 kubernetes_long_id,
-                disk_size_in_gib,
                 &qovery_terraform_config_file,
+                options,
             ))?;
         }
     }
@@ -1287,7 +1374,7 @@ fn create(
     if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
         info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
         block_on(patch_kube_proxy_for_aws_user_network(
-            kubernetes.kube_client(cloud_provider)?.client().clone(),
+            infra_ctx.mk_kube_client()?.client().clone(),
         ))
         .map_err(|e| {
             EngineError::new_k8s_node_not_ready(
@@ -1300,15 +1387,9 @@ fn create(
     }
 
     // retrieve cluster CPU architectures
-    let mut nodegroups_arch_set = HashSet::new();
-    for n in node_groups {
-        nodegroups_arch_set.insert(n.instance_architecture);
-    }
-    let cpu_architectures = nodegroups_arch_set.into_iter().collect::<Vec<CpuArchitecture>>();
-
+    let cpu_architectures = kubernetes.cpu_architectures();
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
-            let disk_size_in_gib = node_groups.first().map(|node_group| node_group.disk_size_in_gib);
             let charts_prerequisites = EksChartsConfigPrerequisites {
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
@@ -1343,7 +1424,8 @@ fn create(
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
-                disk_size_in_gib,
+                is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
+                karpenter_parameters: kubernetes.get_karpenter_parameters(),
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
@@ -1389,6 +1471,7 @@ fn create(
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
+                cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
@@ -1412,7 +1495,7 @@ fn create(
     };
 
     if kubernetes.kind() == Kind::Ec2 {
-        let kube_client = kubernetes.kube_client(cloud_provider)?;
+        let kube_client = infra_ctx.mk_kube_client()?;
         let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
             match deploy_charts_levels(
                 kube_client.client(),
@@ -1445,7 +1528,7 @@ fn create(
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
         deploy_charts_levels(
-            kubernetes.kube_client(cloud_provider)?.client(),
+            infra_ctx.mk_kube_client()?.client(),
             kubeconfig_path,
             credentials_environment_variables
                 .iter()
@@ -1457,7 +1540,7 @@ fn create(
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
 
-        if kubernetes.advanced_settings().aws_enable_karpenter {
+        if kubernetes.is_karpenter_enabled() {
             let has_node_group_running = node_groups.iter().any(|ng| {
                 matches!(
                     node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
@@ -1494,65 +1577,25 @@ fn bootstrap_on_fargate_when_karpenter_is_enabled(
 
 fn node_groups_when_karpenter_is_enabled<'a>(
     kubernetes: &dyn Kubernetes,
+    infra_context: &InfrastructureContext,
     node_groups: &'a [NodeGroups],
     event_details: &EventDetails,
     kubernetes_action: KubernetesClusterAction,
-    cloud_provider: &dyn CloudProvider,
-) -> &'a [NodeGroups] {
+) -> Result<&'a [NodeGroups], Box<EngineError>> {
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap
         | KubernetesClusterAction::Upgrade(_)
         | KubernetesClusterAction::Pause
         | KubernetesClusterAction::Resume(_)
         | KubernetesClusterAction::Delete
-        | KubernetesClusterAction::CleanKarpenterMigration => &[],
+        | KubernetesClusterAction::CleanKarpenterMigration => Ok(&[]),
         KubernetesClusterAction::Update(_)
-            if karpenter_is_deployed(kubernetes, cloud_provider, event_details)
-                || kubernetes.context().is_first_cluster_deployment() =>
+            if kubernetes.context().is_first_cluster_deployment()
+                || Karpenter::deployment_is_installed(&infra_context.mk_kube_client()?, event_details) =>
         {
-            &[]
+            Ok(&[])
         }
-        KubernetesClusterAction::Update(_) => node_groups,
-    }
-}
-
-fn karpenter_is_deployed(
-    kubernetes: &dyn Kubernetes,
-    cloud_provider: &dyn CloudProvider,
-    event_details: &EventDetails,
-) -> bool {
-    match kubernetes.kube_client(cloud_provider) {
-        Ok(kube_client) => {
-            let deployments = block_on(kube_client.get_deployments(
-                event_details.clone(),
-                Some(&HelmChartNamespaces::KubeSystem.to_string()),
-                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
-            ))
-            .unwrap_or(Vec::with_capacity(0));
-
-            !deployments.is_empty()
-        }
-        _ => false,
-    }
-}
-
-fn karpenter_pods_is_running(
-    kubernetes: &dyn Kubernetes,
-    cloud_provider: &dyn CloudProvider,
-    event_details: &EventDetails,
-) -> bool {
-    match kubernetes.kube_client(cloud_provider) {
-        Ok(kube_client) => {
-            let nodes = block_on(kube_client.get_pods(
-                event_details.clone(),
-                Some(&HelmChartNamespaces::KubeSystem.to_string()),
-                SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=karpenter".to_string()),
-            ))
-            .unwrap_or(Vec::with_capacity(0));
-
-            !nodes.is_empty()
-        }
-        _ => false,
+        KubernetesClusterAction::Update(_) => Ok(node_groups),
     }
 }
 
@@ -1579,6 +1622,7 @@ fn node_group_is_running(
 }
 
 fn pause(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -1611,7 +1655,7 @@ fn pause(
 
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1672,10 +1716,11 @@ fn pause(
     let tf_workers_resources = match terraform_init_validate_state_list(
         temp_dir.to_string_lossy().as_ref(),
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::Default,
     ) {
         Ok(x) => {
             let mut tf_workers_resources_name = Vec::new();
-            for name in x {
+            for name in x.raw_std_output {
                 if name.starts_with("aws_eks_node_group.") {
                     tf_workers_resources_name.push(name);
                 }
@@ -1689,7 +1734,7 @@ fn pause(
         }
     };
 
-    if tf_workers_resources.is_empty() && !kubernetes.advanced_settings().aws_enable_karpenter {
+    if tf_workers_resources.is_empty() && !kubernetes.is_karpenter_enabled() {
         kubernetes.logger().log(EngineEvent::Warning(
             event_details,
             EventMessage::new_from_safe(
@@ -1760,21 +1805,16 @@ fn pause(
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
-    if kubernetes.advanced_settings().aws_enable_karpenter {
-        if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
-            block_on(Karpenter::pause(
-                kubernetes,
-                cloud_provider,
-                kube_client,
-                kubernetes.advanced_settings().aws_karpenter_max_node_drain_in_sec,
-            ))?;
-        }
+    if kubernetes.is_karpenter_enabled() {
+        let kube_client = infra_ctx.mk_kube_client()?;
+        block_on(Karpenter::pause(kubernetes, cloud_provider, &kube_client))?;
     }
 
     match terraform_apply_with_tf_workers_resources(
         temp_dir.to_string_lossy().as_ref(),
         tf_workers_resources,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::Default,
     ) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
@@ -1789,6 +1829,7 @@ fn pause(
 }
 
 fn delete(
+    infra_ctx: &InfrastructureContext,
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
@@ -1815,6 +1856,18 @@ fn delete(
     let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
+            let applied_node_groups = if kubernetes.is_karpenter_enabled() {
+                node_groups_when_karpenter_is_enabled(
+                    kubernetes,
+                    infra_ctx,
+                    node_groups,
+                    &event_details,
+                    KubernetesClusterAction::Delete,
+                )?
+            } else {
+                node_groups
+            };
+
             let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
                 Ok(value) => Some(value),
                 Err(_) => None,
@@ -1824,7 +1877,7 @@ fn delete(
                 event_details.clone(),
                 kubernetes,
                 KubernetesClusterAction::Delete,
-                node_groups,
+                applied_node_groups,
                 aws_eks_client,
             )?
         }
@@ -1849,7 +1902,7 @@ fn delete(
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = *AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = kubernetes.kube_client(cloud_provider) {
+    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
@@ -1917,6 +1970,7 @@ fn delete(
         temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::None,
     ) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Warning(
@@ -2123,7 +2177,7 @@ fn delete(
 
         // delete custom metrics api to avoid stale namespaces on deletion
         let helm = Helm::new(
-            &kubernetes_config_file_path,
+            Some(&kubernetes_config_file_path),
             &cloud_provider.credentials_environment_variables(),
         )
         .map_err(|e| to_engine_error(&event_details, e))?;
@@ -2211,9 +2265,14 @@ fn delete(
             EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
         ));
 
+        // Do not uninstall Karpenter to be able to delete the nodes properly .
         match helm.list_release(None, &[]) {
             Ok(helm_charts) => {
-                for chart in helm_charts {
+                for chart in helm_charts.into_iter().filter(|helm_chart| {
+                    helm_chart.name != KarpenterChart::chart_name()
+                        && helm_chart.name != KarpenterConfigurationChart::chart_name()
+                        && helm_chart.name != KarpenterCrdChart::chart_name()
+                }) {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                     match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                         Ok(_) => kubernetes.logger().log(EngineEvent::Info(
@@ -2249,6 +2308,11 @@ fn delete(
             event_details.clone(),
         ))?;
 
+        if kubernetes.is_karpenter_enabled() {
+            let kube_client = infra_ctx.mk_kube_client()?;
+            block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+        }
+
         // remove S3 buckets from tf state
         kubernetes.logger().log(EngineEvent::Info(
             event_details.clone(),
@@ -2268,6 +2332,7 @@ fn delete(
             match cmd::terraform::terraform_remove_resource_from_tf_state(
                 temp_dir.to_string_lossy().as_ref(),
                 resource_to_be_removed_from_tf_state.0,
+                &TerraformValidators::None,
             ) {
                 Ok(_) => {
                     kubernetes.logger().log(EngineEvent::Info(
@@ -2309,6 +2374,7 @@ fn delete(
         temp_dir.to_string_lossy().as_ref(),
         false,
         cloud_provider.credentials_environment_variables().as_slice(),
+        &TerraformValidators::None,
     ) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
     }
@@ -2411,6 +2477,8 @@ mod tests {
                         name: "x".to_string(),
                         namespace: "x".to_string(),
                         termination_grace_period_seconds: Some(Duration::seconds(40)),
+                        labels: None,
+                        annotations: None,
                     },
                     status: K8sPodStatus {
                         phase: K8sPodPhase::Running,
@@ -2421,6 +2489,8 @@ mod tests {
                         name: "y".to_string(),
                         namespace: "z".to_string(),
                         termination_grace_period_seconds: Some(Duration::minutes(80)),
+                        labels: None,
+                        annotations: None,
                     },
                     status: K8sPodStatus {
                         phase: K8sPodPhase::Pending,

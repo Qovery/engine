@@ -1,5 +1,3 @@
-mod application;
-mod container;
 mod database;
 mod database_utils;
 mod job;
@@ -22,8 +20,6 @@ impl CloudProvider for SCW {
     type AppExtraSettings = ScwAppExtraSettings;
     type DbExtraSettings = ScwDbExtraSettings;
     type RouterExtraSettings = ScwRouterExtraSettings;
-    type StorageTypes = ScwStorageType;
-
     fn cloud_provider() -> Kind {
         Kind::Scw
     }
@@ -48,30 +44,22 @@ impl CloudProvider for SCW {
         "scaleway"
     }
 
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        // SCW doesn't support UDP loadbalancer
-        // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
-        // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
-        &[
-            (
-                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
-                "leastconn",
-            ),
-            ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
-        ]
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
-pub enum ScwStorageType {
-    #[serde(rename = "b_ssd")]
-    BlockSsd,
-    #[serde(rename = "l_ssd")]
-    LocalSsd,
+    // fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
+    //     // SCW doesn't support UDP loadbalancer
+    //     // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
+    //     // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
+    //     &[
+    //         (
+    //             "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
+    //             "leastconn",
+    //         ),
+    //         ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
+    //         ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
+    //         ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
+    //         ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
+    //         ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
+    //     ]
+    // }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -106,7 +94,11 @@ impl FromStr for ScwRegion {
     type Err = ();
 
     fn from_str(s: &str) -> Result<ScwRegion, ()> {
-        match s {
+        if s.len() < "fr-par".len() {
+            return Err(());
+        }
+
+        match &s[..6] {
             "fr-par" => Ok(ScwRegion::Paris),
             "nl-ams" => Ok(ScwRegion::Amsterdam),
             "pl-waw" => Ok(ScwRegion::Warsaw),
@@ -115,7 +107,7 @@ impl FromStr for ScwRegion {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScwZone {
     Paris1,
     Paris2,
@@ -199,6 +191,9 @@ mod tests {
         assert_eq!(ScwRegion::from_str("fr-par"), Ok(ScwRegion::Paris));
         assert_eq!(ScwRegion::from_str("nl-ams"), Ok(ScwRegion::Amsterdam));
         assert_eq!(ScwRegion::from_str("pl-waw"), Ok(ScwRegion::Warsaw));
+        assert_eq!(ScwRegion::from_str("fr-par-1"), Ok(ScwRegion::Paris));
+        assert_eq!(ScwRegion::from_str("nl-ams-1"), Ok(ScwRegion::Amsterdam));
+        assert_eq!(ScwRegion::from_str("pl-waw-1"), Ok(ScwRegion::Warsaw));
     }
 
     #[test]

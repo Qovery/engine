@@ -9,7 +9,8 @@ locals {
   "aws_s3_loki_bucket_name": "${aws_iam_role.iam_eks_loki.name}",
   "aws_account_id": "${data.aws_caller_identity.current.account_id}",
   "karpenter_controller_aws_role_arn": "${aws_iam_role.karpenter_controller_role.arn}",
-  "cluster_security_group_id": "${aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id}"
+  "cluster_security_group_id": "${aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id}",
+  "aws_iam_alb_controller_arn": "${aws_iam_role.aws_load_balancer_controller.arn}"
 }
 TF_CONFIG
 }

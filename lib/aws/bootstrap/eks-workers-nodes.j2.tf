@@ -5,6 +5,7 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
     http_endpoint = "enabled"
     http_tokens = var.ec2_metadata_imds_version
     # https://github.com/kubernetes/autoscaler/issues/3592
+    # hop limit should be set to 2 for https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#using-the-amazon-ec2-instance-metadata-server-version-2-imdsv2
     http_put_response_hop_limit = 2
     instance_metadata_tags = "enabled"
   }
@@ -14,9 +15,7 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
 
     ebs {
       volume_size = {{ eks_worker_node.disk_size_in_gib }}
-      {% if eks_masters_version == "1.27" or eks_masters_version == "1.28" %}
       encrypted   = true
-      {% endif %}
     }
   }
 

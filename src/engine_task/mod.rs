@@ -1,10 +1,9 @@
-use crate::cloud_provider::aws::regions::AwsRegion;
-
+use crate::fs::workspace_directory;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
-use crate::object_storage::errors::ObjectStorageError;
-use crate::object_storage::ObjectStorage;
-use std::borrow::Cow;
+use crate::log_file_writer::LogFileWriter;
+use crate::models::abort::Abort;
+use reqwest::header::CONTENT_TYPE;
 use std::path::Path;
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -16,27 +15,13 @@ pub mod qovery_api;
 pub trait Task: Send + Sync {
     fn id(&self) -> &str;
     fn run(&self);
-    fn cancel(&self) -> bool;
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync>;
+    fn cancel(&self, force_requested: bool) -> bool;
+    fn cancel_checker(&self) -> Box<dyn Abort>;
     fn is_terminated(&self) -> bool;
     fn await_terminated(&self) -> broadcast::Receiver<()>;
 }
 
-fn basename(path: &str, sep: char) -> Cow<str> {
-    let pieces = path.split(sep);
-    match pieces.last() {
-        Some(p) => p.into(),
-        None => path.into(),
-    }
-}
-
-fn upload_s3_file(
-    context: &Context,
-    archive: Option<&Archive>,
-    file_path: &Path,
-    region: AwsRegion,
-    _resource_ttl: Option<Duration>, // TODO(benjaminch): propagate TTL for object
-) -> Result<(), ObjectStorageError> {
+fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), anyhow::Error> {
     let archive = match archive {
         Some(archive) => archive,
         None => {
@@ -45,38 +30,39 @@ fn upload_s3_file(
         }
     };
 
-    let object_key = format!(
-        "{}/{}",
-        context.organization_short_id(),
-        basename(file_path.to_str().unwrap_or_default(), '/')
-    );
-
     info!(
-        "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
+        "Sending file {} to bucket {}://{}{}",
         file_path.to_str().unwrap_or_default(),
-        archive.bucket_name.as_str(),
-        object_key.as_str(),
-        archive.access_key_id.as_str(),
-        archive.secret_access_key.as_str(),
+        archive.upload_url.scheme(),
+        archive.upload_url.host_str().unwrap_or(""),
+        archive.upload_url.path()
     );
 
-    // I am using this s3 object directly to avoid reinventing the wheel.
-    let s3 = crate::object_storage::s3::S3::new(
-        "archive-123abc".to_string(),
-        "archive-s3".to_string(),
-        archive.access_key_id.to_string(),
-        archive.secret_access_key.to_string(),
-        region,
-    );
+    let file = std::fs::File::open(file_path)?;
+    reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
+        .build()?
+        .put(archive.upload_url.clone())
+        .header(CONTENT_TYPE, "application/octet-stream")
+        .body(file)
+        .timeout(Duration::from_secs(60 * 5))
+        .send()?
+        .error_for_status()?;
 
-    match s3.put_object(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
-        Ok(_) => {
-            info!("Archive successfully pushed to Qovery S3");
-            Ok(())
+    Ok(())
+}
+
+fn enable_log_file_writer(context: &Context, log_file_writer: &Option<Box<LogFileWriter>>) {
+    if let Some(log_file_writer) = &log_file_writer {
+        let temp_dir = workspace_directory(context.workspace_root_dir(), context.execution_id(), "logs");
+        if let Ok(temp_dir) = temp_dir {
+            log_file_writer.enable(&temp_dir);
         }
-        Err(err) => {
-            warn!("Error while pushing archive to s3, {}", err);
-            Err(err)
-        }
+    }
+}
+
+fn disable_log_file_writer(log_file_writer: &Option<Box<LogFileWriter>>) {
+    if let Some(log_file_writer) = log_file_writer {
+        log_file_writer.disable();
     }
 }

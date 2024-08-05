@@ -6,7 +6,7 @@ use crate::helpers::utilities::{
 use chrono::Utc;
 use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Application, Port, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -14,8 +14,9 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::utilities::to_short_id;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use url::Url;
 use uuid::Uuid;
 
@@ -66,6 +67,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        annotations_groups: btreemap! {},
+        labels_groups: btreemap! {},
     };
 
     match options {
@@ -85,16 +88,20 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 port: 5432,
                 username: "superuser".to_string(),
                 password: generate_id().to_string(),
-                total_cpus: "250m".to_string(),
-                total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
+                cpu_request_in_milli: 250,
+                cpu_limit_in_milli: 250,
+                ram_request_in_mib: 512,
+                ram_limit_in_mib: 512, // MySQL requires at least 512Mo in order to boot
                 disk_size_in_gib: NormalSize.size(),
-                database_disk_type: "gp2".to_string(),
+                database_disk_type: AwsStorageType::GP2.to_k8s_storage_class(),
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
                 publicly_accessible: false,
                 mode: CONTAINER,
                 database_instance_type: None,
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             };
             environment.databases = vec![db];
         }
@@ -128,8 +135,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     .to_string(),
                 ],
                 entrypoint: None,
-                cpu_request_in_mili: 250,
-                cpu_limit_in_mili: 250,
+                cpu_request_in_milli: 250,
+                cpu_limit_in_milli: 250,
                 ram_request_in_mib: 250,
                 ram_limit_in_mib: 250,
                 min_instances: 1,
@@ -168,7 +175,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_1_id),
                         long_id: storage_1_id,
                         name: "photos1".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -177,7 +184,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_2_id),
                         long_id: storage_2_id,
                         name: "photos2".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos2".to_string(),
                         snapshot_retention_in_days: 0,
@@ -186,6 +193,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 environment_vars_with_infos: BTreeMap::default(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             };
             environment.containers = vec![container];
         }
@@ -212,7 +221,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_1_id),
                         long_id: storage_1_id,
                         name: "photos1".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -221,7 +230,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                         id: to_short_id(&storage_2_id),
                         long_id: storage_2_id,
                         name: "photos2".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: NormalSize.size(),
                         mount_point: "/mnt/photos2".to_string(),
                         snapshot_retention_in_days: 0,
@@ -261,14 +270,17 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     success_threshold: 1,
                     failure_threshold: 5,
                 }),
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
+                cpu_request_in_milli: 100,
+                cpu_limit_in_milli: 100,
+                ram_request_in_mib: 256,
+                ram_limit_in_mib: 256,
                 min_instances: 1,
                 max_instances: 1,
-                cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 container_registries: Vec::new(),
+                annotations_group_ids: BTreeSet::new(),
+                labels_group_ids: btreeset! {},
             };
             environment.applications = vec![app];
         }
@@ -313,6 +325,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 readiness_probe: None,
                 liveness_probe: None,
                 container_registries: ContainerRegistries { registries: vec![] },
+                annotations_group_ids: btreeset! {},
+                labels_group_ids: btreeset! {},
             };
             environment.jobs = vec![job];
         }

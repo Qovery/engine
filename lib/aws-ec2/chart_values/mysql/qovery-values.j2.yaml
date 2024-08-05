@@ -19,6 +19,7 @@ commonLabels:
   qovery.com/service-type: "database"
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
+#  Warning: commonLabels are also added to PVC and PV
 auth:
   rootPassword: "{{ database_password }}"
   username: "qovery"
@@ -38,15 +39,19 @@ primary:
     qovery.com/service-type: "database"
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   resources:
     requests:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
     limits:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"
   persistence:
-    storageClass: "aws-ebs-gp2-0"
+    storageClass: "{{ database_disk_type }}"
     size: "{{ database_disk_size_in_gib }}Gi"
     labels:
       # app label required for legacy chart (installed before 15/06/23)
@@ -73,11 +78,26 @@ primary:
     name: {{ service_name }}
     type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
     {% if publicly_accessible -%}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
     {% endif %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor % }
 
 rbac:
   create: true

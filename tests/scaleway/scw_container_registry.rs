@@ -67,8 +67,8 @@ fn test_get_repository() {
             .unwrap_or_else(|| "undefined".to_string());
 
         // testing it in all regions
-        for region in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -77,7 +77,7 @@ fn test_get_repository() {
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
                 scw_default_project_id.as_str(),
-                region,
+                zone.region(),
             )
             .unwrap();
 
@@ -87,7 +87,7 @@ fn test_get_repository() {
                 .expect("error while creating registry namespace");
 
             // execute:
-            debug!("test_get_repository - {}", region);
+            debug!("test_get_repository - {}", zone.region());
             let result = container_registry.get_repository(&image);
 
             // verify:
@@ -119,8 +119,8 @@ fn test_create_registry_namespace() {
             .unwrap_or_else(|| "undefined".to_string());
 
         // testing it in all regions
-        for region in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -129,14 +129,14 @@ fn test_create_registry_namespace() {
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
                 scw_default_project_id.as_str(),
-                region,
+                zone.region(),
             )
             .unwrap();
 
             let image = registry_name.to_string();
 
             // execute:
-            debug!("test_create_registry_namespace - {}", region);
+            debug!("test_create_registry_namespace - {}", zone);
             let result = container_registry.create_registry_namespace(&image);
 
             // verify:
@@ -176,8 +176,8 @@ fn test_create_registry_namespace_invalid_name() {
         }
 
         // testing it in all regions
-        for region in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
 
             // Very basics tests cases just making sure naming validation is properly plugged
             let naming_test_cases = vec![
@@ -226,7 +226,7 @@ fn test_create_registry_namespace_invalid_name() {
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
                 scw_default_project_id.as_str(),
-                region,
+                zone.region(),
             )
             .unwrap();
 
@@ -234,7 +234,7 @@ fn test_create_registry_namespace_invalid_name() {
                 let image = naming_test_case.name;
 
                 // execute:
-                debug!("test_create_registry_namespace with name {} - {}", image, region);
+                debug!("test_create_registry_namespace with name {} - {}", image, zone);
                 let result = container_registry.get_or_create_registry_namespace(&image);
 
                 // verify:
@@ -277,8 +277,8 @@ fn test_delete_repository() {
             .unwrap_or_else(|| "undefined".to_string());
 
         // testing it in all regions
-        for region in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -287,7 +287,7 @@ fn test_delete_repository() {
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
                 scw_default_project_id.as_str(),
-                region,
+                zone.region(),
             )
             .unwrap();
 
@@ -297,7 +297,7 @@ fn test_delete_repository() {
                 .expect("error while creating registry namespace");
 
             // execute:
-            debug!("test_delete_repository - {}", region);
+            debug!("test_delete_repository - {}", zone);
             let result = container_registry.delete_repository(&image);
 
             // verify:
@@ -325,8 +325,8 @@ fn test_get_or_create_registry_namespace() {
             .unwrap_or_else(|| "undefined".to_string());
 
         // testing it in all regions
-        for region in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &region.to_string());
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -335,7 +335,7 @@ fn test_get_or_create_registry_namespace() {
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
                 scw_default_project_id.as_str(),
-                region,
+                zone.region(),
             )
             .unwrap();
 
@@ -347,7 +347,7 @@ fn test_get_or_create_registry_namespace() {
             // first try: registry not created, should be created
 
             // execute:
-            debug!("test_get_or_create_registry_namespace - {}", region);
+            debug!("test_get_or_create_registry_namespace - {}", zone);
             let result = container_registry.get_or_create_registry_namespace(&image);
 
             // verify:

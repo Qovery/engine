@@ -1,0 +1,38 @@
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: stable
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            {{ range.Values.capacity_type }}
+              - {{ . }}
+            {{ end }}
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: [ "c", "d", "h", "i", "im", "inf", "is", "m", "r", "t", "trn", "x", "z" ]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["2"]
+      nodeClassRef:
+        name: default
+      taints:
+        - key: nodepool/stable
+          effect: NoSchedule
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+    expireAfter: 720h # 30 * 24h = 720h
+    budgets:
+      - nodes: 10%
+  weight: 10

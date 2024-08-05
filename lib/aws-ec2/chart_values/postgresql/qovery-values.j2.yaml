@@ -16,6 +16,10 @@ commonLabels:
   qovery.com/service-type: "database"
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
 
 volumePermissions:
   enabled: true
@@ -53,9 +57,19 @@ primary:
       service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
     {% endif %}
   persistence:
-    storageClass: "aws-ebs-gp2-0"
+    storageClass: "{{ database_disk_type }}"
     labels:
       # app label required for legacy cahrt (installed before 01/06/23)
       app: "{{ sanitized_name }}" 
@@ -76,8 +90,25 @@ primary:
       databaseName: "{{ sanitized_name }}"
   resources:
     requests:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
     limits:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+
+readReplicas:
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}

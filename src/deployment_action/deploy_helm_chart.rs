@@ -10,7 +10,7 @@ use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::deployment_report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::git;
 use crate::io_models::variable_utils::VariableInfo;
@@ -19,7 +19,7 @@ use crate::models::types::CloudProvider;
 use anyhow::anyhow;
 use git2::{Cred, CredentialType};
 use itertools::Itertools;
-use kube::api::PartialObjectMeta;
+use kube::api::{DeleteParams, PartialObjectMeta, Patch, PatchParams};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -27,6 +27,10 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 
+use crate::runtime::block_on;
+use k8s_openapi::api::core::v1::ConfigMap;
+use kube::Api;
+use serde_json::json;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -42,6 +46,9 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
             // Check users does not bypass restrictions (i.e: install cluster wide resources, or not in the correct namespace)
             check_resources_are_allowed_to_install(self, target, event_details.clone(), logger)?;
+
+            // Create config map for qovery-webhook-admission-controller to inject labels / annotations
+            create_config_map_for_webhook_admission_controller_if_not_exists(self, target, event_details.clone())?;
             Ok(())
         };
 
@@ -65,7 +72,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     target.environment.namespace(),
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
                     &[],
-                    &CommandKiller::from(self.helm_timeout(), target.should_abort),
+                    &CommandKiller::from(self.helm_timeout(), target.abort),
                     &mut |line| logger.info(line),
                     &mut |line| logger.warning(line),
                 )
@@ -124,6 +131,21 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
 
         let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            // delete admission controller config map
+            let config_map_api: Api<ConfigMap> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let admission_controller_config_map = self.admission_controller_config_map_name();
+            if let Err(err) =
+                block_on(config_map_api.delete(admission_controller_config_map.as_str(), &DeleteParams::default()))
+            {
+                // this should not be blocking, as some helm charts don't have this secret
+                warn!(
+                    "Cannot delete secret {}: {}",
+                    admission_controller_config_map.as_str(),
+                    err.to_string()
+                );
+            }
+
+            // uninstall chart
             let mut chart_info =
                 ChartInfo::new_from_release_name(self.helm_release_name(), target.environment.namespace());
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
@@ -133,7 +155,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 .uninstall(
                     &chart_info,
                     &[],
-                    &CommandKiller::from(self.helm_timeout(), &target.should_abort),
+                    &CommandKiller::from(self.helm_timeout(), target.abort),
                     &mut |line| logger.info(line),
                     &mut |line| logger.warning(line),
                 )
@@ -182,7 +204,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     }
 }
 
-fn write_helm_value_with_replacement<'a, T: CloudProvider>(
+fn write_helm_value_with_replacement<'a>(
     mut lines: impl Iterator<Item = Cow<'a, str>>,
     output_writer: &mut impl Write,
     service_id: Uuid,
@@ -191,6 +213,7 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
     environment_id: Uuid,
     project_id: Uuid,
     env_vars: &HashMap<String, VariableInfo>,
+    loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
 ) -> Result<(), anyhow::Error> {
     let mut output_writer = BufWriter::new(output_writer);
     let mut lines = lines.try_fold(Vec::with_capacity(512), |mut acc, l| {
@@ -212,7 +235,7 @@ fn write_helm_value_with_replacement<'a, T: CloudProvider>(
         ),
         (
             "qovery.annotations.loadbalancer",
-            T::loadbalancer_l4_annotations()
+            loadbalancer_l4_annotations
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect_vec(),
@@ -389,7 +412,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     this.chart_workspace_directory(),
                     *skip_tls_verify,
                     &[],
-                    &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+                    &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
                 )
                 .map_err(|e| (event_details.clone(), e))?;
         }
@@ -429,7 +452,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             this.chart_workspace_directory(),
             &[],
             &[],
-            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
             &mut |line| logger.info(line),
             &mut |line| logger.warning(line),
         )
@@ -446,7 +469,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     File::create(this.chart_workspace_directory().join(&value.name)).map_err(|e| {
                         to_error(format!("Cannot create output helm value file {} due to {}", value.name, e))
                     })?;
-                write_helm_value_with_replacement::<T>(
+                write_helm_value_with_replacement(
                     lines,
                     &mut output_path,
                     *this.long_id(),
@@ -455,6 +478,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
+                    target.kubernetes.loadbalancer_l4_annotations(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {} due to {}", value.name, e)))?;
             }
@@ -498,7 +522,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 let mut output_path = File::create(this.chart_workspace_directory().join(filename)).map_err(|e| {
                     to_error(format!("Cannot create output helm value file {:?} due to {}", filename, e))
                 })?;
-                write_helm_value_with_replacement::<T>(
+                write_helm_value_with_replacement(
                     lines,
                     &mut output_path,
                     *this.long_id(),
@@ -507,6 +531,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
+                    target.kubernetes.loadbalancer_l4_annotations(),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {:?} due to {}", filename, e)))?;
             }
@@ -536,7 +561,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
             target.environment.namespace(),
             &template_args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
             &[],
-            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.should_abort),
+            &CommandKiller::from(HELM_CHART_DOWNLOAD_TIMEOUT, target.abort),
             &mut |line| logger.warning(line),
         )
         .map_err(|e| (event_details.clone(), e))?;
@@ -664,10 +689,81 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
     Ok(())
 }
 
+fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProvider>(
+    this: &HelmChart<T>,
+    target: &DeploymentTarget,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let kube_client = target.kube.clone();
+    let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, target.environment.namespace());
+
+    let config_map_name = this.admission_controller_config_map_name();
+    let project_id = target.environment.project_long_id;
+    let environment_id = target.environment.long_id;
+    let helm_chart_id = this.long_id();
+    let helm_chart_version = this.version();
+
+    let json_config_map = json!({
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+          "name": config_map_name,
+          "namespace": target.environment.namespace(),
+          "labels": {
+            "qovery.com/project-id": project_id,
+            "qovery.com/environment-id": environment_id,
+            "qovery.com/service-id": helm_chart_id,
+            "qovery.com/service-type": "helm",
+          },
+        },
+        "data": {
+          "project-id": project_id,
+          "environment-id": environment_id,
+          "service-id": helm_chart_id,
+          "service-version": helm_chart_version,
+          "service-type": "helm",
+        },
+    });
+    let config_map = match serde_json::from_value::<ConfigMap>(json_config_map) {
+        Ok(config_map) => config_map,
+        Err(err) => {
+            return Err(Box::new(
+                EngineError::new_k8s_cannot_create_helm_config_map_for_admission_controller(
+                    event_details,
+                    CommandError::from(err),
+                ),
+            ));
+        }
+    };
+
+    if let Err(err) = block_on(api_config_map.patch(
+        config_map_name.as_str(),
+        &PatchParams::apply("qovery").force(),
+        &Patch::Apply(config_map),
+    )) {
+        return Err(Box::new(
+            EngineError::new_k8s_cannot_patch_helm_config_map_for_admission_controller(
+                event_details,
+                CommandError::new(
+                    err.to_string(),
+                    Some(
+                        format!(
+                            "Error while trying to patch config map '{}' for helm admission controller",
+                            config_map_name
+                        )
+                        .to_string(),
+                    ),
+                    None,
+                ),
+            ),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models;
 
     use maplit::hashmap;
 
@@ -790,7 +886,7 @@ controller:
         };
         let mut output: Vec<u8> = vec![];
 
-        let ret = write_helm_value_with_replacement::<models::types::AWS>(
+        let ret = write_helm_value_with_replacement(
             value_file.lines().map(Cow::Borrowed),
             &mut output,
             service_id,
@@ -799,6 +895,10 @@ controller:
             env_id,
             project_id,
             &envs,
+            &[
+                ("custom-annotation-1", "custom-value-1"),
+                ("custom-annotation-2", "custom-value-2"),
+            ],
         );
         assert!(ret.is_ok());
 
@@ -824,7 +924,8 @@ controller:
 
   loadBalancer:
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      custom-annotation-1: custom-value-1
+      custom-annotation-2: custom-value-2
 
   annotations:
     - qovery.com/service-version: 42

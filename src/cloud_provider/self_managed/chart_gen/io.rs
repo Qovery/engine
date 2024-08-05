@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
+use crate::cloud_provider::self_managed::chart_gen::values_dot_yaml::{BuildContainer, QoveryEngine};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -8,8 +9,8 @@ use super::{
     chart_dot_yaml,
     values_dot_yaml::{
         AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
-        LoggingServices, ObservabilityServices, QoveryAgents, QoveryGlobalConfig, QoveryServices, ScalewayServices,
-        ServiceEnabled, ServicesEnabler, ValuesFile,
+        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryServices,
+        QoveryShellAgent, ScalewayServices, ServiceEnabled, ServicesEnabler, ValuesFile,
     },
     QoverySelfManagedChart, SupportedCharts,
 };
@@ -154,6 +155,7 @@ impl ValuesFile {
                     qovery_cluster_agent: ServiceEnabled { enabled: true },
                     qovery_shell_agent: ServiceEnabled { enabled: true },
                     qovery_engine: ServiceEnabled { enabled: false },
+                    priority_class: ServiceEnabled { enabled: true },
                 },
                 ingress: IngressServices {
                     ingress_nginx: ServiceEnabled { enabled: false },
@@ -173,9 +175,16 @@ impl ValuesFile {
                 observability: ObservabilityServices {
                     metrics_server: Some(ServiceEnabled { enabled: false }),
                 },
-                aws: None,
-                gcp: None,
-                scaleway: None,
+                scaleway: ScalewayServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                },
+                aws: AwsServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                    aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+                },
+                gcp: GcpServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                },
             },
             qovery: QoveryGlobalConfig {
                 cluster_id: "&clusterId set-by-customer".to_string(),
@@ -191,11 +200,14 @@ impl ValuesFile {
                 acme_email_addr: "&acmeEmailAddr set-by-customer".to_string(),
                 external_dns_prefix: "&externalDnsPrefix set-by-customer".to_string(),
                 architectures: "&architectures set-by-customer".to_string(),
+                shell_agent_version: "&shellAgentVersion set-by-customer".to_string(),
+                cluster_agent_version: "&clusterAgentVersion set-by-customer".to_string(),
+                engine_version: "&engineVersion set-by-customer".to_string(),
             },
-            qovery_cluster_agent: QoveryAgents {
-                full_name_override: "qovery-shell-agent".to_string(),
+            qovery_cluster_agent: QoveryClusterAgent {
+                fullname_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
+                    tag: "*clusterAgentVersion".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
@@ -203,11 +215,12 @@ impl ValuesFile {
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("LOKI_URL".to_string(), "*lokiUrl".to_string()),
                 ]),
+                use_self_sign_certificate: true,
             },
-            qovery_shell_agent: QoveryAgents {
-                full_name_override: "qovery-shell-agent".to_string(),
+            qovery_shell_agent: QoveryShellAgent {
+                fullname_override: "qovery-shell-agent".to_string(),
                 image: ImageTag {
-                    tag: "2a2fb514aa6029fd80147180d68017c29c6ea4d2".to_string(),
+                    tag: "*shellAgentVersion".to_string(),
                 },
                 environment_variables: BTreeMap::from([
                     ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
@@ -215,6 +228,26 @@ impl ValuesFile {
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                 ]),
             },
+            qovery_engine: Some(QoveryEngine {
+                image: ImageTag {
+                    tag: "*engineVersion".to_string(),
+                },
+                engine_resources: None,
+                build_container: BuildContainer {
+                    environment_variables: BTreeMap::from([
+                        ("BUILDER_CPU_ARCHITECTURES".to_string(), "*architectures".to_string()),
+                        ("BUILDER_ROOTLESS_ENABLED".to_string(), "true".to_string()),
+                    ]),
+                },
+                environment_variables: BTreeMap::from([
+                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                    ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
+                    ("GRPC_SERVER".to_string(), "engine.qovery.com:443".to_string()),
+                    ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
+                ]),
+            }),
             ingress_nginx: ChartConfig { override_chart: None },
             external_dns: ChartConfig { override_chart: None },
             promtail: ChartConfig { override_chart: None },
@@ -257,10 +290,19 @@ impl ValuesFile {
             override_chart: Some(SupportedCharts::MetricsServer.to_string()),
         });
 
-        value.services.aws = Some(AwsServices {
+        value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
-        });
+        };
+
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
 
         value
     }
@@ -291,10 +333,20 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.services.gcp = Some(GcpServices {
-            qovery_storage_class: ServiceEnabled { enabled: true },
-        });
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+        };
 
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: true },
+        };
+
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
         value
     }
 
@@ -324,8 +376,85 @@ impl ValuesFile {
         value.services.observability.metrics_server = None;
         value.metrics_server = None;
 
-        value.services.scaleway = Some(ScalewayServices {
+        value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
+        };
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
+        value
+    }
+
+    pub fn new_local() -> ValuesFile {
+        let mut value = Self::new_minimal();
+
+        value.services.ingress.ingress_nginx.enabled = true;
+        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+
+        value.services.dns.external_dns.enabled = true;
+        value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
+
+        value.services.logging.promtail.enabled = false;
+        value.promtail.override_chart = None;
+        value.services.logging.loki.enabled = false;
+        value.loki.override_chart = None;
+
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
+        value.services.certificates.cert_manager.enabled = true;
+        value.cert_manager.override_chart = Some(SupportedCharts::CertManager.to_string());
+
+        value.services.certificates.cert_manager_qovery_webhook.enabled = true;
+        value.cert_manager_qovery_webhook.override_chart = Some(SupportedCharts::CertManagerQoveryWebhook.to_string());
+
+        value.services.certificates.cert_manager_configs.enabled = true;
+        value.cert_manager_configs.override_chart = Some(SupportedCharts::CertManagerConfigs.to_string());
+
+        value.services.observability.metrics_server = Some(ServiceEnabled { enabled: false });
+        value.metrics_server = None;
+
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+        };
+
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value
+            .qovery_cluster_agent
+            .environment_variables
+            .insert("LOKI_URL".to_string(), "".to_string());
+
+        value.qovery_engine = Some(QoveryEngine {
+            image: ImageTag {
+                tag: "*engineVersion".to_string(),
+            },
+            engine_resources: None,
+            build_container: BuildContainer {
+                environment_variables: BTreeMap::from([
+                    ("BUILDER_CPU_ARCHITECTURES".to_string(), "*architectures".to_string()),
+                    ("BUILDER_ROOTLESS_ENABLED".to_string(), "false".to_string()), // need to disable rootless to use http registries
+                ]),
+            },
+            environment_variables: BTreeMap::from([
+                ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
+                ("GRPC_SERVER".to_string(), "engine.qovery.com:443".to_string()),
+                ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
+            ]),
         });
 
         value

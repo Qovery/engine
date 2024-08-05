@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -20,8 +21,7 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::runtime::block_on;
-use crate::utilities::create_kube_client;
+use crate::models::abort::Abort;
 
 pub mod aws;
 pub mod environment;
@@ -75,7 +75,7 @@ pub enum Kind {
     Aws,
     Scw,
     Gcp,
-    SelfManaged,
+    OnPremise,
 }
 
 impl FromStr for Kind {
@@ -86,7 +86,7 @@ impl FromStr for Kind {
             "aws" | "amazon" => Ok(Kind::Aws),
             "scw" | "scaleway" => Ok(Kind::Scw),
             "gcp" | "google" => Ok(Kind::Gcp),
-            "self_managed" | "selfmanaged" => Ok(Kind::SelfManaged),
+            "on-premise" | "onpremise" => Ok(Kind::OnPremise),
             _ => Err(()),
         }
     }
@@ -98,7 +98,7 @@ impl Display for Kind {
             Kind::Aws => "AWS",
             Kind::Scw => "Scaleway",
             Kind::Gcp => "GCP",
-            Kind::SelfManaged => "SelfManaged",
+            Kind::OnPremise => "OnPremise",
         })
     }
 }
@@ -110,14 +110,24 @@ pub struct TerraformStateCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub region: String,
+    pub s3_bucket: String,
+    pub dynamodb_table: String,
 }
 
 impl TerraformStateCredentials {
-    pub fn new(access_key_id: &str, secret_access_key: &str, region: &str) -> Self {
+    pub fn new(
+        access_key_id: &str,
+        secret_access_key: &str,
+        region: &str,
+        s3_bucket: &str,
+        dynamodb_table: &str,
+    ) -> Self {
         TerraformStateCredentials {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: region.to_string(),
+            s3_bucket: s3_bucket.to_string(),
+            dynamodb_table: dynamodb_table.to_string(),
         }
     }
 }
@@ -131,7 +141,7 @@ pub struct DeploymentTarget<'a> {
     pub docker: &'a Docker,
     pub kube: kube::Client,
     pub helm: Helm,
-    pub should_abort: &'a (dyn Fn() -> bool + Send + Sync),
+    pub abort: &'a dyn Abort,
     logger: Arc<Box<dyn Logger>>,
     pub metrics_registry: Arc<dyn MetricsRegistry>,
     pub is_dry_run_deploy: bool,
@@ -142,23 +152,28 @@ impl<'a> DeploymentTarget<'a> {
     pub fn new(
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
-        should_abort: &'a (dyn Fn() -> bool + Sync + Send),
+        abort: &'a dyn Abort,
     ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
-        let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
-        let kube_credentials: Vec<(String, String)> = infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
+        let kubeconfig_path = {
+            let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
+            if kubeconfig_path.exists() {
+                Some(kubeconfig_path)
+            } else {
+                None
+            }
+        };
 
-        let kube_client = block_on(create_kube_client(&kubeconfig_path, kube_credentials.as_slice()))
-            .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
-
-        let helm = Helm::new(kubeconfig_path, &infra_ctx.cloud_provider().credentials_environment_variables())
-            .map_err(|e| to_engine_error(event_details, e))?;
+        let helm = if let Some(kubeconfig_path) = &kubeconfig_path {
+            Helm::new(
+                Some(kubeconfig_path),
+                &infra_ctx.cloud_provider().credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(event_details, e))?
+        } else {
+            Helm::new(Option::<&Path>::None, &[]).map_err(|e| to_engine_error(event_details, e))?
+        };
 
         Ok(DeploymentTarget {
             kubernetes,
@@ -167,9 +182,9 @@ impl<'a> DeploymentTarget<'a> {
             dns_provider: infra_ctx.dns_provider(),
             environment,
             docker: &infra_ctx.context().docker,
-            kube: kube_client,
+            kube: infra_ctx.mk_kube_client()?.client().clone(),
             helm,
-            should_abort,
+            abort,
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),

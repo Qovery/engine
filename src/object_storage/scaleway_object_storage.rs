@@ -226,6 +226,15 @@ impl ObjectStorage for ScalewayOS {
         self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
     }
 
+    fn update_bucket(
+        &self,
+        _bucket_name: &str,
+        _bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError> {
+        // TODO(benjaminch): to be implemented
+        todo!("update_bucket for SCW object storage is not implemented")
+    }
+
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
         // if bucket doesn't exist, then return an error
         if !self.bucket_exists(bucket_name) {
@@ -314,6 +323,10 @@ impl ObjectStorage for ScalewayOS {
         }
     }
 
+    fn delete_bucket_non_blocking(&self, _bucket_name: &str) -> Result<(), ObjectStorageError> {
+        todo!("delete_bucket for SCW is not implemented")
+    }
+
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
@@ -349,6 +362,7 @@ impl ObjectStorage for ScalewayOS {
                     bucket_name: bucket_name.to_string(),
                     key: object_key.to_string(),
                     value: body,
+                    tags: vec![],
                 })
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
@@ -364,6 +378,7 @@ impl ObjectStorage for ScalewayOS {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        _tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
@@ -386,6 +401,7 @@ impl ObjectStorage for ScalewayOS {
                 bucket_name: bucket_name.to_string(),
                 key: object_key.to_string(),
                 value: file_content.clone(),
+                tags: vec![],
             }),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),

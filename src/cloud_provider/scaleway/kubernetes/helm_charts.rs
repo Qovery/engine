@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, UpdateStrategy,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
@@ -9,7 +9,8 @@ use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAge
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
+    ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -39,6 +40,8 @@ use crate::cloud_provider::helm_charts::loki_chart::{
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
+use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -56,6 +59,7 @@ pub struct ScalewayQoveryTerraformConfig {
     pub loki_storage_config_scaleway_s3: String,
 }
 
+#[allow(dead_code)]
 pub struct ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
@@ -277,7 +281,10 @@ pub fn scw_helm_charts(
                 }),
                 get_chart_override_fn.clone(),
                 true,
+                None,
                 HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartTimeout::ChartDefault,
+                false,
             )
             .to_common_helm_chart()?,
         ),
@@ -305,7 +312,6 @@ pub fn scw_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
-                Kind::Scw,
             )
             .to_common_helm_chart()?,
         ),
@@ -332,8 +338,13 @@ pub fn scw_helm_charts(
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
-            KubeStateMetricsChart::new(chart_prefix_path, true, get_chart_override_fn.clone())
-                .to_common_helm_chart()?,
+            KubeStateMetricsChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Prometheus,
+                true,
+                get_chart_override_fn.clone(),
+            )
+            .to_common_helm_chart()?,
         ),
     };
 
@@ -455,6 +466,14 @@ pub fn scw_helm_charts(
                 .load_balancer_size
                 .clone(),
         ),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_log_format_escaping
+            .to_model(),
+        false, // AWS only
     )
     .to_common_helm_chart()?;
 
@@ -500,6 +519,14 @@ pub fn scw_helm_charts(
         chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
+    )
+    .to_common_helm_chart()?;
+
+    // Qovery priority class
+    let q_priority_class_chart = QoveryPriorityClassChart::new(
+        chart_prefix_path,
+        HashSet::from_iter(vec![QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
+        HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
     )
     .to_common_helm_chart()?;
 
@@ -596,7 +623,12 @@ pub fn scw_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config), Box::new(vpa)];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(q_storage_class),
+        Box::new(coredns_config),
+        Box::new(vpa),
+        Box::new(q_priority_class_chart),
+    ];
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -612,7 +644,7 @@ pub fn scw_helm_charts(
 
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let level_7: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_cluster_agent),
         Box::new(qovery_shell_agent),
@@ -638,6 +670,19 @@ pub fn scw_helm_charts(
     }
     if let Some(grafana_chart) = grafana {
         level_2.push(Box::new(grafana_chart))
+    }
+
+    // pdb infra
+    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
+        let pdb_infra = QoveryPdbInfraChart::new(
+            chart_prefix_path,
+            HelmChartNamespaces::Qovery,
+            prometheus_namespace,
+            loki_namespace,
+        )
+        .to_common_helm_chart()?;
+
+        level_7.push(Box::new(pdb_infra));
     }
 
     info!("charts configuration preparation finished");

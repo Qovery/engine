@@ -118,7 +118,7 @@ impl ToCommonHelmChart for PromtailChart {
                             Some(KubernetesCpuResourceUnit::MilliCpu(50)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(200)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(32)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
                     }],
                 )),

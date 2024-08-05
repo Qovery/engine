@@ -9,7 +9,8 @@ locals {
 {% else %}
   "aws_ec2_kubernetes_port": "${var.k3s_config.exposed_port}",
 {%- endif %}
-  "aws_aws_account_id": "${data.aws_caller_identity.current.account_id}"
+  "aws_aws_account_id": "${data.aws_caller_identity.current.account_id}",
+  "aws_iam_alb_controller_arn": "${aws_iam_role.aws_load_balancer_controller.arn}"
 }
 TF_CONFIG
 }

@@ -1,0 +1,12 @@
+clusterName: set-by-engine-code
+securityGroupId: set-by-engine-code
+diskSizeInGib: set-by-engine-code
+capacity_type: set-by-engine-code
+explicitSubnetIds: []
+
+tags:
+  ClusterId: set-by-engine-code
+  ClusterLongId: set-by-engine-code
+  OrganizationId: set-by-engine-code
+  OrganizationLongId: set-by-engine-code
+  Region: set-by-engine-code

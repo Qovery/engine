@@ -1,5 +1,4 @@
 use super::Task;
-use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
 use crate::engine::EngineConfigError;
 use crate::engine_task::qovery_api::QoveryApi;
@@ -9,8 +8,10 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
+use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::models::abort::{Abort, AbortStatus};
 use crate::transaction::{Transaction, TransactionResult};
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
@@ -26,6 +27,7 @@ pub struct InfrastructureTask {
     qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
+    log_file_writer: Option<Box<LogFileWriter>>,
 }
 
 impl InfrastructureTask {
@@ -37,6 +39,7 @@ impl InfrastructureTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
+        log_file_writer: Option<Box<LogFileWriter>>,
     ) -> Self {
         let span = info_span!(
             "infrastructure_task",
@@ -58,6 +61,7 @@ impl InfrastructureTask {
                 let (tx, rx) = broadcast::channel(1);
                 (RwLock::new(Some(tx)), rx)
             },
+            log_file_writer,
         }
     }
 
@@ -146,6 +150,10 @@ impl Task for InfrastructureTask {
     }
 
     fn run(&self) {
+        if self.request.is_self_managed() {
+            super::enable_log_file_writer(&self.info_context(), &self.log_file_writer);
+        }
+
         let _span = self.span.enter();
         info!(
             "infrastructure task {} started with infrastructure id {}-{}-{}",
@@ -175,6 +183,7 @@ impl Task for InfrastructureTask {
             self.request.event_details(),
             self.logger.clone(),
             self.metrics_registry.clone(),
+            true,
         ) {
             Ok(engine) => engine,
             Err(err) => {
@@ -211,6 +220,7 @@ impl Task for InfrastructureTask {
         // Uploading to S3 can take a lot of time, and might hit the core timeout
         // So we early drop the guard to notify core that the task is done
         drop(guard);
+        super::disable_log_file_writer(&self.log_file_writer);
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
@@ -218,13 +228,7 @@ impl Task for InfrastructureTask {
                 engine.context().workspace_root_dir(),
                 engine.context().execution_id(),
             ) {
-                Ok(file) => match super::upload_s3_file(
-                    &self.info_context(),
-                    self.request.archive.as_ref(),
-                    &file,
-                    AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request.kubernetes.advanced_settings.resource_ttl(),
-                ) {
+                Ok(file) => match super::upload_s3_file(self.request.archive.as_ref(), &file) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
                     }
@@ -237,12 +241,12 @@ impl Task for InfrastructureTask {
         info!("infrastructure task {} finished", self.id());
     }
 
-    fn cancel(&self) -> bool {
+    fn cancel(&self, _force_requested: bool) -> bool {
         false
     }
 
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool + Send + Sync> {
-        Box::new(|| false)
+    fn cancel_checker(&self) -> Box<dyn Abort> {
+        Box::new(move || AbortStatus::None)
     }
 
     fn is_terminated(&self) -> bool {

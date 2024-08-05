@@ -47,11 +47,10 @@ environmentVariables:
 
 buildContainer:
   enabled: true
-  image: public.ecr.aws/r3m4q3r9/pub-mirror-docker
-  tag: 25.0.3-dind
   environmentVariables:
     BUILDER_KUBE_ENABLED: "true"
     BUILDER_CPU_ARCHITECTURES: "ARM64"
+    BUILDER_ROOTLESS_ENABLED: "true"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -68,7 +67,7 @@ podSecurityContext:
   # fsGroup: 2000
 
 securityContext:
-  privileged: true
+  # privileged: true
   # capabilities:
   #   drop:
   #   - ALL
@@ -98,4 +97,8 @@ affinity: {}
 rbac:
   create: true
   clusterRole: true
+  clusterPermission: "admin"
   apiVersion: v1
+
+networkPolicies:
+  enabled: false

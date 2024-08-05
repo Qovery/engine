@@ -295,8 +295,12 @@ fn test_file_handling() {
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
         // compute:
-        let put_result =
-            scaleway_os.put_object(bucket_name.as_str(), object_key.as_str(), temp_file.into_temp_path().as_ref());
+        let put_result = scaleway_os.put_object(
+            bucket_name.as_str(),
+            object_key.as_str(),
+            temp_file.into_temp_path().as_ref(),
+            None,
+        );
         // validate:
         assert!(put_result.is_ok());
         info!("File {} put in bucket {}.", object_key, bucket_name);
@@ -355,7 +359,7 @@ fn test_ensure_file_is_absent() {
         let tempfile_path = temp_file.into_temp_path();
         let tempfile_path = tempfile_path.as_ref();
 
-        let put_result = scaleway_os.put_object(bucket_name.as_str(), object_key.as_str(), tempfile_path);
+        let put_result = scaleway_os.put_object(bucket_name.as_str(), object_key.as_str(), tempfile_path, None);
         assert!(put_result.is_ok());
         info!("File {} put in bucket {}.", object_key, bucket_name);
 

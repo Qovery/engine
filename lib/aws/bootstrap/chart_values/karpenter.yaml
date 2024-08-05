@@ -1,0 +1,15 @@
+logLevel: debug
+
+settings:
+  clusterName: set-by-engine-code
+  interruptionQueue: set-by-engine-code
+
+serviceMonitor:
+  enabled: set-by-engine-code
+
+serviceAccount:
+  annotations: {
+    eks.amazonaws.com/role-arn: set-by-engine-code
+  }
+
+dnsPolicy: Default

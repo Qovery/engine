@@ -2,65 +2,64 @@ extern crate base64;
 extern crate bstr;
 extern crate passwords;
 extern crate scaleway_api_rs;
+extern crate time;
 
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryFrom;
+use std::env;
+use std::io::{Error, ErrorKind};
+use std::sync::Arc;
+
+use base64::engine::general_purpose;
+use base64::Engine;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
 use dotenv::dotenv;
 use gethostname;
-use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
-use std::io::{Error, ErrorKind};
-
-use passwords::PasswordGenerator;
-
-use std::env;
-use std::sync::Arc;
-use tracing::{info, warn};
-
-use crate::helpers::scaleway::{
-    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-};
 use hashicorp_vault;
+use passwords::PasswordGenerator;
+use reqwest::header;
+use serde::{Deserialize, Serialize};
+use time::Instant;
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
+use url::Url;
+use uuid::Uuid;
+
 use qovery_engine::build_platform::local_docker::LocalDocker;
+use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
-use qovery_engine::constants::{
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
-};
-use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
-use reqwest::header;
-use serde::{Deserialize, Serialize};
-
-extern crate time;
-
-use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
-use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
-use base64::engine::general_purpose;
-use base64::Engine;
-use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+use qovery_engine::constants::{
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
+};
 use qovery_engine::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
-use qovery_engine::io_models::database::DatabaseMode::MANAGED;
+use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::models::database::DatabaseInstanceType;
+use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::msg_publisher::StdMsgPublisher;
-use time::Instant;
-use tracing_subscriber::EnvFilter;
-use url::Url;
-use uuid::Uuid;
+
+use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
+use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
+use crate::helpers::scaleway::{
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+};
 
 pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
     #[derive(Deserialize)]
@@ -229,6 +228,8 @@ pub struct FuncTestsSecrets {
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
+    pub TERRAFORM_AWS_BUCKET: Option<String>,
+    pub TERRAFORM_AWS_DYNAMODB_TABLE: Option<String>,
     pub QOVERY_GRPC_URL: Option<String>,
     pub ENGINE_SERVER_URL: Option<String>,
     pub QOVERY_CLUSTER_SECRET_TOKEN: Option<String>,
@@ -341,6 +342,8 @@ impl FuncTestsSecrets {
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
+            TERRAFORM_AWS_BUCKET: None,
+            TERRAFORM_AWS_DYNAMODB_TABLE: None,
             QOVERY_GRPC_URL: None,
             ENGINE_SERVER_URL: None,
             QOVERY_CLUSTER_SECRET_TOKEN: None,
@@ -501,6 +504,11 @@ impl FuncTestsSecrets {
                 secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY,
             ),
             TERRAFORM_AWS_REGION: Self::select_secret("TERRAFORM_AWS_REGION", secrets.TERRAFORM_AWS_REGION),
+            TERRAFORM_AWS_BUCKET: Self::select_secret("TERRAFORM_AWS_BUCKET", secrets.TERRAFORM_AWS_BUCKET),
+            TERRAFORM_AWS_DYNAMODB_TABLE: Self::select_secret(
+                "TERRAFORM_AWS_DYNAMODB_TABLE",
+                secrets.TERRAFORM_AWS_DYNAMODB_TABLE,
+            ),
             QOVERY_GRPC_URL: Self::select_secret("QOVERY_GRPC_URL", secrets.QOVERY_GRPC_URL),
             ENGINE_SERVER_URL: Self::select_secret("ENGINE_SERVER_URL", secrets.ENGINE_SERVER_URL),
             QOVERY_CLUSTER_SECRET_TOKEN: Self::select_secret(
@@ -517,7 +525,13 @@ impl FuncTestsSecrets {
 }
 
 pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
-    LocalDocker::new(context.clone(), Uuid::new_v4(), "qovery-local-docker").unwrap()
+    LocalDocker::new(
+        context.clone(),
+        Uuid::new_v4(),
+        "qovery-local-docker",
+        Box::<StdMetricsRegistry>::default(),
+    )
+    .unwrap()
 }
 
 pub fn init() -> Instant {
@@ -582,7 +596,7 @@ pub fn generate_password(db_mode: DatabaseMode) -> String {
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(db_mode == MANAGED)
+        .symbols(db_mode == DatabaseMode::MANAGED)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);
@@ -638,7 +652,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Gcp => vec![],
-        Kind::SelfManaged => vec![],
+        Kind::OnPremise => vec![],
     }
 }
 
@@ -793,9 +807,9 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "0ce035590a117ff0683c273a359c7a452f639dd1".to_string(),
+                app_commit: "ff9028ee18177daed83393c158dac6059824573b".to_string(),
                 app_env_vars: btreemap! {
-                    "IS_DOCUMENTDB".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == MANAGED).to_string()), is_secret:false},
+                    "IS_DOCUMENTDB".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED).to_string()), is_secret:false},
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
                     "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_uri), is_secret:false},
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
@@ -823,7 +837,7 @@ pub fn db_infos(
         }
         DatabaseKind::Postgresql => {
             let database_port = 5432;
-            let database_db_name = if database_mode == MANAGED {
+            let database_db_name = if database_mode == DatabaseMode::MANAGED {
                 "postgres".to_string()
             } else {
                 db_id
@@ -849,7 +863,7 @@ pub fn db_infos(
                 db_name: database_db_name,
                 app_commit: "c8dd8b57a4ebafabc860f0b948f881dad5ab632e".to_string(),
                 app_env_vars: btreemap! {
-                "IS_ELASTICCACHE".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == MANAGED && database_username == "default").to_string()), is_secret:false},
+                "IS_ELASTICCACHE".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED && database_username == "default").to_string()), is_secret:false},
                 "REDIS_HOST".to_string()      => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
                 "REDIS_PORT".to_string()      =>VariableInfo { value:  general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
                 "REDIS_USERNAME".to_string()  => VariableInfo { value: general_purpose::STANDARD.encode(database_username), is_secret:false},
@@ -862,17 +876,20 @@ pub fn db_infos(
 
 pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
     match provider_kind {
-        Kind::Aws => "gp2".to_string(),
+        Kind::Aws => match database_mode {
+            DatabaseMode::MANAGED => AwsStorageType::GP2.to_cloud_provider_format().to_string(),
+            DatabaseMode::CONTAINER => AwsStorageType::GP2.to_k8s_storage_class(),
+        },
         Kind::Scw => match database_mode {
-            MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
+            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         }
         .to_string(),
         Kind::Gcp => match database_mode {
-            MANAGED => todo!(),
+            DatabaseMode::MANAGED => todo!(),
             DatabaseMode::CONTAINER => GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
         },
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     }
 }
 
@@ -889,11 +906,11 @@ pub fn db_instance_type(
             DatabaseKind::Redis => Some(Box::new(AwsDatabaseInstanceType::CACHE_T3_MICRO)),
         },
         Kind::Scw => match database_mode {
-            MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
+            DatabaseMode::MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
             DatabaseMode::CONTAINER => None,
         },
         Kind::Gcp => None, // TODO: once managed DB is implemented
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     }
 }
 

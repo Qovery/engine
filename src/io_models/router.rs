@@ -1,6 +1,8 @@
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::Action;
 use crate::models;
 use crate::models::aws::AwsRouterExtraSettings;
@@ -8,13 +10,17 @@ use crate::models::aws_ec2::AwsEc2RouterExtraSettings;
 use crate::models::gcp::GcpRouterExtraSettings;
 use crate::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::models::scaleway::ScwRouterExtraSettings;
-use crate::models::selfmanaged::SelfManagedRouterExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseRouterExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 fn default_generate_certificate() -> bool {
     true
+}
+
+fn default_use_cdn() -> bool {
+    false
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -35,6 +41,8 @@ pub struct CustomDomain {
     pub target_domain: String,
     #[serde(default = "default_generate_certificate")]
     pub generate_certificate: bool,
+    #[serde(default = "default_use_cdn")]
+    pub use_cdn: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -49,14 +57,17 @@ impl Router {
         context: &Context,
         advanced_settings: RouterAdvancedSettings,
         cloud_provider: &dyn CloudProvider,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
             .iter()
-            .map(|x| crate::cloud_provider::models::CustomDomain {
-                domain: x.domain.clone(),
-                target_domain: x.target_domain.clone(),
-                generate_certificate: x.generate_certificate,
+            .map(|it| crate::cloud_provider::models::CustomDomain {
+                domain: it.domain.clone(),
+                target_domain: it.target_domain.clone(),
+                generate_certificate: it.generate_certificate,
+                use_cdn: it.use_cdn,
             })
             .collect::<Vec<_>>();
 
@@ -87,6 +98,8 @@ impl Router {
                         AwsRouterExtraSettings {},
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 } else {
                     Ok(Box::new(models::router::Router::<AWSEc2>::new(
@@ -101,6 +114,8 @@ impl Router {
                         AwsEc2RouterExtraSettings {},
                         advanced_settings,
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
                     )?))
                 }
             }
@@ -117,6 +132,8 @@ impl Router {
                     ScwRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?);
                 Ok(router)
             }
@@ -132,9 +149,11 @@ impl Router {
                 GcpRouterExtraSettings {},
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
             )?)),
-            CPKind::SelfManaged => {
-                let router = Box::new(models::router::Router::<SelfManaged>::new(
+            CPKind::OnPremise => {
+                let router = Box::new(models::router::Router::<OnPremise>::new(
                     context,
                     self.long_id,
                     self.name.as_str(),
@@ -143,9 +162,11 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
-                    SelfManagedRouterExtraSettings {},
+                    OnPremiseRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
                 )?);
                 Ok(router)
             }

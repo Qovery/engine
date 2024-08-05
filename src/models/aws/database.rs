@@ -357,8 +357,6 @@ where
         }
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("encrypt_disk", &options.encrypt_disk);
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
-        context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
@@ -367,6 +365,7 @@ where
         context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
         context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
+        context.insert("labels_group", &self.labels_group);
 
         context.insert(
             "resource_expiration_in_seconds",

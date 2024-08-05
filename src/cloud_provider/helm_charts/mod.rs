@@ -5,6 +5,7 @@ use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
+use time::Duration;
 
 use super::helm::HelmChartError;
 
@@ -23,10 +24,18 @@ pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_cluster_agent_chart;
+pub mod qovery_pdb_infra_chart;
 pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
 pub mod vertical_pod_autoscaler;
+
+pub enum HelmChartTimeout {
+    /// Let helm chart defines what it wants
+    ChartDefault,
+    /// Let user define what they want
+    Custom(Duration),
+}
 
 pub enum HelmChartResourcesConstraintType {
     /// Let helm chart defines what it wants
@@ -256,6 +265,7 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
                 KubernetesKind::Ec2 => "aws-ec2",
                 KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
                 KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
+                Kind::OnPremiseSelfManaged => "on-premise",
             },
             true => "undefined-cloud-provider", // There is something weird
         },

@@ -11,6 +11,10 @@ commonLabels:
   qovery.com/service-type: "database"
   qovery.com/environment-id: "{{ environment_long_id }}"
   qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
 
 image:
   registry: "{{ registry_name }}"
@@ -26,11 +30,11 @@ auth:
 master:
   resources:
     requests:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
     limits:
-      memory: "{{ database_ram_size_in_mib }}Mi"
-      cpu: "{{ database_total_cpus }}"
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"
   podLabels:
     app: "{{ sanitized_name }}" 
     envId: "{{ environment_id }}"
@@ -75,10 +79,19 @@ master:
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
     {% endif %}
   serviceAccount:
     create: true
     name: "{{ sanitized_name }}"
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
 
 rbac:
   create: true
@@ -93,3 +106,19 @@ sysctlImage:
   enabled: true
   registry: {{ registry_name }}
   repository: {{ repository_name_bitnami_shell }}
+
+replica:
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+
+sentinel:
+  service:
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}

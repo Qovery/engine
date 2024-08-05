@@ -82,6 +82,7 @@ resource "google_container_cluster" "primary" {
     enabled = var.enable_vertical_pod_autoscaling
   }
   enable_autopilot = true
+
   dynamic "master_authorized_networks_config" {
     for_each = local.master_authorized_networks_config
     content {
@@ -94,6 +95,22 @@ resource "google_container_cluster" "primary" {
       }
     }
   }
+
+  # Public endpoint access enabled, authorized networks disabled
+  # This is the default and it is also the least restrictive option.
+  # Since authorized networks are not enabled, you can administer your cluster from any source IP address
+  # as long as you authenticate.
+  # https://cloud.google.com/kubernetes-engine/docs/concepts/private-cluster-concept
+  private_cluster_config {
+    {% if cluster_is_private == true %}
+    enable_private_endpoint = false
+    enable_private_nodes    = true
+    {% else %}
+    enable_private_endpoint = false
+    enable_private_nodes    = false
+    {% endif %}
+  }
+
   dynamic "node_pool_auto_config" {
     for_each = length(var.network_tags) > 0 ? [1] : []
     content {

@@ -5,9 +5,11 @@ use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
@@ -20,11 +22,12 @@ use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::job::{ImageSource, JobError, JobService};
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::SelfManagedAppExtraSettings;
-use crate::models::types::{AWSEc2, SelfManaged, AWS, GCP, SCW};
+use crate::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -66,6 +69,11 @@ pub struct JobAdvancedSettings {
     pub security_read_only_root_filesystem: bool,
     #[serde(alias = "security.automount_service_account_token")]
     pub security_automount_service_account_token: bool,
+
+    #[serde(alias = "resources.override.limit.cpu_in_milli")]
+    pub resources_override_limit_cpu_in_milli: Option<u32>,
+    #[serde(alias = "resources.override.limit.ram_in_mib")]
+    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for JobAdvancedSettings {
@@ -83,16 +91,26 @@ impl Default for JobAdvancedSettings {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
+            resources_override_limit_cpu_in_milli: None,
+            resources_override_limit_ram_in_mib: None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum LifecycleType {
+    TERRAFORM,
+    CLOUDFORMATION,
+    #[serde(other)]
+    GENERIC,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum JobSchedule {
-    OnStart {},
-    OnPause {},
-    OnDelete {},
+    OnStart { lifecycle_type: LifecycleType },
+    OnPause { lifecycle_type: LifecycleType },
+    OnDelete { lifecycle_type: LifecycleType },
     Cron { schedule: String, timezone: String },
 }
 
@@ -103,6 +121,15 @@ impl JobSchedule {
 
     pub fn is_job(&self) -> bool {
         !self.is_cronjob()
+    }
+
+    pub fn lifecycle_type(&self) -> Option<LifecycleType> {
+        match self {
+            JobSchedule::OnStart { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::OnPause { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::OnDelete { lifecycle_type } => Some(*lifecycle_type),
+            JobSchedule::Cron { .. } => None,
+        }
     }
 }
 
@@ -119,8 +146,9 @@ pub enum JobSource {
         git_credentials: Option<GitCredentials>,
         branch: String,
         commit_id: String,
-        dockerfile_path: Option<String>,
         root_path: String,
+        dockerfile_path: Option<String>,
+        dockerfile_content: Option<String>,
     },
 }
 
@@ -157,6 +185,10 @@ pub struct Job {
     #[serde(default)]
     pub advanced_settings: JobAdvancedSettings,
     pub container_registries: ContainerRegistries,
+    #[serde(default)]
+    pub annotations_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub labels_group_ids: BTreeSet<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -171,17 +203,34 @@ impl Job {
         qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
     ) -> Option<Build> {
-        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
-            JobSource::Docker {
-                git_url,
-                git_credentials,
-                branch,
-                commit_id,
-                dockerfile_path,
-                root_path,
-            } => (git_url, git_credentials, branch, commit_id, dockerfile_path, root_path),
-            _ => return None,
-        };
+        let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
+        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, dockerfile_content, root_path) =
+            match &self.source {
+                JobSource::Docker {
+                    git_url,
+                    git_credentials,
+                    branch,
+                    commit_id,
+                    root_path,
+                    dockerfile_path,
+                    dockerfile_content,
+                } => {
+                    if dockerfile_content.is_some() {
+                        (
+                            git_url,
+                            git_credentials,
+                            branch,
+                            commit_id,
+                            &qovery_dockerfile,
+                            dockerfile_content,
+                            root_path,
+                        )
+                    } else {
+                        (git_url, git_credentials, branch, commit_id, dockerfile_path, &None, root_path)
+                    }
+                }
+                _ => return None,
+            };
 
         // Retrieve ssh keys from env variables
 
@@ -208,6 +257,7 @@ impl Job {
                 ssh_keys,
                 commit_id: commit_id.clone(),
                 dockerfile_path,
+                dockerfile_content: dockerfile_content.clone(),
                 root_path,
                 buildpack_language: None,
             },
@@ -253,6 +303,7 @@ impl Job {
             commit_id,
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
+            registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
             repository_name: cr_info.get_repository_name(&self.long_id.to_string()),
         }
@@ -264,6 +315,10 @@ impl Job {
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
+        annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
+        labels_group: &BTreeMap<Uuid, LabelsGroup>,
+        allow_service_cpu_overcommit: bool,
+        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
@@ -303,6 +358,18 @@ impl Job {
         };
 
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let annotations_groups = self
+            .annotations_group_ids
+            .iter()
+            .flat_map(|annotations_group_id| annotations_group.get(annotations_group_id))
+            .cloned()
+            .collect_vec();
+        let labels_groups = self
+            .labels_group_ids
+            .iter()
+            .flat_map(|labels_group_id| labels_group.get(labels_group_id))
+            .cloned()
+            .collect_vec();
 
         let service: Box<dyn JobService> = match cloud_provider.kind() {
             Kind::Aws => {
@@ -335,6 +402,10 @@ impl Job {
                         self.liveness_probe.map(|p| p.to_domain()),
                         AwsAppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 } else {
                     Box::new(models::job::Job::<AWSEc2>::new(
@@ -365,6 +436,10 @@ impl Job {
                         self.liveness_probe.map(|p| p.to_domain()),
                         AwsEc2AppExtraSettings {},
                         |transmitter| context.get_event_details(transmitter),
+                        annotations_groups,
+                        labels_groups,
+                        allow_service_cpu_overcommit,
+                        allow_service_ram_overcommit,
                     )?)
                 }
             }
@@ -396,6 +471,10 @@ impl Job {
                 self.liveness_probe.map(|p| p.to_domain()),
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -425,8 +504,12 @@ impl Job {
                 self.liveness_probe.map(|p| p.to_domain()),
                 GcpAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
-            Kind::SelfManaged => Box::new(models::job::Job::<SelfManaged>::new(
+            Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,
                 self.name,
@@ -452,8 +535,12 @@ impl Job {
                 self.advanced_settings,
                 self.readiness_probe.map(|p| p.to_domain()),
                 self.liveness_probe.map(|p| p.to_domain()),
-                SelfManagedAppExtraSettings {},
+                OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                allow_service_cpu_overcommit,
+                allow_service_ram_overcommit,
             )?),
         };
 

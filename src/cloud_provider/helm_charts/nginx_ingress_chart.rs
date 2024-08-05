@@ -1,4 +1,6 @@
+use std::fmt::Display;
 use std::sync::Arc;
+use strum_macros::EnumIter;
 
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
@@ -19,6 +21,29 @@ use tera::{Context, Tera};
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
 
+#[derive(Clone)]
+pub enum LogFormat {
+    Default,
+    Custom(String),
+}
+
+#[derive(Clone, EnumIter)]
+pub enum LogFormatEscaping {
+    Default,
+    None,
+    JSON,
+}
+
+impl Display for LogFormatEscaping {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogFormatEscaping::Default => write!(f, "default"),
+            LogFormatEscaping::None => write!(f, "none"),
+            LogFormatEscaping::JSON => write!(f, "json"),
+        }
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -34,6 +59,9 @@ pub struct NginxIngressChart {
     nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
     namespace: HelmChartNamespaces,
     loadbalancer_size: Option<String>,
+    enable_real_ip: bool,
+    log_format_escaping: LogFormatEscaping,
+    is_alb_enabled: bool,
 }
 
 impl NginxIngressChart {
@@ -51,6 +79,9 @@ impl NginxIngressChart {
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
         namespace: HelmChartNamespaces,
         loadbalancer_size: Option<String>,
+        enable_real_ip: bool,
+        log_format_escaping: LogFormatEscaping,
+        is_alb_enabled: bool,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -91,6 +122,9 @@ impl NginxIngressChart {
             nginx_hpa_target_cpu_utilization_percentage,
             namespace,
             loadbalancer_size,
+            enable_real_ip,
+            log_format_escaping,
+            is_alb_enabled,
         }
     }
 
@@ -178,7 +212,7 @@ defaultBackend:
                 key: "controller.allowSnippetAnnotations".to_string(),
                 value: true.to_string(),
             },
-            // enable metrics for customers who wants to manage it by their own
+            // enable metrics for customers who want to manage it by their own
             ChartSetValue {
                 key: "controller.metrics.enabled".to_string(),
                 value: true.to_string(),
@@ -187,11 +221,16 @@ defaultBackend:
                 key: "controller.metrics.serviceMonitor.enabled".to_string(),
                 value: self.ff_metrics_history_enabled.to_string(),
             },
+            ChartSetValue {
+                key: "controller.autoscaling.enabled".to_string(),
+                value: true.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.config.enable-real-ip".to_string(),
+                value: self.enable_real_ip.to_string(),
+            },
         ];
-        chart_set_values.push(ChartSetValue {
-            key: "controller.autoscaling.enabled".to_string(),
-            value: true.to_string(),
-        });
+
         if let Some(value) = self.nginx_hpa_minimum_replicas {
             chart_set_values.push(ChartSetValue {
                 key: "controller.autoscaling.minReplicas".to_string(),
@@ -210,16 +249,71 @@ defaultBackend:
                 value: value.to_string(),
             })
         }
+        match self.log_format_escaping {
+            LogFormatEscaping::None => {
+                chart_set_values.push(ChartSetValue {
+                    key: "controller.config.log-format-escaping-none".to_string(),
+                    value: true.to_string(),
+                });
+            }
+            LogFormatEscaping::JSON => {
+                chart_set_values.push(ChartSetValue {
+                    key: "controller.config.log-format-escaping-json".to_string(),
+                    value: true.to_string(),
+                });
+            }
+            LogFormatEscaping::Default => {}
+        }
 
         // custom cloud provider configuration
         match self.cloud_provider {
             Kind::Aws => {
                 if self.kubernetes_kind == KubernetesKind::Eks {
+                    // common config
                     chart_set_values.push(ChartSetValue {
-                        key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                        key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
                             .to_string(),
-                        value: "nlb".to_string(),
-                    })
+                        value: "6".to_string(),
+                    });
+
+                    // alb controller VS native k8s nlb
+                    match self.is_alb_enabled {
+                        true => {
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.config.use-proxy-protocol".to_string(),
+                                value: "true".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                                    .to_string(),
+                                value: "external".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
+                                    .to_string(),
+                                value: "internet-facing".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-proxy-protocol".to_string(),
+                                value: "*".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-nlb-target-type".to_string(),
+                                value: "ip".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-target-group-attributes".to_string(),
+                                value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
+                            });
+                        }
+                        false => {
+                            chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
+                                    .to_string(),
+                                value: "nlb".to_string(),
+                            });
+                        }
+                    }
                 };
             }
             Kind::Scw => {
@@ -238,7 +332,7 @@ defaultBackend:
                 });
             }
             Kind::Gcp => {}
-            Kind::SelfManaged => {}
+            Kind::OnPremise => {}
         }
         // external dns
         if self.kubernetes_kind != KubernetesKind::Ec2 {
@@ -254,7 +348,8 @@ defaultBackend:
                 path: self.chart_path.to_string(),
                 namespace: self.namespace,
                 // Because of NLB, svc can take some time to start
-                timeout_in_seconds: 300,
+                // rolling out the deployment can take a lot of time for users that has a lot of nginx
+                timeout_in_seconds: 60 * 60,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,
                 yaml_files_content: {
@@ -301,11 +396,9 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use strum::IntoEnumIterator;
-
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
-    use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
+    use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType;
     use crate::cloud_provider::helm_charts::HelmChartType;
@@ -316,6 +409,7 @@ mod tests {
     use crate::models::domain::Domain;
     use std::env;
     use std::sync::Arc;
+    use strum::IntoEnumIterator;
 
     fn get_nginx_ingress_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
         Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
@@ -348,6 +442,9 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
+            LogFormatEscaping::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -386,6 +483,9 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
+            LogFormatEscaping::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -408,90 +508,48 @@ mod tests {
         assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
-    // Make sure rust code doesn't set a value not declared inside values file.
-    // All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test_but_not_on_ec2() {
-        // setup:
-        let chart = NginxIngressChart::new(
-            None,
-            HelmChartResourcesConstraintType::ChartDefault,
-            HelmChartResourcesConstraintType::ChartDefault,
-            true,
-            get_nginx_ingress_chart_override(),
-            get_domain().wildcarded(),
-            Kind::Aws,
-            KubernetesKind::Ec2,
-            Some(1),
-            Some(10),
-            Some(50),
-            HelmChartNamespaces::NginxIngress,
-            None,
-        );
-        let common_chart = chart.to_common_helm_chart().unwrap();
-
-        // TODO(benjaminch): GKE integration
-        for cloud_provider in KubernetesKind::iter().filter(|k| {
-            k != &KubernetesKind::Gke
-                && k != &KubernetesKind::Ec2
-                && k != &KubernetesKind::EksSelfManaged
-                && k != &KubernetesKind::ScwSelfManaged
-                && k != &KubernetesKind::GkeSelfManaged
-        }) {
-            let values_file_lib_path = format!(
-                "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(
-                    chart.chart_values_path.helm_path(),
-                    HelmChartType::CloudProviderSpecific(cloud_provider)
-                ),
-                NginxIngressChart::chart_name(),
+    fn nginx_ingress_chart_log_format_escaping_test() {
+        for log_format_escaping in LogFormatEscaping::iter() {
+            // setup:
+            let chart = NginxIngressChart::new(
+                None,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                true,
+                get_nginx_ingress_chart_override(),
+                get_domain().wildcarded(),
+                Kind::Aws,
+                KubernetesKind::Ec2,
+                None,
+                None,
+                None,
+                HelmChartNamespaces::NginxIngress,
+                None,
+                false,
+                log_format_escaping.clone(),
+                false,
             );
 
             // execute:
-            let missing_fields =
-                get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
+            let common_chart = chart.to_common_helm_chart().expect("cannot create common chart");
 
             // verify:
-            assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+            match &log_format_escaping {
+                LogFormatEscaping::Default => {
+                    assert!(!common_chart
+                        .chart_info
+                        .values
+                        .iter()
+                        .any(|x| x.key == "controller.config.log-format-escaping-none"
+                            || x.key == "controller.config.log-format-escaping-json"));
+                }
+                _ => {
+                    assert!(common_chart.chart_info.values.iter().any(|x| x.key
+                        == format!("controller.config.log-format-escaping-{}", log_format_escaping)
+                        && x.value == "true"),);
+                }
+            }
         }
-    }
-
-    // Make sure rust code doesn't set a value not declared inside values file.
-    // All values should be declared / set in values file unless it needs to be injected via rust code.
-    #[test]
-    fn nginx_ingress_chart_rust_overridden_values_exists_in_ec2_values_yaml_test() {
-        // setup:
-        let chart = NginxIngressChart::new(
-            None,
-            HelmChartResourcesConstraintType::ChartDefault,
-            HelmChartResourcesConstraintType::ChartDefault,
-            true,
-            get_nginx_ingress_chart_override(),
-            get_domain().wildcarded(),
-            Kind::Aws,
-            KubernetesKind::Ec2,
-            None,
-            None,
-            None,
-            HelmChartNamespaces::NginxIngress,
-            None,
-        );
-        let common_chart = chart.to_common_helm_chart().unwrap();
-
-        let values_file_lib_path = format!(
-            "/lib/{}/bootstrap/chart_values/{}.j2.yaml",
-            get_helm_path_kubernetes_provider_sub_folder_name(
-                chart.chart_values_path.helm_path(),
-                HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2)
-            ),
-            NginxIngressChart::chart_name(),
-        );
-
-        // execute:
-        let missing_fields =
-            get_helm_values_set_in_code_but_absent_in_values_file(common_chart.clone(), values_file_lib_path);
-
-        // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }

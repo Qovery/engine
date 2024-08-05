@@ -10,11 +10,11 @@ use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
-use qovery_engine::io_models::application::StorageType;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
+use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::application::{get_application_with_invalid_storage_size, Application};
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::types::AWS;
@@ -53,14 +53,14 @@ fn should_increase_app_storage_size() {
                 infra_ctx.kubernetes(),
             )
             .unwrap();
-        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| false).unwrap();
+        let deployment_target = DeploymentTarget::new(&infra_ctx, &test_env, &|| AbortStatus::None).unwrap();
         let test_app = &test_env.applications[0];
 
         let storages = resized_app
             .storage
             .iter()
-            .map(|storage| storage.to_aws_storage())
-            .collect::<Vec<Storage<AwsStorageType>>>();
+            .map(|storage| storage.to_storage())
+            .collect::<Vec<Storage>>();
 
         let envs = resized_app
             .environment_vars_with_infos
@@ -79,9 +79,6 @@ fn should_increase_app_storage_size() {
             resized_app.name.clone(),
             resized_app.public_domain.clone(),
             resized_app.ports.clone(),
-            resized_app.total_cpus.to_string(),
-            resized_app.cpu_burst.to_string(),
-            resized_app.total_ram_in_mib,
             resized_app.min_instances,
             resized_app.max_instances,
             resized_app.to_build(
@@ -99,6 +96,14 @@ fn should_increase_app_storage_size() {
             resized_app.advanced_settings.clone(),
             AwsAppExtraSettings {},
             |transmitter| infra_ctx.context().get_event_details(transmitter),
+            vec![],
+            vec![],
+            resized_app.cpu_request_in_milli,
+            resized_app.cpu_limit_in_milli,
+            resized_app.ram_request_in_mib,
+            resized_app.ram_limit_in_mib,
+            false,
+            false,
         )
         .expect("Unable to create application");
 
@@ -249,7 +254,7 @@ fn should_have_mounted_files_as_volume() {
         let mut statefulset = application.clone();
         let statefulset_id = QoveryIdentifier::new_random();
         statefulset.name = statefulset_id.short().to_string();
-        statefulset.kube_name = statefulset.name.clone();
+        statefulset.kube_name.clone_from(&statefulset.name);
         statefulset.long_id = statefulset_id.to_uuid();
         let storage_id = QoveryIdentifier::new_random();
         statefulset.readiness_probe = None;
@@ -258,7 +263,7 @@ fn should_have_mounted_files_as_volume() {
             id: storage_id.short().to_string(),
             long_id: storage_id.to_uuid(),
             name: storage_id.short().to_string(),
-            storage_type: StorageType::Ssd,
+            storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
             size_in_gib: 10,
             mount_point: format!("/tmp/{}", storage_id.short()),
             snapshot_retention_in_days: 1,

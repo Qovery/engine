@@ -1,0 +1,91 @@
+{{- if .Values.networkPolicies.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qovery-engine-builder
+spec:
+  podSelector:
+    matchLabels:
+      qovery.com/is-builder: "true"
+  policyTypes:
+    - Egress
+    - Ingress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 53
+          protocol: UDP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+        - ipBlock:
+            cidr: ::/0
+            except:
+              - fd00::/8
+  # We must specify ingress rules to avoid conntrack issue with AWS CNI https://github.com/aws/aws-network-policy-agent/issues/245
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        - ipBlock:
+            cidr: ::/0
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qovery-engine
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: qovery-engine
+  policyTypes:
+    - Egress
+    - Ingress
+  egress:
+    # DNS
+    - to:
+        - ipBlock:
+            cidr: 172.16.0.0/12
+      ports:
+        - port: 53
+          protocol: UDP
+    # KUBE API
+    - to:
+        - ipBlock:
+            cidr: 172.20.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    # BUILDER container
+    - to:
+      - podSelector:
+          matchLabels:
+            qovery.com/is-builder: "true"
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+        - ipBlock:
+            cidr: ::/0
+            except:
+              - fd00::/8
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: prometheus
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: prometheus
+  {{- end }}

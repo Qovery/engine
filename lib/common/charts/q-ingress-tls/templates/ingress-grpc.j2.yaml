@@ -13,6 +13,10 @@ metadata:
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   annotations:
     kubernetes.io/tls-acme: "true"
     {%- if has_wildcard_domain == true %}
@@ -58,12 +62,20 @@ metadata:
       grpc_send_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
       client_body_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
 
-    {%- if advanced_settings.network_ingress_extra_headers %}
+    {%- if advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      {%- for key, value in advanced_settings.network_ingress_extra_headers %}
+      {%- for key, value in advanced_settings.network_ingress_add_headers %}
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}
+
+      {%- for key, value in advanced_settings.network_ingress_proxy_set_headers %}
+      proxy_set_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
     {%- endif %}
+    {%- for key, value in annotations_group.ingress %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
 
 spec:
   tls:

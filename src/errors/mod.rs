@@ -238,6 +238,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotUpdateBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot update bucket: `{bucket_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::CannotDeleteBucket {
                 bucket_name,
                 raw_error_message,
@@ -541,8 +549,16 @@ impl From<BuildError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
-            BuildError::GitError { application, raw_error } => CommandError::new(
-                format!("Build error, cannot build application `{application}` due to a git error"),
+            BuildError::GitError {
+                application,
+                git_cmd,
+                context,
+                raw_error,
+            } => CommandError::new(
+                format!(
+                    "Git error, the cmd '{}' done for {context} has failed for `{application}` due to error",
+                    git_cmd,
+                ),
                 Some(raw_error.to_string()),
                 None,
             ),
@@ -570,6 +586,9 @@ impl From<BuildError> for CommandError {
                 Some(raw_error.to_string()),
                 None,
             ),
+            BuildError::CannotGetCredentials { .. } => {
+                CommandError::new("Build error, cannot get registry credentials".to_string(), None, None)
+            }
         }
     }
 }
@@ -878,6 +897,8 @@ pub enum Tag {
     TerraformCannotImportResource,
     /// TerraformManagedDatabaseError: represents an error on managed database.
     TerraformManagedDatabaseError,
+    /// TerraformValidatorError: represents an error while trying to validate Terraform configuration.
+    TerraformValidatorError,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -1020,6 +1041,8 @@ pub enum Tag {
     ObjectStorageCannotInstantiateClient,
     /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
     ObjectStorageCannotCreateBucket,
+    /// ObjectStorageCannotUpdateBucket: represents an error while trying to update an object storage bucket.
+    ObjectStorageCannotUpdateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
     ObjectStorageCannotPutFileIntoBucket,
     /// ObjectStorageCannotDeleteFileIntoBucket: represents an error while trying to delete a file into an object storage bucket.
@@ -1086,6 +1109,20 @@ pub enum Tag {
     K8sCannotGetNodes,
     /// K8sPatchNodeError: represents an error where we are not able to patch a node.
     K8sPatchNodeError,
+    /// K8sUninstallEc2NodeClassesError: represents an error where we are not able to uninstall Ec2NodeClasses.
+    K8sUninstallEc2NodeClassesError,
+    /// K8sDeleteKarpenterNodesError: represents an error where we are not able to delete Karpenter nodes.
+    K8sDeleteKarpenterNodesError,
+    /// CannotCreateHelmAdmissionControllerConfigMap: cannot create K8S config map for admission controller
+    CannotCreateHelmAdmissionControllerConfigMap,
+    /// CannotPatchHelmAdmissionControllerConfigMap: cannot patch K8S config map for admission controller
+    CannotPatchHelmAdmissionControllerConfigMap,
+    /// ServiceInstantiationError: represents an error while trying to instantiate a service
+    ServiceInstantiationError,
+    /// CannotGetRegistryCredentials
+    CannotGetRegistryCredentials,
+    /// CannotCreateAwsServiceLinkedRoleForSpotInstance: represents an error while trying to create an AWS Service Linked Role
+    CannotCreateAwsServiceLinkedRoleForSpotInstance,
 }
 
 impl Tag {
@@ -1212,6 +1249,28 @@ impl EngineError {
             link: self.link.as_ref().cloned(),
             hint_message: self.hint_message.as_ref().cloned(),
         }
+    }
+
+    /// Creates new service error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
+    /// * `underlying_error`: raw error message such as command input / output.
+    pub fn new_service_instantiation_error(
+        event_details: EventDetails,
+        service_name: String,
+        underlying_error: Option<CommandError>,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::ServiceInstantiationError,
+            format!("Cannot instantiate an underlying service: `{service_name}`"),
+            underlying_error,
+            None,
+            None,
+        )
     }
 
     /// Creates new unknown error.
@@ -2967,6 +3026,14 @@ impl EngineError {
                     )
                 }
             },
+            TerraformError::ValidatorError { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformValidatorError,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
         }
     }
 
@@ -3070,7 +3137,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRegistry,
-                format!("Container registry: cannot create registry: `{registry_name}`."),
+                format!("Container registry: cannot create registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3078,7 +3145,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRegistry,
-                format!("Container registry: cannot delete registry: `{registry_name}`."),
+                format!("Container registry: cannot delete registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3086,7 +3153,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteImage { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteImage,
-                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3094,7 +3161,7 @@ impl EngineError {
             ContainerRegistryError::ImageDoesntExistInRegistry { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryImageDoesntExist,
-                format!("Container registry: image `{image_name}` doesn't exist in repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: image `{image_name}` doesn't exist in repository `{repository_name}` in registry `{registry_name}`. "),
                 Some(error.into()),
                 None,
                 None,
@@ -3118,7 +3185,7 @@ impl EngineError {
             ContainerRegistryError::CannotLinkRegistryToCluster { ref registry_name, ref cluster_id, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotLinkRegistryToCluster,
-                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`."),
+                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3126,7 +3193,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRepository,
-                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3134,7 +3201,7 @@ impl EngineError {
             ContainerRegistryError::CannotGetRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotGetRepository,
-                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`."),
+                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3142,7 +3209,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRepository,
-                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`."),
+                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3150,14 +3217,14 @@ impl EngineError {
             ContainerRegistryError::CannotSetRepositoryLifecyclePolicy { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotSetRepositoryLifecycle,
-                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`."),
+                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
             ),
             ContainerRegistryError::CannotSetRepositoryTags { ref registry_name, ref repository_name, .. } => EngineError::new(event_details,
             Tag::ContainerRegistryCannotSetRepositoryTags,
-            format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`."),
+            format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
             Some(error.into()),
                                                                                                                                None,
                                                                                                                                None,
@@ -3165,7 +3232,7 @@ impl EngineError {
             ContainerRegistryError::RepositoryNameNotValid {ref registry_name, ref repository_name, ..} => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryRepositoryNameInvalid,
-                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`."),
+                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`. Due to {}", error),
                 Some(error.into()),
                 None,
                 None,
@@ -3443,18 +3510,14 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
-    pub fn new_k8s_cannot_get_services(
-        event_details: EventDetails,
-        error: CommandError,
-        services_id: &str,
-    ) -> EngineError {
+    pub fn new_k8s_cannot_get_services(event_details: EventDetails, error: CommandError) -> EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetServices,
             error.to_string(),
-            Some(error),
+            Some(error.clone()),
             None,
-            Some(format!("K8s service for service {services_id} can't be found")),
+            Some(format!("K8s service for service can't be found: {error}")),
         )
     }
 
@@ -4423,6 +4486,14 @@ impl EngineError {
                 None,
                 None,
             ),
+            ObjectStorageError::CannotUpdateBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotUpdateBucket,
+                format!("Error, cannot update object storage bucket `{bucket_name}`.",),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
             ObjectStorageError::CannotDeleteBucket { ref bucket_name, .. } => EngineError::new(
                 event_details,
                 Tag::ObjectStorageCannotDeleteBucket,
@@ -4976,6 +5047,118 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sPatchNodeError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_uninstall_ec2_node_classes_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sUninstallEc2NodeClassesError,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_delete_karpenter_nodes_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sDeleteKarpenterNodesError,
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when attempting to create config map needed for admission controller
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_create_helm_config_map_for_admission_controller(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateHelmAdmissionControllerConfigMap,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when attempting to patch config map needed for admission controller
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_patch_helm_config_map_for_admission_controller(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotPatchHelmAdmissionControllerConfigMap,
+            error.to_string(),
+            Some(error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when cannot get the registry credentials
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_cannot_get_registry_credentials(event_details: EventDetails) -> EngineError {
+        let message_safe = "Cannot get the registry credentials".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetRegistryCredentials,
+            message_safe,
+            None,
+            None,
+            Some("Cannot get the registry credentials".to_string()),
+        )
+    }
+
+    /// * `error`: Raw error message.
+    /// Creates new error when attempting to create the service-linked rome for Spot Instances
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_cannot_create_aws_service_linked_role_for_spot_instance(
+        event_details: EventDetails,
+        error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance,
             error.to_string(),
             Some(error),
             None,

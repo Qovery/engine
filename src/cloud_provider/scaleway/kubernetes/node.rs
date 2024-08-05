@@ -37,6 +37,8 @@ pub enum ScwInstancesType {
     L4_1_24G,
     L4_2_24G,
     L4_4_24G,
+    L40S_1_48G,
+    L40S_2_48G,
     PLAY2_MICRO,
     PLAY2_NANO,
     PLAY2_PICO,
@@ -64,6 +66,15 @@ pub enum ScwInstancesType {
     PRO2_XXS,
     RENDER_S,
     START1_L,
+    START1_M,
+    START1_S,
+    VC1L,
+    VC1M,
+    VC1S,
+    X64_120GB,
+    X64_15GB,
+    X64_30GB,
+    X64_60GB,
 }
 
 impl InstanceType for ScwInstancesType {
@@ -96,6 +107,8 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::L4_1_24G => "l4-1-24g",
             ScwInstancesType::L4_2_24G => "l4-2-24g",
             ScwInstancesType::L4_4_24G => "l4-4-24g",
+            ScwInstancesType::L40S_1_48G => "l40s-1-48g",
+            ScwInstancesType::L40S_2_48G => "l40s-2-48g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -123,6 +136,15 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
             ScwInstancesType::START1_L => "start1-l",
+            ScwInstancesType::START1_M => "start1-m",
+            ScwInstancesType::START1_S => "start1-s",
+            ScwInstancesType::VC1L => "vc1l",
+            ScwInstancesType::VC1M => "vc1m",
+            ScwInstancesType::VC1S => "vc1s",
+            ScwInstancesType::X64_120GB => "x64-120gb",
+            ScwInstancesType::X64_15GB => "x64-15gb",
+            ScwInstancesType::X64_30GB => "x64-30gb",
+            ScwInstancesType::X64_60GB => "x64-60gb",
         }
         .to_string()
     }
@@ -154,6 +176,8 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::GPU_3070_S
                 | ScwInstancesType::H100_1_80G
                 | ScwInstancesType::H100_1_M
+                | ScwInstancesType::L40S_1_48G
+                | ScwInstancesType::L40S_2_48G
                 | ScwInstancesType::L4_1_24G
                 | ScwInstancesType::L4_2_24G
                 | ScwInstancesType::L4_4_24G
@@ -184,6 +208,15 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
                 | ScwInstancesType::START1_L
+                | ScwInstancesType::START1_M
+                | ScwInstancesType::START1_S
+                | ScwInstancesType::VC1L
+                | ScwInstancesType::VC1M
+                | ScwInstancesType::VC1S
+                | ScwInstancesType::X64_120GB
+                | ScwInstancesType::X64_15GB
+                | ScwInstancesType::X64_30GB
+                | ScwInstancesType::X64_60GB
         )
     }
     fn is_arm_instance(&self) -> bool {
@@ -216,6 +249,8 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::GPU_3070_S
                 | ScwInstancesType::H100_1_80G
                 | ScwInstancesType::H100_1_M
+                | ScwInstancesType::L40S_1_48G
+                | ScwInstancesType::L40S_2_48G
                 | ScwInstancesType::L4_1_24G
                 | ScwInstancesType::L4_2_24G
                 | ScwInstancesType::L4_4_24G
@@ -245,6 +280,13 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
                 | ScwInstancesType::START1_L
+                | ScwInstancesType::START1_M
+                | ScwInstancesType::VC1L
+                | ScwInstancesType::VC1M
+                | ScwInstancesType::X64_120GB
+                | ScwInstancesType::X64_15GB
+                | ScwInstancesType::X64_30GB
+                | ScwInstancesType::X64_60GB
         )
     }
 }
@@ -279,6 +321,8 @@ impl ScwInstancesType {
             ScwInstancesType::L4_1_24G => "l4-1-24g",
             ScwInstancesType::L4_2_24G => "l4-2-24g",
             ScwInstancesType::L4_4_24G => "l4-4-24g",
+            ScwInstancesType::L40S_1_48G => "l40s-1-48g",
+            ScwInstancesType::L40S_2_48G => "l40s-2-48g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -306,6 +350,15 @@ impl ScwInstancesType {
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
             ScwInstancesType::START1_L => "start1-l",
+            ScwInstancesType::START1_M => "start1-m",
+            ScwInstancesType::START1_S => "start1-s",
+            ScwInstancesType::VC1L => "vc1l",
+            ScwInstancesType::VC1M => "vc1m",
+            ScwInstancesType::VC1S => "vc1s",
+            ScwInstancesType::X64_120GB => "x64-120gb",
+            ScwInstancesType::X64_15GB => "x64-15gb",
+            ScwInstancesType::X64_30GB => "x64-30gb",
+            ScwInstancesType::X64_60GB => "x64-60gb",
         }
     }
 }
@@ -340,6 +393,8 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::L4_1_24G => write!(f, "l4-1-24g"),
             ScwInstancesType::L4_2_24G => write!(f, "l4-2-24g"),
             ScwInstancesType::L4_4_24G => write!(f, "l4-4-24g"),
+            ScwInstancesType::L40S_1_48G => write!(f, "l40s-1-48g"),
+            ScwInstancesType::L40S_2_48G => write!(f, "l40s-2-48g"),
             ScwInstancesType::PLAY2_MICRO => write!(f, "play2-micro"),
             ScwInstancesType::PLAY2_NANO => write!(f, "play2-nano"),
             ScwInstancesType::PLAY2_PICO => write!(f, "play2-pico"),
@@ -367,6 +422,15 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::PRO2_XXS => write!(f, "pro2-xxs"),
             ScwInstancesType::RENDER_S => write!(f, "render-s"),
             ScwInstancesType::START1_L => write!(f, "start1-l"),
+            ScwInstancesType::START1_M => write!(f, "start1-m"),
+            ScwInstancesType::START1_S => write!(f, "start1-s"),
+            ScwInstancesType::VC1L => write!(f, "vc1l"),
+            ScwInstancesType::VC1M => write!(f, "vc1m"),
+            ScwInstancesType::VC1S => write!(f, "vc1s"),
+            ScwInstancesType::X64_120GB => write!(f, "x64-120gb"),
+            ScwInstancesType::X64_15GB => write!(f, "x64-15gb"),
+            ScwInstancesType::X64_30GB => write!(f, "x64-30gb"),
+            ScwInstancesType::X64_60GB => write!(f, "x64-60gb"),
         }
     }
 }
@@ -403,6 +467,8 @@ impl FromStr for ScwInstancesType {
             "l4-1-24g" => Ok(ScwInstancesType::L4_1_24G),
             "l4-2-24g" => Ok(ScwInstancesType::L4_2_24G),
             "l4-4-24g" => Ok(ScwInstancesType::L4_4_24G),
+            "l40s-1-48g" => Ok(ScwInstancesType::L40S_1_48G),
+            "l40s-2-48g" => Ok(ScwInstancesType::L40S_2_48G),
             "play2-micro" => Ok(ScwInstancesType::PLAY2_MICRO),
             "play2-nano" => Ok(ScwInstancesType::PLAY2_NANO),
             "play2-pico" => Ok(ScwInstancesType::PLAY2_PICO),
@@ -430,6 +496,15 @@ impl FromStr for ScwInstancesType {
             "pro2-xxs" => Ok(ScwInstancesType::PRO2_XXS),
             "render-s" => Ok(ScwInstancesType::RENDER_S),
             "start1-l" => Ok(ScwInstancesType::START1_L),
+            "start1-m" => Ok(ScwInstancesType::START1_M),
+            "start1-s" => Ok(ScwInstancesType::START1_S),
+            "vc1l" => Ok(ScwInstancesType::VC1L),
+            "vc1m" => Ok(ScwInstancesType::VC1M),
+            "vc1s" => Ok(ScwInstancesType::VC1S),
+            "x64-120gb" => Ok(ScwInstancesType::X64_120GB),
+            "x64-15gb" => Ok(ScwInstancesType::X64_15GB),
+            "x64-30gb" => Ok(ScwInstancesType::X64_30GB),
+            "x64-60gb" => Ok(ScwInstancesType::X64_60GB),
             _ => Err(CommandError::new_from_safe_message(format!(
                 "`{s}` instance type is not supported"
             ))),
@@ -521,6 +596,8 @@ mod tests {
                     ScwInstancesType::L4_1_24G => "l4-1-24g",
                     ScwInstancesType::L4_2_24G => "l4-2-24g",
                     ScwInstancesType::L4_4_24G => "l4-4-24g",
+                    ScwInstancesType::L40S_1_48G => "l40s-1-48g",
+                    ScwInstancesType::L40S_2_48G => "l40s-2-48g",
                     ScwInstancesType::PLAY2_MICRO => "play2-micro",
                     ScwInstancesType::PLAY2_NANO => "play2-nano",
                     ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -548,6 +625,15 @@ mod tests {
                     ScwInstancesType::PRO2_XXS => "pro2-xxs",
                     ScwInstancesType::RENDER_S => "render-s",
                     ScwInstancesType::START1_L => "start1-l",
+                    ScwInstancesType::START1_M => "start1-m",
+                    ScwInstancesType::START1_S => "start1-s",
+                    ScwInstancesType::VC1L => "vc1l",
+                    ScwInstancesType::VC1M => "vc1m",
+                    ScwInstancesType::VC1S => "vc1s",
+                    ScwInstancesType::X64_120GB => "x64-120gb",
+                    ScwInstancesType::X64_15GB => "x64-15gb",
+                    ScwInstancesType::X64_30GB => "x64-30gb",
+                    ScwInstancesType::X64_60GB => "x64-60gb",
                 }
                 .to_string(),
                 result_to_string

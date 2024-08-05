@@ -1,10 +1,95 @@
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: false
+    configReloaders: true
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeProxy: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeStateMetrics: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
+    windows: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubelet:
+  serviceMonitor:
+    resource: true
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 90d
+    retentionSize: "40GB"
+    walCompression: true
+    externalUrl: set-by-engine-code
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: set-by-engine-code
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: "50Gi"
+
+prometheusOperator:
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+    requests:
+      cpu: "200m"
+      memory: "1Gi"
+  tls:
+    enabled: false
+  admissionWebhooks:
+    enabled: false
+
 prometheus-node-exporter:
+  priorityClassName: set-by-engine-code
+  resources:
+    limits:
+      cpu: "20m"
+      memory: "32Mi"
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+  prometheus:
+    monitor:
+      enabled: false
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
           - matchExpressions:
-              - key: eks.amazonaws.com/compute-type
-                operator: NotIn
-                values:
-                  - fargate
+            - key: eks.amazonaws.com/compute-type
+              operator: NotIn
+              values:
+                - fargate

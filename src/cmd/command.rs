@@ -6,6 +6,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::cmd::command::CommandError::{ExecutionError, ExitStatusError, Killed, TimeoutError};
 
+use crate::models::abort::Abort;
 use itertools::Itertools;
 use std::time::{Duration, Instant};
 use timeout_readwrite::TimeoutReader;
@@ -39,7 +40,7 @@ impl AbortReason {
 
 pub enum CommandKillerTrigger<'a> {
     Timeout(Instant, Duration),
-    Cancelable(&'a dyn Fn() -> bool),
+    Cancelable(&'a dyn Abort),
 }
 
 const LOGGING_INTERVAL: Duration = Duration::from_secs(120);
@@ -55,7 +56,7 @@ impl<'a> CommandKillerTrigger<'a> {
                 }
             }
             CommandKillerTrigger::Cancelable(func) => {
-                if (func)() {
+                if func.status().should_cancel() {
                     Some(AbortReason::Canceled("Task Canceled".to_string()))
                 } else {
                     None
@@ -88,14 +89,14 @@ impl<'a> CommandKiller<'a> {
         CommandKiller::One(CommandKillerTrigger::Timeout(Instant::now(), timeout))
     }
 
-    pub fn from_cancelable(is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
-        CommandKiller::One(CommandKillerTrigger::Cancelable(is_canceled))
+    pub fn from_cancelable(abort_status: &'a dyn Abort) -> CommandKiller<'a> {
+        CommandKiller::One(CommandKillerTrigger::Cancelable(abort_status))
     }
 
-    pub fn from(timeout: Duration, is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
+    pub fn from(timeout: Duration, abort: &'a dyn Abort) -> CommandKiller<'a> {
         CommandKiller::Two(
             CommandKillerTrigger::Timeout(Instant::now(), timeout),
-            CommandKillerTrigger::Cancelable(is_canceled),
+            CommandKillerTrigger::Cancelable(abort),
         )
     }
 }
@@ -422,7 +423,8 @@ mod tests {
     use crate::cmd::command::{
         does_binary_exist, run_version_command_for, CommandError, CommandKiller, ExecutableCommand, QoveryCommand,
     };
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use crate::models::abort::{AbortStatus, AtomicAbortStatus};
+    use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
@@ -469,7 +471,7 @@ mod tests {
     #[test]
     fn test_command_with_abort() {
         let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
-        let should_kill = Arc::new(AtomicBool::new(false));
+        let should_kill = Arc::new(AtomicAbortStatus::new(AbortStatus::None));
         let should_kill2 = should_kill.clone();
         let barrier = Arc::new(Barrier::new(2));
 
@@ -478,7 +480,7 @@ mod tests {
             move || {
                 barrier.wait();
                 thread::sleep(Duration::from_secs(2));
-                should_kill.store(true, Ordering::Release);
+                should_kill.store(AbortStatus::Requested, Ordering::Release);
             }
         });
 

@@ -67,6 +67,7 @@ resource "aws_iam_role" "karpenter_controller_role" {
       ]
     }
   )
+  tags = local.tags_eks
 }
 
 resource "aws_iam_role_policy" "karpenter_controller" {
@@ -183,6 +184,18 @@ resource "aws_iam_role_policy" "karpenter_controller" {
           "Resource" : "*",
           "Action" : "iam:GetInstanceProfile"
         }
+        {% if enable_karpenter %}
+        ,{
+          "Action": [
+            "sqs:DeleteMessage",
+            "sqs:GetQueueUrl",
+            "sqs:ReceiveMessage"
+          ],
+          "Effect": "Allow",
+          "Resource": aws_sqs_queue.qovery-eks-queue.arn
+          "Sid": "AllowInterruptionQueueActions"
+        }
+        {% endif %}
       ],
       "Version" : "2012-10-17"
     }

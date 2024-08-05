@@ -22,3 +22,4 @@ acme:
   letsEncrypt:
     emailReport: ""
     acmeUrl: ""
+    skipTLSVerify: false

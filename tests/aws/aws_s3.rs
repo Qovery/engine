@@ -312,6 +312,8 @@ fn test_put_file() {
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
+        let tag_0 = "OrganizationLongId=toto".to_string();
+        let tag_1 = "OrganizationId=tata".to_string();
 
         aws_os
             .create_bucket(
@@ -324,11 +326,18 @@ fn test_put_file() {
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
         // compute:
-        let result = aws_os.put_object(bucket_name.as_str(), object_key.as_str(), temp_file.into_temp_path().as_ref());
+        let result = aws_os.put_object(
+            bucket_name.as_str(),
+            object_key.as_str(),
+            temp_file.into_temp_path().as_ref(),
+            Some(vec![tag_0.clone(), tag_1.clone()]),
+        );
 
         // validate:
         assert!(result.is_ok());
-        assert!(aws_os.get_object(bucket_name.as_str(), object_key.as_str()).is_ok());
+        let object = aws_os.get_object(bucket_name.as_str(), object_key.as_str());
+        assert!(object.is_ok());
+        assert_eq!(object.unwrap().tags, vec![tag_0, tag_1]);
 
         // clean-up:
         assert!(aws_os
@@ -377,7 +386,7 @@ fn test_get_file() {
         let tempfile_path = tempfile_path.as_ref();
 
         aws_os
-            .put_object(bucket_name.as_str(), object_key.as_str(), tempfile_path)
+            .put_object(bucket_name.as_str(), object_key.as_str(), tempfile_path, None)
             .unwrap_or_else(|_| {
                 panic!(
                     "error while putting file {} into bucket {bucket_name}",

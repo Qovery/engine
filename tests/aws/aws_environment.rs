@@ -13,20 +13,24 @@ use kube::api::ListParams;
 use kube::Api;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
-use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use base64::engine::general_purpose;
 use base64::Engine;
+use k8s_openapi::api::core::v1::ConfigMap;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
-use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
+use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::runtime::block_on;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
@@ -35,7 +39,7 @@ use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::net::UdpSocket;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use tracing::{span, Level};
@@ -47,7 +51,7 @@ use uuid::Uuid;
 #[test]
 fn aws_test_build_phase() {
     // This test tries to run up to the build phase of the engine
-    // basically building and pushing each applications
+    // basically building and pushing each application
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -595,6 +599,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
+                use_cdn: false,
             };
 
             router.custom_domains = vec![cd];
@@ -674,7 +679,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -748,6 +753,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                &AwsStorageType::GP2.to_k8s_storage_class(),
             );
 
         let mut environment_delete = environment.clone();
@@ -771,8 +777,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -843,7 +848,7 @@ fn redeploy_same_app_with_ebs() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1144,6 +1149,8 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::default(),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = environment
@@ -1249,6 +1256,8 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1368,6 +1377,8 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1478,13 +1489,13 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1534,15 +1545,14 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 failure_threshold: 5,
             }),
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let kube_conn = infra_ctx
-            .kubernetes()
-            .kube_client(infra_ctx.cloud_provider())
-            .expect("kube client is not set");
+        let kube_conn = infra_ctx.mk_kube_client().expect("kube client is not set");
         // ensure default pod affinity is set to preferred
         let preferred = block_on(kube_conn.get_deployments_from_api(
             context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
@@ -1622,10 +1632,14 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .clone()
                 .match_expressions
                 .unwrap();
-            for nf in node_affinity {
-                assert_eq!(nf.key, node_selector_key);
-                assert_eq!(nf.values.unwrap()[0], node_selector_value);
-            }
+            let nf = node_affinity
+                .iter()
+                .find(|node_affinity| node_affinity.key == node_selector_key);
+            assert_ne!(nf, None);
+            assert_eq!(
+                <Option<Vec<String>> as Clone>::clone(&nf.unwrap().values).unwrap()[0],
+                node_selector_value
+            );
         }
 
         // delete
@@ -1690,8 +1704,8 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1741,6 +1755,8 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 failure_threshold: 5,
             }),
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1809,13 +1825,13 @@ fn deploy_container_with_storages_on_aws_eks() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1854,7 +1870,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                     id: to_short_id(&storage_id_1),
                     long_id: storage_id_1,
                     name: "photos1".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: 10,
                     mount_point: "/mnt/photos1".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1863,7 +1879,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                     id: to_short_id(&storage_id_2),
                     long_id: storage_id_2,
                     name: "photos2".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                     size_in_gib: 10,
                     mount_point: "/mnt/photos2".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1872,6 +1888,8 @@ fn deploy_container_with_storages_on_aws_eks() {
             environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1949,8 +1967,8 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 ),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -2000,6 +2018,8 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2020,8 +2040,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -2083,6 +2102,8 @@ fn deploy_container_with_router_on_aws_eks() {
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
         environment.containers = vec![Container {
@@ -2099,8 +2120,8 @@ fn deploy_container_with_router_on_aws_eks() {
             tag: "2.4.56-alpine3.17".to_string(),
             command_args: vec![],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -2153,7 +2174,34 @@ fn deploy_container_with_router_on_aws_eks() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "false".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: true,
+            }]
+        }};
 
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
@@ -2208,16 +2256,19 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}, "foo_3": {"value": "bar_3", "description": "bar_3"}}"#;
+        let job_id = QoveryIdentifier::new_random();
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
         environment.jobs = vec![Job {
-            long_id: Uuid::new_v4(), //Uuid::default(),
-            name: "job test #####".to_string(),
-            kube_name: "job-test".to_string(),
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
             source: JobSource::Image {
                 registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
@@ -2263,6 +2314,117 @@ fn deploy_job_on_aws_eks() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_job_on_aws_eks_with_dockerfile_content() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let job_id = QoveryIdentifier::new_random();
+        //environment.long_id = Uuid::default();
+        //environment.project_long_id = Uuid::default();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            }, //JobSchedule::Cron("* * * * *".to_string()),
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                git_credentials: None,
+                branch: "main".to_string(),
+                commit_id: "168be6d16d8ade877f679ae752de5d095d95b8d0".to_string(),
+                root_path: "/".to_string(),
+                dockerfile_path: None,
+                dockerfile_content: Some(
+                    r#"
+FROM debian:bookworm-slim
+CMD ["/bin/sh", "-c", "echo hello"]
+                    "#
+                    .trim()
+                    .to_string(),
+                ),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2304,6 +2466,8 @@ fn deploy_cronjob_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(),
@@ -2358,7 +2522,27 @@ fn deploy_cronjob_on_aws_eks() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! {},
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::CronJobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -2455,6 +2639,8 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2473,8 +2659,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
 
         let k8s_cronjob_api: Api<CronJob> = Api::namespaced(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("should always contain kube_client")
                 .client()
                 .clone(),
@@ -2524,6 +2709,8 @@ fn build_and_deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         let json_output = r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
         environment.applications = vec![];
         environment.jobs = vec![Job {
@@ -2531,7 +2718,9 @@ fn build_and_deploy_job_on_aws_eks() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
@@ -2539,6 +2728,7 @@ fn build_and_deploy_job_on_aws_eks() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2577,7 +2767,31 @@ fn build_and_deploy_job_on_aws_eks() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -2639,17 +2853,17 @@ fn test_restart_deployment() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
-            min_instances: 3,
-            max_instances: 3,
+            min_instances: 2,
+            max_instances: 2,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
                 Port {
@@ -2695,6 +2909,8 @@ fn test_restart_deployment() {
             mounted_files: vec![],
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2703,7 +2919,7 @@ fn test_restart_deployment() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        sleep(Duration::from_secs(10));
+        sleep(Duration::from_secs(20));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
@@ -2762,7 +2978,7 @@ fn test_restart_statefulset() {
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat TCP6-LISTEN:8080,bind=[::],reuseaddr,fork STDOUT
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
                 "#
                 .to_string(),
             ],
@@ -2772,13 +2988,13 @@ fn test_restart_statefulset() {
                 name: "storage-1".to_string(),
                 mount_point: "/storage".to_string(),
                 size_in_gib: 10,
-                storage_type: StorageType::FastSsd,
+                storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                 snapshot_retention_in_days: 1,
             }],
             mounted_files: vec![],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -2826,6 +3042,8 @@ fn test_restart_statefulset() {
             }),
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2887,7 +3105,9 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
@@ -2895,6 +3115,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2936,6 +3157,8 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2956,8 +3179,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -3028,7 +3250,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         id: to_short_id(&id_1),
                         long_id: id_1,
                         name: "photos_1".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: initial_storage_size,
                         mount_point: "/mnt/photos_1".to_string(),
                         snapshot_retention_in_days: 0,
@@ -3037,7 +3259,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                         id: to_short_id(&id_2),
                         long_id: id_2,
                         name: "photos_2".to_string(),
-                        storage_type: StorageType::Ssd,
+                        storage_class: AwsStorageType::GP2.to_k8s_storage_class(),
                         size_in_gib: initial_storage_size,
                         mount_point: "/mnt/photos_2".to_string(),
                         snapshot_retention_in_days: 0,
@@ -3185,8 +3407,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -3246,6 +3468,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 failure_threshold: 5,
             }),
             advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3375,6 +3599,169 @@ fn deploy_helm_chart() {
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+// 1. Deploy helm chart
+// 2. Check admission controller config map is created with good info
+// 3. Redeploy helm chart with different version
+// 2. Check admission controller config map is updated with new version
+fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_created_and_updated() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![("my-string".to_string(), "1".to_string())],
+            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![],
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // Deploy the helm chart and check config map is well created
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let kube_client = infra_ctx
+            .mk_kube_client()
+            .expect("kube client is not set")
+            .client()
+            .clone();
+        let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, &environment.kube_name);
+        let short_id = to_short_id(&service_id);
+        let config_map_name = format!("{short_id}-admission-controller-config-map");
+
+        let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
+        let config_map_data = config_map.data.unwrap();
+        assert_eq!(config_map_data.len(), 5);
+        let config_map_project_id = config_map_data.get("project-id").expect("Cannot find project-id");
+        let config_map_environment_id = config_map_data
+            .get("environment-id")
+            .expect("Cannot find environment-id");
+        let config_map_service_id = config_map_data.get("service-id").expect("Cannot find service-id");
+        let config_map_service_version = config_map_data
+            .get("service-version")
+            .expect("Cannot find service-version");
+        assert_eq!(
+            &config_map_project_id.to_string(),
+            environment.project_long_id.to_string().as_str()
+        );
+        assert_eq!(&config_map_environment_id.to_string(), environment.long_id.to_string().as_str());
+        assert_eq!(&config_map_service_id.to_string(), service_id.to_string().as_str());
+        assert_eq!(
+            &config_map_service_version.to_string(),
+            "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string().as_str()
+        );
+
+        // Redeploy helm chart
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "b93c8d1b9c0bea63f7ce6a669c758cd6b9c9ece2".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![("my-string".to_string(), "1".to_string())],
+            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![],
+        }];
+
+        // Delete helm chart dir otherwise it would fail
+        let chart_directory = qovery_engine::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("helm_charts/{service_id}"),
+        )
+        .unwrap();
+        let chart_dir = chart_directory.to_str().unwrap();
+        std::fs::remove_dir_all(Path::new(chart_dir)).unwrap();
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
+        let config_map_data = config_map.data.unwrap();
+        let config_map_service_version = config_map_data
+            .get("service-version")
+            .expect("Cannot find service-version");
+        assert_eq!(
+            &config_map_service_version.to_string(),
+            "b93c8d1b9c0bea63f7ce6a669c758cd6b9c9ece2".to_string().as_str()
+        );
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

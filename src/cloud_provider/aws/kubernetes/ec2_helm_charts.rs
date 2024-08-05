@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::helm_charts::alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
@@ -21,6 +22,7 @@ use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
     VpcQoveryNetworkMode,
@@ -45,6 +47,7 @@ pub struct AwsEc2QoveryTerraformConfig {
     pub aws_ec2_public_hostname: String,
     pub aws_ec2_kubernetes_port: String,
     pub aws_aws_account_id: String,
+    pub aws_iam_alb_controller_arn: String,
 }
 
 impl AwsEc2QoveryTerraformConfig {
@@ -59,6 +62,7 @@ impl AwsEc2QoveryTerraformConfig {
     }
 }
 
+#[allow(dead_code)]
 pub struct Ec2ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
@@ -86,6 +90,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     // qovery options form json input
     pub infra_options: Options,
+    pub cluster_advanced_settings: ClusterAdvancedSettings,
 }
 
 pub fn get_aws_ec2_qovery_terraform_config(
@@ -191,6 +196,13 @@ pub fn ec2_aws_helm_charts(
             .managed_dns_resolvers_terraform_format
             .to_string(),
         HelmChartNamespaces::KubeSystem,
+    );
+
+    // ALB controller
+    let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
+        chart_prefix_path,
+        qovery_terraform_config.aws_iam_alb_controller_arn,
+        chart_config_prerequisites.cluster_name.clone(),
     );
 
     let registry_creds = CommonChart {
@@ -341,6 +353,16 @@ pub fn ec2_aws_helm_charts(
         None,
         HelmChartNamespaces::NginxIngress,
         None,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_log_format_escaping
+            .to_model(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_enable_alb_controller,
     )
     .to_common_helm_chart()?;
 
@@ -517,6 +539,13 @@ pub fn ec2_aws_helm_charts(
         Box::new(registry_creds),
         Box::new(cert_manager),
     ];
+
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_eks_enable_alb_controller
+    {
+        prepare_chats_to_deploy.push(Box::new(aws_load_balancer_controller));
+    }
 
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {
         prepare_chats_to_deploy.push(Box::new(qovery_webhook));

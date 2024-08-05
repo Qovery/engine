@@ -22,8 +22,6 @@ use crate::utilities::to_short_id;
 
 pub mod database_instance_type;
 pub mod kubernetes;
-pub mod load_balancers;
-pub mod models;
 pub mod regions;
 
 pub struct AWS {
@@ -84,7 +82,7 @@ impl CloudProvider for AWS {
     }
 
     fn kubernetes_kind(&self) -> KubernetesKind {
-        self.kubernetes_kind.clone()
+        self.kubernetes_kind
     }
 
     fn id(&self) -> &str {

@@ -53,7 +53,7 @@ impl<'a> Transaction<'a> {
             match step {
                 Step::CreateKubernetes => {
                     // create kubernetes
-                    match self.commit_infrastructure(self.engine.kubernetes().on_create()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_create(self.engine)) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while creating infrastructure: {:?}", err);
@@ -63,7 +63,7 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeleteKubernetes => {
                     // delete kubernetes
-                    match self.commit_infrastructure(self.engine.kubernetes().on_delete()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_delete(self.engine)) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while deleting infrastructure: {:?}", err);
@@ -73,7 +73,7 @@ impl<'a> Transaction<'a> {
                 }
                 Step::PauseKubernetes => {
                     // pause kubernetes
-                    match self.commit_infrastructure(self.engine.kubernetes().on_pause()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_pause(self.engine)) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while pausing infrastructure: {:?}", err);

@@ -11,6 +11,15 @@ metadata:
     qovery.com/service-type: job
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.cronjob %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
 spec:
   schedule: "{{ service.cronjob_schedule }}"
   timeZone: "{{ service.cronjob_timezone }}"
@@ -26,8 +35,16 @@ spec:
         qovery.com/service-type: job
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
       annotations:
         qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.pods %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
     spec:
       backoffLimit: {{ service.max_nb_restart }}
       activeDeadlineSeconds: {{ service.max_duration_in_sec }}
@@ -51,8 +68,8 @@ spec:
             nodeAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
                 nodeSelectorTerms:
-            {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
                 - matchExpressions:
+              {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
                     - key: "{{ key }}"
                       operator: In
                       values:

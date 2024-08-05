@@ -1,12 +1,9 @@
-mod application;
-mod container;
 mod database;
 mod database_utils;
 mod job;
 mod router;
 
 use crate::cloud_provider::Kind;
-use std::fmt::{Display, Formatter};
 
 use crate::models::types::{AWSEc2, CloudProvider};
 
@@ -18,8 +15,6 @@ impl CloudProvider for AWSEc2 {
     type AppExtraSettings = AwsEc2AppExtraSettings;
     type DbExtraSettings = AwsEc2DbExtraSettings;
     type RouterExtraSettings = AwsEc2RouterExtraSettings;
-    type StorageTypes = AwsEc2StorageType;
-
     fn cloud_provider() -> Kind {
         Kind::Aws
     }
@@ -42,40 +37,5 @@ impl CloudProvider for AWSEc2 {
 
     fn lib_directory_name() -> &'static str {
         "aws-ec2"
-    }
-
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")]
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub enum AwsEc2StorageType {
-    SC1,
-    ST1,
-    GP2,
-    IO1,
-}
-
-impl Display for AwsEc2StorageType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AwsEc2StorageType::SC1 => write!(f, "SC1"),
-            AwsEc2StorageType::ST1 => write!(f, "ST1"),
-            AwsEc2StorageType::GP2 => write!(f, "GP2"),
-            AwsEc2StorageType::IO1 => write!(f, "IO1"),
-        }
-    }
-}
-
-impl AwsEc2StorageType {
-    pub fn to_k8s_storage_class(&self) -> String {
-        match self {
-            AwsEc2StorageType::SC1 => "aws-ebs-sc1-0",
-            AwsEc2StorageType::ST1 => "aws-ebs-st1-0",
-            AwsEc2StorageType::GP2 => "aws-ebs-gp2-0",
-            AwsEc2StorageType::IO1 => "aws-ebs-io1-0",
-        }
-        .to_string()
     }
 }

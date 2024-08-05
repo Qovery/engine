@@ -11,13 +11,15 @@ use ::function_name::named;
 use bstr::ByteSlice;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
-use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use base64::engine::general_purpose;
 use base64::Engine;
+use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
-use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
+use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
@@ -27,7 +29,7 @@ use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -394,6 +396,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
+                use_cdn: false,
             };
 
             router.custom_domains = vec![cd];
@@ -482,7 +485,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: "scw-sbv-ssd-0".to_string(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -561,6 +564,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
+                "scw-sbv-ssd-0",
             );
 
         let mut environment_delete = environment.clone();
@@ -584,8 +588,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -727,7 +730,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                     id: to_short_id(&id),
                     long_id: id,
                     name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
+                    storage_class: "scw-sbv-ssd-0".to_string(),
                     size_in_gib: storage_size,
                     mount_point: "/mnt/photos".to_string(),
                     snapshot_retention_in_days: 0,
@@ -1093,6 +1096,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = environment
@@ -1213,6 +1218,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1345,6 +1352,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
                 infra_ctx.context(),
                 RouterAdvancedSettings::new(true, None, None, None),
                 infra_ctx.cloud_provider(),
+                vec![],
+                vec![],
             )
             .unwrap();
         let environment_domain = whitelist_all_environment
@@ -1463,8 +1472,8 @@ fn deploy_container_with_no_router_on_scw() {
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1514,6 +1523,8 @@ fn deploy_container_with_no_router_on_scw() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret: false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1594,8 +1605,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 ),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1645,6 +1656,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1665,8 +1678,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -1732,6 +1744,8 @@ fn deploy_container_with_router_on_scw() {
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
@@ -1746,8 +1760,8 @@ fn deploy_container_with_router_on_scw() {
             tag: "2.4.56-alpine3.17".to_string(),
             command_args: vec![],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -1797,7 +1811,30 @@ fn deploy_container_with_router_on_scw() {
                 success_threshold: 1,
                 failure_threshold: 5,
             }),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
 
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
@@ -1855,13 +1892,17 @@ fn deploy_job_on_scw_kapsule() {
         let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: Uuid::new_v4(), //Uuid::default(),
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            }, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
                 registry: Registry::PublicEcr {
                     long_id: Uuid::new_v4(),
@@ -1907,7 +1948,30 @@ fn deploy_job_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! {labels_group_id},
         }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }],
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -2002,6 +2066,8 @@ fn deploy_cronjob_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2097,6 +2163,8 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2145,7 +2213,9 @@ fn build_and_deploy_job_on_scw_kapsule() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -2153,6 +2223,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2191,6 +2262,8 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2247,7 +2320,9 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             name: "job test #####".to_string(),
             kube_name: "job-test".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart {},
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            },
             source: JobSource::Docker {
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -2255,6 +2330,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 root_path: String::from("/"),
                 git_credentials: None,
                 branch: "main".to_string(),
+                dockerfile_content: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2296,6 +2372,8 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 failure_threshold: 5,
             }),
             container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2316,8 +2394,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx
-                .kubernetes()
-                .kube_client(infra_ctx.cloud_provider())
+                .mk_kube_client()
                 .expect("kube client is not set")
                 .client()
                 .clone(),
@@ -2402,8 +2479,8 @@ fn deploy_container_with_tcp_public_port() {
                 .to_string(),
             ],
             entrypoint: None,
-            cpu_request_in_mili: 250,
-            cpu_limit_in_mili: 250,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
             min_instances: 1,
@@ -2463,6 +2540,8 @@ fn deploy_container_with_tcp_public_port() {
             environment_vars_with_infos: btreemap! { "MY_VAR".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode("my_value"), is_secret:false} },
             mounted_files: vec![],
             advanced_settings: Default::default(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: btreeset! {},
         }];
 
         let mut environment_for_delete = environment.clone();

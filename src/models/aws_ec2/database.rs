@@ -325,8 +325,6 @@ where
         }
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("encrypt_disk", &options.encrypt_disk);
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
-        context.insert("database_total_cpus", &self.total_cpus);
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));

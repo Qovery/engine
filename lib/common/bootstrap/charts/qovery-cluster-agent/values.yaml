@@ -82,3 +82,6 @@ rbac:
   create: true
   clusterRole: true
   apiVersion: v1
+
+# Either we rely on cert-manager, or we use a self signed certificate
+useSelfSignCertificate: false

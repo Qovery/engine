@@ -4,6 +4,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::RegistryTags;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -19,7 +20,9 @@ use kube::api::ListParams;
 use kube::Api;
 use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -74,7 +77,6 @@ pub fn delete_cached_image(
 pub fn mirror_image_if_necessary(
     service_id: &Uuid,
     source: &RegistryImageSource,
-    tag_for_mirror: String,
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
@@ -82,27 +84,41 @@ pub fn mirror_image_if_necessary(
 ) -> Result<(), Box<EngineError>> {
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 
-    let registry_info = target.container_registry.registry_info();
-    let mirror_repo_name = get_mirror_repository_name(
-        service_id,
-        target.kubernetes.long_id(),
-        &target.kubernetes.advanced_settings().registry_mirroring_mode,
-    );
-    let dest_image = ContainerImage::new(
-        target.container_registry.registry_info().endpoint.clone(),
-        registry_info.get_image_name(&mirror_repo_name),
-        vec![tag_for_mirror],
-    );
+    let (cluster_container_registry, image_name, image_tag, must_mirror_image) = source
+        .compute_cluster_container_registry_url_with_image_name_and_image_tag(
+            service_id,
+            target.kubernetes.long_id(),
+            &target.kubernetes.advanced_settings().registry_mirroring_mode,
+            target.container_registry.registry_info(),
+        );
+    let dest_image = ContainerImage::new(cluster_container_registry, image_name, vec![image_tag]);
 
     if image_already_exist(&dest_image, target) {
-        logger.info(format!(
-            "🎯 Skipping image mirroring. Image {} already exists in the registry",
-            source.image
-        ));
+        let skip_image_mirroring_message = if must_mirror_image {
+            format!(
+                "🎯 Skipping image mirroring: image {} already exists in the registry",
+                source.image
+            )
+        } else {
+            "🎯 Skipping image mirroring: service and cluster registries are the same".to_string()
+        };
+        logger.info(skip_image_mirroring_message);
         mirror_record.stop(StepStatus::Skip);
         Ok(())
     } else {
-        let result = mirror_image(service_id, source, &dest_image, target, logger, event_details.clone());
+        let result = mirror_image(
+            service_id,
+            source,
+            &dest_image,
+            target,
+            logger,
+            event_details.clone(),
+            RegistryTags {
+                environment_id: target.environment.id.clone(),
+                project_id: target.environment.project_id.clone(),
+                resource_ttl: target.kubernetes.advanced_settings().resource_ttl(),
+            },
+        );
         mirror_record.stop(if result.is_ok() {
             StepStatus::Success
         } else {
@@ -123,9 +139,13 @@ fn mirror_image(
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
+    tags: RegistryTags,
 ) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
-    let url = source.registry.get_url_with_credentials();
+    let url = source.registry.get_url_with_credentials().map_err(|_| {
+        logger.warning("⚠️Cannot get the registry credentials".to_string());
+        EngineError::new_error_cannot_get_registry_credentials(event_details.clone())
+    })?;
     if url.password().is_some() {
         logger.info(format!(
             "🔓 Login to registry {} as user {}",
@@ -142,11 +162,12 @@ fn mirror_image(
 
         if let Err(err) = login_ret {
             let err = EngineError::new_docker_error(event_details, err.error);
-            let user_err = EngineError::new_engine_error(
-                err,
-                format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
-                None,
+            let msg = format!(
+                "❌ Failed to login to registry {} due to {}",
+                url.host_str().unwrap_or_default(),
+                err
             );
+            let user_err = EngineError::new_engine_error(err, msg, None);
             return Err(Box::new(user_err));
         }
     }
@@ -164,7 +185,7 @@ fn mirror_image(
         .create_repository(
             mirror_repo_name.as_str(),
             target.kubernetes.advanced_settings().registry_image_retention_time_sec,
-            target.kubernetes.advanced_settings().resource_ttl(),
+            tags,
         )
         .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
@@ -174,31 +195,69 @@ fn mirror_image(
         vec![source.tag.to_string()],
     );
 
-    if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
-        // Not setting 10min timeout because we need to send at least a log every 10min
-        match target.docker.mirror(
-            &source_image,
-            dest_image,
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 9), target.should_abort),
-        ) {
-            Ok(ret) => OperationResult::Ok(ret),
-            Err(err) if err.is_aborted() => OperationResult::Err(err),
-            Err(err) => {
-                error!("docker mirror error: {:?}", err);
-                logger.info("🪞 Retrying Mirroring image due to error...".to_string());
-                OperationResult::Retry(err)
+    let should_abort_waiting_thread = AtomicBool::new(false);
+    let current_span = tracing::Span::current();
+    let result = thread::scope(|scope| {
+        let waiting_thread = scope.spawn(|| {
+            // making sure to pass the current span to the new thread not to lose any tracing info
+            let _span = current_span.enter();
+            let mut iterations: u16 = 0;
+            loop {
+                thread::sleep(Duration::from_secs(1));
+                if should_abort_waiting_thread.load(Ordering::Relaxed) {
+                    break;
+                }
+                iterations += 1;
+                // Send a message every minute to reassure user
+                if iterations % 60 == 0 {
+                    logger.info("🪞 Mirroring is still in progress...".to_string());
+                    iterations = 0;
+                }
             }
-        }
-    }) {
-        let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
-        let user_err = EngineError::new_docker_error(event_details, err.error);
+        });
+        let docker_mirror_thread = scope.spawn(|| {
+            // making sure to pass the current span to the new thread not to lose any tracing info
+            let _span = current_span.enter();
+            if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
+                match target.docker.mirror(
+                    &source_image,
+                    dest_image,
+                    &mut |line| info!("{}", line),
+                    &mut |line| warn!("{}", line),
+                    // Set timeout at 15min (arbitrary value)
+                    &CommandKiller::from(Duration::from_secs(60 * 15), target.abort),
+                ) {
+                    Ok(ret) => OperationResult::Ok(ret),
+                    Err(err) if err.is_aborted() => OperationResult::Err(err),
+                    Err(err) => {
+                        error!("docker mirror error: {:?}", err);
+                        logger.info("🪞 Retrying Mirroring image due to error...".to_string());
+                        OperationResult::Retry(err)
+                    }
+                }
+            }) {
+                let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
+                logger.warning(msg.clone());
+                let user_err = EngineError::new_docker_error(event_details, err.error);
 
-        return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
-    }
+                return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
+            }
 
-    Ok(())
+            Ok(())
+        });
+
+        // Wait docker mirror thread to finish
+        let result = docker_mirror_thread.join().unwrap();
+
+        // Release waiting thread
+        should_abort_waiting_thread.store(true, Ordering::Relaxed);
+        waiting_thread.join().unwrap();
+
+        // Return docker mirroring thread result
+        result
+    });
+
+    result
 }
 
 pub enum KubeObjectKind {

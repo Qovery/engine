@@ -21,7 +21,6 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
-use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::fs::workspace_directory;
 use qovery_engine::io_models::context::Context;
@@ -31,8 +30,9 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
+use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
+use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
-use std::sync::Arc;
 use tracing::{span, Level};
 
 pub const KUBERNETES_MIN_NODES: i32 = 5;
@@ -70,6 +70,7 @@ pub fn cluster_test(
         KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
+        KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
 
     let mut engine = match provider_kind {
@@ -115,7 +116,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
         ),
-        Kind::SelfManaged => todo!(),
+        Kind::OnPremise => todo!(),
     };
     // Bootstrap
     let mut bootstrap_tx = Transaction::new(&engine).unwrap();
@@ -144,7 +145,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }
@@ -216,7 +217,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
-                Kind::SelfManaged => todo!(),
+                Kind::OnPremise => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -281,7 +282,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                 ),
-                Kind::SelfManaged => todo!(),
+                Kind::OnPremise => todo!(),
             };
             let mut upgrade_tx = Transaction::new(&engine).unwrap();
             let mut delete_tx = Transaction::new(&engine).unwrap();
@@ -312,7 +313,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| false) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }
@@ -329,9 +330,8 @@ pub fn cluster_test(
 
 pub fn get_environment_test_kubernetes(
     context: &Context,
-    cloud_provider: Arc<dyn CloudProvider>,
+    cloud_provider: &dyn CloudProvider,
     kubernetes_version: KubernetesVersion,
-    dns_provider: Arc<dyn DnsProvider>,
     logger: Box<dyn Logger>,
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -352,7 +352,7 @@ pub fn get_environment_test_kubernetes(
     let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -366,7 +366,6 @@ pub fn get_environment_test_kubernetes(
                     region.clone(),
                     region.get_zones_to_string(),
                     cloud_provider,
-                    dns_provider,
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
@@ -385,7 +384,7 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide);
+            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -400,7 +399,6 @@ pub fn get_environment_test_kubernetes(
                     region.clone(),
                     region.get_zones_to_string(),
                     cloud_provider,
-                    dns_provider,
                     options,
                     ec2_kubernetes_instance(),
                     logger,
@@ -426,9 +424,8 @@ pub fn get_environment_test_kubernetes(
                     kubernetes_version,
                     zone,
                     cloud_provider,
-                    dns_provider,
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
+                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
@@ -451,9 +448,12 @@ pub fn get_environment_test_kubernetes(
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region,
-                    cloud_provider,
-                    dns_provider,
-                    Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide),
+                    Gke::kubernetes_cluster_options(
+                        secrets.clone(),
+                        None,
+                        EngineLocation::ClientSide,
+                        vpc_network_mode,
+                    ),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,
@@ -469,6 +469,7 @@ pub fn get_environment_test_kubernetes(
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
+        KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
     };
 
     kubernetes

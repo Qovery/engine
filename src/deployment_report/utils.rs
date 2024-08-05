@@ -496,7 +496,6 @@ pub fn exit_code_to_msg(exit_code: i32) -> Option<&'static str> {
 }
 
 pub trait QPodExt {
-    fn restart_count(&self) -> u32;
     fn container_states(&self) -> BTreeMap<String, QContainerState>;
     fn is_starting(&self) -> bool;
     fn is_failing(&self) -> Option<&str>;
@@ -504,17 +503,6 @@ pub trait QPodExt {
 }
 
 impl QPodExt for Pod {
-    fn restart_count(&self) -> u32 {
-        match &self.status {
-            None => 0,
-            Some(status) => status
-                .container_statuses
-                .iter()
-                .flatten()
-                .fold(0, |acc, status| acc + status.restart_count as u32),
-        }
-    }
-
     fn container_states(&self) -> BTreeMap<String, QContainerState> {
         match &self.status {
             None => BTreeMap::new(),
@@ -624,10 +612,7 @@ impl QPodExt for Pod {
     }
 
     fn service_version(&self) -> Option<String> {
-        let Some(annotations) = &self.metadata.annotations else {
-            return None;
-        };
-
+        let annotations = &self.metadata.annotations.clone()?;
         annotations.get("qovery.com/service-version").cloned()
     }
 }

@@ -1,4 +1,7 @@
 fullnameOverride: cert-manager
+global:
+  leaderElection:
+    namespace: qovery
 installCRDs: true
 replicaCount: 1
 startupapicheck:

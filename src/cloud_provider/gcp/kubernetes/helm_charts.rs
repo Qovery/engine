@@ -5,18 +5,23 @@ use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
+use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
+    ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -32,12 +37,13 @@ use crate::errors::CommandError;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
-use crate::models::gcp::JsonCredentials;
+use crate::models::gcp::{GcpStorageType, JsonCredentials};
 use crate::models::third_parties::LetsEncryptConfig;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
+use time::Duration;
 use url::Url;
 
 pub struct ChartsConfigPrerequisites {
@@ -158,8 +164,8 @@ pub fn gcp_helm_charts(
             ));
         }
     };
-    let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let _prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
+    let prometheus_namespace = HelmChartNamespaces::Qovery;
+    let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Qovery;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
@@ -167,7 +173,7 @@ pub fn gcp_helm_charts(
     let q_storage_class_chart = QoveryStorageClassChart::new(
         chart_prefix_path,
         CloudProviderKind::Gcp,
-        HashSet::from_iter(vec![QoveryStorageType::Ssd, QoveryStorageType::Hdd]), // TODO(benjaminch): Should add Cold and Nvme?
+        HashSet::from_iter(vec![QoveryStorageType::Ssd, QoveryStorageType::Hdd]), // TODO(ENG-1800): Add Cold and Nvme
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
     )
     .to_common_helm_chart()?;
@@ -189,13 +195,13 @@ pub fn gcp_helm_charts(
             .to_string(),
         chart_config_prerequisites.cluster_id.to_string(),
         UpdateStrategy::RollingUpdate,
-        false,
+        true,
         HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
     // Metrics server is built-in GCP cluster, no need to manage it
-
+    // VPA is built-in GCP cluster, no need to manage it
     let loki: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(Box::new(
@@ -214,13 +220,16 @@ pub fn gcp_helm_charts(
                     bucketname: Some(chart_config_prerequisites.logs_bucket_name.to_string()),
                 }),
                 get_chart_override_fn.clone(),
-                false,
+                true,
+                Some(500), // GCP need at least 500m for pod with antiAffinity
                 HelmChartResourcesConstraintType::Constrained(HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(500), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
                     request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
                 }),
+                HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
+                false,
             )
             .to_common_helm_chart()?,
         )),
@@ -234,7 +243,7 @@ pub fn gcp_helm_charts(
                 HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
-                false,
+                true,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
             )
@@ -242,22 +251,63 @@ pub fn gcp_helm_charts(
         )),
     };
 
-    // TODO(benjaminch): VPA
-    // TODO(benjaminch): Kube prometheus stack
-    // TODO(benjaminch): Prometheus adapter
-    // TODO(benjaminch): Kube state metrics
-    // TODO(benjaminch): Grafana
+    // Kube prometheus stack
+    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled
+    {
+        false => None,
+        true => Some(Box::new(
+            KubePrometheusStackChart::new(
+                chart_prefix_path,
+                GcpStorageType::Balanced.to_k8s_storage_class(),
+                prometheus_internal_url.to_string(),
+                prometheus_namespace,
+                true,
+                get_chart_override_fn.clone(),
+                true,
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
+
+    // Prometheus adapter
+    let prometheus_adapter: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(Box::new(
+            PrometheusAdapterChart::new(
+                chart_prefix_path,
+                prometheus_internal_url.clone(),
+                prometheus_namespace,
+                get_chart_override_fn.clone(),
+                true,
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
+
+    // Kube state metrics
+    let kube_state_metrics: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(Box::new(
+            KubeStateMetricsChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Qovery,
+                true,
+                get_chart_override_fn.clone(),
+            )
+            .to_common_helm_chart()?,
+        )),
+    };
 
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(benjaminch): should be activated once prometheus will be installed
+        chart_config_prerequisites.ff_metrics_history_enabled,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         get_chart_override_fn.clone(),
-        false,
+        true,
         HelmChartNamespaces::Qovery,
         HelmChartNamespaces::Qovery, // Leader election defaults to kube-system which is not permitted on GKE autopilot
     )
@@ -315,7 +365,7 @@ pub fn gcp_helm_charts(
             ),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        false, // chart_config_prerequisites.ff_metrics_history_enabled, TODO(benjaminch): should be activated once prometheus will be installed
+        chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Gcp,
@@ -337,12 +387,20 @@ pub fn gcp_helm_charts(
         ),
         HelmChartNamespaces::Qovery,
         None,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_enable_client_ip,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_log_format_escaping
+            .to_model(),
+        false, // only for AWS
     )
     .to_common_helm_chart()?;
 
     // K8s Event Logger
     let k8s_event_logger =
-        K8sEventLoggerChart::new(chart_prefix_path, false, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
     // Qovery cluster agent
     let qovery_cluster_agent = QoveryClusterAgentChart::new(
@@ -369,7 +427,7 @@ pub fn gcp_helm_charts(
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
-        false,
+        true,
     )
     .to_common_helm_chart()?;
 
@@ -395,18 +453,32 @@ pub fn gcp_helm_charts(
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         promtail,
+        kube_prometheus_stack,
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, prometheus_adapter, kube_state_metrics];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
-    let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(cert_manager_config)),
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(k8s_event_logger)),
     ];
+
+    // pdb infra
+    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
+        let pdb_infra = QoveryPdbInfraChart::new(
+            chart_prefix_path,
+            HelmChartNamespaces::Qovery,
+            prometheus_namespace,
+            loki_namespace,
+        )
+        .to_common_helm_chart()?;
+
+        level_7.push(Some(Box::new(pdb_infra)));
+    }
 
     Ok(vec![
         level_1.into_iter().flatten().collect(),

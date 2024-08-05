@@ -1,4 +1,5 @@
 use crate::cloud_provider::gcp::kubernetes::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
+use crate::cloud_provider::models::VpcQoveryNetworkMode;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::models::gcp::io::JsonCredentials;
 use crate::models::gcp::JsonCredentials as GkeJsonCredentials;
@@ -52,6 +53,8 @@ pub struct GkeOptions {
     pub services_ipv4_cidr_block: Option<String>,
     #[serde(default)]
     pub user_provided_network: Option<UserProvidedVPCNetwork>,
+    #[serde(default)]
+    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: String,
@@ -128,6 +131,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             GkeJsonCredentials::try_from(value.gcp_credentials)
                 .map_err(|e| format!("Cannot parse JSON credentials: {e}"))?,
             vpc_mode,
+            value.vpc_qovery_network_mode,
             value.tls_email_report,
             Time::parse(
                 value.cluster_maintenance_start_time.as_str(),
@@ -189,6 +193,7 @@ mod tests {
             cluster_ipv4_cidr_block: None,
             services_ipv4_cidr_block: None,
             user_provided_network: None,
+            vpc_qovery_network_mode: None,
         };
 
         // execute & validate:

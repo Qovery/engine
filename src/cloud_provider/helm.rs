@@ -463,7 +463,7 @@ pub trait HelmChart: Send {
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config, envs)?;
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
 
         match chart_info.action {
             Deploy => {
@@ -631,7 +631,7 @@ fn deploy_parallel_charts(
             let current_span = tracing::Span::current();
             let handle = s.spawn(move || {
                 // making sure to pass the current span to the new thread not to lose any tracing info
-                let _ = current_span.enter();
+                let _span = current_span.enter();
                 chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
             });
 
@@ -681,7 +681,7 @@ pub fn deploy_charts_levels(
     dry_run: bool,
 ) -> Result<(), HelmChartError> {
     // first show diff
-    let helm = Helm::new(kubernetes_config, envs)?;
+    let helm = Helm::new(Some(kubernetes_config), envs)?;
 
     for level in charts {
         // Show diff for all chart in this state
@@ -785,14 +785,15 @@ impl CommonChart {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ServiceChart {
     pub chart_info: ChartInfo,
+    helm: Helm,
 }
 
 impl ServiceChart {
-    pub fn new(chart_info: ChartInfo) -> Self {
-        ServiceChart { chart_info }
+    pub fn new(helm: Helm, chart_info: ChartInfo) -> Self {
+        ServiceChart { chart_info, helm }
     }
 }
 
@@ -829,7 +830,7 @@ impl HelmChart for CommonChart {
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
-        let helm = Helm::new(kubernetes_config, envs)?;
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
 
         // installation checker
         let chart_payload_res = match &self.chart_installation_checker {
@@ -878,18 +879,16 @@ impl HelmChart for ServiceChart {
 
     fn exec(
         &self,
-        kubernetes_config: &Path,
-        envs: &[(&str, &str)],
+        _kubernetes_config: &Path,
+        _envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config, envs)?;
-
         match chart_info.action {
             Deploy => {
-                let _ = helm.upgrade_diff(chart_info, &[]);
-                match helm.upgrade(chart_info, &[], cmd_killer) {
+                let _ = self.helm.upgrade_diff(chart_info, &[]);
+                match self.helm.upgrade(chart_info, &[], cmd_killer) {
                     Ok(_) => {}
                     Err(e) => {
                         return Err(HelmChartError::HelmError(e));
@@ -897,7 +896,8 @@ impl HelmChart for ServiceChart {
                 };
             }
             HelmAction::Destroy => {
-                helm.uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
+                self.helm
+                    .uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
             HelmAction::Skip => {}
         }

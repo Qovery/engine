@@ -51,15 +51,31 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            - name: https
+              containerPort: 8080
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: 8080
+              scheme: HTTPS
             failureThreshold: 10
             periodSeconds: 60
             timeoutSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/certs
+              readOnly: true
+      volumes:
+        - name: tls-certs
+          secret:
+          {{- if .Values.useSelfSignCertificate }}
+            secretName: {{ include "qovery-cluster-agent.fullname" . }}-self-signed-tls
+          {{- else }}
+            secretName: {{ include "qovery-cluster-agent.fullname" . }}-tls
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

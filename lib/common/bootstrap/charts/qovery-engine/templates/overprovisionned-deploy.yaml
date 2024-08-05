@@ -18,7 +18,10 @@ spec:
       priorityClassName: qovery-engine-overprovisioning
       nodeSelector:
         kubernetes.io/arch: amd64
+      terminationGracePeriodSeconds: 1
       containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -45,7 +48,10 @@ spec:
       priorityClassName: qovery-engine-overprovisioning
       nodeSelector:
         kubernetes.io/arch: arm64
+      terminationGracePeriodSeconds: 1
       containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
       - name: qovery-engine-overprovisionning
         # use engine image to warm up the cache
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

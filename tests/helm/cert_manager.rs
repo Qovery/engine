@@ -86,7 +86,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
     let vault_secrets = FuncTestsSecrets::new();
     let mut kube_config = dirs::home_dir().unwrap();
     kube_config.push(".kube/config");
-    let helm = Helm::new(kube_config.to_str().unwrap(), &[]).unwrap();
+    let helm = Helm::new(Some(kube_config.to_str().unwrap()), &[]).unwrap();
     let cert_manager = CommonChart {
         chart_info: ChartInfo {
             name: "cert-manager".to_string(),

@@ -17,7 +17,7 @@ labels:
   app: qovery-shell-agent
 
 environmentVariables:
-  {}
+  RUST_LIB_BACKTRACE: "0"
   #CLOUD_PROVIDER: ""
   #CLOUD_REGION: ""
   #AGENT_ID: ""

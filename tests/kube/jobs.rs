@@ -5,7 +5,7 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use qovery_engine::io_models::container::Registry;
-use qovery_engine::io_models::job::{JobSchedule, JobSource};
+use qovery_engine::io_models::job::{JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::transaction::TransactionResult;
@@ -87,7 +87,9 @@ fn should_have_mounted_files_as_volume() {
         job.name = job_id.short().to_string();
         job.long_id = job_id.to_uuid();
         job.force_trigger = true;
-        job.schedule = JobSchedule::OnStart {};
+        job.schedule = JobSchedule::OnStart {
+            lifecycle_type: LifecycleType::TERRAFORM,
+        };
 
         // attaching job to env
         ea.jobs = vec![cron_job, job];

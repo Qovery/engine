@@ -138,6 +138,8 @@ pub enum SupportedCharts {
     QoveryShellAgent,
     #[display("qovery-engine")]
     QoveryEngine,
+    #[display("qovery-priority-class")]
+    PriorityClass,
 }
 
 #[cfg(test)]
@@ -145,8 +147,9 @@ mod tests {
     use std::{fs, io, path::Path};
 
     use regex::Regex;
+    use tera::{Context, Tera};
 
-    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart};
+    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart, SupportedCharts};
 
     pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(&destination)?;
@@ -200,6 +203,22 @@ mod tests {
                     };
 
                     let override_values = fs::read_to_string(file).unwrap();
+                    let override_values = if chart.name == SupportedCharts::IngressNginx {
+                        let mut tera = Tera::default();
+                        match tera.add_raw_template("self-managed-template-nginx", &override_values) {
+                            Ok(_) => {}
+                            Err(_) => return override_values,
+                        }
+
+                        let mut context = Context::new();
+                        context.insert("enable_karpenter", &false);
+
+                        tera.render("self-managed-template-nginx", &context)
+                            .unwrap_or(override_values)
+                    } else {
+                        override_values
+                    };
+
                     let replace_values = override_values
                         // add Yaml indentation to validate Yaml
                         .replace('\n', "\n  ")
@@ -272,6 +291,7 @@ mod tests {
     pub fn generate_helm_chart() {
         use semver::Version;
         use url::Url;
+        use walkdir::WalkDir;
 
         use crate::cloud_provider::self_managed::chart_gen::{
             chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
@@ -281,9 +301,10 @@ mod tests {
         };
 
         use super::QoverySelfManagedChart;
-        use std::{fs, path::Path, process::Command};
+        use std::{fs, io::Read, path::Path, process::Command};
 
         // create chart directories
+        dotenv::dotenv().ok();
         let prefix = std::env::var("WORKSPACE_ROOT_DIR").unwrap();
         let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", &prefix);
         fs::create_dir_all(&qovery_chart_path).unwrap();
@@ -383,6 +404,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
             //     category: ChartCategory::Qovery,
@@ -473,6 +500,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
             // ChartMeta {
             //     name: SupportedCharts::QoveryEngine,
             //     category: ChartCategory::Qovery,
@@ -550,12 +583,18 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_gcp(),
@@ -627,12 +666,18 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_gcp(),
@@ -646,7 +691,7 @@ mod tests {
         scaleway_qovery_chart.charts_source_path = vec![
             ChartMeta {
                 name: SupportedCharts::QoveryScalewayStorageClass,
-                category: ChartCategory::Gcp,
+                category: ChartCategory::Scaleway,
                 source_path: ChartSourcePath::ScalewayBootstrapCharts,
                 values_source_path: None,
             },
@@ -710,6 +755,12 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_scaleway(),
@@ -723,7 +774,7 @@ mod tests {
         scaleway_qovery_chart_demo.charts_source_path = vec![
             ChartMeta {
                 name: SupportedCharts::QoveryScalewayStorageClass,
-                category: ChartCategory::Gcp,
+                category: ChartCategory::Scaleway,
                 source_path: ChartSourcePath::ScalewayBootstrapCharts,
                 values_source_path: None,
             },
@@ -781,17 +832,88 @@ mod tests {
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
             },
-            // ChartMeta {
-            //     name: SupportedCharts::QoveryEngine,
-            //     category: ChartCategory::Qovery,
-            //     source_path: ChartSourcePath::CommonBoostrapCharts,
-            //     values_source_path: None,
-            // },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
         ];
         generate_config_file(
             ValuesFile::new_scaleway(),
             "values-demo-scaleway.yaml".to_string(),
             scaleway_qovery_chart_demo.clone(),
+            prefix.clone(),
+        );
+
+        // Local demo
+        let mut local_demo_charts = minimal_qovery_chart.clone();
+        local_demo_charts.charts_source_path = vec![
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::DNS,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+        ];
+        generate_config_file(
+            ValuesFile::new_local(),
+            "values-demo-local.yaml".to_string(),
+            local_demo_charts.clone(),
             prefix.clone(),
         );
 
@@ -867,5 +989,35 @@ mod tests {
             Ok(_) => println!("helm lint ok"),
             Err(e) => panic!("helm lint failed: {e}"),
         }
+
+        // assert all generated files do not contain jinja templating like '{{ }}' or '{% %}'
+        for entry in WalkDir::new(aws_qovery_chart.destination).max_depth(1) {
+            let entry = entry.expect("failed to read folder entry {entry}");
+            if entry.file_type().is_file() {
+                let file_path = entry.path();
+
+                let mut file_content = String::new();
+                fs::File::open(file_path)
+                    .expect("can't open file {file_path}")
+                    .read_to_string(&mut file_content)
+                    .unwrap();
+
+                assert!(
+                    contains_only_valid_chars(&file_content),
+                    "File {} contains invalid chars. No Jinja is allowed here.",
+                    file_path.display()
+                );
+            }
+        }
+    }
+
+    pub fn contains_only_valid_chars(content: &str) -> bool {
+        let invalid_patterns = ["{{", "}}", "{%", "%}"];
+        for pattern in &invalid_patterns {
+            if content.contains(pattern) {
+                return false;
+            }
+        }
+        true
     }
 }

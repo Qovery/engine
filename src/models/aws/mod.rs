@@ -1,16 +1,15 @@
-mod application;
-mod container;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use crate::cloud_provider::Kind;
+use crate::models::types::CloudProvider;
+use crate::models::types::AWS;
+use crate::models::ToCloudProviderFormat;
+
 mod database;
 mod database_utils;
 mod job;
 mod router;
-
-use crate::cloud_provider::Kind;
-use std::fmt::Display;
-use std::fmt::Formatter;
-
-use crate::models::types::CloudProvider;
-use crate::models::types::AWS;
 
 pub struct AwsAppExtraSettings {}
 pub struct AwsDbExtraSettings {}
@@ -20,7 +19,6 @@ impl CloudProvider for AWS {
     type AppExtraSettings = AwsAppExtraSettings;
     type DbExtraSettings = AwsDbExtraSettings;
     type RouterExtraSettings = AwsRouterExtraSettings;
-    type StorageTypes = AwsStorageType;
 
     fn cloud_provider() -> Kind {
         Kind::Aws
@@ -45,29 +43,27 @@ impl CloudProvider for AWS {
     fn lib_directory_name() -> &'static str {
         "aws"
     }
-
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-        &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")]
-    }
 }
 
 impl AWS {}
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum AwsStorageType {
-    SC1,
-    ST1,
     GP2,
-    IO1,
+}
+
+impl ToCloudProviderFormat for AwsStorageType {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            AwsStorageType::GP2 => "gp2",
+        }
+    }
 }
 
 impl Display for AwsStorageType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AwsStorageType::SC1 => write!(f, "SC1"),
-            AwsStorageType::ST1 => write!(f, "ST1"),
             AwsStorageType::GP2 => write!(f, "GP2"),
-            AwsStorageType::IO1 => write!(f, "IO1"),
         }
     }
 }
@@ -75,10 +71,7 @@ impl Display for AwsStorageType {
 impl AwsStorageType {
     pub fn to_k8s_storage_class(&self) -> String {
         match self {
-            AwsStorageType::SC1 => "aws-ebs-sc1-0",
-            AwsStorageType::ST1 => "aws-ebs-st1-0",
             AwsStorageType::GP2 => "aws-ebs-gp2-0",
-            AwsStorageType::IO1 => "aws-ebs-io1-0",
         }
         .to_string()
     }

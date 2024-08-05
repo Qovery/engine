@@ -53,7 +53,7 @@ resource "aws_instance" "ec2_instance" {
   key_name = aws_key_pair.user_ssh_key.key_name
   {%- endif %}
 
-  # ebs csi driver
+  # ebs csi driver + alb controller
   iam_instance_profile = aws_iam_instance_profile.aws_ebs_csi_driver.name
 
   # k3s install
@@ -71,6 +71,10 @@ resource "aws_instance" "ec2_instance" {
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = var.ec2_metadata_imds_version
+    # https://github.com/kubernetes/autoscaler/issues/3592
+    # hop limit should be set to 2 for https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#using-the-amazon-ec2-instance-metadata-server-version-2-imdsv2
+    http_put_response_hop_limit = 2
+    instance_metadata_tags = "enabled"
   }
 
   depends_on = [
@@ -140,7 +144,8 @@ while [ ! -f /etc/rancher/k3s/k3s.yaml ] ; do
     sleep 1
 done
 
-public_hostname="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+public_hostname="$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)"
 sed "s/127.0.0.1/$public_hostname/g" /etc/rancher/k3s/k3s.yaml > $NEW_KUBECONFIG_PATH
 sed -i "s/:6443/:${random_integer.kubernetes_external_port.result}/g" $NEW_KUBECONFIG_PATH
 aws s3 cp $NEW_KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME --region {{ aws_region }}
@@ -244,12 +249,18 @@ done
 
 # 169.254.169.254 is an internal static ip used by aws to retrieve nodes info without using the cli
 # https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html
-instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-local_ip=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
-public_ip=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+instance_id=$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+local_ip=$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+public_ip=$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
 flannel_iface=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
-provider_id="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-public_hostname_tls_san="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+provider_id="$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)"
+public_hostname_tls_san="$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)"
 
 CUR_HOSTNAME=$(cat /etc/hostname)
 NEW_HOSTNAME=$instance_id
@@ -300,7 +311,8 @@ while [ ! -f /etc/rancher/k3s/k3s.yaml ] ; do
     sleep 1
 done
 
-public_hostname="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+public_hostname="$(TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+&& curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname)"
 sed "s/127.0.0.1/$public_hostname/g" /etc/rancher/k3s/k3s.yaml > "$NEW_KUBECONFIG_PATH"
 sed -i "s/:6443/:${var.k3s_config.exposed_port}/g" "$NEW_KUBECONFIG_PATH"
 aws s3 cp "$NEW_KUBECONFIG_PATH" s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME --region "{{ aws_region }}"

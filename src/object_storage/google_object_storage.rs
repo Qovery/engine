@@ -97,6 +97,28 @@ impl ObjectStorage for GoogleOS {
         }
     }
 
+    fn update_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_versioning_activated: bool,
+    ) -> Result<Bucket, ObjectStorageError> {
+        if let Err(err) = self.get_bucket(bucket_name) {
+            return Err(ObjectStorageError::CannotUpdateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: err.to_string(),
+            });
+        }
+
+        // Update the bucket
+        match self.service.update_bucket(bucket_name, bucket_versioning_activated) {
+            Ok(o) => Ok(o),
+            Err(e) => Err(ObjectStorageError::CannotUpdateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
+    }
+
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
         match self.service.get_bucket(bucket_name) {
             Ok(o) => Ok(o),
@@ -132,6 +154,15 @@ impl ObjectStorage for GoogleOS {
         }
     }
 
+    fn delete_bucket_non_blocking(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+        self.service
+            .delete_bucket_non_blocking(bucket_name, self.region.clone())
+            .map_err(|e| ObjectStorageError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            })
+    }
+
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
         match self.service.get_object(bucket_name, object_key) {
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
@@ -148,6 +179,7 @@ impl ObjectStorage for GoogleOS {
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
+        _tags: Option<Vec<String>>,
     ) -> Result<BucketObject, ObjectStorageError> {
         let file_content = std::fs::read(file_path).map_err(|e| ObjectStorageError::CannotUploadFile {
             bucket_name: bucket_name.to_string(),
@@ -356,42 +388,6 @@ mod tests {
     }
 
     #[test]
-    fn create_bucket_failure_test() {
-        // setup:
-        let bucket_name = "test-bucket";
-        let raw_error_message = "create error message";
-
-        let mut service_mock = ObjectStorageService::faux();
-        faux::when!(service_mock.delete_bucket(bucket_name, _)).then_return(Err(
-            ObjectStorageServiceError::CannotCreateBucket {
-                bucket_name: bucket_name.to_string(),
-                raw_error_message: raw_error_message.to_string(),
-            },
-        ));
-
-        let object_storage = GoogleOS::new(
-            "123",
-            Uuid::new_v4(),
-            "test_123",
-            "project_123",
-            GcpStorageRegion::EuropeWest9,
-            Arc::from(service_mock),
-        );
-
-        // execute:
-        let deleted_bucket = object_storage.delete_bucket(bucket_name, BucketDeleteStrategy::HardDelete);
-
-        // verify:
-        assert_eq!(
-            ObjectStorageError::CannotDeleteBucket {
-                bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Cannot create bucket `{}`: \"{}\"", bucket_name, raw_error_message),
-            },
-            deleted_bucket.unwrap_err()
-        );
-    }
-
-    #[test]
     fn get_bucket_success_test() {
         // setup:
         let bucket_name = "test-bucket";
@@ -466,6 +462,111 @@ mod tests {
     }
 
     #[test]
+    fn update_bucket_success_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let bucket_ttl = Some(Duration::from_secs(7 * 24 * 60 * 60)); // 7 days
+        let bucket_region = GcpStorageRegion::EuropeWest9;
+        let bucket_versioning_test_cases = vec![true, false];
+
+        for bucket_versioning in bucket_versioning_test_cases {
+            let expected_updated_bucket = Bucket {
+                name: bucket_name.to_string(),
+                ttl: bucket_ttl,
+                versioning_activated: bucket_versioning,
+                location: BucketRegion::GcpRegion(bucket_region.clone()),
+                labels: Some(HashMap::from([
+                    ("CreationDate".to_string(), Utc::now().to_rfc3339()),
+                    (
+                        "Ttl".to_string(),
+                        format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                    ),
+                ])),
+            };
+
+            let mut service_mock = ObjectStorageService::faux();
+
+            faux::when!(service_mock.update_bucket(bucket_name, bucket_versioning))
+                .then_return(Ok(expected_updated_bucket.clone()));
+            faux::when!(service_mock.get_bucket(bucket_name)).then_return(Ok(expected_updated_bucket.clone()));
+
+            let object_storage = GoogleOS::new(
+                "123",
+                Uuid::new_v4(),
+                "test_123",
+                "project_123",
+                GcpStorageRegion::EuropeWest9,
+                Arc::from(service_mock),
+            );
+
+            // execute:
+            let updated_bucket = object_storage
+                .update_bucket(bucket_name, bucket_versioning)
+                .expect("Error updating bucket");
+
+            // verify:
+            assert_eq!(expected_updated_bucket, updated_bucket);
+        }
+    }
+
+    #[test]
+    fn update_bucket_failure_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let bucket_versioning_test_cases = vec![true, false];
+
+        for bucket_versioning in bucket_versioning_test_cases {
+            let mut service_mock = ObjectStorageService::faux();
+
+            faux::when!(service_mock.update_bucket(bucket_name, bucket_versioning)).then_return(Err(
+                ObjectStorageServiceError::CannotUpdateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: ObjectStorageServiceError::CannotGetBucket {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: "bucket doesn't exist".to_string(),
+                    }
+                    .to_string(),
+                },
+            ));
+            faux::when!(service_mock.get_bucket(bucket_name)).then_return(Err(
+                ObjectStorageServiceError::CannotGetBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: "bucket doesn't exist".to_string(),
+                },
+            ));
+
+            let object_storage = GoogleOS::new(
+                "123",
+                Uuid::new_v4(),
+                "test_123",
+                "project_123",
+                GcpStorageRegion::EuropeWest9,
+                Arc::from(service_mock),
+            );
+
+            // execute:
+            let updated_bucket = object_storage.update_bucket(bucket_name, bucket_versioning);
+
+            // verify:
+            assert_eq!(
+                ObjectStorageError::CannotUpdateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: ObjectStorageError::CannotGetBucket {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: ObjectStorageServiceError::CannotGetBucket {
+                            bucket_name: bucket_name.to_string(),
+                            raw_error_message: "bucket doesn't exist".to_string()
+                        }
+                        .to_string(),
+                    }
+                    .to_string(),
+                },
+                updated_bucket.unwrap_err()
+            );
+        }
+    }
+
+    #[test]
     fn delete_bucket_success_test() {
         // setup:
         let bucket_name = "test-bucket";
@@ -526,6 +627,66 @@ mod tests {
     }
 
     #[test]
+    fn delete_bucket_non_blocking_success_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.delete_bucket_non_blocking(bucket_name, _)).then_return(Ok(()));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+        );
+
+        // execute:
+        let delete_result = object_storage.delete_bucket_non_blocking(bucket_name);
+
+        // verify:
+        assert_eq!(Ok(()), delete_result);
+    }
+
+    #[test]
+    fn delete_bucket_non_blocking_failure_test() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let raw_error_message = "delete error message";
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.delete_bucket_non_blocking(bucket_name, _)).then_return(Err(
+            ObjectStorageServiceError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: raw_error_message.to_string(),
+            },
+        ));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+        );
+
+        // execute:
+        let delete_result = object_storage.delete_bucket_non_blocking(bucket_name);
+
+        // verify:
+        assert_eq!(
+            ObjectStorageError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: format!("Cannot delete bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+            },
+            delete_result.unwrap_err(),
+        );
+    }
+
+    #[test]
     fn put_object_success_test() {
         // setup:
         let bucket_name = "test-bucket";
@@ -541,6 +702,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -558,7 +720,7 @@ mod tests {
 
         // execute:
         let added_object = object_storage
-            .put_object(bucket_name, object_key, &file_path)
+            .put_object(bucket_name, object_key, &file_path, None)
             .expect("Cannot get object from bucket");
 
         // verify:
@@ -598,7 +760,7 @@ mod tests {
         );
 
         // execute:
-        let added_object = object_storage.put_object(bucket_name, object_key, &file_path);
+        let added_object = object_storage.put_object(bucket_name, object_key, &file_path, None);
 
         // verify:
         assert_eq!(
@@ -624,6 +786,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -657,6 +820,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();
@@ -705,6 +869,7 @@ mod tests {
             bucket_name: bucket_name.to_string(),
             key: object_key.to_string(),
             value: object_content.as_bytes().to_vec(),
+            tags: vec![],
         };
 
         let mut service_mock = ObjectStorageService::faux();

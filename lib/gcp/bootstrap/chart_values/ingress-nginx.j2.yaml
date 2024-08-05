@@ -11,6 +11,18 @@ controller:
     proxy-body-size: 100m
     # hide Nginx version
     server-tokens: "false"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-engine-code
+    # customize log-format / set-by-engine-code
+    # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
+    # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
+    {%- if nginx_controller_log_format_upstream %}
+    log-format-upstream: >
+      {{ nginx_controller_log_format_upstream }}
+    {%- endif %}
+    log-format-escaping-json: "false" # set-by-engine-code
+    log-format-escaping-none: "false" # set-by-engine-code
+
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
   extraArgs:
@@ -19,7 +31,11 @@ controller:
   updateStrategy:
     rollingUpdate:
       # set the minimum acceptable number of unavailable pods during a rolling update
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
+
+  readinessProbe:
+    initialDelaySeconds: 15
 
   # enable auoscaling if you want to scale the number of replicas based on CPU usage
   autoscaling:
@@ -42,3 +58,23 @@ controller:
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
+
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
+
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule

@@ -1,0 +1,68 @@
+image:
+  registry: {{ registry_name}}
+  repository: {{ repository_name}}
+  tag: "{{ version }}"
+
+## sanitized_name of an already existing service account. Setting name value disables the automatic service account creation.
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  envId: "{{ environment_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+
+volumePermissions:
+  enabled: true
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_bitnami_shell }}
+
+serviceAccount:
+  create: true
+  name: "{{ sanitized_name }}"
+
+rbac:
+  create: true
+
+audit:
+  logHostname: true
+  logConnectitrue: true
+  logDisconnections: true
+
+auth:
+  postgresPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
+
+primary:
+  initdb:
+    user: "{{ database_login }}"
+    password: "{{ database_password }}"
+  service:
+    name: "{{ service_name }}"
+    type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+    {% if publicly_accessible -%}
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+  persistence:
+    storageClass: "{{ database_disk_type }}"
+    labels:
+      envId: "{{ environment_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+    size: "{{ database_disk_size_in_gib }}Gi"
+    annotations: {}
+  resources:
+    requests:
+      memory: "{{ ram_request_in_mib }}"
+      cpu: "{{ cpu_request_in_milli }}"
+    limits:
+      memory: "{{ ram_limit_in_mib }}"
+      cpu: "{{ cpu_limit_in_milli }}"

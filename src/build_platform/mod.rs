@@ -11,6 +11,7 @@ use crate::events::EventDetails;
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::io_models::container::Registry;
 use crate::metrics_registry::MetricsRegistry;
+use crate::models::abort::Abort;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
@@ -23,6 +24,26 @@ use uuid::Uuid;
 pub mod dockerfile_utils;
 pub mod local_docker;
 
+#[derive(Debug)]
+pub enum GitCmd {
+    Fetch,
+    Checkout,
+    Submodule,
+    SubmoduleUpdate,
+}
+
+impl Display for GitCmd {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let msg = match self {
+            GitCmd::Fetch => "git fetch",
+            GitCmd::Checkout => "git checkout",
+            GitCmd::Submodule => "git submodule",
+            GitCmd::SubmoduleUpdate => "git submodule update",
+        };
+        f.write_str(msg)
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum BuildError {
     #[error("Cannot build Application {application:?} due to an invalid config: {raw_error_message:?}")]
@@ -31,9 +52,13 @@ pub enum BuildError {
         raw_error_message: String,
     },
 
-    #[error("Cannot build Application {application:?} due to an error with git: {raw_error:?}")]
+    #[error(
+        "Git error, the cmd '{git_cmd}' done for {context} has failed for {application} due to error: {raw_error:?}"
+    )]
     GitError {
         application: String,
+        git_cmd: GitCmd,
+        context: String,
         raw_error: git2::Error,
     },
 
@@ -58,6 +83,9 @@ pub enum BuildError {
         application: String,
         raw_error: CommandError,
     },
+
+    #[error("Cannot get credentials error.")]
+    CannotGetCredentials { raw_error_message: String },
 }
 
 pub fn to_build_error(service_id: String, err: DockerError) -> BuildError {
@@ -89,7 +117,7 @@ pub trait BuildPlatform: Send + Sync {
         build: &mut Build,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
-        is_task_canceled: &dyn Fn() -> bool,
+        cancellation_requested: &dyn Abort,
     ) -> Result<(), BuildError>;
 }
 
@@ -111,6 +139,7 @@ impl Build {
         self.image.tag = compute_image_tag(
             &self.git_repository.root_path,
             &self.git_repository.dockerfile_path,
+            &self.git_repository.dockerfile_content,
             &self.environment_variables,
             &self.git_repository.commit_id,
         );
@@ -146,6 +175,7 @@ pub struct GitRepository {
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<PathBuf>,
+    pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
     pub buildpack_language: Option<String>,
 }
@@ -169,6 +199,7 @@ pub struct Image {
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
+    pub registry_insecure: bool,
     pub repository_name: String,
 }
 
@@ -239,6 +270,7 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
+            registry_insecure: false,
             repository_name: "".to_string(),
         }
     }

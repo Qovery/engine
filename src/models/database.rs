@@ -1,26 +1,35 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage};
+use crate::cloud_provider::models::{
+    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    KubernetesMemoryResourceUnit,
+};
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
     ServiceType, ServiceVersionCheckResult,
 };
-use crate::cloud_provider::{service, DeploymentTarget, Kind};
+use crate::cloud_provider::{kubernetes, service, DeploymentTarget, Kind};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
+use crate::io_models::labels_group::LabelsGroup;
 use crate::kubers_utils::kube_get_resources_by_selector;
+use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::database_utils::{
     is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
     is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
 };
+use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
+use crate::models::utils;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -151,8 +160,10 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) fqdn: String,
     pub(crate) fqdn_id: String,
-    pub(crate) total_cpus: String,
-    pub(crate) total_ram_in_mib: u32,
+    pub(crate) cpu_request_in_milli: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(crate) ram_request_in_mib: KubernetesMemoryResourceUnit,
+    pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(crate) total_disk_size_in_gb: u32,
     pub(crate) database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
     pub(crate) publicly_accessible: bool,
@@ -160,6 +171,8 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) options: T::DatabaseOptions,
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
+    pub(super) annotations_group: AnnotationsGroupTeraContext,
+    pub(super) labels_group: LabelsGroupTeraContext,
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
@@ -173,14 +186,18 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         created_at: DateTime<Utc>,
         fqdn: &str,
         fqdn_id: &str,
-        total_cpus: String,
-        total_ram_in_mib: u32,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
+        ram_request_in_mib: u32,
+        ram_limit_in_mib: u32,
         total_disk_size_in_gb: u32,
         database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
         publicly_accessible: bool,
         private_port: u16,
         options: T::DatabaseOptions,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
+        annotations_groups: Vec<AnnotationsGroup>,
+        labels_groups: Vec<LabelsGroup>,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
 
@@ -196,6 +213,33 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         )
         .map_err(|_| DatabaseError::InvalidConfig("Can't create workspace directory".to_string()))?;
 
+        // Check memory settings only for container databases, as managed db are using an instance type
+        if M::is_container() {
+            if cpu_request_in_milli > cpu_limit_in_milli {
+                return Err(DatabaseError::InvalidConfig(
+                    "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
+                ));
+            }
+
+            if cpu_request_in_milli == 0 {
+                return Err(DatabaseError::InvalidConfig(
+                    "cpu_request_in_milli must be greater than 0".to_string(),
+                ));
+            }
+
+            if ram_request_in_mib > ram_limit_in_mib {
+                return Err(DatabaseError::InvalidConfig(
+                    "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
+                ));
+            }
+
+            if ram_request_in_mib == 0 {
+                return Err(DatabaseError::InvalidConfig(
+                    "ram_request_in_mib must be greater than 0".to_string(),
+                ));
+            }
+        }
+
         let event_details = mk_event_details(Transmitter::Database(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
@@ -210,8 +254,10 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             created_at,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
-            total_cpus: T::cpu_validate(total_cpus),
-            total_ram_in_mib: T::memory_validate(total_ram_in_mib),
+            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
+            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
+            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
+            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
             total_disk_size_in_gb,
             database_instance_type,
             publicly_accessible,
@@ -219,6 +265,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             options,
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
         })
     }
 
@@ -317,10 +365,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
         vec![]
     }
-
-    fn get_passwords(&self) -> Vec<String> {
-        vec![]
-    }
 }
 
 // Method Only For all container database
@@ -375,12 +419,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             format!("{registry_name}/{repository_name}").as_str(),
         );
 
-        // we need the kubernetes config file to store tfstates file in kube secrets
-        context.insert("kubeconfig_path", &kubernetes.kubeconfig_local_file_path());
         context.insert("namespace", environment.namespace());
 
-        let version = self.get_version(event_details)?.matched_version().to_string();
-        context.insert("version", &version);
+        let version = self.get_version(event_details)?.matched_version();
+        context.insert("version", &version.to_string());
 
         for (k, v) in target.cloud_provider.tera_context_environment_variables() {
             context.insert(k, v);
@@ -401,9 +443,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
         }
         context.insert("database_disk_type", &options.database_disk_type);
-        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
-        context.insert("database_total_cpus", &self.total_cpus);
-        context.insert("database_total_cpus_burst", &T::cpu_burst_value(self.total_cpus.clone()));
+        context.insert("cpu_request_in_milli", &self.cpu_request_in_milli.to_string());
+        context.insert("cpu_limit_in_milli", &self.cpu_limit_in_milli.to_string());
+        context.insert("ram_request_in_mib", &self.ram_request_in_mib.to_string());
+        context.insert("ram_limit_in_mib", &self.ram_limit_in_mib.to_string());
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
         context.insert("publicly_accessible", &container_database_publicly_accessible);
@@ -412,6 +455,34 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,
         );
+
+        let mut node_affinity = BTreeMap::<String, String>::new();
+        let mut toleration = BTreeMap::<String, String>::new();
+
+        // some Database/Version do not support arm arch
+        let (node_affinity_type, node_affinity_key, node_affinity_values) = match T::db_type() {
+            service::DatabaseType::PostgreSQL if version.major == "10" => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::Redis if version.major == "5" => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::MongoDB => ("hard", "kubernetes.io/arch", vec!["amd64"]),
+            service::DatabaseType::PostgreSQL => ("", "", vec![]),
+            service::DatabaseType::Redis => ("", "", vec![]),
+            service::DatabaseType::MySQL => ("", "", vec![]),
+        };
+
+        if let Some(value) = node_affinity_values.first() {
+            node_affinity.insert(node_affinity_key.to_string(), value.to_string());
+        }
+        if kubernetes.kind() == kubernetes::Kind::Eks && kubernetes.is_karpenter_enabled() {
+            utils::target_stable_node_pool(&mut node_affinity, &mut toleration, true);
+        }
+
+        context.insert("toleration", &toleration);
+        context.insert("node_affinity", &node_affinity);
+        context.insert("node_affinity_type", &node_affinity_type);
+        context.insert("node_affinity_key", &node_affinity_key);
+        context.insert("node_affinity_values", &node_affinity_values);
+        context.insert("annotations_group", &self.annotations_group);
+        context.insert("labels_group", &self.labels_group);
 
         Ok(context)
     }

@@ -27,7 +27,12 @@ resource "aws_subnet" "eks_zone_a" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      "karpenter.sh/discovery" = var.kubernetes_cluster_name
+    }
+  )
 }
 
 resource "aws_subnet" "eks_zone_b" {
@@ -38,7 +43,12 @@ resource "aws_subnet" "eks_zone_b" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      "karpenter.sh/discovery" = var.kubernetes_cluster_name
+    }
+  )
 }
 
 resource "aws_subnet" "eks_zone_c" {
@@ -49,7 +59,12 @@ resource "aws_subnet" "eks_zone_c" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      "karpenter.sh/discovery" = var.kubernetes_cluster_name
+    }
+  )
 }
 
 resource "aws_route_table" "eks_cluster" {

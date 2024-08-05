@@ -7,12 +7,13 @@ use std::sync::Arc;
 use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::errors::{CommandError, EngineError};
 use tera::Context as TeraContext;
+use thiserror::Error;
 
 // Those types are just marker types that are use to tag our struct/object model
 pub struct AWS {}
 pub struct AWSEc2 {}
 pub struct SCW {}
-pub struct SelfManaged {}
+pub struct OnPremise {}
 pub struct GCP {}
 
 // CloudProvider trait allows to derive all the custom type we need per provider,
@@ -21,7 +22,6 @@ pub trait CloudProvider: Send + Sync {
     type AppExtraSettings: Send + Sync;
     type DbExtraSettings: Send + Sync;
     type RouterExtraSettings: Send + Sync;
-    type StorageTypes: Send + Sync;
 
     fn cloud_provider() -> Kind;
     fn short_name() -> &'static str;
@@ -29,7 +29,6 @@ pub trait CloudProvider: Send + Sync {
     fn registry_short_name() -> &'static str;
     fn registry_full_name() -> &'static str;
     fn lib_directory_name() -> &'static str;
-    fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)];
 }
 
 pub trait ToTeraContext {
@@ -198,5 +197,44 @@ impl Default for VersionsNumberBuilder {
             patch: None,
             suffix: None,
         }
+    }
+}
+
+#[derive(Clone, Error, Debug, PartialEq, Eq)]
+pub enum PercentageError {
+    #[error("Percentage value is out of range")]
+    ValueOutOfRange { raw_error_message: String },
+}
+
+// Percentage is a type that represents a percentage value between 0.0 and 1.0
+// this might be extended in the future if unbounded or negative values are needed.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Percentage(f64);
+
+impl Percentage {
+    pub fn as_f64(&self) -> f64 {
+        self.0
+    }
+
+    pub fn min() -> Self {
+        Percentage(0.0)
+    }
+
+    pub fn max() -> Self {
+        Percentage(1.0)
+    }
+}
+
+impl TryFrom<f64> for Percentage {
+    type Error = PercentageError;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        if !(0.0..=1.0).contains(&value) {
+            return Err(PercentageError::ValueOutOfRange {
+                raw_error_message: format!("Percentage value must be between 0.0 and 1.0, provided value: `{value}`"),
+            });
+        }
+
+        Ok(Percentage(value))
     }
 }

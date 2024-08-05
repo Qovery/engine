@@ -69,6 +69,8 @@ pub enum Tag {
     CannotRetrieveClusterConfigFile,
     CannotUninstallHelmChart,
     CannotWriteToFile,
+    CannotCreateHelmAdmissionControllerConfigMap,
+    CannotPatchHelmAdmissionControllerConfigMap,
     ClientServiceFailedToDeployBeforeStart,
     ClientServiceFailedToStart,
     CloudProviderApiMissingInfo,
@@ -165,6 +167,8 @@ pub enum Tag {
     K8sValidateRequiredCPUandBurstableError,
     K8sGetNodesError,
     K8sPatchNodeError,
+    K8sUninstallEc2NodeClassesError,
+    K8sDeleteKarpenterNodesError,
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     KubeconfigSecurityCheckError,
     MissingRequiredEnvVariable,
@@ -177,6 +181,7 @@ pub enum Tag {
     ObjectStorageCannotInstantiateClient,
     ObjectStorageCannotActivateBucketVersioning,
     ObjectStorageCannotCreateBucket,
+    ObjectStorageCannotUpdateBucket,
     ObjectStorageCannotDeleteBucket,
     ObjectStorageCannotGetBucket,
     ObjectStorageCannotDeleteFileIntoBucket,
@@ -223,6 +228,7 @@ pub enum Tag {
     TerraformValidateError,
     TerraformWaitingTimeoutResource,
     TerraformWrongState,
+    TerraformValidatorError,
     UncompressError,
     Unknown,
     UnsupportedClusterKind,
@@ -238,6 +244,8 @@ pub enum Tag {
     RouterInvalidConfiguration,
     RouterBasicAuthEnvVarCannotDecodeBase64Error,
     RouterBasicAuthEnvVarNotFound,
+    ServiceInstantiationError,
+    CannotGetRegistryCredentials,
 }
 
 impl From<errors::Tag> for Tag {
@@ -291,6 +299,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sGetSecretError => Tag::K8sGetSecretError,
             errors::Tag::K8sCannotGetNodes => Tag::K8sGetNodesError,
             errors::Tag::K8sPatchNodeError => Tag::K8sPatchNodeError,
+            errors::Tag::K8sUninstallEc2NodeClassesError => Tag::K8sUninstallEc2NodeClassesError,
+            errors::Tag::K8sDeleteKarpenterNodesError => Tag::K8sDeleteKarpenterNodesError,
             errors::Tag::CannotFindRequiredBinary => Tag::CannotFindRequiredBinary,
             errors::Tag::SubnetsCountShouldBeEven => Tag::SubnetsCountShouldBeEven,
             errors::Tag::CannotGetOrCreateIamRole => Tag::CannotGetOrCreateIamRole,
@@ -313,6 +323,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotGetSupportedVersions => Tag::CannotGetSupportedVersions,
             errors::Tag::CannotGetCluster => Tag::CannotGetCluster,
             errors::Tag::ObjectStorageCannotCreateBucket => Tag::ObjectStorageCannotCreateBucket,
+            errors::Tag::ObjectStorageCannotUpdateBucket => Tag::ObjectStorageCannotUpdateBucket,
             errors::Tag::ObjectStorageCannotPutFileIntoBucket => Tag::ObjectStorageCannotPutFileIntoBucket,
             errors::Tag::UnsupportedRegion => Tag::UnsupportedRegion,
             errors::Tag::UnsupportedZone => Tag::UnsupportedZone,
@@ -430,6 +441,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::TerraformCannotImportResource => Tag::TerraformCannotImportResource,
             errors::Tag::TerraformManagedDatabaseError => Tag::TerraformManagedDatabaseError,
+            errors::Tag::TerraformValidatorError => Tag::TerraformValidatorError,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,
@@ -481,6 +493,15 @@ impl From<errors::Tag> for Tag {
             errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
             errors::Tag::CannotFetchScalewayPrivateNetworks => Tag::CannotFetchScalewayPrivateNetworks,
             errors::Tag::CannotWriteToFile => Tag::CannotWriteToFile,
+            errors::Tag::CannotCreateHelmAdmissionControllerConfigMap => {
+                Tag::CannotCreateHelmAdmissionControllerConfigMap
+            }
+            errors::Tag::CannotPatchHelmAdmissionControllerConfigMap => {
+                Tag::CannotPatchHelmAdmissionControllerConfigMap
+            }
+            errors::Tag::ServiceInstantiationError => Tag::ServiceInstantiationError,
+            errors::Tag::CannotGetRegistryCredentials => Tag::CannotGetRegistryCredentials,
+            errors::Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance => Tag::ServiceInstantiationError,
         }
     }
 }

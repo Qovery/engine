@@ -14,11 +14,25 @@ You can follow the detailed installation instruction in the [documentation](http
 ```bash
 helm upgrade --install --namespace karpenter --create-namespace \
   karpenter oci://public.ecr.aws/karpenter/{{ template "chart.name" . }} \
-  --version v{{ template "chart.version" . }} \
+  --version {{ template "chart.version" . }} \
   --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${KARPENTER_IAM_ROLE_ARN}" \
   --set settings.clusterName=${CLUSTER_NAME} \
   --set settings.interruptionQueue=${CLUSTER_NAME} \
   --wait
+```
+
+### Verification
+
+As the OCI Helm chart is signed by [Cosign](https://github.com/sigstore/cosign) as part of the release process you can verify the chart before installing it by running the following command.
+
+```shell
+cosign verify public.ecr.aws/karpenter/karpenter:{{ template "chart.version" . }} \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp='https://github\.com/aws/karpenter-provider-aws/\.github/workflows/release\.yaml@.+' \
+  --certificate-github-workflow-repository=aws/karpenter-provider-aws \
+  --certificate-github-workflow-name=Release \
+  --certificate-github-workflow-ref=refs/tags/v{{ template "chart.version" . }} \
+  --annotations version={{ template "chart.version" . }}
 ```
 
 {{ template "chart.requirementsSection" . }}

@@ -29,6 +29,8 @@ use serde_json::json;
 use url::Url;
 use uuid::Uuid;
 
+use super::RegistryTags;
+
 pub struct ECR {
     context: Context,
     id: String,
@@ -81,6 +83,7 @@ impl ECR {
             endpoint: registry_url,
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
+            insecure_registry: false,
             get_image_name: Box::new(|img_name| img_name.to_string()),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
@@ -177,22 +180,32 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
             ..Default::default()
         };
 
-        let tags = resource_ttl.map(|ttl| {
-            vec![Tag {
+        let mut tags = vec![
+            Tag {
+                key: Some("EnvironmentId".to_string()),
+                value: Some(registry_tags.environment_id.to_string()),
+            },
+            Tag {
+                key: Some("ProjectId".to_string()),
+                value: Some(registry_tags.project_id.to_string()),
+            },
+        ];
+        if let Some(duration) = registry_tags.resource_ttl {
+            tags.push(Tag {
                 key: Some("ttl".to_string()),
-                value: Some(ttl.as_secs().to_string()),
-            }]
-        });
+                value: Some(duration.as_secs().to_string()),
+            })
+        };
         let crr = CreateRepositoryRequest {
             repository_name: repository_name.to_string(),
-            tags,
+            tags: Some(tags),
             ..Default::default()
         };
 
@@ -315,7 +328,7 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // check if the repository already exists
         if let Ok(repository) = self.get_repository(repository_name) {
@@ -323,7 +336,7 @@ impl ECR {
         }
 
         // create it if it doesn't exist
-        match self.create_repository(repository_name, image_retention_time_in_seconds, resource_ttl) {
+        match self.create_repository(repository_name, image_retention_time_in_seconds, registry_tags) {
             Ok(repository) => Ok((repository, RepositoryInfo { created: true })),
             Err(e) => Err(e),
         }
@@ -407,9 +420,9 @@ impl ContainerRegistry for ECR {
         &self,
         name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
-        let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds, resource_ttl)?;
+        let repository_info = self.get_or_create_repository(name, image_retention_time_in_seconds, registry_tags)?;
         Ok(repository_info)
     }
 

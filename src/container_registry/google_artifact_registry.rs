@@ -10,9 +10,10 @@ use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
+
+use super::RegistryTags;
 
 pub struct GoogleArtifactRegistry {
     context: Context,
@@ -65,6 +66,7 @@ impl GoogleArtifactRegistry {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
+            insecure_registry: false,
             get_image_name: Box::new(move |img_name| {
                 format!(
                     "{}/{}/{img_name}",
@@ -97,7 +99,7 @@ impl GoogleArtifactRegistry {
         &self,
         repository_name: &str,
         _image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         let creation_date: DateTime<Utc> = Utc::now();
         self.service
@@ -111,8 +113,10 @@ impl GoogleArtifactRegistry {
                     ("creation_date".to_string(), creation_date.timestamp().to_string()),
                     (
                         "ttl".to_string(),
-                        format!("{}", resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                        format!("{}", registry_tags.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     ),
+                    ("environment_id".to_string(), registry_tags.environment_id),
+                    ("project_id".to_string(), registry_tags.project_id),
                 ]),
             )
             .map(|r| (r, RepositoryInfo { created: true }))
@@ -127,7 +131,7 @@ impl GoogleArtifactRegistry {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // check if the repository already exists
         if let Ok(repository) = self.get_repository(repository_name) {
@@ -135,8 +139,11 @@ impl GoogleArtifactRegistry {
         }
 
         // create it if it doesn't exist
-        match self.create_repository_without_exist_check(repository_name, image_retention_time_in_seconds, resource_ttl)
-        {
+        match self.create_repository_without_exist_check(
+            repository_name,
+            image_retention_time_in_seconds,
+            registry_tags,
+        ) {
             Ok((repository, info)) => Ok((repository, info)),
             Err(e) => Err(e),
         }
@@ -177,9 +184,9 @@ impl ContainerRegistry for GoogleArtifactRegistry {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        resource_ttl: Option<Duration>,
+        registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
-        self.get_or_create_repository(repository_name, image_retention_time_in_seconds, resource_ttl)
+        self.get_or_create_repository(repository_name, image_retention_time_in_seconds, registry_tags)
     }
 
     fn get_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
