@@ -76,7 +76,7 @@ impl EngineMessageStream {
         // We re-emit the last message in case of failure
         let remit_last_msg: Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>> =
             if let Some(last_msg) = last_msg_memento.clone() {
-                Box::pin(stream::once(futures_util::future::ready(last_msg)))
+                Box::pin(stream::once(std::future::ready(last_msg)))
             } else {
                 Box::pin(stream::empty())
             };
@@ -88,14 +88,19 @@ impl EngineMessageStream {
         )
         // We inspect each message to store the last_msg to re-emit it in case of failure
         // We set the message id of each msg to have a global order of the message
-        .map(move |mut msg| {
-            let ts = Utc::now();
-            msg.message_id = Some(Timestamp {
-                seconds: ts.timestamp(),
-                nanos: ts.timestamp_subsec_nanos() as i32,
-            });
-            last_msg_memento.replace(msg.clone());
-            msg
+        .map({
+            let start_time = Utc::now();
+            let now = Instant::now();
+
+            move |mut msg| {
+                let ts = start_time + now.elapsed();
+                msg.message_id = Some(Timestamp {
+                    seconds: ts.timestamp(),
+                    nanos: ts.timestamp_subsec_nanos() as i32,
+                });
+                last_msg_memento.replace(msg.clone());
+                msg
+            }
         });
 
         let s = Self {
