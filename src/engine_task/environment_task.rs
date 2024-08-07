@@ -45,7 +45,7 @@ pub struct EnvironmentTask {
     qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
-    log_file_writer: Option<Box<LogFileWriter>>,
+    log_file_writer: Option<LogFileWriter>,
 }
 
 impl EnvironmentTask {
@@ -57,7 +57,7 @@ impl EnvironmentTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
-        log_file_writer: Option<Box<LogFileWriter>>,
+        log_file_writer: Option<LogFileWriter>,
     ) -> Self {
         let span = info_span!(
             "environment_task",
