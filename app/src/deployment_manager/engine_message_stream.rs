@@ -1,6 +1,6 @@
 use crate::grpc::engine::StepRecord as GrpcStepRecord;
 use crate::grpc::engine::{engine_message_tx, EngineMessageTx, Metrics};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures_util::{stream, Stream, StreamExt};
 use prost_types::Timestamp;
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
@@ -74,11 +74,13 @@ impl EngineMessageStream {
         msg_stream_context.should_stop = Some(abort_handle_rx);
 
         // We re-emit the last message in case of failure
-        let remit_last_msg: Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>> =
+        let (remit_last_msg, start_time_anchor): (Pin<Box<dyn Stream<Item = EngineMessageTx> + Send>>, DateTime<Utc>) =
             if let Some(last_msg) = last_msg_memento.clone() {
-                Box::pin(stream::once(std::future::ready(last_msg)))
+                let msg_id = last_msg.message_id.as_ref().unwrap();
+                let start_time = DateTime::from_timestamp(msg_id.seconds, msg_id.nanos as u32).unwrap();
+                (Box::pin(stream::once(std::future::ready(last_msg))), start_time)
             } else {
-                Box::pin(stream::empty())
+                (Box::pin(stream::empty()), Utc::now())
             };
 
         // Normal flow were we dequeue engine message
@@ -89,11 +91,9 @@ impl EngineMessageStream {
         // We inspect each message to store the last_msg to re-emit it in case of failure
         // We set the message id of each msg to have a global order of the message
         .map({
-            let start_time = Utc::now();
-            let now = Instant::now();
-
+            let start_time = Instant::now();
             move |mut msg| {
-                let ts = start_time + now.elapsed();
+                let ts = start_time_anchor + start_time.elapsed();
                 msg.message_id = Some(Timestamp {
                     seconds: ts.timestamp(),
                     nanos: ts.timestamp_subsec_nanos() as i32,
