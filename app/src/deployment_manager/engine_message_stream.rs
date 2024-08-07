@@ -245,7 +245,7 @@ mod test {
             EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details.clone()), None);
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Box::default());
+        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Default::default());
 
         // Dropping the handle should terminate the stream
         let (_, _, mut stream, abort_handle) = deployment.get_message_stream().await;
@@ -308,7 +308,7 @@ mod test {
         )));
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Box::default());
+        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Default::default());
         let (_, msg_tx, mut stream, abort_handle) = deployment.get_message_stream().await;
 
         let _ = msg_tx.send(engine_msg.clone());

@@ -94,7 +94,7 @@ type MkEngineTask = Box<
             &GrpcEngineClient,
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
-            Box<LogFileWriter>,
+            LogFileWriter,
         ) -> Result<Arc<dyn Task>, EngineEvent>
         + Send,
 >;
@@ -107,7 +107,7 @@ pub struct DeploymentManager {
     should_shutdown: Arc<AtomicBool>,
     is_connected_to_gtw: Arc<AtomicBool>,
     mk_engine_task: MkEngineTask,
-    log_file_writer: Box<LogFileWriter>,
+    log_file_writer: LogFileWriter,
 }
 
 impl DeploymentManager {
@@ -117,7 +117,7 @@ impl DeploymentManager {
         should_shutdown: Arc<AtomicBool>,
         is_connected_to_gtw: Arc<AtomicBool>,
         mk_engine_task: MkEngineTask,
-        log_file_writer: Box<LogFileWriter>,
+        log_file_writer: LogFileWriter,
     ) -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
         let deployment_request = match task_type {
@@ -412,7 +412,7 @@ impl DeploymentManager {
                             match msg.request {
                                 Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
                                     info!("Received new deployment task: {}", payload);
-                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry(), upstream.log_file_writer());
+                                    let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry(), upstream.log_file_writer().clone());
                                     match new_task {
                                         Ok(new_task) => {
                                             task.await_task_termination().await;
@@ -673,7 +673,7 @@ mod test {
             should_shutdown.clone(),
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
-            Box::default(),
+            Default::default(),
         );
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
@@ -740,7 +740,7 @@ mod test {
             should_shutdown.clone(),
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
-            Box::default(),
+            Default::default(),
         );
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);

@@ -87,7 +87,7 @@ fn to_engine_task(
     grpc_client: &GrpcEngineClient,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-    log_file_writer: Box<LogFileWriter>,
+    log_file_writer: LogFileWriter,
 ) -> Result<Arc<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
@@ -366,7 +366,7 @@ pub fn main() -> io::Result<()> {
                                            grpc_client: &GrpcEngineClient,
                                            logger: Box<dyn Logger>,
                                            metrics_registry: Box<dyn MetricsRegistry>,
-                                           log_file_writer: Box<LogFileWriter>|
+                                           log_file_writer: LogFileWriter|
               -> Result<Arc<dyn Task>, EngineEvent> {
             // make sure to clean configuration directories so engine task can start fresh
             clean_configuration_directories();
@@ -430,7 +430,7 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
             should_shutdown,
             is_connected_to_gtw,
             Box::new(payload_to_engine_task),
-            Box::new(log_file_writer),
+            log_file_writer,
         );
         mngr.run().await
     };

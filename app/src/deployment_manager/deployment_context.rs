@@ -33,15 +33,11 @@ pub struct DeploymentContext {
 
     // The last message we sent to the gateway, that we will re-emit in case of cnx resume
     last_msg_memento: Arc<Mutex<Option<EngineMessageTx>>>,
-    log_file_writer: Box<LogFileWriter>,
+    log_file_writer: LogFileWriter,
 }
 
 impl DeploymentContext {
-    pub fn new(
-        deployment_info: DeploymentInfo,
-        log_buffer_duration: Duration,
-        log_file_writer: Box<LogFileWriter>,
-    ) -> Self {
+    pub fn new(deployment_info: DeploymentInfo, log_buffer_duration: Duration, log_file_writer: LogFileWriter) -> Self {
         let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
         let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
         Self {
@@ -84,7 +80,7 @@ impl DeploymentContext {
             watch::Sender<()>,
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
-            Box<LogFileWriter>,
+            LogFileWriter,
         ),
         tonic::Status,
     > {

@@ -27,7 +27,7 @@ pub struct InfrastructureTask {
     qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
-    log_file_writer: Option<Box<LogFileWriter>>,
+    log_file_writer: Option<LogFileWriter>,
 }
 
 impl InfrastructureTask {
@@ -39,7 +39,7 @@ impl InfrastructureTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
-        log_file_writer: Option<Box<LogFileWriter>>,
+        log_file_writer: Option<LogFileWriter>,
     ) -> Self {
         let span = info_span!(
             "infrastructure_task",

@@ -52,7 +52,7 @@ fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), any
     Ok(())
 }
 
-fn enable_log_file_writer(context: &Context, log_file_writer: &Option<Box<LogFileWriter>>) {
+fn enable_log_file_writer(context: &Context, log_file_writer: &Option<LogFileWriter>) {
     if let Some(log_file_writer) = &log_file_writer {
         let temp_dir = workspace_directory(context.workspace_root_dir(), context.execution_id(), "logs");
         if let Ok(temp_dir) = temp_dir {
@@ -61,7 +61,7 @@ fn enable_log_file_writer(context: &Context, log_file_writer: &Option<Box<LogFil
     }
 }
 
-fn disable_log_file_writer(log_file_writer: &Option<Box<LogFileWriter>>) {
+fn disable_log_file_writer(log_file_writer: &Option<LogFileWriter>) {
     if let Some(log_file_writer) = log_file_writer {
         log_file_writer.disable();
     }

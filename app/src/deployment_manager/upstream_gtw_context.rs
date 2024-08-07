@@ -12,7 +12,7 @@ pub struct UpstreamGatewayContext {
     pub close_upstream_tx: watch::Sender<()>,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
-    log_file_writer: Box<LogFileWriter>,
+    log_file_writer: LogFileWriter,
 }
 
 impl UpstreamGatewayContext {
@@ -21,7 +21,7 @@ impl UpstreamGatewayContext {
         close_upstream_tx: watch::Sender<()>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
-        log_file_writer: Box<LogFileWriter>,
+        log_file_writer: LogFileWriter,
     ) -> Self {
         Self {
             msg_stream,
@@ -40,8 +40,8 @@ impl UpstreamGatewayContext {
         self.metrics_registry.clone()
     }
 
-    pub fn log_file_writer(&self) -> Box<LogFileWriter> {
-        self.log_file_writer.clone()
+    pub fn log_file_writer(&self) -> &LogFileWriter {
+        &self.log_file_writer
     }
 
     pub async fn await_termination(self) {
