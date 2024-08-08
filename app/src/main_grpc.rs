@@ -68,6 +68,10 @@ mod models;
 mod tokio_utils;
 mod utils;
 
+// Inject build information into env vars
+use shadow_rs::shadow;
+shadow!(build_info);
+
 pub type CloudProvider = String;
 pub type Region = String;
 pub type Organization = String;

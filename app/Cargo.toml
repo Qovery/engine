@@ -34,7 +34,7 @@ anyhow = "1.0.75"
 scopeguard = "1.2.0"
 reqwest = { version = "0.11.20", features = ["blocking", "json", "gzip"] }
 serde = "1.0.188"
-clap = { version = "4.4.2", features = ["derive", "env"]}
+clap = { version = "4.4.2", features = ["derive", "env"] }
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.32.0", features = ["full"] }
@@ -62,6 +62,8 @@ tracing-appender = "0.2.3"
 
 # To load .env file into env variables
 dotenv = "0.15.0"
+# To get build info (commit, version, ...) at runtime
+shadow-rs = { version = "0.31.1", features = [] }
 
 [dev-dependencies]
 reqwest = { version = "0.11.20", features = ["blocking"] }
@@ -69,3 +71,4 @@ reqwest = { version = "0.11.20", features = ["blocking"] }
 
 [build-dependencies]
 tonic-build = { version = "0.10.0", features = ["prost"] }
+shadow-rs = { version = "0.31.1", features = [] }
