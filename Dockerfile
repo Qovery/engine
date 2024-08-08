@@ -80,6 +80,8 @@ ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc"
+ARG CI_COMMIT_SHORT_SHA
+ENV CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA
 
 WORKDIR /build
 

@@ -45,7 +45,7 @@ pub async fn new_engine_client(
         Channel::builder(grpc_server)
     };
 
-    let user_agent = format!("qovery-engine/{}", build_info::SHORT_COMMIT);
+    let user_agent = format!("qovery-engine/{}", build_info::ENGINE_VERSION);
     let channel = channel
         .connect_timeout(Duration::from_secs(30))
         // Worst case scenario is engine gtw re-dispatching the deployment after 1min while we ack it.
