@@ -1,10 +1,8 @@
 use crate::build_info;
 use crate::grpc::engine::engine_client::EngineClient;
-use once_cell::sync::Lazy;
 use std::convert::TryFrom;
 use std::time::Duration;
 use tonic::codec::CompressionEncoding;
-use tonic::codegen::http::header::USER_AGENT;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::{AsciiMetadataValue, MetadataValue};
 use tonic::service::Interceptor;
@@ -17,10 +15,6 @@ pub mod engine;
 pub mod qovery_api;
 
 const GRPC_CLUSTER_ID_HEADER_NAME: &str = "x-qovery-cluster";
-static GRPC_ENGINE_VERSION_HEADER_VALUE: Lazy<AsciiMetadataValue> = Lazy::new(|| {
-    let val = format!("qovery-engine/{}", build_info::SHORT_COMMIT);
-    AsciiMetadataValue::try_from(&val).unwrap()
-});
 
 #[derive(Debug, Clone)]
 pub struct QoveryInterceptor {
@@ -33,7 +27,6 @@ impl Interceptor for QoveryInterceptor {
         let metadata = request.metadata_mut();
         metadata.insert("authorization", self.token.clone());
         metadata.insert(GRPC_CLUSTER_ID_HEADER_NAME, self.cluster_id.clone());
-        metadata.insert(USER_AGENT.as_str(), GRPC_ENGINE_VERSION_HEADER_VALUE.clone());
         Ok(request)
     }
 }
@@ -52,6 +45,7 @@ pub async fn new_engine_client(
         Channel::builder(grpc_server)
     };
 
+    let user_agent = format!("qovery-engine/{}", build_info::SHORT_COMMIT);
     let channel = channel
         .connect_timeout(Duration::from_secs(30))
         // Worst case scenario is engine gtw re-dispatching the deployment after 1min while we ack it.
@@ -62,6 +56,7 @@ pub async fn new_engine_client(
         // while no deployment is on-going
         .keep_alive_while_idle(false)
         .tcp_nodelay(true)
+        .user_agent(user_agent)?
         .connect()
         .await?;
 
