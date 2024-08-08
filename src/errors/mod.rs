@@ -5146,11 +5146,11 @@ impl EngineError {
         )
     }
 
-    /// * `error`: Raw error message.
     /// Creates new error when attempting to create the service-linked rome for Spot Instances
     ///
     /// Arguments:
     ///
+    /// * `error`: Raw error message.
     /// * `event_details`: Error linked event details.
     pub fn new_cannot_create_aws_service_linked_role_for_spot_instance(
         event_details: EventDetails,
