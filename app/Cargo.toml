@@ -48,7 +48,7 @@ kube = { version = "0.88.1", features = ["default"] }
 k8s-openapi = { version = "0.21.1", default-features = false, features = ["v1_27"] }
 
 # GRPC
-tonic = { version = "0.12.1", features = ["tls", "tls-roots", "gzip", "transport"] }
+tonic = { version = "0.12.1", features = ["tls", "tls-roots", "zstd", "transport"] }
 prost = "0.13.1"
 prost-types = "0.13.1"
 tower = "0.4.13"

@@ -72,8 +72,8 @@ pub async fn new_engine_client(
         .service(channel);
 
     let client = EngineClient::new(channel)
-        .accept_compressed(CompressionEncoding::Gzip)
-        .send_compressed(CompressionEncoding::Gzip);
+        .accept_compressed(CompressionEncoding::Zstd)
+        .send_compressed(CompressionEncoding::Zstd);
 
     Ok(client)
 }
