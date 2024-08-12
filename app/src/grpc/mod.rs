@@ -40,7 +40,7 @@ pub async fn new_engine_client(
 ) -> Result<GrpcEngineClient, tonic::transport::Error> {
     let enable_tls = grpc_server.scheme_str().unwrap_or("https") == "https";
     let channel = if enable_tls {
-        Channel::builder(grpc_server).tls_config(ClientTlsConfig::new())?
+        Channel::builder(grpc_server).tls_config(ClientTlsConfig::new().with_native_roots())?
     } else {
         Channel::builder(grpc_server)
     };
