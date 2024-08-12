@@ -193,11 +193,7 @@ impl DeploymentManager {
 
     /// Engine has nothing to do, pool the gtw to get a new deployment to execute
     async fn seek_new_deployment(&mut self) -> (DeploymentManagerState, Option<Duration>) {
-        let deployment_info = match self
-            .engine_client
-            .get_new_deployment(self.deployment_request.clone())
-            .await
-        {
+        let deployment_info = match self.engine_client.get_new_deployment(self.deployment_request).await {
             Ok(deployment_info) => deployment_info.into_inner(),
             Err(err) => {
                 if err.code() == Code::NotFound {

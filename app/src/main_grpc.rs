@@ -33,7 +33,6 @@ use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
 use url::Url;
 use uuid::Uuid;
-use warp::http::Uri;
 
 use crate::constants::ASCII_BANNER;
 use crate::deployment_manager::DeploymentManager;
@@ -70,6 +69,7 @@ mod utils;
 
 // Inject build information into env vars
 use shadow_rs::shadow;
+use tonic::transport::Uri;
 shadow!(build_info);
 
 pub type CloudProvider = String;

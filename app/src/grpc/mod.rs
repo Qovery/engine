@@ -45,7 +45,11 @@ pub async fn new_engine_client(
         Channel::builder(grpc_server)
     };
 
-    let user_agent = format!("qovery-engine/{}", build_info::ENGINE_VERSION);
+    let user_agent = format!(
+        "engine/{} pod/{}",
+        build_info::ENGINE_VERSION,
+        std::env::var("ENGINE_NAME").unwrap_or_default()
+    );
     let channel = channel
         .connect_timeout(Duration::from_secs(30))
         // Worst case scenario is engine gtw re-dispatching the deployment after 1min while we ack it.
@@ -88,7 +92,7 @@ pub mod test {
                 let client = client.take();
                 async move {
                     if let Some(client) = client {
-                        Ok(client)
+                        Ok(hyper_util::rt::TokioIo::new(client))
                     } else {
                         Err(std::io::Error::new(std::io::ErrorKind::Other, "Client already taken"))
                     }
