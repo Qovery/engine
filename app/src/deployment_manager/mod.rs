@@ -222,28 +222,26 @@ impl DeploymentManager {
         mut deployment: DeploymentContext,
     ) -> (DeploymentManagerState, Option<Duration>) {
         info!("Starting to execute deployment");
-        let (mut msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer) = match deployment
-            .execute_deployment(&mut self.engine_client)
-            .await
-        {
-            Ok(upstream_msg) => upstream_msg,
-            Err(err) => {
-                return match err.code() {
-                    Code::NotFound => {
-                        error!(
-                                "Deployment not found anymore while wanting to execute task for deployment. Took too long for engine to dequeue deployment ? {:?}",
-                                &deployment.deployment_info
+        let (mut msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer) =
+            match deployment.execute_deployment(&mut self.engine_client).await {
+                Ok(upstream_msg) => upstream_msg,
+                Err(err) => {
+                    return match err.code() {
+                        Code::NotFound | Code::DeadlineExceeded => {
+                            error!(
+                                "Deployment cannot be executed due to {:?} for {:?}",
+                                err, &deployment.deployment_info
                             );
-                        (DeploymentManagerState::SeekingNewDeployment {}, None)
-                    }
-                    _ => {
-                        error!("Error while getting new deployment: {}", err);
-                        let next_step = DeploymentManagerState::ExecutingDeployment { deployment };
-                        (next_step, Some(self.default_wait_time))
-                    }
-                };
-            }
-        };
+                            (DeploymentManagerState::SeekingNewDeployment {}, None)
+                        }
+                        _ => {
+                            error!("Error while getting new deployment: {}", err);
+                            let next_step = DeploymentManagerState::ExecutingDeployment { deployment };
+                            (next_step, Some(self.default_wait_time))
+                        }
+                    };
+                }
+            };
         info!(
             "Connected to gateway, executing deployment task for: {:?}",
             deployment.deployment_info
@@ -335,13 +333,13 @@ impl DeploymentManager {
             }
 
             Err(err) => match err.code() {
-                Code::NotFound => {
+                Code::NotFound | Code::DeadlineExceeded => {
                     if task.task.is_terminated() {
                         info!("Deployment not found anymore and task is already terminated");
                     } else {
                         error!(
-                            "Deployment not found anymore to resume task ??? {:?}",
-                            &deployment.deployment_info
+                            "Deployment cannot be executed anymore to resume task ??? {:?} for {:?}",
+                            err, &deployment.deployment_info
                         );
                     }
                     task.terminate_task().await;
@@ -495,7 +493,7 @@ mod test {
 
     use qovery_engine::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
     use std::pin::Pin;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex, RwLock};
     use std::thread;
     use std::time::Duration;
@@ -702,6 +700,7 @@ mod test {
                 request_id: "".to_string(),
                 r#type: 0,
                 last_message_id: "".to_string(),
+                execution_start_deadline: None,
             }))]),
             msgs: vec![Ok(EngineMessageRx {
                 message_id: "".to_string(),
@@ -751,5 +750,136 @@ mod test {
         should_shutdown.store(true, Ordering::Relaxed);
         assert!(timeout(Duration::from_secs(7), &mut fut).await.is_ok());
         assert!(!task_is_running.load(Ordering::Relaxed));
+    }
+
+    struct EngineGtwTestThatDisconnect {
+        deployments: Mutex<Vec<Result<Response<DeploymentInfo>, Status>>>,
+        msgs: Vec<Result<EngineMessageRx, Status>>,
+        nb_disconnect: AtomicUsize,
+        disconnect_after: Duration,
+        nb_exec_deployment_called: Arc<AtomicUsize>,
+    }
+
+    #[tonic::async_trait]
+    impl Engine for EngineGtwTestThatDisconnect {
+        async fn is_authorized(&self, _request: Request<()>) -> Result<Response<()>, Status> {
+            Ok(Response::new(()))
+        }
+
+        async fn get_new_deployment(
+            &self,
+            _request: Request<DeploymentRequest>,
+        ) -> Result<Response<DeploymentInfo>, Status> {
+            self.deployments
+                .lock()
+                .unwrap()
+                .pop()
+                .unwrap_or_else(|| Err(Status::not_found("")))
+        }
+
+        type ExecDeploymentStream = Pin<Box<dyn Stream<Item = Result<EngineMessageRx, Status>> + Send>>;
+        async fn exec_deployment(
+            &self,
+            _request: Request<Streaming<EngineMessageTx>>,
+        ) -> Result<Response<Self::ExecDeploymentStream>, Status> {
+            self.nb_exec_deployment_called.fetch_add(1, Ordering::Relaxed);
+            if self.nb_disconnect.fetch_add(1, Ordering::Relaxed) <= 1 {
+                // freeze the cnx and disconnect
+                tokio::time::sleep(self.disconnect_after).await;
+                return Err(Status::unavailable("Disconnected"));
+            }
+
+            let stream = Box::pin(stream::iter(self.msgs.clone()).chain(stream::pending()));
+            Ok(Response::new(stream))
+        }
+
+        async fn get_service_version(
+            &self,
+            _request: Request<ServiceVersionRequest>,
+        ) -> Result<Response<ServiceVersionResponse>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn get_git_token(
+            &self,
+            _request: Request<GitTokenRequest>,
+        ) -> Result<Response<GitTokenResponse>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn update_cluster_credentials(
+            &self,
+            _request: Request<ClusterCredentialsUpdate>,
+        ) -> Result<Response<()>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_deployment_manager_not_executing_task_after_deadline() {
+        let (client, server) = tokio::io::duplex(1024);
+
+        // The start should be claimed before 1sec
+        let execution_start_deadline = Duration::from_secs(2);
+        let nb_exec_deployment_called = Arc::new(AtomicUsize::new(0));
+        let engine_gateway = EngineGtwTestThatDisconnect {
+            deployments: Mutex::new(vec![Ok(Response::new(DeploymentInfo {
+                organization_id: "".to_string(),
+                cluster_id: "".to_string(),
+                execution_id: Uuid::new_v4().to_string(),
+                request_id: "".to_string(),
+                r#type: 0,
+                last_message_id: "".to_string(),
+                execution_start_deadline: Some(prost_types::Duration::try_from(execution_start_deadline).unwrap()),
+            }))]),
+            msgs: vec![Ok(EngineMessageRx {
+                message_id: "".to_string(),
+                request: Some(engine_message_rx::Request::DeploymentRequest("".to_string())),
+            })],
+            nb_disconnect: AtomicUsize::new(0),
+            disconnect_after: execution_start_deadline - Duration::from_secs(1),
+            nb_exec_deployment_called: nb_exec_deployment_called.clone(),
+        };
+
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(EngineServer::new(engine_gateway))
+                .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server)]))
+                .await
+        });
+
+        let client = new_engine_client_test(Some(client)).await;
+
+        let task = EngineTaskTest::new();
+        let _task = task.clone();
+        let task_is_running = task.is_running.clone();
+
+        let mk_engine_task = move |_, _: &_, _: &_, _, _, _| {
+            let task: Arc<dyn Task> = Arc::new(task.clone());
+            Ok::<_, EngineEvent>(task)
+        };
+
+        let task = TaskSelector::Environment;
+        let mut deployment_mngr = DeploymentManager::new(
+            &task,
+            client,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
+            Box::new(mk_engine_task),
+            Default::default(),
+        );
+        deployment_mngr.default_wait_time = Duration::from_millis(100);
+        deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
+        let fut = deployment_mngr.run();
+        pin_mut!(fut);
+
+        // Drive the deployment for 5secs
+        assert!(timeout(execution_start_deadline * 3, &mut fut).await.is_err());
+
+        // Be sure that our task is not running and has not been executed
+        assert!(!task_is_running.load(Ordering::Relaxed));
+        assert!(!_task.is_terminated());
+        // it should have been called twice, and no more as deadline should have elapsed after
+        assert_eq!(nb_exec_deployment_called.load(Ordering::Relaxed), 2);
     }
 }

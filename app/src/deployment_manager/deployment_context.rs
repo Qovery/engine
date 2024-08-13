@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, watch, Mutex};
+use tokio::time::Instant;
 use tokio_stream::Stream;
 use tonic::Streaming;
 
@@ -21,6 +22,8 @@ use tonic::Streaming;
 /// The same engine is going to receive all the deployment group/task for a deployment
 pub struct DeploymentContext {
     pub deployment_info: DeploymentInfo,
+    deployment_start_deadline: Instant,
+    execution_started: bool,
 
     // The channel to send engine events to the gateway/receiver
     // The same channel is re-used across all tasks, so even in case of cnx loss
@@ -41,6 +44,11 @@ impl DeploymentContext {
         let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
         let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
         Self {
+            deployment_start_deadline: Instant::now()
+                + deployment_info
+                    .execution_start_deadline
+                    .map(|d| Duration::from_secs(d.seconds as u64))
+                    .unwrap_or(Duration::from_secs(50)),
             deployment_info,
             log_tx: log_engine_tx,
             log_rx: Arc::new(Mutex::new(EngineLogStreamContext::new(log_engine_rx, log_buffer_duration))),
@@ -52,7 +60,12 @@ impl DeploymentContext {
             // on resume
             last_msg_memento: Arc::new(Mutex::new(None)),
             log_file_writer,
+            execution_started: false,
         }
+    }
+
+    fn is_deployment_start_deadline_exceeded(&self) -> bool {
+        !self.execution_started && (Instant::now() > self.deployment_start_deadline)
     }
 
     pub async fn get_message_stream(
@@ -84,6 +97,10 @@ impl DeploymentContext {
         ),
         tonic::Status,
     > {
+        if self.is_deployment_start_deadline_exceeded() {
+            return Err(tonic::Status::deadline_exceeded("Deployment start execution deadline exceeded"));
+        }
+
         let (log_tx, msg_tx, msg_stream, abort_upstream_tx) = self.get_message_stream().await;
         let msg_publisher = Box::new(msg_tx);
         let logger_for_task: Box<dyn Logger> = Box::new(CompositeLogger::new(vec![
@@ -110,6 +127,7 @@ impl DeploymentContext {
     }
 
     pub fn set_last_message_id(&mut self, last_id: String) {
+        self.execution_started = true;
         self.deployment_info.last_message_id = last_id;
     }
 

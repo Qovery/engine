@@ -63,6 +63,12 @@ message DeploymentInfo {
   string request_id = 4;
   DeploymentType type = 5;
   string last_message_id = 6;
+  // Represents the deadline for the start of execution of the deployment
+  // So in case of retry, the engine will not execute the deployment if the deadline is elapsed
+  // as the gateway is going to re-dispatch the deployment after this deadline elapsed.
+  // It is a duration and not a point in time as engine may have their clock not synchronized correctly.
+  // i.e: Self Managed cluster, and need to rely on their clock
+  google.protobuf.Duration execution_start_deadline = 7;
 }
 
 message EngineMessageTx {
@@ -83,7 +89,7 @@ message EngineMessageRx {
   string message_id = 1;
   oneof request {
     string deployment_request = 2;
-    // int32 deployment_cancel = 3; // Deprecated: use `deployment_cancel_request` instead, this field is commented to avoid matching on a dead field
+    // int32 deployment_cancel = 3; // Deprecated: use `deployment_cancel_request` instead
     bool terminated = 4;
     CancelType deployment_cancel_request = 5;
   }
