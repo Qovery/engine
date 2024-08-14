@@ -32,7 +32,6 @@ use crate::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::models::labels_group::LabelsGroupTeraContext;
 use crate::models::probe::Probe;
 use crate::models::registry_image_source::RegistryImageSource;
-use crate::models::service_resource::compute_service_requests_and_limits;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::models::utils;
 use crate::runtime::block_on;
@@ -119,10 +118,10 @@ impl<T: CloudProvider> Container<T> {
         registry_image_source: RegistryImageSource,
         command_args: Vec<String>,
         entrypoint: Option<String>,
-        cpu_request_in_milli: u32,
-        cpu_limit_in_milli: u32,
-        ram_request_in_mib: u32,
-        ram_limit_in_mib: u32,
+        cpu_request_in_milli: KubernetesCpuResourceUnit,
+        cpu_limit_in_milli: KubernetesCpuResourceUnit,
+        ram_request_in_mib: KubernetesMemoryResourceUnit,
+        ram_limit_in_mib: KubernetesMemoryResourceUnit,
         min_instances: u32,
         max_instances: u32,
         public_domain: String,
@@ -137,8 +136,6 @@ impl<T: CloudProvider> Container<T> {
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
-        allow_service_cpu_overcommit: bool,
-        allow_service_ram_overcommit: bool,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -151,18 +148,6 @@ impl<T: CloudProvider> Container<T> {
                 "min_instances must be greater than 0".to_string(),
             ));
         }
-
-        let service_resources = compute_service_requests_and_limits(
-            cpu_request_in_milli,
-            cpu_limit_in_milli,
-            ram_request_in_mib,
-            ram_limit_in_mib,
-            advanced_settings.resources_override_limit_cpu_in_milli,
-            advanced_settings.resources_override_limit_ram_in_mib,
-            allow_service_cpu_overcommit,
-            allow_service_ram_overcommit,
-        )
-        .map_err(ContainerError::InvalidConfig)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -184,10 +169,10 @@ impl<T: CloudProvider> Container<T> {
             source: registry_image_source,
             command_args,
             entrypoint,
-            cpu_request_in_milli: service_resources.cpu_request_in_milli,
-            cpu_limit_in_milli: service_resources.cpu_limit_in_milli,
-            ram_request_in_mib: service_resources.ram_request_in_mib,
-            ram_limit_in_mib: service_resources.ram_limit_in_mib,
+            cpu_request_in_milli,
+            cpu_limit_in_milli,
+            ram_request_in_mib,
+            ram_limit_in_mib,
             min_instances,
             max_instances,
             public_domain,

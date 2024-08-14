@@ -6,7 +6,9 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
+use qovery_engine::cloud_provider::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
+};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
@@ -98,12 +100,10 @@ fn should_increase_app_storage_size() {
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
             vec![],
-            resized_app.cpu_request_in_milli,
-            resized_app.cpu_limit_in_milli,
-            resized_app.ram_request_in_mib,
-            resized_app.ram_limit_in_mib,
-            false,
-            false,
+            KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_request_in_milli),
+            KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_limit_in_milli),
+            KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_request_in_mib),
+            KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_limit_in_mib),
         )
         .expect("Unable to create application");
 

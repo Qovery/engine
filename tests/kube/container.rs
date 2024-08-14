@@ -7,7 +7,9 @@ use base64::Engine;
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::cloud_provider::io::RegistryMirroringMode;
-use qovery_engine::cloud_provider::models::{EnvironmentVariable, Storage};
+use qovery_engine::cloud_provider::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
+};
 use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
@@ -87,10 +89,10 @@ fn should_increase_container_storage_size() {
             },
             resized_container.command_args.clone(),
             resized_container.entrypoint.clone(),
-            resized_container.cpu_request_in_milli,
-            resized_container.cpu_limit_in_milli,
-            resized_container.ram_request_in_mib,
-            resized_container.ram_limit_in_mib,
+            KubernetesCpuResourceUnit::MilliCpu(resized_container.cpu_request_in_milli),
+            KubernetesCpuResourceUnit::MilliCpu(resized_container.cpu_limit_in_milli),
+            KubernetesMemoryResourceUnit::MebiByte(resized_container.ram_request_in_mib),
+            KubernetesMemoryResourceUnit::MebiByte(resized_container.ram_limit_in_mib),
             resized_container.min_instances,
             resized_container.max_instances,
             resized_container.public_domain.clone(),
@@ -105,8 +107,6 @@ fn should_increase_container_storage_size() {
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
             vec![],
-            false,
-            false,
         )
         .expect("Unable to create container");
 
