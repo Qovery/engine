@@ -35,7 +35,7 @@ pub fn get_simple_deployment() -> Deployment {
             "containers": [
               {
                 "name": "pause",
-                "image": "registry.k8s.io/pause:3.10"
+                "image": "public.ecr.aws/r3m4q3r9/qovery-ci:pause-3.10"
               }
             ]
           }
@@ -72,7 +72,7 @@ pub fn get_simple_statefulset() -> StatefulSet {
             "containers": [
               {
                 "name": "pause",
-                "image": "registry.k8s.io/pause:3.9"
+                "image": "public.ecr.aws/r3m4q3r9/qovery-ci:pause-3.10"
               }
             ]
           }
@@ -101,7 +101,7 @@ pub fn get_simple_cron_job() -> CronJob {
                           "containers":[
                              {
                                 "name":"pause",
-                                "image":"registry.k8s.io/pause:3.9"
+                                "image":"public.ecr.aws/r3m4q3r9/qovery-ci:pause-3.10"
                              }
                           ],
                           "restartPolicy":"OnFailure"
@@ -140,7 +140,7 @@ pub fn get_simple_daemon_set() -> DaemonSet {
                     "containers": [
                       {
                         "name": "pause",
-                        "image": "registry.k8s.io/pause:3.9"
+                        "image": "public.ecr.aws/r3m4q3r9/qovery-ci:pause-3.10"
                       }
                     ]
                   }
