@@ -14,7 +14,8 @@ use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{
-    CpuArchitecture, CustomDomain, EnvironmentVariable, MountedFile, Route, Storage, StorageClass,
+    CpuArchitecture, CustomDomain, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+    MountedFile, Route, Storage, StorageClass,
 };
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::service::{Action, Service};
@@ -333,19 +334,15 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             hpa_memory_average_utilization_percent: None,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
-            resources_override_limit_cpu_in_milli: None,
-            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
         get_labels_group(),
-        1,
-        2,
-        3,
-        3,
-        false,
-        false,
+        KubernetesCpuResourceUnit::MilliCpu(1),
+        KubernetesCpuResourceUnit::MilliCpu(2),
+        KubernetesMemoryResourceUnit::MebiByte(3),
+        KubernetesMemoryResourceUnit::MebiByte(3),
     )
     .unwrap()
 }
@@ -370,10 +367,10 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         },
         vec![test_cmd_arg()],
         Some("my_entrypoint".to_string()),
-        1,
-        2,
-        3,
-        4,
+        KubernetesCpuResourceUnit::MilliCpu(1),
+        KubernetesCpuResourceUnit::MilliCpu(2),
+        KubernetesMemoryResourceUnit::MebiByte(3),
+        KubernetesMemoryResourceUnit::MebiByte(4),
         5,
         6,
         format!("{}.{}", service_id, "example.com"),
@@ -439,15 +436,11 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
-            resources_override_limit_cpu_in_milli: None,
-            resources_override_limit_ram_in_mib: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
         get_labels_group(),
-        false,
-        false,
     )
     .unwrap()
 }
@@ -626,10 +619,10 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         vec![test_cmd_arg()],
         None,
         false,
-        4,
-        5,
-        6,
-        7,
+        KubernetesCpuResourceUnit::MilliCpu(4),
+        KubernetesCpuResourceUnit::MilliCpu(5),
+        KubernetesMemoryResourceUnit::MebiByte(6),
+        KubernetesMemoryResourceUnit::MebiByte(7),
         vec![test_env_var()],
         btreeset![test_mounted_file()],
         JobAdvancedSettings {
@@ -645,8 +638,6 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
-            resources_override_limit_cpu_in_milli: None,
-            resources_override_limit_ram_in_mib: None,
         },
         Some(Probe {
             r#type: ProbeType::Http {
@@ -673,8 +664,6 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_job(),
         get_labels_group(),
-        false,
-        false,
     )
     .unwrap()
 }

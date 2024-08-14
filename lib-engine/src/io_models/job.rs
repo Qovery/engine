@@ -1,6 +1,6 @@
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
-use crate::cloud_provider::models::CpuArchitecture;
+use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
@@ -69,11 +69,6 @@ pub struct JobAdvancedSettings {
     pub security_read_only_root_filesystem: bool,
     #[serde(alias = "security.automount_service_account_token")]
     pub security_automount_service_account_token: bool,
-
-    #[serde(alias = "resources.override.limit.cpu_in_milli")]
-    pub resources_override_limit_cpu_in_milli: Option<u32>,
-    #[serde(alias = "resources.override.limit.ram_in_mib")]
-    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for JobAdvancedSettings {
@@ -91,8 +86,6 @@ impl Default for JobAdvancedSettings {
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
-            resources_override_limit_cpu_in_milli: None,
-            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -317,8 +310,6 @@ impl Job {
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
-        allow_service_cpu_overcommit: bool,
-        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn JobService>, JobError> {
         let image_source = match self.source {
             JobSource::Docker { .. } => {
@@ -388,10 +379,10 @@ impl Job {
                         self.command_args,
                         self.entrypoint,
                         self.force_trigger,
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -404,8 +395,6 @@ impl Job {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        allow_service_cpu_overcommit,
-                        allow_service_ram_overcommit,
                     )?)
                 } else {
                     Box::new(models::job::Job::<AWSEc2>::new(
@@ -422,10 +411,10 @@ impl Job {
                         self.command_args,
                         self.entrypoint,
                         self.force_trigger,
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                         environment_variables,
                         self.mounted_files
                             .iter()
@@ -438,8 +427,6 @@ impl Job {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        allow_service_cpu_overcommit,
-                        allow_service_ram_overcommit,
                     )?)
                 }
             }
@@ -457,10 +444,10 @@ impl Job {
                 self.command_args,
                 self.entrypoint,
                 self.force_trigger,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -473,8 +460,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -490,10 +475,10 @@ impl Job {
                 self.command_args,
                 self.entrypoint,
                 self.force_trigger,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -506,8 +491,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -523,10 +506,10 @@ impl Job {
                 self.command_args,
                 self.entrypoint,
                 self.force_trigger,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -539,8 +522,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
             )?),
         };
 

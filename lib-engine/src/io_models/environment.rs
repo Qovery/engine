@@ -100,15 +100,7 @@ impl EnvironmentRequest {
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
                 );
-                srv.to_application_domain(
-                    context,
-                    build,
-                    cloud_provider,
-                    &self.annotations_groups,
-                    &self.labels_groups,
-                    cluster.advanced_settings().allow_service_cpu_overcommit,
-                    cluster.advanced_settings().allow_service_ram_overcommit,
-                )
+                srv.to_application_domain(context, build, cloud_provider, &self.annotations_groups, &self.labels_groups)
             })
             .collect();
         let applications = applications?;
@@ -125,8 +117,6 @@ impl EnvironmentRequest {
                     cluster,
                     &self.annotations_groups,
                     &self.labels_groups,
-                    cluster.advanced_settings().allow_service_cpu_overcommit,
-                    cluster.advanced_settings().allow_service_ram_overcommit,
                 )
             })
             .collect();
@@ -354,8 +344,6 @@ impl EnvironmentRequest {
                     cluster,
                     &self.annotations_groups,
                     &self.labels_groups,
-                    cluster.advanced_settings().allow_service_cpu_overcommit,
-                    cluster.advanced_settings().allow_service_ram_overcommit,
                 )
             })
             .collect();

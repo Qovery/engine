@@ -13,7 +13,9 @@ use uuid::Uuid;
 
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{CpuArchitecture, EnvironmentVariable, StorageClass};
+use crate::cloud_provider::models::{
+    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
+};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
@@ -174,11 +176,6 @@ pub struct ApplicationAdvancedSettings {
     pub hpa_cpu_average_utilization_percent: u8,
     #[serde(alias = "hpa.memory.average_utilization_percent")]
     pub hpa_memory_average_utilization_percent: Option<u8>,
-
-    #[serde(alias = "resources.override.limit.cpu_in_milli")]
-    pub resources_override_limit_cpu_in_milli: Option<u32>,
-    #[serde(alias = "resources.override.limit.ram_in_mib")]
-    pub resources_override_limit_ram_in_mib: Option<u32>,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -223,8 +220,6 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_read_timeout_seconds: 60,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
-            resources_override_limit_cpu_in_milli: None,
-            resources_override_limit_ram_in_mib: None,
         }
     }
 }
@@ -270,8 +265,6 @@ impl ApplicationAdvancedSettings {
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
             hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
-            resources_override_limit_cpu_in_milli: self.resources_override_limit_cpu_in_milli,
-            resources_override_limit_ram_in_mib: self.resources_override_limit_ram_in_mib,
         }
     }
 }
@@ -330,8 +323,6 @@ impl Application {
         cloud_provider: &dyn CloudProvider,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
-        allow_service_cpu_overcommit: bool,
-        allow_service_ram_overcommit: bool,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
         let annotations_groups = self
@@ -380,12 +371,10 @@ impl Application {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        allow_service_cpu_overcommit,
-                        allow_service_ram_overcommit,
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -414,12 +403,10 @@ impl Application {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        allow_service_cpu_overcommit,
-                        allow_service_ram_overcommit,
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                     )?))
                 }
             }
@@ -449,12 +436,10 @@ impl Application {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -482,12 +467,10 @@ impl Application {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -515,12 +498,10 @@ impl Application {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
-                allow_service_cpu_overcommit,
-                allow_service_ram_overcommit,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
             )?)),
         }
     }
