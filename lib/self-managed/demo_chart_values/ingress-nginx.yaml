@@ -7,3 +7,8 @@ controller:
     default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
   publishService:
     enabled: true
+  service:
+    enabled: true
+    annotations:
+      # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
+      external-dns.alpha.kubernetes.io/hostname: *domainWildcard
