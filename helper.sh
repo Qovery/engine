@@ -16,6 +16,7 @@ ARGS_NUM=$#
 PROC="$$"
 QOVERY_API="api.qovery.com"
 QOVERY_ADMIN_API="api-admin.qovery.com"
+QOVERY_ADMIN_DEV_API="api-admin-dev.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
 ENGINE_DIR=lib-engine
 
@@ -127,6 +128,7 @@ function build() { ## Build engine app with engine lib
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(generate_image_tag)
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
+  curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_DEV_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
 }
 
 function get_release_ga() { ## Get globally available release version
