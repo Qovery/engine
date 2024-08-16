@@ -434,16 +434,10 @@ impl ValuesFile {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
 
-        value.qovery_cluster_agent
-            .environment_variables = BTreeMap::from([
-            ("LOKI_URL".to_string(), "".to_string()),
-            ("GRPC_SERVER".to_string(), "*agentGatewayUrl".to_string()),
-        ]);
-        value.qovery_shell_agent
-            .environment_variables = BTreeMap::from([
-            ("GRPC_SERVER".to_string(), "*agentGatewayUrl".to_string()),
-        ]);
-        
+        value
+            .qovery_cluster_agent
+            .environment_variables
+            .insert("LOKI_URL".to_string(), "".to_string());
 
         value.qovery_engine = Some(QoveryEngine {
             image: ImageTag {
