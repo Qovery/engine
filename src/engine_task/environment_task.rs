@@ -45,7 +45,7 @@ pub struct EnvironmentTask {
     qovery_api: Arc<dyn QoveryApi>,
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
-    log_file_writer: Option<Box<LogFileWriter>>,
+    log_file_writer: Option<LogFileWriter>,
 }
 
 impl EnvironmentTask {
@@ -57,7 +57,7 @@ impl EnvironmentTask {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         qovery_api: Box<dyn QoveryApi>,
-        log_file_writer: Option<Box<LogFileWriter>>,
+        log_file_writer: Option<LogFileWriter>,
     ) -> Self {
         let span = info_span!(
             "environment_task",
@@ -247,7 +247,10 @@ impl EnvironmentTask {
         }
 
         // Be sure that our repository exist before trying to pull/push images from it
-        logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
+        logger.send_progress(format!(
+            "🗂️ Provisioning container repository {}",
+            build.image.repository_name()
+        ));
         let provision_registry_record = metrics_registry.start_record(
             build.image.service_long_id,
             StepLabel::Service,

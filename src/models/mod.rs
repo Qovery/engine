@@ -17,7 +17,6 @@ pub mod registry_image_source;
 pub mod router;
 pub mod scaleway;
 pub mod selfmanaged;
-pub mod service_resource;
 pub mod third_parties;
 pub mod types;
 pub mod utils;

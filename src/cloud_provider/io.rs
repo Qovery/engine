@@ -165,10 +165,6 @@ pub struct ClusterAdvancedSettings {
     pub gcp_vpc_enable_flow_logs: bool,
     #[serde(alias = "gcp.vpc.flow_logs_sampling")]
     pub gcp_vpc_flow_logs_sampling: Option<Percentage>,
-    #[serde(alias = "allow_service_cpu_overcommit")]
-    pub allow_service_cpu_overcommit: bool,
-    #[serde(alias = "allow_service_ram_overcommit")]
-    pub allow_service_ram_overcommit: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -217,8 +213,6 @@ impl Default for ClusterAdvancedSettings {
             infra_pdb_enabled: false,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
-            allow_service_cpu_overcommit: false,
-            allow_service_ram_overcommit: false,
         }
     }
 }
