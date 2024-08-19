@@ -10,7 +10,6 @@ metadata:
     external-dns.alpha.kubernetes.io/target: {{ .Values.externalDnsTarget }}
     kubernetes.io/tls-acme: "true"
     cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
-    kubernetes.io/ingress.class: {{ .Values.ingressClass | quote }}
     ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken"
@@ -24,6 +23,7 @@ spec:
               servicePort: {{ .Values.oauthConfig.port }}
             path: /oauth2
 
+  ingressClassName: {{ .Values.ingressClass | quote }}
   tls:
     - hosts:
         - {{ .Values.hostName }}
