@@ -17,7 +17,6 @@ use super::RegistryTags;
 
 pub struct GoogleArtifactRegistry {
     context: Context,
-    id: String,
     long_id: Uuid,
     name: String,
     project_id: String,
@@ -29,7 +28,6 @@ pub struct GoogleArtifactRegistry {
 impl GoogleArtifactRegistry {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         project_id: &str,
@@ -85,7 +83,6 @@ impl GoogleArtifactRegistry {
 
         Ok(Self {
             context,
-            id: id.to_string(),
             long_id,
             name: name.to_string(),
             project_id: project_id.to_string(),
@@ -157,10 +154,6 @@ impl ContainerRegistry for GoogleArtifactRegistry {
 
     fn kind(&self) -> Kind {
         Kind::GcpArtifactRegistry
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
     }
 
     fn long_id(&self) -> &Uuid {

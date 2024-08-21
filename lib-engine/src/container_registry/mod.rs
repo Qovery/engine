@@ -14,6 +14,7 @@ use crate::io_models::QoveryIdentifier;
 pub mod ecr;
 pub mod errors;
 pub mod generic_cr;
+pub mod github_cr;
 pub mod google_artifact_registry;
 pub mod scaleway_container_registry;
 
@@ -42,12 +43,8 @@ pub struct RegistryTags {
 pub trait ContainerRegistry: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
-    fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
 
     // Get info for this registry, url endpoint with login/password, image name convention, ...
     fn registry_info(&self) -> &ContainerRegistryInfo;
@@ -127,6 +124,7 @@ pub enum Kind {
     ScalewayCr,
     GcpArtifactRegistry,
     GenericCr,
+    GithubCr,
 }
 
 #[derive(Clone, PartialEq, Debug)]

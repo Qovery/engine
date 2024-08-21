@@ -263,13 +263,6 @@ impl<T: CloudProvider> Job<T> {
         &self.action
     }
 
-    pub fn image_with_tag(&self) -> String {
-        match &self.image_source {
-            ImageSource::Registry { source: registry } => format!("{}:{}", registry.image, registry.tag),
-            ImageSource::Build { source: build } => build.image.name_without_repository().to_string(),
-        }
-    }
-
     fn service_version(&self) -> String {
         match &self.image_source {
             ImageSource::Registry { source: registry } => {

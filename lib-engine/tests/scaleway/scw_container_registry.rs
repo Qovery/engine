@@ -72,7 +72,6 @@ fn test_get_repository() {
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
-                "",
                 Uuid::new_v4(),
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
@@ -124,7 +123,6 @@ fn test_create_registry_namespace() {
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
-                "",
                 Uuid::new_v4(),
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
@@ -221,7 +219,6 @@ fn test_create_registry_namespace_invalid_name() {
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
-                "",
                 Uuid::new_v4(),
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
@@ -282,7 +279,6 @@ fn test_delete_repository() {
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
-                "",
                 Uuid::new_v4(),
                 registry_name.as_str(),
                 scw_secret_key.as_str(),
@@ -330,7 +326,6 @@ fn test_get_or_create_registry_namespace() {
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
-                "",
                 Uuid::new_v4(),
                 registry_name.as_str(),
                 scw_secret_key.as_str(),

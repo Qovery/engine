@@ -37,7 +37,6 @@ pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, re
 
     ECR::new(
         context.clone(),
-        format!("default-ecr-ec2-registry-{region}-Qovery Test").as_str(),
         Uuid::new_v4(),
         "ea69qe62xaw3wjai",
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),

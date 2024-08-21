@@ -20,7 +20,6 @@ use super::RegistryTags;
 
 pub struct ScalewayCR {
     context: Context,
-    id: String,
     long_id: Uuid,
     name: String,
     default_project_id: String,
@@ -32,7 +31,6 @@ pub struct ScalewayCR {
 impl ScalewayCR {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         secret_token: &str,
@@ -65,7 +63,6 @@ impl ScalewayCR {
 
         let cr = ScalewayCR {
             context,
-            id: id.to_string(),
             long_id,
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
@@ -293,10 +290,6 @@ impl ContainerRegistry for ScalewayCR {
 
     fn kind(&self) -> Kind {
         Kind::ScalewayCr
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
     }
 
     fn long_id(&self) -> &Uuid {
