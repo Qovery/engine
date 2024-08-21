@@ -27,7 +27,6 @@ fn create_ecr_repository_with_tags() {
         let registry_name = format!("test-{}", Uuid::new_v4());
         let container_registry = ECR::new(
             context,
-            "",
             Uuid::new_v4(),
             registry_name.as_str(),
             &secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),

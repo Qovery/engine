@@ -1,5 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::docker::ContainerImage;
+use std::collections::HashSet;
 
 use std::process::ExitStatus;
 
@@ -37,7 +38,9 @@ impl Skopeo {
     pub fn new(credentials: Option<(String, String)>) -> Result<Self, SkopeoError> {
         Ok(Self {
             credentials,
-            common_envs: vec![],
+            common_envs: vec![
+            //("HTTPS_PROXY".to_string(), "http://localhost:8080".to_string())
+            ],
         })
     }
 
@@ -81,7 +84,7 @@ impl Skopeo {
                 output.push(line);
             },
             &mut |line| info!("{}", line),
-            &CommandKiller::never(),
+            &CommandKiller::from_timeout(Duration::from_secs(30)),
         )?;
 
         #[derive(Deserialize)]
@@ -100,6 +103,80 @@ impl Skopeo {
             })?;
 
         Ok(output.tags)
+    }
+
+    /// List all digests of an image with format `sha256:d35dfc2fe3ef66bcc085ca00d3152b482e6cafb23cdda1864154caf3b19094ba`
+    pub fn list_digests(&self, image: &ContainerImage, tls_verify: bool) -> Result<HashSet<String>, SkopeoError> {
+        let uri = format!("docker://{}", image.image_name());
+        info!("listing digest of image {}", uri);
+
+        let tls = format!("--tls-verify={}", tls_verify);
+        let creds = if let Some((user, pass)) = &self.credentials {
+            format!("--creds={}:{}", user, pass)
+        } else {
+            "--no-creds".to_string()
+        };
+
+        // We need --raw because else skopeo is only returning the digest for the current arch and not of the whole image tag
+        // https://github.com/containers/skopeo/issues/1345
+        let args = &["inspect", &tls, &creds, "--retry-times=5", "--raw", &uri];
+        let mut output: Vec<String> = vec![];
+        skopeo_exec(
+            args,
+            &self.get_all_envs(&[]),
+            &mut |line| {
+                info!("{}", line);
+                output.push(line);
+            },
+            &mut |line| info!("{}", line),
+            &CommandKiller::from_timeout(Duration::from_secs(30)),
+        )?;
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct JsonOutput {
+            //repository: String,
+            manifests: Vec<Digest>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Digest {
+            digest: String,
+        }
+
+        let json: JsonOutput = serde_json::from_str(&output.join("\n")).map_err(|err| SkopeoError::ExecutionError {
+            raw_error: std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid JSON output: {:?} {}", err, output.join("\n")),
+            ),
+        })?;
+
+        let mut digests: HashSet<String> = json.manifests.into_iter().map(|m| m.digest).collect();
+
+        // We need to do it again with --format='{{ .Digest }}' because --raw does not return the digest of the tag
+        // in case of a multi-arch image
+        let args = &[
+            "inspect",
+            &tls,
+            &creds,
+            "--retry-times=5",
+            "--format={{ .Digest }}",
+            &uri,
+        ];
+        output.clear();
+        skopeo_exec(
+            args,
+            &self.get_all_envs(&[]),
+            &mut |line| {
+                info!("{}", line);
+                output.push(line);
+            },
+            &mut |line| info!("{}", line),
+            &CommandKiller::from_timeout(Duration::from_secs(30)),
+        )?;
+
+        digests.insert(output.remove(0));
+        Ok(digests)
     }
 
     fn get_all_envs<'a>(&'a self, envs: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
@@ -219,5 +296,21 @@ mod tests {
         let ret = ret.unwrap();
         assert_eq!(ret.len(), 1);
         assert_eq!(ret[0], "mirror");
+    }
+
+    #[test]
+    fn test_list_digests() {
+        let image = ContainerImage::new(
+            Url::parse("https://public.ecr.aws").unwrap(),
+            "r3m4q3r9/qovery-ci".to_string(),
+            vec!["pause-3.10".to_string()],
+        );
+
+        let skopeo = Skopeo::new(None).unwrap();
+        let ret = skopeo.list_digests(&image, true);
+        assert!(ret.is_ok());
+        let ret = ret.unwrap();
+        assert!(ret.len() >= 3);
+        assert!(ret.iter().all(|d| d.starts_with("sha256:")));
     }
 }

@@ -159,7 +159,7 @@ impl Task for InfrastructureTask {
             "infrastructure task {} started with infrastructure id {}-{}-{}",
             self.id(),
             self.request.cloud_provider.id.as_str(),
-            self.request.container_registry.id.as_str(),
+            self.request.container_registry.long_id,
             self.request.build_platform.id.as_str()
         );
 

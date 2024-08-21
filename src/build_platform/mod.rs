@@ -252,9 +252,7 @@ impl Image {
     }
 
     pub fn name_without_repository(&self) -> &str {
-        self.name
-            .strip_prefix(&format!("{}/", self.repository_name()))
-            .unwrap_or(&self.name)
+        self.name.split_once('/').map(|(_, name)| name).unwrap_or(&self.name)
     }
 }
 

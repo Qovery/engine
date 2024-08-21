@@ -33,7 +33,6 @@ use super::RegistryTags;
 
 pub struct ECR {
     context: Context,
-    id: String,
     long_id: Uuid,
     name: String,
     access_key_id: String,
@@ -47,7 +46,6 @@ pub struct ECR {
 impl ECR {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         access_key_id: &str,
@@ -58,7 +56,6 @@ impl ECR {
     ) -> Result<Self, ContainerRegistryError> {
         let mut cr = ECR {
             context,
-            id: id.to_string(),
             long_id,
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
@@ -392,10 +389,6 @@ impl ContainerRegistry for ECR {
 
     fn kind(&self) -> Kind {
         Kind::Ecr
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
     }
 
     fn long_id(&self) -> &Uuid {

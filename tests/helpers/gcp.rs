@@ -101,7 +101,6 @@ pub fn gcp_container_registry(context: &Context) -> GoogleArtifactRegistry {
 
     GoogleArtifactRegistry::new(
         context.clone(),
-        id.short(),
         id.to_uuid(),
         &name,
         secrets
@@ -320,7 +319,6 @@ pub fn clean_environments(
 
     let _container_registry = GoogleArtifactRegistry::new(
         context.clone(),
-        "test",
         Uuid::new_v4(),
         "test",
         gcp_project_name,

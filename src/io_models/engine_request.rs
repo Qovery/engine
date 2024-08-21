@@ -17,6 +17,7 @@ use crate::cloud_provider::scaleway::Scaleway;
 use crate::cloud_provider::self_managed::SelfManaged;
 use crate::container_registry::ecr::ECR;
 use crate::container_registry::generic_cr::GenericCr;
+use crate::container_registry::github_cr::{GithubCr, RegistryType};
 use crate::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
@@ -551,7 +552,6 @@ impl Kubernetes {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContainerRegistry {
     pub kind: container_registry::Kind,
-    pub id: String,
     pub long_id: Uuid,
     pub name: String,
     pub options: serde_json::Value,
@@ -570,7 +570,6 @@ impl ContainerRegistry {
                     .with_context(|| "cannot deserialize container registry option")?;
                 Ok(Box::new(ECR::new(
                     context,
-                    self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
                     &options.access_key_id,
@@ -585,7 +584,6 @@ impl ContainerRegistry {
                     .with_context(|| "cannot deserialize container registry option")?;
                 Ok(Box::new(ScalewayCR::new(
                     context,
-                    self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
                     &options.scaleway_secret_key,
@@ -608,7 +606,6 @@ impl ContainerRegistry {
 
                 Ok(Box::new(GoogleArtifactRegistry::new(
                     context,
-                    self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
                     credentials.project_id.as_str(),
@@ -637,6 +634,19 @@ impl ContainerRegistry {
                     options.repository_name.clone(),
                     options.username.and_then(|l| options.password.map(|p| (l, p))),
                     options.url.host_str().unwrap_or("") != "qovery-registry.lan",
+                )?))
+            }
+            container_registry::Kind::GithubCr => {
+                let options: GithubCrOptions = serde_json::from_value(self.options.clone())
+                    .with_context(|| "cannot deserialize container registry option")?;
+
+                Ok(Box::new(GithubCr::new(
+                    context,
+                    self.long_id,
+                    &self.name,
+                    options.url,
+                    RegistryType::from(options.repository_type),
+                    options.token,
                 )?))
             }
         }
@@ -752,6 +762,20 @@ pub struct GenericCrOptions {
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct GithubCrOptions {
+    pub url: Url,
+    #[derivative(Debug = "ignore")]
+    pub token: String,
+    pub repository_type: GithubCrRepoType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub enum GithubCrRepoType {
+    User(String),
+    Organization(String),
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GcpCrOptions {
     #[derivative(Debug = "ignore")]
     #[serde(alias = "json_credentials")]
@@ -782,4 +806,13 @@ where
 #[derivative(Debug)]
 pub struct Archive {
     pub upload_url: Url,
+}
+
+impl From<GithubCrRepoType> for RegistryType {
+    fn from(value: GithubCrRepoType) -> Self {
+        match value {
+            GithubCrRepoType::User(user) => RegistryType::User(user),
+            GithubCrRepoType::Organization(orga) => RegistryType::Organization(orga),
+        }
+    }
 }

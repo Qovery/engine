@@ -1,4 +1,3 @@
-#![allow(deprecated)]
 pub mod aws;
 pub mod aws_ec2;
 pub mod common;
