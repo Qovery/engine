@@ -96,6 +96,9 @@ impl GenericCr {
 
         Ok(cr)
     }
+    pub fn skopeo(&self) -> &Skopeo {
+        &self.skopeo
+    }
 
     fn get_docker_json_config_raw(host: &str, port: u16, login: &str, secret_token: &str) -> String {
         let port = if port == 443 {
@@ -122,10 +125,6 @@ impl ContainerRegistry for GenericCr {
 
     fn kind(&self) -> Kind {
         Kind::GenericCr
-    }
-
-    fn id(&self) -> &str {
-        ""
     }
 
     fn long_id(&self) -> &Uuid {

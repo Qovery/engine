@@ -4,12 +4,6 @@ extern crate passwords;
 extern crate scaleway_api_rs;
 extern crate time;
 
-use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
-use std::env;
-use std::io::{Error, ErrorKind};
-use std::sync::Arc;
-
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
@@ -21,7 +15,12 @@ use hashicorp_vault;
 use passwords::PasswordGenerator;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
-use time::Instant;
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryFrom;
+use std::env;
+use std::io::{Error, ErrorKind};
+use std::sync::Arc;
+use std::time::Instant;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -565,7 +564,7 @@ pub fn init() -> Instant {
 pub fn teardown(start_time: Instant, test_name: String) {
     let end = Instant::now();
     let elapsed = end - start_time;
-    info!("{} seconds for test {}", elapsed.as_seconds_f64(), test_name);
+    info!("{} seconds for test {}", elapsed.as_secs_f64(), test_name);
 }
 
 pub fn engine_run_test<T>(test: T)

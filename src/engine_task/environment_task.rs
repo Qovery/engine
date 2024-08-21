@@ -356,7 +356,6 @@ impl EnvironmentTask {
             if abort.status().should_cancel() {
                 return Err(Box::new(EngineError::new_task_cancellation_requested(event_details)));
             }
-
             let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, abort, logger.clone())?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
