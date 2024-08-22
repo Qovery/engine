@@ -574,6 +574,7 @@ impl BuildPlatform for LocalDocker {
                 // - Timeout on git clone
                 debug!("Error on git clone: git_error_class={:?}, message={}", git_error_class, message);
                 return if git_error_class == ErrorClass::Os
+                    || git_error_class == ErrorClass::Ssl
                     || (git_error_class == ErrorClass::Net && message.contains("timed out"))
                 {
                     debug!("Retrying git clone...");
