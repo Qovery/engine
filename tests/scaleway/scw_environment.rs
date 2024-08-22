@@ -323,7 +323,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                     service_name: None,
                     namespace: None,
                 }];
-                app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
+                app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
                 app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
                 app
