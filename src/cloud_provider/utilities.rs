@@ -14,8 +14,9 @@ use core::result::Result::{Err, Ok};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
-use std::net::ToSocketAddrs;
+use std::io;
 use std::net::{SocketAddr, TcpStream as NetTcpStream};
+use std::net::{ToSocketAddrs, UdpSocket};
 use std::time::Duration;
 use std::{fmt, thread};
 use trust_dns_resolver::config::*;
@@ -168,6 +169,22 @@ pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(),
     }
 }
 
+pub fn check_udp_port_is_open(address: &str, port: u16) -> io::Result<bool> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    let full_address = format!("{}:{}", address, port);
+    socket.set_read_timeout(Some(Duration::from_secs(5)))?;
+
+    socket.send_to(b"qovery", full_address)?;
+
+    // Attempt to receive a response
+    let mut buf = [0; 512];
+    match socket.recv_from(&mut buf) {
+        Ok(_) => Ok(true), // A response was received, port is open
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Ok(false), // Timeout, port is closed
+        Err(e) => Err(e),  // An actual error occurred
+    }
+}
+
 pub fn wait_until_port_is_open(
     address: &TcpCheckSource,
     port: u16,
@@ -258,7 +275,7 @@ pub fn update_pvcs(
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::utilities::{
-        await_domain_resolve_cname, check_tcp_port_is_open, TcpCheckErrors, TcpCheckSource,
+        await_domain_resolve_cname, check_tcp_port_is_open, check_udp_port_is_open, TcpCheckErrors, TcpCheckSource,
     };
     use crate::cmd::command::CommandKiller;
     use crate::errors::CommandError;
@@ -374,5 +391,25 @@ mod tests {
             // verify:
             assert_eq!(tc.expected_output, result, "case {} : '{}'", tc.description, tc.input);
         }
+    }
+
+    #[test]
+    #[ignore] // comment if you locally want to perform tests
+    fn test_udp_port_closed() {
+        // random port that should be closed
+        let result = check_udp_port_is_open("127.0.0.1", 65535);
+        assert!(result.is_err(), "port 65535 is opened while it was expected to be closed");
+    }
+
+    #[test]
+    #[ignore] // comment if you locally want to perform tests
+    fn test_udp_port_open() {
+        let result = check_udp_port_is_open("127.0.0.1", 8080);
+        assert!(
+            result.is_ok(),
+            "Expected the udp port to be open: 8080. Got an error: {:?}",
+            result
+        );
+        assert!(result.unwrap());
     }
 }
