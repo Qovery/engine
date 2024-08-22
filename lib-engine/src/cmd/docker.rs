@@ -53,7 +53,7 @@ pub enum Architecture {
 }
 
 impl Architecture {
-    fn to_platform(self) -> &'static str {
+    pub(crate) fn to_platform(self) -> &'static str {
         match self {
             Architecture::AMD64 => "linux/amd64",
             Architecture::ARM64 => "linux/arm64",

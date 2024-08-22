@@ -332,6 +332,11 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   return $TESTS_STATUS
 }
 
+function cargo_version() {
+  print_title "CARGO VERSION"
+  cargo --version
+}
+
 # shellcheck disable=SC2120
 function lint() { ## Run rust linter
   nb_treads=$2
@@ -547,6 +552,9 @@ single_test)
   ;;
 prepare_tests)
   prepare_tests
+  ;;
+cargo_version)
+  cargo_version
   ;;
 lint)
   lint

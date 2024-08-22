@@ -28,12 +28,13 @@ build-and-lint-code:
   stage: build-and-lint
   retry: 0
   script:
+    - ./helper.sh cargo_version
     - ./helper.sh lint
     - ./helper.sh unused_dependencies
     - ./helper.sh build
   when: always
   tags:
-    - bm-7cpu-12gmem-0g
+    - bm-7cpu-16gmem-0g
   only:
     - merge_requests
   interruptible: true
@@ -87,7 +88,6 @@ release-image:
     - if: $CI_COMMIT_BRANCH == "main"
       when: always
       allow_failure: false
-
 
 release-image-slim:
   stage: build-and-lint
@@ -301,7 +301,7 @@ aws-infra:
   script:
     - ./helper.sh aws_infra
   tags:
-    - vm-2cpu-6gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -382,7 +382,7 @@ aws-ec2-managed-services:
   script:
     - ./helper.sh aws_ec2_managed_services
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -520,7 +520,7 @@ scw-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -545,7 +545,7 @@ scw-managed-services:
   script:
     - ./helper.sh scw_managed_services
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -632,7 +632,7 @@ gcp-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -657,7 +657,7 @@ gcp-managed-services:
   script:
     - ./helper.sh gcp_managed_services
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -744,7 +744,7 @@ quarantine:
   script:
     - ./helper.sh quarantine
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
@@ -820,7 +820,7 @@ update_qovery_chart:
   script:
     - ./helper.sh update_qovery_chart
   tags:
-    - bm-7cpu-12gmem-0g
+    - bm-7cpu-16gmem-0g
   only:
     refs:
       - main
