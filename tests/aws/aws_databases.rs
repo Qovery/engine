@@ -533,7 +533,7 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
     test_postgresql_configuration("11", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -548,7 +548,7 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v12_deploy_a_working_dev_environment() {
     test_postgresql_configuration("12", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -563,7 +563,7 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
     test_postgresql_configuration("13", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -571,7 +571,6 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
 fn private_postgresql_v14_deploy_a_working_dev_environment() {
     test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -579,7 +578,7 @@ fn private_postgresql_v14_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v14_deploy_a_working_dev_environment() {
     test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -594,6 +593,7 @@ fn private_postgresql_v15_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v15_deploy_a_working_dev_environment() {
     test_postgresql_configuration("15", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -623,7 +623,7 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
     test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -638,7 +638,7 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
     test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -653,7 +653,7 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -675,6 +675,7 @@ fn private_postgresql_v14_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v14_deploy_a_working_prod_environment() {
     test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -689,6 +690,7 @@ fn private_postgresql_v15_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v15_deploy_a_working_prod_environment() {
     test_postgresql_configuration("15", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -791,7 +793,7 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -806,6 +808,7 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -820,6 +823,7 @@ fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v5_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -834,6 +838,7 @@ fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -951,7 +956,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -981,7 +986,7 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -1081,7 +1086,7 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -1096,7 +1101,7 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_redis_v6_deploy_a_working_dev_environment() {
     test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }

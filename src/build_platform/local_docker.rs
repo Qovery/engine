@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::{fs, thread};
 
 use git2::{Cred, CredentialType, ErrorClass};
+use itertools::Itertools;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use time::Instant;
@@ -33,7 +34,7 @@ use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
 const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/builder:22",
+    "heroku/builder:24",
     // removed because it does not support dynamic port binding
     //"gcr.io/buildpacks/builder:v1",
     //"paketobuildpacks/builder:base",
@@ -347,6 +348,13 @@ impl LocalDocker {
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
         ));
 
+        let architectures: Vec<Architecture> = build
+            .architectures
+            .iter()
+            .map(|arch| docker::Architecture::from(arch))
+            .collect();
+        let platforms = architectures.iter().map(|arch| arch.to_platform()).join(",");
+
         for builder_name in BUILDPACKS_BUILDERS.iter() {
             // always add 'latest' tag
             let mut buildpacks_args = vec![
@@ -360,6 +368,11 @@ impl LocalDocker {
             if !use_build_cache {
                 buildpacks_args.push("--clear-cache");
             }
+
+            // Build for all requested architectures, if empty build for the current architecture the engine is running on
+            if !architectures.is_empty() {
+                buildpacks_args.extend(vec!["--platform", &platforms]);
+            };
 
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
@@ -561,6 +574,7 @@ impl BuildPlatform for LocalDocker {
                 // - Timeout on git clone
                 debug!("Error on git clone: git_error_class={:?}, message={}", git_error_class, message);
                 return if git_error_class == ErrorClass::Os
+                    || git_error_class == ErrorClass::Ssl
                     || (git_error_class == ErrorClass::Net && message.contains("timed out"))
                 {
                     debug!("Retrying git clone...");

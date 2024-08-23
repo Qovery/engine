@@ -9,8 +9,11 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "k8s_subnet_ids" {
-  vpc_id = data.aws_vpc.selected.id
+data "aws_subnets" "k8s_subnet_ids" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.selected.id]
+  }
   filter {
     name = "tag:ClusterId"
     values = [var.kubernetes_cluster_id]
