@@ -5,7 +5,8 @@ OUTPUT_DIR_TESTS_FILES="$FORMATED_FAILED_TESTS_DIR/output"
 JUNIT_REPORT="$OUTPUT_DIR_TESTS_FILES/junit-report.json"
 TESTS_NON_HANDLED_ISSUES="$OUTPUT_DIR_TESTS_FILES/tests_issues"
 
-set -e
+# Avoiding the script to fail the test in case it fails
+# set -e
 
 function generate_html_file() {
   file=$1

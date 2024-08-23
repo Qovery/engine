@@ -317,6 +317,8 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
   TESTS_STATUS="${PIPESTATUS[0]}"
 
+  echo "Test status: $TESTS_STATUS"
+
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
   # Log management part
