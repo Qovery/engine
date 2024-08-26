@@ -48,8 +48,8 @@ spec:
     spec:
       backoffLimit: {{ service.max_nb_restart }}
       activeDeadlineSeconds: {{ service.max_duration_in_sec }}
-      {%- if service.advanced_settings.delete_ttl_seconds_after_finished %}
-      ttlSecondsAfterFinished: {{ service.advanced_settings.delete_ttl_seconds_after_finished }}
+      {%- if service.advanced_settings.job_delete_ttl_seconds_after_finished %}
+      ttlSecondsAfterFinished: {{ service.advanced_settings.job_delete_ttl_seconds_after_finished }}
       {%- endif %}
       parallelism: 1
       template:
