@@ -645,7 +645,7 @@ impl ContainerRegistry {
                     self.long_id,
                     &self.name,
                     options.url,
-                    RegistryType::from(options.repository_type),
+                    options.username,
                     options.token,
                 )?))
             }
@@ -764,9 +764,10 @@ pub struct GenericCrOptions {
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GithubCrOptions {
     pub url: Url,
+    pub username: String,
     #[derivative(Debug = "ignore")]
+    #[serde(alias = "password")]
     pub token: String,
-    pub repository_type: GithubCrRepoType,
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
