@@ -3,7 +3,7 @@ use function_name::named;
 use qovery_engine::build_platform::Image;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::ContainerImage;
-use qovery_engine::container_registry::github_cr::{GithubCr, RegistryType};
+use qovery_engine::container_registry::github_cr::GithubCr;
 use qovery_engine::container_registry::ContainerRegistry;
 use tracing::{span, Level};
 use url::Url;
@@ -29,7 +29,7 @@ fn test_github_cr() {
             Uuid::new_v4(),
             registry_name.as_str(),
             Url::parse("https://ghcr.io").unwrap(),
-            RegistryType::Organization("qovery".to_string()),
+            "qovery".to_string(),
             secrets.GITHUB_ACCESS_TOKEN.unwrap(),
         )
         .unwrap();
