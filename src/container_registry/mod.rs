@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;
@@ -117,8 +116,7 @@ impl ContainerRegistryInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Clone, Copy, Debug)]
 pub enum Kind {
     Ecr,
     ScalewayCr,
