@@ -398,6 +398,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 }];
                 app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -471,6 +472,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 }];
                 app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -618,6 +620,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 protocol: Protocol::GRPC,
                 service_name: None,
                 namespace: None,
+                additional_service: None,
             });
             // disable custom domain check
             advanced_settings.deployment_custom_domain_check_enabled = false;
@@ -1512,6 +1515,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1522,6 +1526,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
@@ -1722,6 +1727,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1732,6 +1738,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
@@ -1847,6 +1854,7 @@ fn deploy_container_with_storages_on_aws_eks() {
                 protocol: HTTP,
                 service_name: None,
                 namespace: None,
+                additional_service: None,
             }],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1985,6 +1993,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1995,6 +2004,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2138,6 +2148,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2148,6 +2159,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2876,6 +2888,7 @@ fn test_restart_deployment() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2886,6 +2899,7 @@ fn test_restart_deployment() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -3011,6 +3025,7 @@ fn test_restart_statefulset() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -3021,6 +3036,7 @@ fn test_restart_statefulset() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -3431,6 +3447,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     protocol: Protocol::TCP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -3441,6 +3458,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     protocol: Protocol::TCP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -3451,6 +3469,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     protocol: Protocol::UDP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
@@ -4032,6 +4051,7 @@ fn deploy_helm_chart_with_router() {
                     protocol: Protocol::HTTP,
                     namespace: None,
                     service_name: Some("inner-namespace-service1".to_string()),
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -4042,6 +4062,7 @@ fn deploy_helm_chart_with_router() {
                     protocol: Protocol::HTTP,
                     namespace: Some(extra_namespace.clone()),
                     service_name: Some("outside-namespace-service2".to_string()),
+                    additional_service: None,
                 },
             ],
         }];

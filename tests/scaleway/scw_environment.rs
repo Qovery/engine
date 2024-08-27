@@ -322,6 +322,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 }];
                 app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
                 app.branch = "simple-node-app".to_string();
@@ -413,6 +414,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 protocol: Protocol::GRPC,
                 service_name: None,
                 namespace: None,
+                additional_service: None,
             });
             // disable custom domain check
             application.advanced_settings.deployment_custom_domain_check_enabled = false;
@@ -1489,6 +1491,7 @@ fn deploy_container_with_no_router_on_scw() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1499,6 +1502,7 @@ fn deploy_container_with_no_router_on_scw() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -1622,6 +1626,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1632,6 +1637,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
@@ -1777,6 +1783,7 @@ fn deploy_container_with_router_on_scw() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1787,6 +1794,7 @@ fn deploy_container_with_router_on_scw() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
@@ -2496,6 +2504,7 @@ fn deploy_container_with_tcp_public_port() {
                     protocol: Protocol::TCP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2506,6 +2515,7 @@ fn deploy_container_with_tcp_public_port() {
                     protocol: Protocol::TCP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2516,6 +2526,7 @@ fn deploy_container_with_tcp_public_port() {
                     protocol: Protocol::UDP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             readiness_probe: Some(Probe {

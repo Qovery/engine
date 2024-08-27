@@ -325,6 +325,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 protocol: Protocol::GRPC,
                 service_name: None,
                 namespace: None,
+                additional_service: None,
             });
             // disable custom domain check
             application.advanced_settings.deployment_custom_domain_check_enabled = false;

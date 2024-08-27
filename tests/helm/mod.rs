@@ -166,6 +166,7 @@ fn test_port() -> Port {
         protocol: Protocol::HTTP,
         service_name: None,
         namespace: None,
+        additional_service: None,
     }
 }
 
