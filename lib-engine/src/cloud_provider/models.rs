@@ -1,5 +1,6 @@
 use crate::cloud_provider::service::ServiceType;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use uuid::Uuid;
 
@@ -73,6 +74,21 @@ impl CustomDomain {
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub struct CustomDomainDataTemplate {
     pub domain: String,
+}
+
+#[derive(Serialize, Eq, PartialEq)]
+pub struct KubeService {
+    pub namespace_key: Option<String>,
+    pub name: String,
+    pub ports: Vec<KubeServicePort>,
+    pub selectors: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Eq, PartialEq)]
+pub struct KubeServicePort {
+    pub port: u16,
+    pub target_port: u16,
+    pub protocol: String,
 }
 
 #[derive(Serialize, Eq, PartialEq)]

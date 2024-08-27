@@ -1,6 +1,6 @@
 use crate::build_platform::Build;
 use crate::cloud_provider::models::{
-    CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, Route,
+    CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, KubeService, KubeServicePort, Route,
 };
 use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -238,9 +238,13 @@ impl<T: CloudProvider> Router<T> {
             &cluster_domain,
             environment.namespace(),
         );
+
+        let qovery_additional_services = to_additional_services(ports);
+
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
+        context.insert("qovery_additional_services", &qovery_additional_services);
 
         context.insert("annotations_group", &self.annotations_group);
         context.insert("labels_group", &self.labels_group);
@@ -362,6 +366,24 @@ fn to_host_data_template(
         );
     }
     hosts_per_namespace
+}
+
+fn to_additional_services(ports: Vec<&Port>) -> Vec<KubeService> {
+    ports
+        .into_iter()
+        .filter_map(|port| {
+            port.additional_service.as_ref().map(|additional_service| KubeService {
+                namespace_key: port.namespace.clone(),
+                name: port.service_name.clone().unwrap_or_default(),
+                ports: vec![KubeServicePort {
+                    port: port.port,
+                    target_port: port.port,
+                    protocol: "TCP".to_string(),
+                }],
+                selectors: additional_service.selectors.clone(),
+            })
+        })
+        .collect()
 }
 
 fn get_ports_by_namespace(ports: &[&Port]) -> HashMap<Option<String>, Vec<Port>> {
@@ -514,10 +536,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::RouterAdvancedSettings;
-    use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate};
+    use super::{to_additional_services, RouterAdvancedSettings};
+    use crate::cloud_provider::models::{
+        CustomDomain, CustomDomainDataTemplate, HostDataTemplate, KubeService, KubeServicePort,
+    };
     use crate::io_models::application::{Port, Protocol};
     use crate::models::router::{generate_certificate_alternative_names, to_host_data_template};
+    use maplit::btreemap;
 
     #[test]
     pub fn test_router_advanced_settings() {
@@ -563,6 +588,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let ports = vec![&port];
 
@@ -580,6 +606,7 @@ mod tests {
             protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let ports = vec![&port, &port2];
 
@@ -611,6 +638,7 @@ mod tests {
             protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let ports = vec![&port, &port2];
 
@@ -635,6 +663,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let port_grpc = Port {
             long_id: Default::default(),
@@ -645,6 +674,7 @@ mod tests {
             protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -792,6 +822,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "toto.cluster.com".to_string(),
@@ -834,6 +865,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let port_http_with_service_name = Port {
             long_id: Default::default(),
@@ -844,6 +876,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: Some("service1".to_string()),
             namespace: None,
+            additional_service: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -897,6 +930,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
+            additional_service: None,
         };
         let port_http_with_service_name = Port {
             long_id: Default::default(),
@@ -907,6 +941,7 @@ mod tests {
             protocol: Protocol::HTTP,
             service_name: Some("service1".to_string()),
             namespace: Some("namespace1".to_string()),
+            additional_service: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -948,6 +983,36 @@ mod tests {
             domain_name: "http-2-cluster.com".to_string(),
             service_name: "service1".to_string(),
             service_port: 8080,
+        }));
+    }
+
+    #[test]
+    pub fn test_ingress_host_template_with_additional_service_defined_in_port() {
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http-1".to_string(),
+            publicly_accessible: true,
+            port: 80,
+            is_default: false,
+            protocol: Protocol::HTTP,
+            service_name: Some("a service".to_string()),
+            namespace: Some("a namespace".to_string()),
+            additional_service: Some(crate::io_models::application::AdditionalService {
+                selectors: btreemap![ "a".to_string() => "b".to_string()],
+            }),
+        };
+
+        let ret = to_additional_services(vec![&port_http]);
+        assert_eq!(ret.len(), 1);
+        assert!(ret.contains(&KubeService {
+            namespace_key: Some("a namespace".to_string()),
+            name: "a service".to_string(),
+            ports: vec![KubeServicePort {
+                port: 80,
+                target_port: 80,
+                protocol: "TCP".to_string(),
+            }],
+            selectors: btreemap![ "a".to_string() => "b".to_string()],
         }));
     }
 }

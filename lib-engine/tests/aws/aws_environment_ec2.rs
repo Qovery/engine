@@ -197,6 +197,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -207,6 +208,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 },
             ],
             storages: vec![],
