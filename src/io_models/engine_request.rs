@@ -549,13 +549,36 @@ impl Kubernetes {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ContainerRegistry {
-    pub kind: container_registry::Kind,
-    pub long_id: Uuid,
-    pub name: String,
-    pub options: serde_json::Value,
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ContainerRegistry {
+    Ecr {
+        long_id: Uuid,
+        name: String,
+        options: EcrOptions,
+    },
+    ScalewayCr {
+        long_id: Uuid,
+        name: String,
+        options: ScwCrOptions,
+    },
+    GcpArtifactRegistry {
+        long_id: Uuid,
+        name: String,
+        options: GcpCrOptions,
+    },
+    GenericCr {
+        long_id: Uuid,
+        name: String,
+        options: GenericCrOptions,
+    },
+    GithubCr {
+        long_id: Uuid,
+        name: String,
+        options: GithubCrOptions,
+    },
 }
+impl ContainerRegistry {}
 
 impl ContainerRegistry {
     pub fn to_engine_container_registry(
@@ -564,38 +587,28 @@ impl ContainerRegistry {
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
     ) -> Result<Box<dyn container_registry::ContainerRegistry>, anyhow::Error> {
-        match self.kind {
-            container_registry::Kind::Ecr => {
-                let options: EcrOptions = serde_json::from_value(self.options.clone())
-                    .with_context(|| "cannot deserialize container registry option")?;
-                Ok(Box::new(ECR::new(
-                    context,
-                    self.long_id,
-                    self.name.as_str(),
-                    &options.access_key_id,
-                    &options.secret_access_key,
-                    &options.region,
-                    logger,
-                    tags,
-                )?))
-            }
-            container_registry::Kind::ScalewayCr => {
-                let options: ScwCrOptions = serde_json::from_value(self.options.clone())
-                    .with_context(|| "cannot deserialize container registry option")?;
-                Ok(Box::new(ScalewayCR::new(
-                    context,
-                    self.long_id,
-                    self.name.as_str(),
-                    &options.scaleway_secret_key,
-                    &options.scaleway_project_id,
-                    ScwRegion::from_str(&options.region).map_err(|_| {
-                        anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
-                    })?,
-                )?))
-            }
-            container_registry::Kind::GcpArtifactRegistry => {
-                let options: GcpCrOptions = serde_json::from_value(self.options.clone())
-                    .with_context(|| "cannot deserialize container registry option")?;
+        match self.clone() {
+            ContainerRegistry::Ecr { long_id, name, options } => Ok(Box::new(ECR::new(
+                context,
+                long_id,
+                name.as_str(),
+                &options.access_key_id,
+                &options.secret_access_key,
+                &options.region,
+                logger,
+                tags,
+            )?)),
+            ContainerRegistry::ScalewayCr { long_id, name, options } => Ok(Box::new(ScalewayCR::new(
+                context,
+                long_id,
+                &name,
+                &options.scaleway_secret_key,
+                &options.scaleway_project_id,
+                ScwRegion::from_str(&options.region).map_err(|_| {
+                    anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
+                })?,
+            )?)),
+            ContainerRegistry::GcpArtifactRegistry { long_id, name, options } => {
                 let credentials = JsonCredentials::try_from(
                     options
                         .gcp_credentials
@@ -606,9 +619,9 @@ impl ContainerRegistry {
 
                 Ok(Box::new(GoogleArtifactRegistry::new(
                     context,
-                    self.long_id,
-                    self.name.as_str(),
-                    credentials.project_id.as_str(),
+                    long_id,
+                    &name,
+                    &credentials.project_id,
                     GcpRegion::from_str(&options.region)
                         .map_err(|err| anyhow!("cannot deserialize gcp region: {:?}", err))?,
                     credentials.clone(),
@@ -622,33 +635,24 @@ impl ContainerRegistry {
                     ),
                 )?))
             }
-            container_registry::Kind::GenericCr => {
-                let options: GenericCrOptions = serde_json::from_value(self.options.clone())
-                    .with_context(|| "cannot deserialize container registry option")?;
-                Ok(Box::new(GenericCr::new(
-                    context,
-                    self.long_id,
-                    &self.name,
-                    options.url.clone(),
-                    options.skip_tls_verify,
-                    options.repository_name.clone(),
-                    options.username.and_then(|l| options.password.map(|p| (l, p))),
-                    options.url.host_str().unwrap_or("") != "qovery-registry.lan",
-                )?))
-            }
-            container_registry::Kind::GithubCr => {
-                let options: GithubCrOptions = serde_json::from_value(self.options.clone())
-                    .with_context(|| "cannot deserialize container registry option")?;
-
-                Ok(Box::new(GithubCr::new(
-                    context,
-                    self.long_id,
-                    &self.name,
-                    options.url,
-                    RegistryType::from(options.repository_type),
-                    options.token,
-                )?))
-            }
+            ContainerRegistry::GenericCr { long_id, name, options } => Ok(Box::new(GenericCr::new(
+                context,
+                long_id,
+                &name,
+                options.url.clone(),
+                options.skip_tls_verify,
+                options.repository_name,
+                options.username.and_then(|l| options.password.map(|p| (l, p))),
+                options.url.host_str().unwrap_or("") != "qovery-registry.lan",
+            )?)),
+            ContainerRegistry::GithubCr { long_id, name, options } => Ok(Box::new(GithubCr::new(
+                context,
+                long_id,
+                &name,
+                options.url,
+                options.username,
+                options.token,
+            )?)),
         }
     }
 }
@@ -764,9 +768,10 @@ pub struct GenericCrOptions {
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GithubCrOptions {
     pub url: Url,
+    pub username: String,
     #[derivative(Debug = "ignore")]
+    #[serde(alias = "password")]
     pub token: String,
-    pub repository_type: GithubCrRepoType,
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]

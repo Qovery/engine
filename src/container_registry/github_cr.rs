@@ -1,15 +1,15 @@
+use super::RegistryTags;
 use crate::build_platform::Image;
+use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::generic_cr::GenericCr;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
 use crate::io_models::context::Context;
 use itertools::Itertools;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
+use reqwest::Error;
 use serde_derive::Deserialize;
 use std::time::Duration;
-
-use super::RegistryTags;
-use crate::cmd::docker::ContainerImage;
-use crate::container_registry::generic_cr::GenericCr;
 use url::Url;
 use uuid::Uuid;
 
@@ -34,13 +34,18 @@ pub struct GithubCr {
     registry_type: RegistryType,
 }
 
+#[derive(Default, Deserialize)]
+struct GithubUserResponse {
+    login: String,
+}
+
 impl GithubCr {
     pub fn new(
         context: Context,
         long_id: Uuid,
         name: &str,
         url: Url,
-        repository_type: RegistryType,
+        username: String,
         token: String,
     ) -> Result<Self, ContainerRegistryError> {
         let mut headers = HeaderMap::new();
@@ -65,6 +70,24 @@ impl GithubCr {
             .map_err(|e| ContainerRegistryError::CannotInstantiateClient {
                 raw_error_message: format!("Cannot create http client: {}", e),
             })?;
+
+        let response: Result<GithubUserResponse, Error> = http_client
+            .get("https://api.github.com/user")
+            .send()
+            .and_then(|res| res.error_for_status())
+            .and_then(|x| x.json());
+
+        let repository_type = match response {
+            Ok(r) if r.login == username => RegistryType::User(username),
+            Ok(_) => RegistryType::Organization(username),
+            Err(err) => {
+                warn!(
+                    "Cannot determine if the registry is an organization or a user, defaulting to user: {:?}",
+                    err
+                );
+                RegistryType::User(username)
+            }
+        };
 
         let generic_cr = GenericCr::new(
             context,
