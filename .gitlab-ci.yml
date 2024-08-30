@@ -140,10 +140,8 @@ create-multi-arch-image:
   before_script:
     - ci_helper docker_login_public_prod_ecr
   script:
-    - docker manifest create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
-    - docker manifest push public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
-    - docker manifest create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
-    - docker manifest push public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim
+    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
+    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
   tags:
     - vm-250mcpu-1gmem-0g
   only:
