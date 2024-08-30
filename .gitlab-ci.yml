@@ -1,6 +1,6 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2024-08-23T08-04-34
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2024-08-29T18-50-36
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
@@ -14,11 +14,11 @@ services:
 
 stages:
   - build-and-lint
+  - build-final
   - minimal-tests
   - tests
   - tests-quarantine
   - deploy
-  - deploy-all-clusters
 
 ##################
 # BUILD AND LINT #
@@ -43,7 +43,7 @@ build-engine-ci-image:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 12 12
     - ci_helper docker_login_public_prod_ecr
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
@@ -64,19 +64,25 @@ release-image:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 12 12 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
+    - ci_helper docker_login_private_prod_ecr
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
-    - docker buildx build --platform=linux/amd64,linux/arm64
-      --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache'
-      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache'
+    - docker buildx build --platform=linux/${IMAGE_ARCH}
+      --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
+      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
       --target=run
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}
-      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-${IMAGE_ARCH}
       --push .
+  parallel:
+    matrix:
+      - IMAGE_ARCH:
+          - amd64
+          - arm64
   tags:
     - vm-1cpu-1gmem-0g
   when: manual
@@ -93,19 +99,25 @@ release-image-slim:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 7 12
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 7 12 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
+    - ci_helper docker_login_private_prod_ecr
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
-    - docker buildx build --platform=linux/amd64,linux/arm64
-      --cache-from 'type=registry,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
-      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=public.ecr.aws/r3m4q3r9/engine:cache-slim'
+    - docker buildx build --platform=linux/${IMAGE_ARCH}
+      --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
+      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
       --target=run-slim
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}-slim
-      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-${IMAGE_ARCH}
       --push .
+  parallel:
+    matrix:
+      - IMAGE_ARCH:
+          - amd64
+          - arm64
   tags:
     - vm-1cpu-1gmem-0g
   when: manual
@@ -117,6 +129,27 @@ release-image-slim:
     - if: $CI_COMMIT_BRANCH == "main"
       when: always
       allow_failure: false
+
+
+create-multi-arch-image:
+  stage: build-final
+  retry: 2
+  dependencies:
+    - release-image
+    - release-image-slim
+  before_script:
+    - ci_helper docker_login_public_prod_ecr
+  script:
+    - docker manifest create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
+    - docker manifest push public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}
+    - docker manifest create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 --amend public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
+    - docker manifest push public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim
+  tags:
+    - vm-250mcpu-1gmem-0g
+  only:
+    refs:
+      - main
+  when: always
 #gitguardian:
 #  stage: build-and-lint
 #  image: gitguardian/ggshield:latest
@@ -773,8 +806,7 @@ quarantine:
   stage: deploy
   retry: 2
   dependencies:
-    - release-image
-    - release-image-slim
+    - create-multi-arch-image
   script:
     - ./helper.sh set_release_ga
   tags:
@@ -788,7 +820,7 @@ quarantine:
   stage: deploy
   retry: 0
   dependencies:
-    - release-image
+    - create-multi-arch-image
   script:
     - ./helper.sh deploy_engines_infra
   tags:
@@ -802,7 +834,7 @@ quarantine:
   stage: deploy
   retry: 0
   dependencies:
-    - release-image
+    - create-multi-arch-image
   script:
     - ./helper.sh deploy_engines_envs
   tags:
@@ -816,7 +848,7 @@ update_qovery_chart:
   stage: deploy
   retry: 1
   dependencies:
-    - update_qovery_chart
+    - create-multi-arch-image
   script:
     - ./helper.sh update_qovery_chart
   tags:

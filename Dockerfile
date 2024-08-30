@@ -15,7 +15,7 @@ ARG CONTAINERD_VERSION="1.7.19-1"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.0-2024-08-08T13-37-34"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.1-2024-08-29T18-38-50"
 
 
 ###########################################
@@ -80,8 +80,7 @@ ARG SCCACHE_REDIS
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc"
-ARG CI_COMMIT_SHORT_SHA
-ENV CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA
+
 
 WORKDIR /build
 
@@ -134,6 +133,9 @@ COPY . .
 
 # build engine
 # If sscache is set we set rustc wrapper
+
+ARG CI_COMMIT_SHORT_SHA
+ENV CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA
 RUN <<EOF
   set -e
   
