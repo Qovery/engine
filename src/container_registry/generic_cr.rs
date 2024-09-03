@@ -139,11 +139,6 @@ impl ContainerRegistry for GenericCr {
         &self.cr_info
     }
 
-    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
-        // Nothing to do, local registry create automatically new repositories
-        Ok(())
-    }
-
     fn create_repository(
         &self,
         name: &str,
