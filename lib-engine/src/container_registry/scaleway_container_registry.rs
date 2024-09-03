@@ -304,11 +304,6 @@ impl ContainerRegistry for ScalewayCR {
         &self.registry_info
     }
 
-    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
-        // Nothing to do, scaleway managed container registry per repository (aka `namespace` by the scw naming convention)
-        Ok(())
-    }
-
     fn create_repository(
         &self,
         name: &str,

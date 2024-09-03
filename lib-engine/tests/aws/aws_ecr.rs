@@ -37,9 +37,6 @@ fn create_ecr_repository_with_tags() {
         )
         .unwrap();
 
-        let cr = container_registry.create_registry();
-        assert!(cr.is_ok());
-
         let repo_name = format!("test-{}", Uuid::new_v4());
         let repo_creation = container_registry.create_repository(
             repo_name.as_str(),

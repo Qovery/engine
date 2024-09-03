@@ -34,9 +34,6 @@ fn test_github_cr() {
         )
         .unwrap();
 
-        let cr = container_registry.create_registry();
-        assert!(cr.is_ok());
-
         let img_name = Uuid::new_v4();
         let repo_name = container_registry
             .registry_info()
