@@ -296,7 +296,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   filter_tests=$1
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
-  export RUST_LOG=debug
+  export RUST_LOG=info
   prepare_tests
   use_sccache
 
@@ -314,18 +314,23 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
   set -x
-  cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json 2>&1 | tee $GITLAB_LOG_OUTPUT_DIR/output.log
+  # Removing from Gitlab pipeline output non ERROR / WARN logs avoiding to have output over 100MB has it's the limit
+  # and we cannot increase it properly for the time being CF: https://docs.gitlab.com/ee/administration/instance_limits.html#maximum-file-size-for-job-logs
+  output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
+  touch $output_log_file
+  tail -f $output_log_file | grep -ve "\"level\":\"DEBUG\"" -ve "\"level\":\"TRACE\"" -ve "\"level\":\"INFO\"" &
+  cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json >> $output_log_file 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
-
   echo "Test status: $TESTS_STATUS"
 
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
+
   # Log management part
   cd $GITLAB_LOG_UTILITIES_DIR
   STARTTIME=$(date +%s)
   # sorts logs into multiple files
-  ./sorter.sh $GITLAB_LOG_OUTPUT_DIR/output.log
+  ./sorter.sh $output_log_file
   # print failed tests
   ./print_tests_status.sh
   ENDTIME=$(date +%s)
