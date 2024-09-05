@@ -296,7 +296,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   filter_tests=$1
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
-  export RUST_LOG=info
+  export RUST_LOG=debug
   prepare_tests
   use_sccache
 
