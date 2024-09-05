@@ -24,6 +24,7 @@ pub struct PromtailChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     priority_class: PriorityClass,
+    additional_char_path: Option<HelmChartValuesFilePath>,
 }
 
 impl PromtailChart {
@@ -35,6 +36,7 @@ impl PromtailChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         priority_class: PriorityClass,
+        karpenter_enabled: bool,
     ) -> Self {
         PromtailChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -53,6 +55,14 @@ impl PromtailChart {
             enable_vpa,
             namespace,
             priority_class,
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "promtail_with_karpenter".to_string(),
+                )),
+                false => None,
+            },
         }
     }
 
@@ -63,12 +73,17 @@ impl PromtailChart {
 
 impl ToCommonHelmChart for PromtailChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         let mut chart_info = ChartInfo {
             name: PromtailChart::chart_name(),
             reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
             path: self.chart_path.to_string(),
             namespace: self.namespace,
-            values_files: vec![self.chart_values_path.to_string()],
+            values_files,
             values: vec![
                 ChartSetValue {
                     key: "image.registry".to_string(),
@@ -187,6 +202,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -218,6 +234,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -253,6 +270,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
