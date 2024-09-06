@@ -78,6 +78,7 @@ fn create_pause_and_destroy_kapsule_cluster_ams_1() {
 #[cfg(feature = "test-scw-infra")]
 #[named]
 #[test]
+#[ignore = "SCW has provisioning issues with Warsaw, ticket: https://console.scaleway.com/support/tickets/1453986"]
 fn create_and_destroy_kapsule_cluster_war_1() {
     let zone = ScwZone::Warsaw1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::Classic, function_name!(), None);
