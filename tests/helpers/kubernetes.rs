@@ -35,7 +35,7 @@ use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
 use tracing::{span, Level};
 
-pub const KUBERNETES_MIN_NODES: i32 = 5;
+pub const KUBERNETES_MIN_NODES: i32 = 3;
 pub const KUBERNETES_MAX_NODES: i32 = 10;
 
 pub enum ClusterTestType {
