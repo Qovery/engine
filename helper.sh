@@ -313,15 +313,18 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
-  set -x
+  # set -x
   # Removing from Gitlab pipeline output non ERROR / WARN logs avoiding to have output over 100MB has it's the limit
   # and we cannot increase it properly for the time being CF: https://docs.gitlab.com/ee/administration/instance_limits.html#maximum-file-size-for-job-logs
   output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
   touch $output_log_file
   tail -f $output_log_file | grep -ve "\"level\":\"DEBUG\"" -ve "\"level\":\"TRACE\"" -ve "\"level\":\"INFO\"" &
-  cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json >> $output_log_file 2>&1
+  cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json --report-time >> $output_log_file 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
   echo "Test status: $TESTS_STATUS"
+
+  echo "Computing report"
+  cat $output_log_file | cargo2junit > $GITLAB_LOG_OUTPUT_DIR/results.xml
 
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
