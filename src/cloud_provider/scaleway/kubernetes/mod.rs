@@ -1598,7 +1598,11 @@ impl Kubernetes for Kapsule {
             ScwZone::Paris2 => "fr-par",
             ScwZone::Paris3 => "fr-par",
             ScwZone::Amsterdam1 => "nl-ams",
+            ScwZone::Amsterdam2 => "nl-ams",
+            ScwZone::Amsterdam3 => "nl-ams",
             ScwZone::Warsaw1 => "pl-waw",
+            ScwZone::Warsaw2 => "pl-waw",
+            ScwZone::Warsaw3 => "pl-waw",
         }
     }
 
