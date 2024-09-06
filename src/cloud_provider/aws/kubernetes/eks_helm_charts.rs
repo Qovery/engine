@@ -336,6 +336,7 @@ pub fn eks_aws_helm_charts(
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),

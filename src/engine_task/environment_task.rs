@@ -166,9 +166,6 @@ impl EnvironmentTask {
             to_engine_error(event_details, err)
         };
 
-        // Do setup of registry and be sure we are login to the registry
-        cr_registry.create_registry().map_err(cr_to_engine_error)?;
-
         // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
         let abort_flag = AtomicAbortStatus::new(AbortStatus::None);
         let abort_status = || AbortStatus::merge(abort_flag.load(Ordering::Relaxed), abort.status());

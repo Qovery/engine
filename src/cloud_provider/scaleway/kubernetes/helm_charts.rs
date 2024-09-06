@@ -255,6 +255,7 @@ pub fn scw_helm_charts(
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
+                false,
             )
             .to_common_helm_chart()?,
         ),

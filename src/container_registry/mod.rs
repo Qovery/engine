@@ -48,10 +48,6 @@ pub trait ContainerRegistry: Send + Sync {
     // Get info for this registry, url endpoint with login/password, image name convention, ...
     fn registry_info(&self) -> &ContainerRegistryInfo;
 
-    // Some provider require specific action in order to allow container registry
-    // For now it is only digital ocean, that require 2 steps to have registries
-    fn create_registry(&self) -> Result<(), ContainerRegistryError>;
-
     // Call to create a specific repository in the registry
     // i.e: docker.io/erebe or docker.io/qovery
     // All providers requires action for that

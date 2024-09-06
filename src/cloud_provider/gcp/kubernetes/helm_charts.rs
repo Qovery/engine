@@ -246,6 +246,7 @@ pub fn gcp_helm_charts(
                 true,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
+                false,
             )
             .to_common_helm_chart()?,
         )),

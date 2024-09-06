@@ -131,10 +131,6 @@ impl ContainerRegistry for GithubCr {
         self.generic_cr.registry_info()
     }
 
-    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
-        self.generic_cr.create_registry()
-    }
-
     fn create_repository(
         &self,
         name: &str,

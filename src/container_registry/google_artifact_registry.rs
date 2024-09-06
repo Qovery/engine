@@ -168,11 +168,6 @@ impl ContainerRegistry for GoogleArtifactRegistry {
         &self.registry_info
     }
 
-    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
-        // Nothing to do, registry already here
-        Ok(())
-    }
-
     fn create_repository(
         &self,
         repository_name: &str,

@@ -38,7 +38,6 @@ use reqwest::StatusCode;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
-use std::net::UdpSocket;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -3358,6 +3357,9 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
 #[named]
 #[test]
 fn deploy_container_with_udp_tcp_public_ports() {
+    use qovery_engine::cloud_provider::utilities::{check_tcp_port_is_open, check_udp_port_is_open, TcpCheckSource};
+    use tracing::info;
+
     engine_run_test(|| {
         init();
         let span = span!(Level::INFO, "test", name = function_name!());
@@ -3382,7 +3384,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
 
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
-        let main_port = 443;
+        let tcp_port = 443;
+        let udp_port = 80;
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
@@ -3397,16 +3400,18 @@ fn deploy_container_with_udp_tcp_public_ports() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                r#"
+                format!(
+                    r#"
                 apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
-                socat UDP6-LISTEN:80,bind=[::],reuseaddr,fork exec:"/bin/cat" &
+                socat UDP6-LISTEN:{},bind=[::],reuseaddr,fork exec:"/bin/cat" &
                 socat TCP6-LISTEN:5432,bind=[::],reuseaddr,fork STDOUT &
-                socat TCP6-LISTEN:443,bind=[::],reuseaddr,fork STDOUT
-                "#
-                .to_string(),
+                socat TCP6-LISTEN:{},bind=[::],reuseaddr,fork STDOUT
+                "#,
+                    udp_port, tcp_port
+                ),
             ],
             entrypoint: None,
             cpu_request_in_milli: 250,
@@ -3419,9 +3424,9 @@ fn deploy_container_with_udp_tcp_public_ports() {
             ports: vec![
                 Port {
                     long_id: Uuid::new_v4(),
-                    port: main_port,
+                    port: tcp_port,
                     is_default: true,
-                    name: format!("p{}", main_port),
+                    name: format!("p{}", tcp_port),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
                     service_name: None,
@@ -3439,9 +3444,9 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 },
                 Port {
                     long_id: Uuid::new_v4(),
-                    port: 80,
+                    port: udp_port,
                     is_default: false,
-                    name: "p80".to_string(),
+                    name: format!("p{}", udp_port),
                     publicly_accessible: true,
                     protocol: Protocol::UDP,
                     service_name: None,
@@ -3453,7 +3458,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             mounted_files: vec![],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
-                port: main_port as u32,
+                port: tcp_port as u32,
                 initial_delay_seconds: 30,
                 timeout_seconds: 2,
                 period_seconds: 10,
@@ -3462,7 +3467,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             }),
             liveness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
-                port: main_port as u32,
+                port: tcp_port as u32,
                 initial_delay_seconds: 30,
                 timeout_seconds: 2,
                 period_seconds: 10,
@@ -3484,6 +3489,8 @@ fn deploy_container_with_udp_tcp_public_ports() {
         sleep(Duration::from_secs(30));
         let now = Instant::now();
         let timeout = Duration::from_secs(60 * 10);
+        let tcp_domain = format!("p{}-{}.{}", tcp_port, service_id, infra_ctx.dns_provider().domain());
+        let udp_domain = format!("p{}-{}.{}", udp_port, service_id, infra_ctx.dns_provider().domain());
         loop {
             if now.elapsed() > timeout {
                 panic!("Cannot connect to endpoint before timeout of {:?}", timeout);
@@ -3492,32 +3499,14 @@ fn deploy_container_with_udp_tcp_public_ports() {
             sleep(Duration::from_secs(10));
 
             // check we can connect on port
-            let domain = format!("p443-{}.{}:{}", service_id, infra_ctx.dns_provider().domain(), main_port);
-            if std::net::TcpStream::connect(domain).is_err() {
+            if check_tcp_port_is_open(&TcpCheckSource::DnsName(&tcp_domain), tcp_port).is_err() {
+                info!("Cannot connect to {} port {}/tcp yet...", tcp_domain, tcp_port);
                 continue;
             }
 
-            // Check udp is echoing back our message
-            let udp = UdpSocket::bind("[::]:0").expect("cannot bind udp socket");
-            udp.connect(format!("p80-{}.{}:80", service_id, infra_ctx.dns_provider().domain()))
-                .expect("cannot connect to udp socket");
-            let _ = udp.set_nonblocking(true);
-
-            loop {
-                if now.elapsed() > timeout {
-                    panic!("Cannot rcv udp hello msg before timeout of {:?}", timeout);
-                }
-                sleep(Duration::from_secs(10));
-
-                udp.send(b"hello").expect("cannot send udp packet");
-                let mut buf = [0; 10];
-
-                if udp.recv(&mut buf).is_err() {
-                    continue;
-                }
-
-                assert_eq!(&buf[0..5], b"hello");
-                break;
+            if check_udp_port_is_open(&udp_domain, udp_port).is_err() {
+                info!("Cannot connect to {} port {}/udp yet...", udp_domain, udp_port);
+                continue;
             }
 
             // exit loop

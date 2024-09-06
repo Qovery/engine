@@ -404,11 +404,6 @@ impl ContainerRegistry for ECR {
         self.registry_info.as_ref().unwrap()
     }
 
-    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
-        // Nothing to do, ECR require to create only repository
-        Ok(())
-    }
-
     fn create_repository(
         &self,
         name: &str,
