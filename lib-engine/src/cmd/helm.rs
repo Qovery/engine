@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 
@@ -10,7 +9,7 @@ use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, 
 use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
-use crate::cmd::helm_utils::ChartYAML;
+use crate::cmd::helm_utils::{ChartDependencyYAML, ChartYAML};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
@@ -1014,19 +1013,22 @@ impl Helm {
     {
         let (registry_config_path, repository_config_path, repository_cache_path) =
             Helm::get_helm_cmd_paths(working_directory_path);
-        let repositories_ret = self.get_repo_dependencies(chart_path, args, envs, cmd_killer, stderr_output);
-        match repositories_ret {
-            Ok(repositories) => repositories.iter().for_each(|repository_url| {
-                let _ = self.helm_add_repo(
-                    working_directory_path,
-                    chart_path,
-                    repository_url,
-                    args,
-                    envs,
-                    cmd_killer,
-                    stdout_output,
-                    stderr_output,
-                );
+        let dependencies = self.get_repo_dependencies(chart_path, args, envs, cmd_killer, stderr_output);
+        match dependencies {
+            Ok(dependencies) if dependencies.is_empty() => return Ok(()),
+            Ok(dependencies) => dependencies.iter().for_each(|dependency| {
+                if dependency.is_https() {
+                    let _ = self.helm_add_repo(
+                        working_directory_path,
+                        chart_path,
+                        &dependency.repository,
+                        args,
+                        envs,
+                        cmd_killer,
+                        stdout_output,
+                        stderr_output,
+                    );
+                }
             }),
             Err(err) => warn!("Helm error: {:?}", err),
         }
@@ -1085,7 +1087,7 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
         stderr_output: &mut STDERR,
-    ) -> Result<HashSet<String>, HelmError>
+    ) -> Result<Vec<ChartDependencyYAML>, HelmError>
     where
         STDERR: FnMut(String),
     {
@@ -1114,11 +1116,11 @@ impl Helm {
                 let parse_result = serde_yaml::from_str::<ChartYAML>(output_string.join("\n").as_str());
                 match parse_result {
                     Ok(yaml) => {
-                        let dependencies: HashSet<String> = yaml
+                        let dependencies: Vec<ChartDependencyYAML> = yaml
                             .dependencies
                             .iter()
-                            .filter(|dependency| dependency.repository.starts_with("https://"))
-                            .map(|dependency| dependency.repository.clone())
+                            .filter(|dependency| dependency.is_https() || dependency.is_oci())
+                            .cloned()
                             .collect();
                         Ok(dependencies)
                     }
