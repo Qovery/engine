@@ -319,12 +319,15 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
   touch $output_log_file
   tail -f $output_log_file | grep -ve "\"level\":\"DEBUG\"" -ve "\"level\":\"TRACE\"" -ve "\"level\":\"INFO\"" &
-  cargo +nightly test $features_to_test_option --lib --tests --manifest-path Cargo.toml -- --color always --test-threads=$nb_treads -Z unstable-options --format json --report-time >> $output_log_file 2>&1
+
+  # Using nextest to run tests (mainly because its compatibility with junit)
+  # https://nexte.st/docs/machine-readable/junit/
+  # overriding default profile to output junit report
+  echo '[profile.default.junit]' > nextest.config.toml
+  echo 'path = "junit.xml"' >> nextest.config.toml # output junit report
+  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run $features_to_test_option --lib --tests --message-format libtest-json --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --profile default -- >> $output_log_file 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
   echo "Test status: $TESTS_STATUS"
-
-  echo "Computing report"
-  cat $output_log_file | cargo2junit > $GITLAB_LOG_OUTPUT_DIR/results.xml
 
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
