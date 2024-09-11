@@ -2,6 +2,9 @@ fullnameOverride: ingress-nginx
 controller:
   useComponentLabel: true
   allowSnippetAnnotations: true
+  ingressClassResource:
+    name: nginx-qovery
+    enabled: true
   ingressClass: nginx-qovery
   extraArgs:
     default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"

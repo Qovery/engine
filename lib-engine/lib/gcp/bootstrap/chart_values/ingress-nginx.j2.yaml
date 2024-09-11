@@ -23,8 +23,15 @@ controller:
     log-format-escaping-json: "false" # set-by-engine-code
     log-format-escaping-none: "false" # set-by-engine-code
 
+  ingressClassResource:
+    # -- Name of the IngressClass
+    name: nginx-qovery
+    # -- Create the IngressClass or not
+    enabled: true
+
   # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
   ingressClass: nginx-qovery
+
   extraArgs:
     # Kubernetes path of the default Cert-manager TLS certificate (if used)
     default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"

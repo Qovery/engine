@@ -25,7 +25,14 @@ controller:
     log-format-escaping-json: "false" # set-by-engine-code
     log-format-escaping-none: "false" # set-by-engine-code
 
+  ingressClassResource:
+    # -- Name of the IngressClass
+    name: nginx-qovery
+    # -- Create the IngressClass or not
+    enabled: true
+
   ingressClass: nginx-qovery
+
   # No load-balancer to reduce costs.
   # Hostport required so no rolling update strategy possible on a single node. (same port cannot be listened twice on same node)
   hostPort:
