@@ -187,7 +187,7 @@ unit-Tests:
   script:
     - ./helper.sh unit_tests
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -216,7 +216,7 @@ scw-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -242,7 +242,7 @@ aws-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -267,7 +267,7 @@ aws-ec2-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -292,7 +292,7 @@ gcp-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -361,7 +361,7 @@ aws-ec2-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - merge_requests
@@ -386,7 +386,7 @@ aws-managed-services:
   script:
     - ./helper.sh aws_managed_services
   tags:
-    - vm-3cpu-8gmem-0g
+    - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
   only:
