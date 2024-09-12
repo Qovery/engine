@@ -43,7 +43,7 @@ build-engine-ci-image:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 12 16
+    - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 4 16
     - ci_helper docker_login_public_prod_ecr
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
@@ -64,7 +64,7 @@ release-image:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 12 16 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 16 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
@@ -99,7 +99,7 @@ release-image-slim:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 7 16 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 16 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
