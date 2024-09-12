@@ -7,6 +7,7 @@ resource "aws_eks_addon" "aws_coredns" {
   # Pick the recommended version for the k8s version or override if set
   addon_version     = "{{ eks_addon_coredns.version }}"
   resolve_conflicts_on_update = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
 
   tags = local.tags_eks
 
