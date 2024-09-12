@@ -36,27 +36,15 @@ pub enum RouterError {
     BasicAuthEnvVarNotFound { env_var_name: String },
 }
 
+#[derive(Default)]
 pub struct RouterAdvancedSettings {
-    pub custom_domain_check_enabled: bool,
     pub whitelist_source_range: Option<String>,
     pub denylist_source_range: Option<String>,
     pub basic_auth: Option<String>,
 }
 
-impl Default for RouterAdvancedSettings {
-    fn default() -> Self {
-        Self {
-            custom_domain_check_enabled: true,
-            whitelist_source_range: None,
-            denylist_source_range: None,
-            basic_auth: None,
-        }
-    }
-}
-
 impl RouterAdvancedSettings {
     pub fn new(
-        custom_domain_check_enabled: bool,
         whitelist_source_range: Option<String>,
         denylist_source_range: Option<String>,
         basic_auth: Option<String>,
@@ -64,7 +52,6 @@ impl RouterAdvancedSettings {
         let definitive_whitelist =
             whitelist_source_range.filter(|whitelist| whitelist != &Self::whitelist_source_range_default_value());
         Self {
-            custom_domain_check_enabled,
             whitelist_source_range: definitive_whitelist,
             denylist_source_range,
             basic_auth,
@@ -536,20 +523,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{to_additional_services, RouterAdvancedSettings};
+    use super::to_additional_services;
     use crate::cloud_provider::models::{
         CustomDomain, CustomDomainDataTemplate, HostDataTemplate, KubeService, KubeServicePort,
     };
     use crate::io_models::application::{Port, Protocol};
     use crate::models::router::{generate_certificate_alternative_names, to_host_data_template};
     use maplit::btreemap;
-
-    #[test]
-    pub fn test_router_advanced_settings() {
-        // this should be true by default
-        let router_advanced_settings_defaults = RouterAdvancedSettings::default();
-        assert!(router_advanced_settings_defaults.custom_domain_check_enabled);
-    }
 
     #[test]
     pub fn test_certificate_alternative_names() {

@@ -36,7 +36,6 @@ use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
-use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
@@ -602,7 +601,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
-                use_cdn: false,
+                use_cdn: true,
             };
 
             router.custom_domains = vec![cd];
@@ -610,7 +609,6 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         }
 
         for mut application in environment.applications.into_iter() {
-            let advanced_settings = application.advanced_settings.borrow_mut();
             application.ports.push(Port {
                 long_id: Uuid::new_v4(),
                 port: 5050,
@@ -622,8 +620,6 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 namespace: None,
                 additional_service: None,
             });
-            // disable custom domain check
-            advanced_settings.deployment_custom_domain_check_enabled = false;
             modified_environment.applications.push(application);
         }
 
@@ -1258,7 +1254,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
             .unwrap()
             .to_router_domain(
                 infra_ctx.context(),
-                RouterAdvancedSettings::new(true, None, None, None),
+                RouterAdvancedSettings::new(None, None, None),
                 infra_ctx.cloud_provider(),
                 vec![],
                 vec![],
@@ -1379,7 +1375,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
             .unwrap()
             .to_router_domain(
                 infra_ctx.context(),
-                RouterAdvancedSettings::new(true, None, None, None),
+                RouterAdvancedSettings::new(None, None, None),
                 infra_ctx.cloud_provider(),
                 vec![],
                 vec![],
