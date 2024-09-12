@@ -54,7 +54,7 @@ build-engine-ci-image:
       -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-$(date +%Y-%m-%dT%H-%M-%S)
       --push .
   tags:
-    - vm-1cpu-1gmem-0g
+    - vm-3cpu-12gmem-0g
   when: manual
   interruptible: true
   only:
@@ -84,7 +84,7 @@ release-image:
           - amd64
           - arm64
   tags:
-    - vm-1cpu-1gmem-0g
+    - vm-3cpu-12gmem-0g
   when: manual
   interruptible: true
   rules:
@@ -119,7 +119,7 @@ release-image-slim:
           - amd64
           - arm64
   tags:
-    - vm-1cpu-1gmem-0g
+    - vm-3cpu-12gmem-0g
   when: manual
   interruptible: true
   rules:
@@ -143,7 +143,7 @@ create-multi-arch-image:
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
   tags:
-    - vm-250mcpu-1gmem-0g
+    - vm-3cpu-12gmem-0g
   only:
     refs:
       - main
