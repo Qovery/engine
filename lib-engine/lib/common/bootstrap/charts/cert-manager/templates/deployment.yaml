@@ -15,6 +15,10 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- /* The if statement below is equivalent to {{- if $value }} but will also return true for 0. */ -}}
+  {{- if not (has (quote .Values.global.revisionHistoryLimit) (list "" (quote ""))) }}
+  revisionHistoryLimit: {{ .Values.global.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ template "cert-manager.name" . }}
@@ -39,7 +43,7 @@ spec:
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if and .Values.prometheus.enabled (not .Values.prometheus.servicemonitor.enabled) }}
+      {{- if and .Values.prometheus.enabled (not (or .Values.prometheus.servicemonitor.enabled .Values.prometheus.podmonitor.enabled)) }}
       {{- if not .Values.podAnnotations }}
       annotations:
       {{- end }}
@@ -62,10 +66,10 @@ spec:
       {{- end }}
       {{- if or .Values.volumes .Values.config}}
       volumes:
-        {{- if .Values.config }} 
+        {{- if .Values.config }}
         - name: config 
           configMap: 
-            name: {{ include "cert-manager.fullname" . }} 
+            name: {{ include "cert-manager.fullname" . }}
         {{- end }}
         {{ with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
@@ -73,12 +77,11 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}-controller
-          {{- with .Values.image }}
-          image: "{{- if .registry -}}{{ .registry }}/{{- end -}}{{ .repository }}{{- if (.digest) -}} @{{ .digest }}{{- else -}}:{{ default $.Chart.AppVersion .tag }} {{- end -}}"
-          {{- end }}
+          image: "{{ template "image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-          {{- if .Values.global.logLevel }}
+          {{- /* The if statement below is equivalent to {{- if $value }} but will also return true for 0. */ -}}
+          {{- if not (has (quote .Values.global.logLevel) (list "" (quote ""))) }}
           - --v={{ .Values.global.logLevel }}
           {{- end }}
           {{- if .Values.config }}
@@ -134,6 +137,9 @@ spec:
           {{- with .Values.dns01RecursiveNameservers }}
           - --dns01-recursive-nameservers={{ . }}
           {{- end }}
+          {{- if .Values.disableAutoApproval }}
+          - --controllers=-certificaterequests-approver
+          {{- end }}
           ports:
           - containerPort: 9402
             name: http-metrics
@@ -147,11 +153,11 @@ spec:
           {{- end }}
           {{- if or .Values.config .Values.volumeMounts }}
           volumeMounts:
-            {{- if .Values.config}} 
+            {{- if .Values.config }}
             - name: config 
               mountPath: /var/cert-manager/config
             {{- end }}
-            {{- with .Values.volumeMounts }} 
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
@@ -219,4 +225,7 @@ spec:
       {{- with .Values.podDnsConfig }}
       dnsConfig:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases: {{ toYaml . | nindent 8 }}
       {{- end }}
