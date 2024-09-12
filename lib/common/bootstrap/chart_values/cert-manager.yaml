@@ -6,7 +6,17 @@ global:
 # Qovery requires CRD
 # WARNING: do not enable this if you already have another Cert-manager installed on the cluster to avoid CRD conflicts version.
 # Qovery strongly discourage to use another Cert-manager to reduce configuration complexity and miss-configuration.
-installCRDs: true
+crds:
+  # This option decides if the CRDs should be installed
+  # as part of the Helm installation.
+  enabled: true
+
+  # This option makes it so that the "helm.sh/resource-policy": keep
+  # annotation is added to the CRD. This will prevent Helm from uninstalling
+  # the CRD when the Helm release is uninstalled.
+  # WARNING: when the CRDs are removed, all cert-manager custom resources
+  # (Certificates, Issuers, ...) will be removed too by the garbage collector.
+  keep: true
 
 startupapicheck:
   jobAnnotations:
