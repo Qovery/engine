@@ -210,7 +210,7 @@ fn test_custom_domain() -> CustomDomain {
         domain: "my_custom_domain".to_string(),
         target_domain: "my_target_domain".to_string(),
         generate_certificate: true,
-        use_cdn: false,
+        use_cdn: true, // disable custom domain check
     }
 }
 
@@ -301,7 +301,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
             deployment_termination_grace_period_seconds: 60,
-            deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
@@ -402,7 +401,6 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             failure_threshold: 5,
         }),
         ContainerAdvancedSettings {
-            deployment_custom_domain_check_enabled: true,
             deployment_termination_grace_period_seconds: 60,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
@@ -582,7 +580,6 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         vec![test_route(app_id)],
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
-            custom_domain_check_enabled: true,
             whitelist_source_range: None,
             denylist_source_range: None,
             basic_auth: None,

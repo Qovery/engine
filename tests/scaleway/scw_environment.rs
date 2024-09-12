@@ -397,7 +397,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
-                use_cdn: false,
+                use_cdn: true, // disable custom domain check
             };
 
             router.custom_domains = vec![cd];
@@ -416,8 +416,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 namespace: None,
                 additional_service: None,
             });
-            // disable custom domain check
-            application.advanced_settings.deployment_custom_domain_check_enabled = false;
             modified_environment.applications.push(application);
         }
 
@@ -1096,7 +1094,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .unwrap()
             .to_router_domain(
                 infra_ctx.context(),
-                RouterAdvancedSettings::new(true, None, None, None),
+                RouterAdvancedSettings::new(None, None, None),
                 infra_ctx.cloud_provider(),
                 vec![],
                 vec![],
@@ -1218,7 +1216,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
             .unwrap()
             .to_router_domain(
                 infra_ctx.context(),
-                RouterAdvancedSettings::new(true, None, None, None),
+                RouterAdvancedSettings::new(None, None, None),
                 infra_ctx.cloud_provider(),
                 vec![],
                 vec![],
@@ -1352,7 +1350,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
             .unwrap()
             .to_router_domain(
                 infra_ctx.context(),
-                RouterAdvancedSettings::new(true, None, None, None),
+                RouterAdvancedSettings::new(None, None, None),
                 infra_ctx.cloud_provider(),
                 vec![],
                 vec![],
