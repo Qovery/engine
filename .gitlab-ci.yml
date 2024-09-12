@@ -76,6 +76,8 @@ release-image:
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
       --target=run
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}
+      --build-arg CI_SCCACHE_REDIS_ENDPOINT=${CI_SCCACHE_REDIS_ENDPOINT}
+      --build-arg CI_SCCACHE_REDIS_PASSWORD=${CI_SCCACHE_REDIS_PASSWORD}
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-${IMAGE_ARCH}
       --push .
   parallel:
@@ -110,7 +112,8 @@ release-image-slim:
       --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
       --target=run-slim
-      --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}-slim
+      --build-arg CI_SCCACHE_REDIS_ENDPOINT=${CI_SCCACHE_REDIS_ENDPOINT}
+      --build-arg CI_SCCACHE_REDIS_PASSWORD=${CI_SCCACHE_REDIS_PASSWORD}
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-${IMAGE_ARCH}
       --push .
   parallel:

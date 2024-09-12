@@ -76,8 +76,10 @@ CMD ["/bin/sh"]
 FROM $RUST_IMAGE AS build
 
 ARG TERRAFORM_VERSION
-ARG SCCACHE_REDIS
-ENV SCCACHE_REDIS=$SCCACHE_REDIS
+ARG CI_SCCACHE_REDIS_ENDPOINT
+ARG CI_SCCACHE_REDIS_PASSWORD
+ENV CI_SCCACHE_REDIS_URL=$CI_SCCACHE_REDIS_ENDPOINT
+ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc"
 
@@ -117,13 +119,30 @@ COPY app/Cargo.toml app/
 COPY app/build.rs app/
 COPY app/proto app/proto
 
+# If sscache is set we set rustc wrapper
 RUN <<EOF
+  if [ -z "${CI_SCCACHE_REDIS_ENDPOINT}" ];
+  then
+      echo "!!! WARNING: sccache is not used !!!"
+  else
+      echo "USING SSCACHE"
+      export RUSTC_WRAPPER=/usr/bin/sccache
+      export SCCACHE_REDIS_ENDPOINT=$CI_SCCACHE_REDIS_ENDPOINT
+      export SCCACHE_REDIS_USERNAME=default
+      export SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
+      sccache --version
+      sccache --show-stats
+  fi
+
   set -e
 
   # Use stub main.rs and lib.rs to build and cache dependencies
   echo "pub fn main() {}" > app/src/main_grpc.rs
   echo "// dummy" > lib-engine/src/lib.rs
   cargo build ${CARGO_FLAGS}
+  if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
+    sccache --show-stats
+  fi
   rm app/src/main_grpc.rs
   rm lib-engine/src/lib.rs
   rm target/release/deps/engine*
@@ -132,25 +151,30 @@ EOF
 COPY . .
 
 # build engine
-# If sscache is set we set rustc wrapper
 
 ARG CI_COMMIT_SHORT_SHA
 ENV CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA
 RUN <<EOF
+  if [ -z "${CI_SCCACHE_REDIS_ENDPOINT}" ];
+  then
+      echo "!!! WARNING: sccache is not used !!!"
+  else
+      echo "USING SSCACHE"
+      export RUSTC_WRAPPER=/usr/bin/sccache
+      export SCCACHE_REDIS_ENDPOINT=$CI_SCCACHE_REDIS_ENDPOINT
+      export SCCACHE_REDIS_USERNAME=default
+      export SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
+      sccache --version
+      sccache --show-stats
+  fi
+
   set -e
   
   touch app/src/main_grpc.rs
   touch lib-engine/src/lib.rs
-
-  if [ -z "${SCCACHE_REDIS}" ];
-  then
-      unset SCCACHE_REDIS
-      cargo build ${CARGO_FLAGS}
-  else
-      echo "USING SSCACHE"
-      export RUSTC_WRAPPER=/usr/bin/sccache
-      sccache --version
-      sccache --show-stats
+  cargo build ${CARGO_FLAGS}
+  if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
+    sccache --show-stats
   fi
 
   cp /build/target/release/engine_grpc /build/target/release/engine_grpc_stripped

@@ -252,9 +252,13 @@ function use_sccache() {
     echo "SCCACHE disabled"
     return
   fi
+
+  echo "SCCACHE enabled"
   export RUSTC_WRAPPER=/usr/bin/sccache
-  if [ ! -z $CI_SCCACHE_REDIS ] ; then
-    export SCCACHE_REDIS=$CI_SCCACHE_REDIS
+  if [ ! -z $CI_SCCACHE_REDIS_ENDPOINT ] ; then
+    export SCCACHE_REDIS_ENDPOINT=$CI_SCCACHE_REDIS_ENDPOINT
+    export SCCACHE_REDIS_USERNAME=default
+    export SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
   fi
   sccache --version
   sccache -s
