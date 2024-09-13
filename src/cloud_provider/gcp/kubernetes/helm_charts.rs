@@ -370,6 +370,10 @@ pub fn gcp_helm_charts(
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Gcp,
+        chart_config_prerequisites.organization_long_id.to_string(),
+        chart_config_prerequisites.organization_id.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string(),
+        chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Gke,
         Some(
             chart_config_prerequisites

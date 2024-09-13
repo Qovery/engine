@@ -3,6 +3,7 @@ use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
+use jsonptr::Pointer;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
 use k8s_openapi::api::batch::v1::CronJob;
@@ -202,7 +203,7 @@ fn get_patch_suspend(selector: &str, desired_suspend_value: bool) -> (ListParams
     let list_params = ListParams::default().labels(selector);
     let patch_params = PatchParams::default();
     let json_patch = json_patch::Patch(vec![json_patch::PatchOperation::Replace(json_patch::ReplaceOperation {
-        path: "/spec/suspend".to_string(),
+        path: Pointer::new(["spec", "suspend"]),
         value: Value::Bool(desired_suspend_value),
     })]);
     let patch = Patch::Json(json_patch);

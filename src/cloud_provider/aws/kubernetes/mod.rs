@@ -47,7 +47,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Features;
 use crate::models::domain::{ToHelmString, ToTerraformString};
-use crate::models::kubernetes::K8sPod;
+use crate::models::kubernetes::{K8sObject, K8sPod};
 use crate::models::third_parties::LetsEncryptConfig;
 
 use crate::runtime::block_on;
@@ -1225,7 +1225,7 @@ fn create(
             )) {
                 let is_the_only_nodegroup_available =
                     match block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name())) {
-                        Ok(x) => matches!(x.nodegroups(), Some(n) if n.len() == 1),
+                        Ok(x) => matches!(x.nodegroups(), n if n.len() == 1),
                         Err(_) => false,
                     };
                 // only return failures if the cluster is not absent, because it can be a VPC quota issue
@@ -1386,6 +1386,15 @@ fn create(
         })?;
     }
 
+    let qube_client = infra_ctx.mk_kube_client()?;
+
+    // check if alb controller is already enabled to decide if webhooks should be enabled or not
+    let found_alb_mutating_configs = block_on(
+        qube_client
+            .get_mutating_webhook_configurations(event_details.clone(), SelectK8sResourceBy::Name("xxx".to_string())),
+    )?;
+    let alb_already_deployed = !found_alb_mutating_configs.is_empty();
+
     // retrieve cluster CPU architectures
     let cpu_architectures = kubernetes.cpu_architectures();
     let helm_charts_to_deploy = match kubernetes.kind() {
@@ -1426,6 +1435,7 @@ fn create(
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
                 is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
                 karpenter_parameters: kubernetes.get_karpenter_parameters(),
+                alb_controller_already_deployed: alb_already_deployed,
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),
@@ -1472,6 +1482,7 @@ fn create(
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
+                alb_controller_already_deployed: alb_already_deployed,
             };
             ec2_aws_helm_charts(
                 qovery_terraform_config_file.as_str(),
@@ -1494,11 +1505,36 @@ fn create(
         }
     };
 
+    // before deploying Helm charts, we need to check if Nginx ingress controller needs to move NLB to ALB controller
+    let nginx_namespace = "nginx-ingress";
+    let services = block_on(qube_client.get_services(
+        event_details.clone(),
+        Some(nginx_namespace),
+        SelectK8sResourceBy::LabelsSelector("app.kubernetes.io/name=ingress-nginx".to_string()),
+    ))?;
+    // annotations corresponding to service to delete if found (to be later replaced)
+    let service_nlb_annotation_to_delete = match kubernetes.advanced_settings().aws_eks_enable_alb_controller {
+        true => "nlb".to_string(),       // without ALB controller
+        false => "external".to_string(), // with ALB controller
+    };
+    // search for nlb annotation
+    for service in &services {
+        if service.get_annotation_value("service.beta.kubernetes.io/aws-load-balancer-type")
+            == Some(&service_nlb_annotation_to_delete)
+        {
+            block_on(qube_client.delete_service_from_name(
+                event_details.clone(),
+                nginx_namespace,
+                service.metadata.name.as_str(),
+            ))?;
+            break;
+        }
+    }
+
     if kubernetes.kind() == Kind::Ec2 {
-        let kube_client = infra_ctx.mk_kube_client()?;
         let result = retry::retry(Fixed::from(Duration::from_secs(60)).take(5), || {
             match deploy_charts_levels(
-                kube_client.client(),
+                qube_client.client(),
                 kubeconfig_path,
                 credentials_environment_variables
                     .iter()
@@ -1528,7 +1564,7 @@ fn create(
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     } else {
         deploy_charts_levels(
-            infra_ctx.mk_kube_client()?.client(),
+            qube_client.client(),
             kubeconfig_path,
             credentials_environment_variables
                 .iter()

@@ -6,12 +6,15 @@ use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::RegistryTags;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::container::get_mirror_repository_name;
+use crate::models::kubernetes::K8sObject;
 use crate::models::registry_image_source::RegistryImageSource;
+use crate::runtime::block_on;
+use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
@@ -25,6 +28,85 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
+
+// specific to AWS
+pub fn delete_nlb_or_alb_service(
+    qube_client: QubeClient,
+    namespace: &str,
+    label_selector: &str,
+    aws_eks_enable_alb_controller: bool,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let services = block_on(qube_client.get_services(
+        event_details.clone(),
+        Some(namespace),
+        SelectK8sResourceBy::LabelsSelector(label_selector.to_string()),
+    ))?;
+
+    // annotations corresponding to service to delete if found (to be later replaced)
+    let service_nlb_annotation_to_delete = match aws_eks_enable_alb_controller {
+        true => "nlb".to_string(),       // without ALB controller
+        false => "external".to_string(), // with ALB controller
+    };
+
+    // search for nlb annotation
+    let mut deleted_nlb = false;
+    for service in &services {
+        if service.get_annotation_value("service.beta.kubernetes.io/aws-load-balancer-type")
+            == Some(&service_nlb_annotation_to_delete)
+        {
+            warn!("Deleting service {} with NLB annotation", service.metadata.name.as_str());
+            block_on(qube_client.delete_service_from_name(
+                event_details.clone(),
+                namespace,
+                service.metadata.name.as_str(),
+            ))?;
+            deleted_nlb = true;
+            break;
+        }
+    }
+
+    // wait for the NLB to be deleted before continuing
+    if deleted_nlb {
+        // error message if timeout waiting for NLB to be deleted
+        let msg = format!("Failed to delete NLB service in namespace '{}' with selector '{}', timed out. Please retry to deploy later or look at AWS Cloudwatch issue.", namespace, service_nlb_annotation_to_delete);
+        let err = EngineError::new_k8s_delete_service_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(msg.clone()),
+            msg,
+        );
+
+        let result = retry::retry(Fixed::from_millis(5 * 1000).take(32), || {
+            let services = match block_on(qube_client.get_services(
+                event_details.clone(),
+                Some(namespace),
+                SelectK8sResourceBy::LabelsSelector(label_selector.to_string()),
+            )) {
+                Ok(x) => x,
+                Err(e) => return OperationResult::Retry(e),
+            };
+
+            for service in services {
+                if service.get_annotation_value("service.beta.kubernetes.io/aws-load-balancer-type")
+                    == Some(&service_nlb_annotation_to_delete)
+                {
+                    info!(
+                        "Waiting for NLB service {}/{} to be deleted...",
+                        service.metadata.namespace, service.metadata.name
+                    );
+                    return OperationResult::Retry(Box::new(err.clone()));
+                }
+            }
+            OperationResult::Ok(())
+        });
+        match result {
+            Ok(_) => (),
+            Err(retry::Error { error, .. }) => return Err(error),
+        }
+    }
+
+    Ok(())
+}
 
 pub fn delete_cached_image(
     service_id: &Uuid,

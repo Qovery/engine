@@ -25,15 +25,9 @@ use crate::secret_manager::vault::QVaultClient;
 use crate::services::aws::models::QoveryAwsSdkConfigEks;
 use crate::services::kube_client::SelectK8sResourceBy;
 use async_trait::async_trait;
-use aws_sdk_eks::error::{
-    DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
-};
 use aws_types::SdkConfig;
 
-use aws_sdk_eks::output::{
-    DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
-};
-use aws_smithy_client::SdkError;
+use aws_sdk_eks::error::SdkError;
 
 use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
@@ -41,8 +35,13 @@ use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_comp
 use crate::engine::InfrastructureContext;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
-use aws_sdk_iam::error::{CreateServiceLinkedRoleError, GetRoleError};
-use aws_sdk_iam::output::{CreateServiceLinkedRoleOutput, GetRoleOutput};
+use aws_sdk_eks::operation::delete_nodegroup::{DeleteNodegroupError, DeleteNodegroupOutput};
+use aws_sdk_eks::operation::describe_cluster::{DescribeClusterError, DescribeClusterOutput};
+use aws_sdk_eks::operation::describe_nodegroup::{DescribeNodegroupError, DescribeNodegroupOutput};
+use aws_sdk_eks::operation::list_clusters::{ListClustersError, ListClustersOutput};
+use aws_sdk_eks::operation::list_nodegroups::{ListNodegroupsError, ListNodegroupsOutput};
+use aws_sdk_iam::operation::create_service_linked_role::{CreateServiceLinkedRoleError, CreateServiceLinkedRoleOutput};
+use aws_sdk_iam::operation::get_role::{GetRoleError, GetRoleOutput};
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
@@ -765,13 +764,45 @@ impl Kubernetes for EKS {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+    fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+        let lb_name = match cloud_provider_lb_name {
+            Some(x) => format!(",QoveryName={x}"),
+            None => "".to_string(),
+        };
         match self.advanced_settings().aws_eks_enable_alb_controller {
-            true => &[
-                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
-                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
-            ],
-            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+            // !!! IMPORTANT !!!
+            // Changing this may require destroy/recreate a load balancer (and so downtime)
+            true => {
+                vec![
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                        "external".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-scheme".to_string(),
+                        "internet-facing".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type".to_string(),
+                        "ip".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
+                        format!(
+                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
+                            self.context.organization_long_id(),
+                            self.context.organization_short_id(),
+                            self.as_kubernetes().long_id(),
+                            self.as_kubernetes().id(),
+                            lb_name
+                        ),
+                    ),
+                ]
+            }
+            false => vec![(
+                "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                "nlb".to_string(),
+            )],
         }
     }
 }
@@ -970,12 +1001,7 @@ pub async fn delete_eks_nodegroups(
         }
     };
 
-    if !clusters
-        .clusters()
-        .unwrap_or_default()
-        .iter()
-        .any(|x| x == &cluster_name)
-    {
+    if !clusters.clusters().iter().any(|x| x == &cluster_name) {
         return Err(Box::new(EngineError::new_cannot_get_cluster_error(
             event_details.clone(),
             CommandError::new_from_safe_message(NodeGroupToRemoveFailure::ClusterNotFound.to_string()),
@@ -1025,7 +1051,6 @@ pub async fn delete_eks_nodegroups(
                                     Some(x) =>
                                         x
                                             .issues()
-                                            .unwrap_or_default()
                                             .iter()
                                             .map(|x| format!("{:?}: {}", x.code(), x.message().unwrap_or("no AWS specific message given, please contact Qovery and AWS support regarding this nodegroup issue")))
                                             .collect::<Vec<String>>()
@@ -1089,13 +1114,13 @@ fn check_failed_nodegroups_to_remove(
         match nodegroup.nodegroup() {
             Some(ng) => match ng.status() {
                 Some(s) => match s {
-                    aws_sdk_eks::model::NodegroupStatus::CreateFailed => {
+                    aws_sdk_eks::types::NodegroupStatus::CreateFailed => {
                         failed_nodegroups_to_remove.push(nodegroup.clone())
                     }
-                    aws_sdk_eks::model::NodegroupStatus::DeleteFailed => {
+                    aws_sdk_eks::types::NodegroupStatus::DeleteFailed => {
                         failed_nodegroups_to_remove.push(nodegroup.clone())
                     }
-                    aws_sdk_eks::model::NodegroupStatus::Degraded => {
+                    aws_sdk_eks::types::NodegroupStatus::Degraded => {
                         failed_nodegroups_to_remove.push(nodegroup.clone())
                     }
                     _ => {
@@ -1132,19 +1157,19 @@ mod tests {
     use crate::errors::Tag;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use aws_sdk_eks::model::{nodegroup, NodegroupStatus};
-    use aws_sdk_eks::output::DescribeNodegroupOutput;
+    use aws_sdk_eks::operation::describe_nodegroup::DescribeNodegroupOutput;
+    use aws_sdk_eks::types::{Nodegroup, NodegroupStatus};
     use uuid::Uuid;
 
     use super::check_failed_nodegroups_to_remove;
 
     #[test]
     fn test_nodegroup_failure_deletion() {
-        let nodegroup_ok = nodegroup::Builder::default()
+        let nodegroup_ok = Nodegroup::builder()
             .set_nodegroup_name(Some("nodegroup_ok".to_string()))
             .set_status(Some(NodegroupStatus::Active))
             .build();
-        let nodegroup_create_failed = nodegroup::Builder::default()
+        let nodegroup_create_failed = Nodegroup::builder()
             .set_nodegroup_name(Some("nodegroup_create_failed".to_string()))
             .set_status(Some(NodegroupStatus::CreateFailed))
             .build();
@@ -1211,7 +1236,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::CreateFailed)))
                         .set_status(Some(NodegroupStatus::CreateFailed))
                         .build(),
@@ -1219,7 +1244,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Deleting)))
                         .set_status(Some(NodegroupStatus::Deleting))
                         .build(),
@@ -1227,7 +1252,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Creating)))
                         .set_status(Some(NodegroupStatus::Creating))
                         .build(),
@@ -1235,7 +1260,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Degraded)))
                         .set_status(Some(NodegroupStatus::Degraded))
                         .build(),
@@ -1243,7 +1268,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::DeleteFailed)))
                         .set_status(Some(NodegroupStatus::DeleteFailed))
                         .build(),
@@ -1251,7 +1276,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Deleting)))
                         .set_status(Some(NodegroupStatus::Deleting))
                         .build(),
@@ -1259,7 +1284,7 @@ mod tests {
                 .build(),
             DescribeNodegroupOutput::builder()
                 .nodegroup(
-                    nodegroup::Builder::default()
+                    Nodegroup::builder()
                         .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Updating)))
                         .set_status(Some(NodegroupStatus::Updating))
                         .build(),

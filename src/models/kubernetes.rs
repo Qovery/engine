@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, io::Read};
 
 use chrono::Duration;
 use k8s_openapi::api::{
+    admissionregistration::v1::MutatingWebhookConfiguration,
     apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
     core::v1::{Pod, PodStatus, Secret, Service},
 };
@@ -19,6 +20,33 @@ use crate::{
 /**********
 PODS & COMMON
 ***********/
+
+pub trait K8sObject {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>>;
+    fn get_annotation_value<'a>(&'a self, key: &str) -> Option<&'a String> {
+        Self::annotations(self).and_then(|x| x.get(key))
+    }
+}
+
+#[derive(Debug)]
+pub struct K8sMetadata {
+    pub name: String,
+    pub namespace: String,
+    pub labels: Option<BTreeMap<String, String>>,
+    pub annotations: Option<BTreeMap<String, String>>,
+    //#[serde(rename(deserialize = "deletion_grace_period_seconds"))]
+    pub termination_grace_period_seconds: Option<Duration>,
+}
+
+pub struct K8sMetadataWithoutNamespace {
+    pub name: String,
+    pub labels: Option<BTreeMap<String, String>>,
+    pub annotations: Option<BTreeMap<String, String>>,
+}
+
+/*****
+PODS
+*****/
 
 pub struct K8sPod {
     pub metadata: K8sMetadata,
@@ -39,19 +67,10 @@ pub enum K8sPodPhase {
     Unknown,
 }
 
-#[derive(Debug)]
-pub struct K8sMetadata {
-    pub name: String,
-    pub namespace: String,
-    pub labels: Option<BTreeMap<String, String>>,
-    pub annotations: Option<BTreeMap<String, String>>,
-    //#[serde(rename(deserialize = "deletion_grace_period_seconds"))]
-    pub termination_grace_period_seconds: Option<Duration>,
-}
-
-pub struct K8sStatefulsetStatus {
-    pub replicas: i32,
-    pub ready_replicas: Option<i32>,
+impl K8sObject for K8sPod {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
 }
 
 impl K8sPodStatus {
@@ -134,8 +153,15 @@ impl K8sPod {
 SERVICES
 *********/
 
+#[derive(Debug)]
 pub struct K8sService {
     pub metadata: K8sMetadata,
+}
+
+impl K8sObject for K8sService {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
 }
 
 impl K8sService {
@@ -197,6 +223,12 @@ DEPLOYMENTS
 pub struct K8sDeployment {
     pub metadata: K8sMetadata,
     pub status: Option<K8sDeploymentStatus>,
+}
+
+impl K8sObject for K8sDeployment {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
 }
 
 impl K8sDeploymentStatus {
@@ -277,9 +309,20 @@ impl K8sDeployment {
 STATEFULSETS
 ***********/
 
+pub struct K8sStatefulsetStatus {
+    pub replicas: i32,
+    pub ready_replicas: Option<i32>,
+}
+
 pub struct K8sStatefulset {
     pub metadata: K8sMetadata,
     pub status: Option<K8sStatefulsetStatus>,
+}
+
+impl K8sObject for K8sStatefulset {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
 }
 
 impl K8sStatefulsetStatus {
@@ -359,6 +402,12 @@ SECRETS
 pub struct K8sSecret {
     pub metadata: K8sMetadata,
     pub decoded_secret: Option<K8sSecretType>,
+}
+
+impl K8sObject for K8sSecret {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -475,5 +524,62 @@ impl K8sSecret {
                 self.metadata.name.as_str(),
             ))),
         }
+    }
+}
+
+/********************************
+MUTATING WEBHOOKS CONFIGURATION
+********************************/
+
+pub struct K8sMutatingWebhookConfiguration {
+    pub metadata: K8sMetadataWithoutNamespace,
+}
+
+impl K8sObject for K8sMutatingWebhookConfiguration {
+    fn annotations(&self) -> Option<&BTreeMap<String, String>> {
+        self.metadata.annotations.as_ref()
+    }
+}
+
+impl K8sMutatingWebhookConfiguration {
+    pub fn from_k8s_mutating_webhook_configuration_objectlist(
+        event_details: EventDetails,
+        k8s_mutating_webhook_configurations: ObjectList<MutatingWebhookConfiguration>,
+    ) -> Vec<K8sMutatingWebhookConfiguration> {
+        let mut mutating_webhook_configurations: Vec<K8sMutatingWebhookConfiguration> =
+            Vec::with_capacity(k8s_mutating_webhook_configurations.items.len());
+
+        for mutating_webhook_configuration in k8s_mutating_webhook_configurations.items {
+            if let Ok(x) = K8sMutatingWebhookConfiguration::from_k8s_mutating_webhook_configuration(
+                event_details.clone(),
+                mutating_webhook_configuration,
+            ) {
+                mutating_webhook_configurations.push(x);
+            };
+        }
+        mutating_webhook_configurations
+    }
+
+    pub fn from_k8s_mutating_webhook_configuration(
+        event_details: EventDetails,
+        k8s_mutating_webhook_configuration: MutatingWebhookConfiguration,
+    ) -> Result<K8sMutatingWebhookConfiguration, Box<EngineError>> {
+        Ok(K8sMutatingWebhookConfiguration {
+            metadata: K8sMetadataWithoutNamespace {
+                name: match k8s_mutating_webhook_configuration.metadata.name.clone() {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_mutating_webhook_configuration_error(
+                            event_details,
+                            CommandError::new_from_safe_message(
+                                "can't read kubernetes mutating webhook configuration, name is missing".to_string(),
+                            ),
+                        )))
+                    }
+                },
+                labels: k8s_mutating_webhook_configuration.metadata.labels.clone(),
+                annotations: k8s_mutating_webhook_configuration.metadata.annotations.clone(),
+            },
+        })
     }
 }

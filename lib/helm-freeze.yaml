@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v1.13.3
+    version: v1.15.3
     repo_name: jetstack
     comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns

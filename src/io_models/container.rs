@@ -217,8 +217,6 @@ pub struct ContainerAdvancedSettings {
     pub security_automount_service_account_token: bool,
 
     // Deployment
-    #[serde(alias = "deployment.custom_domain_check_enabled")]
-    pub deployment_custom_domain_check_enabled: bool,
     #[serde(alias = "deployment.termination_grace_period_seconds")]
     pub deployment_termination_grace_period_seconds: u32,
     #[serde(alias = "deployment.update_strategy.type")]
@@ -297,7 +295,6 @@ impl Default for ContainerAdvancedSettings {
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
             deployment_termination_grace_period_seconds: 60,
-            deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,

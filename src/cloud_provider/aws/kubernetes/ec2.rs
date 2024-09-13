@@ -26,9 +26,12 @@ use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
 use crate::services::aws::models::QoveryAwsSdkConfigEc2;
 use async_trait::async_trait;
-use aws_sdk_ec2::model::{Filter, VolumeState};
-use aws_sdk_ec2::types::SdkError;
-use aws_types::SdkConfig;
+use aws_sdk_ec2::error::SdkError;
+use aws_sdk_ec2::operation::describe_instances::{DescribeInstancesError, DescribeInstancesOutput};
+use aws_sdk_ec2::operation::describe_volumes::{DescribeVolumesError, DescribeVolumesOutput};
+use aws_sdk_ec2::operation::detach_volume::{DetachVolumeError, DetachVolumeOutput};
+use aws_sdk_ec2::types::{Filter, VolumeState};
+use aws_types::sdk_config::SdkConfig;
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Duration;
@@ -561,13 +564,45 @@ impl Kubernetes for EC2 {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+    fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+        let lb_name = match cloud_provider_lb_name {
+            Some(x) => format!(",QoveryName={x}"),
+            None => "".to_string(),
+        };
         match self.advanced_settings().aws_eks_enable_alb_controller {
-            true => &[
-                ("service.beta.kubernetes.io/aws-load-balancer-type", "external"),
-                ("service.beta.kubernetes.io/aws-load-balancer-scheme", "internet-facing"),
-            ],
-            false => &[("service.beta.kubernetes.io/aws-load-balancer-type", "nlb")],
+            // !!! IMPORTANT !!!
+            // Changing this may require destroy/recreate a load balancer (and so downtime)
+            true => {
+                vec![
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                        "external".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-scheme".to_string(),
+                        "internet-facing".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type".to_string(),
+                        "ip".to_string(),
+                    ),
+                    (
+                        "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
+                        format!(
+                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
+                            self.context.organization_long_id(),
+                            self.context.organization_short_id(),
+                            self.as_kubernetes().long_id(),
+                            self.as_kubernetes().id(),
+                            lb_name
+                        ),
+                    ),
+                ]
+            }
+            false => vec![(
+                "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                "nlb".to_string(),
+            )],
         }
     }
 }
@@ -577,7 +612,7 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
     async fn get_volume_by_instance_id(
         &self,
         instance_id: String,
-    ) -> Result<aws_sdk_ec2::output::DescribeVolumesOutput, SdkError<aws_sdk_ec2::error::DescribeVolumesError>> {
+    ) -> Result<DescribeVolumesOutput, SdkError<DescribeVolumesError>> {
         let client = aws_sdk_ec2::Client::new(self);
         client
             .describe_volumes()
@@ -593,7 +628,7 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
     async fn detach_instance_volume(
         &self,
         volume_id: String,
-    ) -> Result<aws_sdk_ec2::output::DetachVolumeOutput, SdkError<aws_sdk_ec2::error::DetachVolumeError>> {
+    ) -> Result<DetachVolumeOutput, SdkError<DetachVolumeError>> {
         let client = aws_sdk_ec2::Client::new(self);
         client.detach_volume().volume_id(volume_id).send().await
     }
@@ -601,8 +636,7 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
     async fn _get_instance_by_id(
         &self,
         instance_id: String,
-    ) -> Result<aws_sdk_ec2::output::DescribeInstancesOutput, SdkError<aws_sdk_ec2::error::DescribeInstancesError>>
-    {
+    ) -> Result<DescribeInstancesOutput, SdkError<DescribeInstancesError>> {
         let client = aws_sdk_ec2::Client::new(self);
         client
             .describe_instances()
@@ -631,31 +665,27 @@ impl QoveryAwsSdkConfigEc2 for SdkConfig {
             }
         };
 
-        if let Some(volumes) = result.volumes() {
-            for volume in volumes {
-                if let (Some(id), Some(attachments), Some(state)) =
-                    (volume.volume_id(), volume.attachments(), volume.state())
-                {
-                    let mut skip_root_volume = false;
-                    for attachment in attachments {
-                        if let Some(device) = attachment.device() {
-                            if device.to_string().contains("/dev/xvda") || state != &VolumeState::InUse {
-                                skip_root_volume = true;
-                            }
+        for volume in result.volumes.unwrap_or_default() {
+            if let (Some(id), attachments, Some(state)) = (volume.volume_id(), volume.attachments(), volume.state()) {
+                let mut skip_root_volume = false;
+                for attachment in attachments {
+                    if let Some(device) = attachment.device() {
+                        if device.to_string().contains("/dev/xvda") || state != &VolumeState::InUse {
+                            skip_root_volume = true;
                         }
                     }
-                    if skip_root_volume {
-                        continue;
-                    }
+                }
+                if skip_root_volume {
+                    continue;
+                }
 
-                    if let Err(e) = self.detach_instance_volume(id.to_string()).await {
-                        return Err(Box::new(EngineError::new_aws_sdk_cannot_detach_ec2_volumes(
-                            event_details.clone(),
-                            e,
-                            instance_id,
-                            id,
-                        )));
-                    }
+                if let Err(e) = self.detach_instance_volume(id.to_string()).await {
+                    return Err(Box::new(EngineError::new_aws_sdk_cannot_detach_ec2_volumes(
+                        event_details.clone(),
+                        e,
+                        instance_id,
+                        id,
+                    )));
                 }
             }
         }

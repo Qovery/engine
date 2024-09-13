@@ -65,6 +65,12 @@ pub struct Port {
     pub protocol: Protocol,
     pub service_name: Option<String>,
     pub namespace: Option<String>,
+    pub additional_service: Option<AdditionalService>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct AdditionalService {
+    pub selectors: BTreeMap<String, String>,
 }
 
 pub fn to_environment_variable(env_vars: BTreeMap<String, VariableInfo>) -> Vec<EnvironmentVariable> {
@@ -99,8 +105,6 @@ pub struct ApplicationAdvancedSettings {
     // Deployment
     #[serde(alias = "deployment.termination_grace_period_seconds")]
     pub deployment_termination_grace_period_seconds: u32,
-    #[serde(alias = "deployment.custom_domain_check_enabled")]
-    pub deployment_custom_domain_check_enabled: bool,
     #[serde(alias = "deployment.update_strategy.type")]
     pub deployment_update_strategy_type: UpdateStrategy,
     #[serde(alias = "deployment.update_strategy.rolling_update.max_unavailable_percent")]
@@ -185,7 +189,6 @@ impl Default for ApplicationAdvancedSettings {
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
             deployment_termination_grace_period_seconds: 60,
-            deployment_custom_domain_check_enabled: true,
             deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
             deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
@@ -230,7 +233,6 @@ impl ApplicationAdvancedSettings {
             security_service_account_name: self.security_service_account_name.clone(),
             security_read_only_root_filesystem: self.security_read_only_root_filesystem,
             security_automount_service_account_token: self.security_automount_service_account_token,
-            deployment_custom_domain_check_enabled: self.deployment_custom_domain_check_enabled,
             deployment_termination_grace_period_seconds: self.deployment_termination_grace_period_seconds,
             deployment_update_strategy_type: self.deployment_update_strategy_type,
             deployment_update_strategy_rolling_update_max_unavailable_percent: self

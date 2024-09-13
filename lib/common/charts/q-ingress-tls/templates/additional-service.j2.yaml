@@ -1,0 +1,28 @@
+{%- for qovery_additional_service in qovery_additional_services %}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ qovery_additional_service.name }}
+  {%- if qovery_additional_service.namespace_key %}
+  namespace: {{ qovery_additional_service.namespace_key }}
+  {%- endif %}
+  labels:
+    qovery.com/service-type: "service"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  type: ClusterIP
+  ports:
+    {%- for port in qovery_additional_service.ports %}
+    - protocol: {{ port.protocol }}
+      port: {{ port.port }}
+      targetPort: {{ port.target_port }}
+    {%- endfor %}
+  selector:
+    {%- for key, value in qovery_additional_service.selectors %}
+    "{{ key }}": "{{ value }}"
+    {%- endfor %}
+{%- endfor %}

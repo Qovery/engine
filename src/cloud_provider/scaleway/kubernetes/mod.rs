@@ -56,7 +56,7 @@ use ::function_name::named;
 use base64::engine::general_purpose;
 use base64::Engine;
 use itertools::Itertools;
-use reqwest::{header, StatusCode};
+use reqwest::header;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
@@ -402,8 +402,9 @@ impl Kapsule {
                     Error::ResponseError(x) => {
                         let msg_with_error =
                             format!("Error code while getting node group: {}, API message: {} ", x.status, x.content);
-                        match x.status {
-                            StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
+                        match x.status.as_u16() {
+                            // TODO(ENG-1453): To be tested against StatusCode::NOT_FOUND once SCW will be bumped (it uses an old http version clashing with new one)
+                            404_u16 /*StatusCode::NOT_FOUND*/ => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                                 "No node pool found".to_string(),
                                 Some(msg_with_error),
                                 None,
@@ -1598,7 +1599,11 @@ impl Kubernetes for Kapsule {
             ScwZone::Paris2 => "fr-par",
             ScwZone::Paris3 => "fr-par",
             ScwZone::Amsterdam1 => "nl-ams",
+            ScwZone::Amsterdam2 => "nl-ams",
+            ScwZone::Amsterdam3 => "nl-ams",
             ScwZone::Warsaw1 => "pl-waw",
+            ScwZone::Warsaw2 => "pl-waw",
+            ScwZone::Warsaw3 => "pl-waw",
         }
     }
 
@@ -1915,20 +1920,35 @@ impl Kubernetes for Kapsule {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
+    fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         // SCW doesn't support UDP loadbalancer
         // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
         // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
-        &[
+        vec![
             (
-                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
-                "leastconn",
+                "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm".to_string(),
+                "leastconn".to_string(),
             ),
-            ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
-            ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-protocol-http".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-health-check-type".to_string(),
+                "tcp".to_string(),
+            ),
+            (
+                "service.beta.kubernetes.io/scw-loadbalancer-use-hostname".to_string(),
+                "false".to_string(),
+            ),
         ]
     }
 }

@@ -1,12 +1,10 @@
-use aws_config::provider_config::ProviderConfig;
+use aws_sdk_ec2::config::{BehaviorVersion, SharedCredentialsProvider};
 use aws_types::SdkConfig;
 use std::any::Any;
+use std::borrow::Cow;
 
-use aws_smithy_async::rt::sleep::TokioSleep;
-use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::never::NeverConnector;
-use aws_types::os_shim_internal::Env;
-use rusoto_core::{Client, HttpClient, Region};
+use aws_types::region::Region;
+use rusoto_core::{Client, HttpClient};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use uuid::Uuid;
@@ -114,28 +112,24 @@ impl CloudProvider for AWS {
     }
 
     fn aws_sdk_client(&self) -> Option<SdkConfig> {
-        let env = Env::from_slice(&[
-            ("AWS_MAX_ATTEMPTS", "10"),
-            ("AWS_REGION", self.region().as_str()),
-            ("AWS_ACCESS_KEY_ID", self.access_key_id().as_str()),
-            ("AWS_SECRET_ACCESS_KEY", self.secret_access_key().as_str()),
-        ]);
-
-        Some(block_on(
-            aws_config::from_env()
-                .configure(
-                    ProviderConfig::empty()
-                        .with_env(env)
-                        .with_sleep(TokioSleep::new())
-                        .with_http_connector(DynConnector::new(NeverConnector::new())),
-                )
-                .load(),
-        ))
+        Some(
+            SdkConfig::builder()
+                .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
+                    self.access_key_id(),
+                    self.secret_access_key(),
+                    None,
+                    None,
+                    "qovery-engine",
+                )))
+                .behavior_version(BehaviorVersion::latest())
+                .region(Region::new(Cow::from(self.region.clone())))
+                .build(),
+        )
     }
 
     fn is_valid(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
-        let client = StsClient::new_with_client(self.client(), Region::default());
+        let client = StsClient::new_with_client(self.client(), rusoto_signature::region::Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {

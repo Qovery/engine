@@ -213,7 +213,7 @@ fn write_helm_value_with_replacement<'a>(
     environment_id: Uuid,
     project_id: Uuid,
     env_vars: &HashMap<String, VariableInfo>,
-    loadbalancer_l4_annotations: &'static [(&'static str, &'static str)],
+    loadbalancer_l4_annotations: Vec<(String, String)>,
 ) -> Result<(), anyhow::Error> {
     let mut output_writer = BufWriter::new(output_writer);
     let mut lines = lines.try_fold(Vec::with_capacity(512), |mut acc, l| {
@@ -478,7 +478,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
-                    target.kubernetes.loadbalancer_l4_annotations(),
+                    target.kubernetes.loadbalancer_l4_annotations(Some(this.name())),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {} due to {}", value.name, e)))?;
             }
@@ -531,7 +531,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     target.environment.long_id,
                     target.environment.project_long_id,
                     this.environment_variables(),
-                    target.kubernetes.loadbalancer_l4_annotations(),
+                    target.kubernetes.loadbalancer_l4_annotations(Some(this.name())),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {:?} due to {}", filename, e)))?;
             }
@@ -895,9 +895,9 @@ controller:
             env_id,
             project_id,
             &envs,
-            &[
-                ("custom-annotation-1", "custom-value-1"),
-                ("custom-annotation-2", "custom-value-2"),
+            vec![
+                ("custom-annotation-1".to_string(), "custom-value-1".to_string()),
+                ("custom-annotation-2".to_string(), "custom-value-2".to_string()),
             ],
         );
         assert!(ret.is_ok());

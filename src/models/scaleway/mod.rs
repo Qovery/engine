@@ -43,23 +43,6 @@ impl CloudProvider for SCW {
     fn lib_directory_name() -> &'static str {
         "scaleway"
     }
-
-    // fn loadbalancer_l4_annotations() -> &'static [(&'static str, &'static str)] {
-    //     // SCW doesn't support UDP loadbalancer
-    //     // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
-    //     // https://www.scaleway.com/en/docs/containers/kubernetes/api-cli/using-load-balancer-annotations/
-    //     &[
-    //         (
-    //             "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm",
-    //             "leastconn",
-    //         ),
-    //         ("service.beta.kubernetes.io/scw-loadbalancer-protocol-http", "false"),
-    //         ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1", "false"),
-    //         ("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2", "false"),
-    //         ("service.beta.kubernetes.io/scw-loadbalancer-health-check-type", "tcp"),
-    //         ("service.beta.kubernetes.io/scw-loadbalancer-use-hostname", "false"),
-    //     ]
-    // }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -113,7 +96,11 @@ pub enum ScwZone {
     Paris2,
     Paris3,
     Amsterdam1,
+    Amsterdam2,
+    Amsterdam3,
     Warsaw1,
+    Warsaw2,
+    Warsaw3,
 }
 
 impl ScwZone {
@@ -124,7 +111,11 @@ impl ScwZone {
             ScwZone::Paris2 => "fr-par-2",
             ScwZone::Paris3 => "fr-par-3",
             ScwZone::Amsterdam1 => "nl-ams-1",
+            ScwZone::Amsterdam2 => "nl-ams-2",
+            ScwZone::Amsterdam3 => "nl-ams-3",
             ScwZone::Warsaw1 => "pl-waw-1",
+            ScwZone::Warsaw2 => "pl-waw-2",
+            ScwZone::Warsaw3 => "pl-waw-3",
         }
     }
 
@@ -134,7 +125,11 @@ impl ScwZone {
             ScwZone::Paris2 => ScwRegion::Paris,
             ScwZone::Paris3 => ScwRegion::Paris,
             ScwZone::Amsterdam1 => ScwRegion::Amsterdam,
+            ScwZone::Amsterdam2 => ScwRegion::Amsterdam,
+            ScwZone::Amsterdam3 => ScwRegion::Amsterdam,
             ScwZone::Warsaw1 => ScwRegion::Warsaw,
+            ScwZone::Warsaw2 => ScwRegion::Warsaw,
+            ScwZone::Warsaw3 => ScwRegion::Warsaw,
         }
     }
 }
@@ -154,7 +149,11 @@ impl FromStr for ScwZone {
             "fr-par-2" => Ok(ScwZone::Paris2),
             "fr-par-3" => Ok(ScwZone::Paris3),
             "nl-ams-1" => Ok(ScwZone::Amsterdam1),
+            "nl-ams-2" => Ok(ScwZone::Amsterdam2),
+            "nl-ams-3" => Ok(ScwZone::Amsterdam3),
             "pl-waw-1" => Ok(ScwZone::Warsaw1),
+            "pl-waw-2" => Ok(ScwZone::Warsaw2),
+            "pl-waw-3" => Ok(ScwZone::Warsaw3),
             _ => Err(CommandError::new_from_safe_message(format!("`{s}` zone is not supported"))),
         }
     }
@@ -169,7 +168,11 @@ impl ToCloudProviderFormat for ScwZone {
             ScwZone::Paris2 => "fr-par-2",
             ScwZone::Paris3 => "fr-par-3",
             ScwZone::Amsterdam1 => "nl-ams-1",
+            ScwZone::Amsterdam2 => "nl-ams-2",
+            ScwZone::Amsterdam3 => "nl-ams-3",
             ScwZone::Warsaw1 => "pl-waw-1",
+            ScwZone::Warsaw2 => "pl-waw-2",
+            ScwZone::Warsaw3 => "pl-waw-3",
         }
     }
 }
@@ -192,8 +195,14 @@ mod tests {
         assert_eq!(ScwRegion::from_str("nl-ams"), Ok(ScwRegion::Amsterdam));
         assert_eq!(ScwRegion::from_str("pl-waw"), Ok(ScwRegion::Warsaw));
         assert_eq!(ScwRegion::from_str("fr-par-1"), Ok(ScwRegion::Paris));
+        assert_eq!(ScwRegion::from_str("fr-par-2"), Ok(ScwRegion::Paris));
+        assert_eq!(ScwRegion::from_str("fr-par-3"), Ok(ScwRegion::Paris));
         assert_eq!(ScwRegion::from_str("nl-ams-1"), Ok(ScwRegion::Amsterdam));
+        assert_eq!(ScwRegion::from_str("nl-ams-2"), Ok(ScwRegion::Amsterdam));
+        assert_eq!(ScwRegion::from_str("nl-ams-3"), Ok(ScwRegion::Amsterdam));
         assert_eq!(ScwRegion::from_str("pl-waw-1"), Ok(ScwRegion::Warsaw));
+        assert_eq!(ScwRegion::from_str("pl-waw-2"), Ok(ScwRegion::Warsaw));
+        assert_eq!(ScwRegion::from_str("pl-waw-3"), Ok(ScwRegion::Warsaw));
     }
 
     #[test]
@@ -202,7 +211,11 @@ mod tests {
         assert_eq!("fr-par-2", ScwZone::Paris2.as_str());
         assert_eq!("fr-par-3", ScwZone::Paris3.as_str());
         assert_eq!("nl-ams-1", ScwZone::Amsterdam1.as_str());
+        assert_eq!("nl-ams-2", ScwZone::Amsterdam2.as_str());
+        assert_eq!("nl-ams-3", ScwZone::Amsterdam3.as_str());
         assert_eq!("pl-waw-1", ScwZone::Warsaw1.as_str());
+        assert_eq!("pl-waw-2", ScwZone::Warsaw2.as_str());
+        assert_eq!("pl-waw-3", ScwZone::Warsaw3.as_str());
     }
 
     #[test]
@@ -211,7 +224,11 @@ mod tests {
         assert_eq!(ScwZone::from_str("fr-par-2"), Ok(ScwZone::Paris2));
         assert_eq!(ScwZone::from_str("fr-par-3"), Ok(ScwZone::Paris3));
         assert_eq!(ScwZone::from_str("nl-ams-1"), Ok(ScwZone::Amsterdam1));
+        assert_eq!(ScwZone::from_str("nl-ams-2"), Ok(ScwZone::Amsterdam2));
+        assert_eq!(ScwZone::from_str("nl-ams-3"), Ok(ScwZone::Amsterdam3));
         assert_eq!(ScwZone::from_str("pl-waw-1"), Ok(ScwZone::Warsaw1));
+        assert_eq!(ScwZone::from_str("pl-waw-2"), Ok(ScwZone::Warsaw2));
+        assert_eq!(ScwZone::from_str("pl-waw-3"), Ok(ScwZone::Warsaw3));
     }
 
     #[test]
@@ -220,6 +237,10 @@ mod tests {
         assert_eq!(ScwZone::Paris2.region(), ScwRegion::Paris);
         assert_eq!(ScwZone::Paris3.region(), ScwRegion::Paris);
         assert_eq!(ScwZone::Amsterdam1.region(), ScwRegion::Amsterdam);
+        assert_eq!(ScwZone::Amsterdam2.region(), ScwRegion::Amsterdam);
+        assert_eq!(ScwZone::Amsterdam3.region(), ScwRegion::Amsterdam);
         assert_eq!(ScwZone::Warsaw1.region(), ScwRegion::Warsaw);
+        assert_eq!(ScwZone::Warsaw2.region(), ScwRegion::Warsaw);
+        assert_eq!(ScwZone::Warsaw3.region(), ScwRegion::Warsaw);
     }
 }

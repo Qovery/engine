@@ -32,10 +32,6 @@ pub struct HelmCredentials {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct HelmChartAdvancedSettings {
-    // Deployment
-    #[serde(alias = "deployment.custom_domain_check_enabled")]
-    pub deployment_custom_domain_check_enabled: bool,
-
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
@@ -87,8 +83,6 @@ pub struct HelmChartAdvancedSettings {
 impl Default for HelmChartAdvancedSettings {
     fn default() -> Self {
         HelmChartAdvancedSettings {
-            deployment_custom_domain_check_enabled: true,
-
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
@@ -451,7 +445,6 @@ mod tests {
             .map(|port| (port.namespace.clone(), port.service_name.clone()))
             .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
                 && service_name == Some("service_1".to_string())));
-        assert!(helm_chart.advanced_settings.deployment_custom_domain_check_enabled)
     }
 }
 

@@ -21,6 +21,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use uuid::Uuid;
 
+use super::annotations_group::Annotation;
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum DatabaseMode {
     MANAGED,
@@ -95,6 +97,21 @@ impl Database {
             .flat_map(|labels_group_id| labels_group.get(labels_group_id))
             .cloned()
             .collect_vec();
+        let mut additional_annotations = Vec::new();
+        if let (CPKind::Aws, DatabaseMode::CONTAINER) = (cloud_provider.kind(), &self.mode) {
+            // alb annotations
+            additional_annotations.push(Annotation {
+                key: "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
+                value: format!(
+                    "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={},QoveryName={}",
+                    context.organization_long_id(),
+                    context.organization_short_id(),
+                    context.cluster_long_id(),
+                    context.cluster_short_id(),
+                    self.kube_name.clone()
+                ),
+            });
+        };
 
         let version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
@@ -144,6 +161,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -168,6 +186,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -198,6 +217,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -222,6 +242,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -253,6 +274,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -277,6 +299,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -307,6 +330,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -331,6 +355,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -361,6 +386,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -385,6 +411,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -415,6 +442,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -439,6 +467,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -469,6 +498,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -493,6 +523,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -523,6 +554,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 } else {
@@ -547,6 +579,7 @@ impl Database {
                         database_options,
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
+                        additional_annotations,
                         labels_groups,
                     )?))
                 }
@@ -574,6 +607,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -601,6 +635,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -628,6 +663,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -655,6 +691,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -682,6 +719,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -709,6 +747,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -750,6 +789,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -780,6 +820,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -813,6 +854,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -843,6 +885,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -870,6 +913,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -897,6 +941,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -924,6 +969,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 
@@ -951,6 +997,7 @@ impl Database {
                     database_options,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
+                    additional_annotations,
                     labels_groups,
                 )?;
 

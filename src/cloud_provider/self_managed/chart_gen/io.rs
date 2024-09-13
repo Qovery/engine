@@ -181,6 +181,7 @@ impl ValuesFile {
                 aws: AwsServices {
                     qovery_storage_class: ServiceEnabled { enabled: false },
                     aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+                    aws_load_balancer_controller: ServiceEnabled { enabled: false },
                 },
                 gcp: GcpServices {
                     qovery_storage_class: ServiceEnabled { enabled: false },
@@ -252,6 +253,7 @@ impl ValuesFile {
                 ]),
             }),
             ingress_nginx: ChartConfig { override_chart: None },
+            aws_load_balancer_controller: None,
             external_dns: ChartConfig { override_chart: None },
             promtail: ChartConfig { override_chart: None },
             loki: ChartConfig { override_chart: None },
@@ -296,7 +298,11 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+            aws_load_balancer_controller: ServiceEnabled { enabled: true },
         };
+        value.aws_load_balancer_controller = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::AlbController.to_string()),
+        });
 
         value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
@@ -339,6 +345,7 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
 
         value.services.scaleway = ScalewayServices {
@@ -385,6 +392,7 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
 
         value.services.gcp = GcpServices {
@@ -428,6 +436,7 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
 
         value.services.gcp = GcpServices {

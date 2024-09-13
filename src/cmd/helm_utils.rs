@@ -486,3 +486,13 @@ where
 
     Ok(())
 }
+
+impl ChartDependencyYAML {
+    pub fn is_https(&self) -> bool {
+        self.repository.starts_with("https://")
+    }
+
+    pub fn is_oci(&self) -> bool {
+        self.repository.starts_with("oci://")
+    }
+}

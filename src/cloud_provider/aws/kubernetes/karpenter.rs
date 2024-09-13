@@ -17,6 +17,7 @@ use crate::services::aws::models::QoveryAwsSdkConfigEks;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
+use jsonptr::Pointer;
 use k8s_openapi::api::core::v1::Node;
 use std::str::FromStr;
 use std::string::ToString;
@@ -210,7 +211,7 @@ impl Karpenter {
             .await?;
 
         let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
-            path: "/metadata/finalizers".to_string(),
+            path: Pointer::new(["metadata", "finalizers"]),
         })];
 
         for node in nodes {

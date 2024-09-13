@@ -134,10 +134,6 @@ impl EnvironmentRequest {
                         annotations_groups_ids.clone_from(&app.annotations_group_ids);
                         labels_groups_ids.clone_from(&app.labels_group_ids);
 
-                        // disable custom domain check for this router
-                        if !app.advanced_settings.deployment_custom_domain_check_enabled {
-                            router_advanced_settings.custom_domain_check_enabled = false;
-                        }
                         // whitelist source range
                         if app.advanced_settings.network_ingress_whitelist_source_range
                             != RouterAdvancedSettings::whitelist_source_range_default_value()
@@ -189,10 +185,6 @@ impl EnvironmentRequest {
                         annotations_groups_ids.clone_from(&container.annotations_group_ids);
                         labels_groups_ids.clone_from(&container.labels_group_ids);
 
-                        // disable custom domain check for this router
-                        if !container.advanced_settings.deployment_custom_domain_check_enabled {
-                            router_advanced_settings.custom_domain_check_enabled = false;
-                        }
                         // whitelist source range
                         if container.advanced_settings.network_ingress_whitelist_source_range
                             != RouterAdvancedSettings::whitelist_source_range_default_value()
@@ -249,11 +241,6 @@ impl EnvironmentRequest {
             for helm in &self.helms {
                 for route in &router.routes {
                     if route.service_long_id == helm.long_id {
-                        // disable custom domain check for this router
-
-                        if !helm.advanced_settings.deployment_custom_domain_check_enabled {
-                            router_advanced_settings.custom_domain_check_enabled = false;
-                        }
                         // whitelist source range
                         if helm.advanced_settings.network_ingress_whitelist_source_range
                             != RouterAdvancedSettings::whitelist_source_range_default_value()

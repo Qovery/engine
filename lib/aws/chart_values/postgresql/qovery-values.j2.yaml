@@ -77,7 +77,15 @@ primary:
     type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
     {% if publicly_accessible -%}
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-type: "{{ aws_load_balancer_type }}"
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+      {%- if aws_load_balancer_type == "external" %}
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+      {%- endif %}
+      {%- for annotations in additional_annotations %}
+      {{ annotations.key }}: |-
+         {{ annotations.value }}
+      {%- endfor %}
       external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
       external-dns.alpha.kubernetes.io/ttl: "300"
       {%- for key, value in annotations_group.service %}

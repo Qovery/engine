@@ -1685,8 +1685,8 @@ impl Kubernetes for Gke {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self) -> &'static [(&'static str, &'static str)] {
-        &[]
+    fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+        Vec::with_capacity(0)
     }
 }
 

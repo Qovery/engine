@@ -309,6 +309,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
+                    additional_service: None,
                 }];
                 app.environment_vars_with_infos = btreemap! {
                      "PG_DBNAME".to_string() => VariableInfo{ value: general_purpose::STANDARD.encode(database_db_name.clone()), is_secret: false},

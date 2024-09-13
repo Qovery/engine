@@ -308,7 +308,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 domain: format!("fake-custom-domain-{idx}.qovery.io"),
                 target_domain: format!("validation-domain-{idx}"),
                 generate_certificate: true,
-                use_cdn: false,
+                use_cdn: true,
             };
 
             router.custom_domains = vec![cd];
@@ -325,9 +325,8 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 protocol: Protocol::GRPC,
                 service_name: None,
                 namespace: None,
+                additional_service: None,
             });
-            // disable custom domain check
-            application.advanced_settings.deployment_custom_domain_check_enabled = false;
             modified_environment.applications.push(application);
         }
 

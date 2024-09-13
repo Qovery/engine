@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{get_database_terraform_config, Action, Service};
-use crate::cloud_provider::Kind::Aws;
+use crate::cloud_provider::Kind::{self, Aws};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -31,16 +31,17 @@ use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use async_trait::async_trait;
-use aws_sdk_docdb::error::DescribeDBClustersError;
-use aws_sdk_docdb::output::DescribeDbClustersOutput;
-use aws_sdk_docdb::types::SdkError;
-use aws_sdk_elasticache::error::DescribeCacheClustersError;
-use aws_sdk_elasticache::output::DescribeCacheClustersOutput;
-use aws_sdk_rds::error::DescribeDBInstancesError;
-use aws_sdk_rds::output::DescribeDbInstancesOutput;
+use aws_sdk_docdb::operation::describe_db_clusters::{DescribeDBClustersError, DescribeDbClustersOutput};
+use aws_sdk_elasticache::operation::describe_cache_clusters::{
+    DescribeCacheClustersError, DescribeCacheClustersOutput,
+};
+use aws_sdk_rds::error::SdkError;
+use aws_sdk_rds::operation::describe_db_instances::{DescribeDBInstancesError, DescribeDbInstancesOutput};
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
+
+use super::utils::delete_nlb_or_alb_service;
 
 const DB_READY_STATE: &str = "available";
 const DB_STOPPED_STATE: &str = "stopped";
@@ -478,12 +479,9 @@ fn managed_database_exists(
                 }
             };
 
-            match result.db_instances() {
-                None => Ok(false),
-                Some(instances) => match instances.is_empty() {
-                    true => Ok(false),
-                    false => Ok(true),
-                },
+            match result.db_instances().is_empty() {
+                true => Ok(false),
+                false => Ok(true),
             }
         }
         service::DatabaseType::MongoDB => {
@@ -505,12 +503,9 @@ fn managed_database_exists(
                 }
             };
 
-            match result.db_clusters() {
-                None => Ok(false),
-                Some(clusters) => match clusters.is_empty() {
-                    true => Ok(false),
-                    false => Ok(true),
-                },
+            match result.db_clusters().is_empty() {
+                true => Ok(false),
+                false => Ok(true),
             }
         }
         service::DatabaseType::Redis => {
@@ -538,12 +533,9 @@ fn managed_database_exists(
                     };
                 }
             };
-            match result.cache_clusters() {
-                None => Ok(false),
-                Some(clusters) => match clusters.is_empty() {
-                    true => Ok(false),
-                    false => Ok(true),
-                },
+            match result.cache_clusters().is_empty() {
+                true => Ok(false),
+                false => Ok(true),
             }
         }
     }
@@ -765,6 +757,16 @@ where
                 Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
                 chart,
             );
+
+            if target.cloud_provider.kind() == Kind::Aws {
+                delete_nlb_or_alb_service(
+                    target.qube_client(event_details.clone())?,
+                    target.environment.namespace(),
+                    format!("qovery.com/service-id={}", self.long_id()).as_str(),
+                    target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,
+                    event_details.clone(),
+                )?;
+            }
 
             if let Err(e) = helm.on_create(target) {
                 return match e.tag() {

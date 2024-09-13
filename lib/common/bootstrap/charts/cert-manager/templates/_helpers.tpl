@@ -172,3 +172,31 @@ https://github.com/helm/helm/issues/5358
 {{- define "cert-manager.namespace" -}}
     {{ .Values.namespace | default .Release.Namespace }}
 {{- end -}}
+
+{{/*
+Util function for generating the image URL based on the provided options.
+IMPORTANT: This function is standarized across all charts in the cert-manager GH organization.
+Any changes to this function should also be made in cert-manager, trust-manager, approver-policy, ...
+See https://github.com/cert-manager/cert-manager/issues/6329 for a list of linked PRs.
+*/}}
+{{- define "image" -}}
+{{- $defaultTag := index . 1 -}}
+{{- with index . 0 -}}
+{{- if .registry -}}{{ printf "%s/%s" .registry .repository }}{{- else -}}{{- .repository -}}{{- end -}}
+{{- if .digest -}}{{ printf "@%s" .digest }}{{- else -}}{{ printf ":%s" (default $defaultTag .tag) }}{{- end -}}
+{{- end }}
+{{- end }}
+
+{{/*
+Check that the user has not set both .installCRDs and .crds.enabled or
+set .installCRDs and disabled .crds.keep.
+.installCRDs is deprecated and users should use .crds.enabled and .crds.keep instead.
+*/}}
+{{- define "cert-manager.crd-check" -}}
+  {{- if and (.Values.installCRDs) (.Values.crds.enabled) }}
+    {{- fail "ERROR: the deprecated .installCRDs option cannot be enabled at the same time as its replacement .crds.enabled" }}
+  {{- end }}
+  {{- if and (.Values.installCRDs) (not .Values.crds.keep) }}
+    {{- fail "ERROR: .crds.keep is not compatible with .installCRDs, please use .crds.enabled and .crds.keep instead" }}
+  {{- end }}
+{{- end -}}
