@@ -5,6 +5,7 @@ resource "aws_eks_addon" "vpc_cni" {
   # Pick the recommended version for the k8s version or override if set
   addon_version        = "{{ eks_addon_vpc_cni.version }}"
   resolve_conflicts_on_update = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
 
   # Get configuration fields: `aws eks describe-addon-configuration --addon-name vpc-cni --addon-version`
   # jq .configurationSchema --raw-output | jq .definitions
