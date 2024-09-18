@@ -171,6 +171,41 @@ engineResources.requests.cpu="300m",\
 engineResources.requests.memory="1Gi"
 }
 
+function deploy_engines_infra_static_ip() { ## Release GA to prod
+  tag=$(generate_image_tag)
+  AWS_ACCESS_KEY_ID="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
+  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-engine-infra qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set image.tag="$tag",\
+environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.DEPLOYMENT_TYPE="INFRASTRUCTURE",\
+environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
+environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+environmentVariables.CLUSTER_ID="6d9f665a-c203-4b02-8d49-ee05ad3f1137",\
+environmentVariables.CLUSTER_JWT_TOKEN="$INFRA_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN",\
+rbac.clusterPermission="none",\
+buildContainer.enabled="false",\
+metrics.enabled="true",\
+terminationGracePeriodSeconds="14400",\
+autoscaler.enabled="true",\
+autoscaler.maxReplicas="30",\
+autoscaler.minReplicas="1",\
+autoscaler.averageValue="0.5",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="1Gi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="1Gi"
+}
+
 function deploy_engines_envs() { ## Release GA to prod
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENGINE_ENV_ACCESS_KEY" \
