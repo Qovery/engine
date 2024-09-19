@@ -72,6 +72,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) lib_root_directory: String,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
     pub(super) labels_group: LabelsGroupTeraContext,
+    pub(super) should_delete_shared_registry: bool,
 }
 
 // Here we define the common behavior among all providers
@@ -103,6 +104,7 @@ impl<T: CloudProvider> Application<T> {
         cpu_limit_in_milli: KubernetesCpuResourceUnit,
         ram_request_in_mib: KubernetesMemoryResourceUnit,
         ram_limit_in_mib: KubernetesMemoryResourceUnit,
+        should_delete_shared_registry: bool,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
@@ -145,6 +147,7 @@ impl<T: CloudProvider> Application<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
+            should_delete_shared_registry,
         })
     }
 
@@ -315,6 +318,10 @@ impl<T: CloudProvider> Application<T> {
 
     pub fn workspace_directory(&self) -> &str {
         self.workspace_directory.to_str().unwrap_or("")
+    }
+
+    pub fn should_delete_shared_registry(&self) -> bool {
+        self.should_delete_shared_registry
     }
 
     fn service_version(&self) -> String {

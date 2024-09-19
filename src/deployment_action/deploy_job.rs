@@ -548,12 +548,25 @@ where
                 }
             }
 
-            // Deleting the repository dedicated to this job
+            // Delete shared container repository if needed (depending on flag computed on core)
             ImageSource::Build { source } => {
+                if job.should_delete_shared_registry() {
+                    logger.send_success("🪓 Terminating shared container registry of the job".to_string());
+                    if let Err(err) = target
+                        .container_registry
+                        .delete_repository(source.image.shared_repository_name())
+                    {
+                        let user_msg =
+                            format!("❌ Failed to delete shared container registry of the application: {err}");
+                        logger.send_success(user_msg);
+                    }
+                }
+
+                // Deleting the repository dedicated to this job
                 logger.send_success("🪓 Terminating container registry of the job".to_string());
                 if let Err(err) = target
                     .container_registry
-                    .delete_repository(source.image.repository_name())
+                    .delete_repository(source.image.legacy_repository_name())
                 {
                     let user_msg = format!("❌ Failed to delete container registry of the application: {err}");
                     logger.send_success(user_msg);

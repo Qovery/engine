@@ -155,6 +155,8 @@ fn fetch<P>(
 where
     P: AsRef<Path>,
 {
+    // TODO handle http only on tests
+    // if !(repository_url.scheme() == "https" || repository_url.scheme() == "http") {
     if repository_url.scheme() != "https" {
         return Err(Error::from_str("Repository URL have to start with https://"));
     }
@@ -178,6 +180,14 @@ where
     let repo = Repository::init(into_dir)?;
     remote_fetch(repository_url, &commit_id, &mut fo, &repo)?;
 
+    // TODO handle full clone only on tests
+    // let fetch_status = remote_fetch(repository_url, &commit_id, &mut fo, &repo);
+    // if fetch_status.is_err() {
+    //     std::fs::remove_dir_all(repo.path()).unwrap_or_default();
+    //     repo = RepoBuilder::new()
+    //         .fetch_options(fo)
+    //         .clone(repository_url.as_str(), into_dir.as_ref())?;
+    // }
     Ok(repo)
 }
 

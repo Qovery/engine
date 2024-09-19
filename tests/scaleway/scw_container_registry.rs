@@ -190,12 +190,12 @@ fn test_create_registry_namespace_invalid_name() {
                     }),
                 },
                 NamingTestCase {
-                    name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc".to_string(),
+                    name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy".to_string(),
                     expected_error: Some(ContainerRegistryError::RepositoryNameNotValid {
                         registry_name: registry_name.to_string(),
-                        repository_name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc".to_string(),
+                        repository_name: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy".to_string(),
                         broken_rules: HashSet::from_iter(vec![RepositoryNamingRule::MaxLengthReached {
-                            max_length: 54,
+                            max_length: 50,
                         }]),
                     }),
                 },
@@ -207,7 +207,7 @@ fn test_create_registry_namespace_invalid_name() {
                             .to_string(),
                         broken_rules: HashSet::from_iter(vec![
                             RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly,
-                            RepositoryNamingRule::MaxLengthReached { max_length: 54 },
+                            RepositoryNamingRule::MaxLengthReached { max_length: 50 },
                         ]),
                     }),
                 },
