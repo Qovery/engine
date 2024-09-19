@@ -251,6 +251,51 @@ engineResources.requests.memory="2Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
+function deploy_engines_environment_static_ip() { ## Release GA to prod
+  tag=$(generate_image_tag)
+  AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
+  helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set-string \
+image.tag="$tag",\
+buildContainer.enabled="true",\
+buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
+buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
+buildContainer.environmentVariables.BUILDER_ROOTLESS_ENABLED="false",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
+environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
+environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
+environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+environmentVariables.CLUSTER_ID="8a14ee85-a66b-46f7-83e3-5cbeb4d5ed8b",\
+environmentVariables.CLUSTER_JWT_TOKEN="$ENVIRONMENT_CLUSTER_STATIC_IP_JWT_TOKEN",\
+networkPolicies.enabled="true",\
+metrics.enabled="true",\
+rbac.clusterPermission="deployer",\
+autoscaler.enabled="true",\
+autoscaler.minReplicas="2",\
+autoscaler.maxReplicas="50",\
+autoscaler.averageValue="0.9",\
+overprovisionning.enabled="true",\
+overprovisionning.replicas="5",\
+overprovisionning.resources.requests.cpu="4",\
+overprovisionning.resources.limits.cpu="4",\
+overprovisionning.resources.requests.memory="8Gi",\
+overprovisionning.resources.limits.memory="8Gi",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="2Gi",\
+engineResources.limits.ephemeral-storage="20Gi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="2Gi",\
+engineResources.requests.ephemeral-storage="20Gi"
+}
+
 ## Tests
 
 function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
@@ -523,6 +568,10 @@ deploy_engines_envs)
 # Deploy the engines dedicated for infra deployments on cluster with static ip
 deploy_engines_infra_static_ip)
   deploy_engines_infra_static_ip
+  ;;
+# Deploy on the engines dedicated for customer's environments deployments on cluster with static ip
+deploy_engines_environment_static_ip)
+  deploy_engines_environment_static_ip
   ;;
 get_release_ga)
   get_release_ga

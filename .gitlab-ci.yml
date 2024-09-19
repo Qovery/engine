@@ -859,6 +859,21 @@ quarantine:
     - if: $CI_COMMIT_BRANCH == "main"
   when: manual
 
+# it could be merged in deploy-qovery-env-engines later
+5-deploy-qovery-environment-engines-static-ip:
+  stage: deploy
+  retry: 0
+  needs:
+    - create-multi-arch-image
+  script:
+    - ./helper.sh deploy_engines_environment_static_ip
+  tags:
+    - vm-250mcpu-1gmem-0g
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  when: manual
+
+
 update_qovery_chart:
   stage: deploy
   retry: 1
