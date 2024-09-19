@@ -520,6 +520,10 @@ deploy_engines_infra)
 deploy_engines_envs)
   deploy_engines_envs
   ;;
+# Deploy the engines dedicated for infra deployments on cluster with static ip
+deploy_engines_infra_static_ip)
+  deploy_engines_infra_static_ip
+  ;;
 get_release_ga)
   get_release_ga
   ;;
