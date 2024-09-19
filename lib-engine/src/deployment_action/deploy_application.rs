@@ -169,11 +169,29 @@ where
                     }
                 }
 
+                // Delete shared container repository if needed (depending on flag computed on core)
+                if self.should_delete_shared_registry() {
+                    logger.info("🪓 Terminating shared container registry of the application".to_string());
+                    if let Err(err) = target
+                        .container_registry
+                        .delete_repository(self.build().image.shared_repository_name())
+                    {
+                        let safe_user_msg =
+                            "❌ Failed to delete shared container registry of the application".to_string();
+                        let user_error = EngineError::new_engine_error(
+                            EngineError::new_container_registry_error(event_details.clone(), err),
+                            safe_user_msg,
+                            None,
+                        );
+                        return Err(Box::new(user_error));
+                    }
+                }
+
                 // Delete container repository created for this application
                 logger.info("🪓 Terminating container registry of the application".to_string());
                 if let Err(err) = target
                     .container_registry
-                    .delete_repository(self.build().image.repository_name())
+                    .delete_repository(self.build().image.legacy_repository_name())
                 {
                     let safe_user_msg = "❌ Failed to delete container registry of the application".to_string();
                     let user_error = EngineError::new_engine_error(
