@@ -283,6 +283,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: btreeset! {},
+                should_delete_shared_registry: false,
+                shared_image_feature_enabled: true,
             };
             environment.applications = vec![app];
         }
@@ -329,6 +331,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 container_registries: ContainerRegistries { registries: vec![] },
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
+                should_delete_shared_registry: false,
+                shared_image_feature_enabled: true,
             };
             environment.jobs = vec![job];
         }

@@ -201,6 +201,8 @@ pub struct Image {
     pub registry_url: Url,
     pub registry_insecure: bool,
     pub repository_name: String,
+    pub shared_repository_name: String,
+    pub shared_image_feature_enabled: bool,
 }
 
 impl Image {
@@ -214,6 +216,17 @@ impl Image {
         }
     }
     pub fn repository_name(&self) -> &str {
+        match self.shared_image_feature_enabled {
+            true => self.shared_repository_name(),
+            false => self.legacy_repository_name(),
+        }
+    }
+
+    pub fn shared_repository_name(&self) -> &str {
+        &self.shared_repository_name
+    }
+
+    pub fn legacy_repository_name(&self) -> &str {
         &self.repository_name
     }
 
@@ -270,6 +283,8 @@ impl Default for Image {
             registry_url: Url::parse("https://default.com").unwrap(),
             registry_insecure: false,
             repository_name: "".to_string(),
+            shared_repository_name: "".to_string(),
+            shared_image_feature_enabled: false,
         }
     }
 }

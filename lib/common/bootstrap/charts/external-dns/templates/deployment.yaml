@@ -1,33 +1,32 @@
+{{- /*
+Copyright Broadcom, Inc. All Rights Reserved.
+SPDX-License-Identifier: APACHE-2.0
+*/}}
+
 apiVersion: apps/v1
-{{- if .Values.useDaemonset }}
-kind: DaemonSet
-{{- else }}
 kind: Deployment
-{{- end }}
 metadata:
   name: {{ template "external-dns.fullname" . }}
-  namespace: {{ .Release.Namespace | quote }}
-  labels: {{ include "external-dns.labels" . | nindent 4 }}
-    {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
-    {{- end }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
   {{- if .Values.commonAnnotations }}
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
-  {{ if not .Values.useDaemonset -}}
-  replicas: {{ coalesce .Values.replicas .Values.replicaCount }}
-  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  replicas: 1
   {{- if .Values.updateStrategy }}
   strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
   {{- end }}
+  {{- $podLabels := include "common.tplvalues.merge" ( dict "values" ( list .Values.podLabels .Values.commonLabels ) "context" . ) }}
   selector:
-    matchLabels: {{ include "external-dns.matchLabels" . | nindent 6 }}
+    matchLabels: {{- include "common.labels.matchLabels" ( dict "customLabels" $podLabels "context" $ ) | nindent 6 }}
   template:
     metadata:
-      labels: {{ include "external-dns.labels" . | nindent 8 }}
+      labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
+      {{- if or .Values.podAnnotations (and .Values.metrics.enabled .Values.metrics.podAnnotations) (include "external-dns.createSecret" .) (and (eq .Values.provider "designate") .Values.designate.customCA.enabled) }}
       annotations:
-        {{- if or .Values.podAnnotations .Values.metrics.enabled }}
+        {{- if or .Values.podAnnotations (and .Values.metrics.enabled .Values.metrics.podAnnotations) }}
         {{- include "external-dns.podAnnotations" . | trim | nindent 8 }}
         {{- end }}
         {{- if (include "external-dns.createSecret" .) }}
@@ -36,22 +35,24 @@ spec:
         {{- if and (eq .Values.provider "designate") .Values.designate.customCA.enabled }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
+      {{- end }}
     spec:
       {{- include "external-dns.imagePullSecrets" . | nindent 6 }}
       {{- if .Values.podSecurityContext.enabled }}
-      securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      securityContext: {{- include "common.compatibility.renderSecurityContext" (dict "secContext" .Values.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.affinity }}
       affinity: {{- include "common.tplvalues.render" (dict "value" .Values.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
-        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAffinityPreset "context" $) | nindent 10 }}
-        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAntiAffinityPreset "context" $) | nindent 10 }}
+        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAffinityPreset "customLabels" $podLabels "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAntiAffinityPreset "customLabels" $podLabels "context" $) | nindent 10 }}
         nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.nodeAffinityPreset.type "key" .Values.nodeAffinityPreset.key "values" .Values.nodeAffinityPreset.values) | nindent 10 }}
       {{- end }}
       {{- if .Values.schedulerName }}
       schedulerName: {{ .Values.schedulerName | quote }}
       {{- end }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
       {{- if .Values.hostAliases }}
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.hostAliases "context" $) | nindent 8 }}
       {{- end }}
@@ -67,6 +68,12 @@ spec:
       serviceAccountName: {{ template "external-dns.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.dnsPolicy  }}
+      dnsPolicy: {{ .Values.dnsPolicy | quote }}
+      {{- end }}
+      {{- if .Values.dnsConfig }}
+      dnsConfig: {{- include "common.tplvalues.render" (dict "value" .Values.dnsConfig "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.initContainers }}
       initContainers: {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
@@ -118,16 +125,16 @@ spec:
             - --service-type-filter={{ . }}
             {{- end }}
             {{- range .Values.domainFilters }}
-            - --domain-filter={{ . }}
+            - --domain-filter={{- include "common.tplvalues.render" (dict "value" . "context" $) }}
             {{- end }}
             {{- range .Values.excludeDomains }}
-            - --exclude-domains={{ . }}
+            - --exclude-domains={{- include "common.tplvalues.render" (dict "value" . "context" $) }}
             {{- end }}
             {{- if .Values.regexDomainFilter }}
-            - --regex-domain-filter={{ .Values.regexDomainFilter }}
+            - --regex-domain-filter={{- include "common.tplvalues.render" (dict "value" .Values.regexDomainFilter "context" $) }}
             {{- end }}
             {{- if .Values.regexDomainExclusion }}
-            - --regex-domain-exclusion={{ .Values.regexDomainExclusion }}
+            - --regex-domain-exclusion={{- include "common.tplvalues.render" (dict "value" .Values.regexDomainExclusion "context" $) }}
             {{- end }}
             {{- range .Values.zoneNameFilters }}
             - --zone-name-filter={{ . }}
@@ -157,6 +164,12 @@ spec:
             {{- end }}
             {{- if .Values.labelFilter }}
             - --label-filter={{ .Values.labelFilter }}
+            {{- end }}
+            {{- range .Values.ingressClassFilters }}
+            - --ingress-class={{ . }}
+            {{- end }}
+            {{- range .Values.managedRecordTypesFilters }}
+            - --managed-record-types={{ . }}
             {{- end }}
             {{- if .Values.crd.apiversion }}
             - --crd-source-apiversion={{ .Values.crd.apiversion }}
@@ -200,8 +213,17 @@ spec:
             {{- if .Values.aws.preferCNAME }}
             - --aws-prefer-cname
             {{- end }}
+            {{- if .Values.aws.dynamodbTable }}
+            - --dynamodb-table={{ .Values.aws.dynamodbTable }}
+            {{- end }}
+            {{- if .Values.aws.dynamodbRegion }}
+            - --dynamodb-region={{ .Values.aws.dynamodbRegion }}
+            {{- end }}
             {{- if and (kindIs "bool" .Values.aws.evaluateTargetHealth) (not .Values.aws.evaluateTargetHealth) }}
             - --no-aws-evaluate-target-health
+            {{- end }}
+            {{- if .Values.aws.zoneMatchParent }}
+            - --aws-zone-match-parent
             {{- end }}
             {{- if or (and (eq .Values.provider "azure") (not .Values.azure.secretName)) (eq .Values.provider "azure-private-dns") }}
             # Azure Arguments
@@ -218,6 +240,9 @@ spec:
             # Cloudflare arguments
               {{- if .Values.cloudflare.proxied }}
             - --cloudflare-proxied
+              {{- end }}
+              {{- if .Values.cloudflare.dnsRecordsPerPage }}
+            - --cloudflare-dns-records-per-page={{ .Values.cloudflare.dnsRecordsPerPage }}
               {{- end }}
             {{- end }}
             {{- if eq .Values.provider "google" }}
@@ -239,6 +264,9 @@ spec:
               {{- if .Values.infoblox.domainFilter }}
             - --domain-filter={{ .Values.infoblox.domainFilter }}
               {{- end }}
+              {{- if .Values.infoblox.nameRegex }}
+            - --infoblox-name-regex={{ .Values.infoblox.nameRegex }}
+              {{- end }}
               {{- if .Values.infoblox.wapiPort }}
             - --infoblox-wapi-port={{ .Values.infoblox.wapiPort }}
               {{- end }}
@@ -250,13 +278,31 @@ spec:
               {{- else }}
             - --infoblox-ssl-verify
               {{- end }}
+              {{- if .Values.infoblox.createPtr }}
+            - --infoblox-create-ptr
+              {{- end }}
               {{- if .Values.infoblox.maxResults }}
             - --infoblox-max-results={{ .Values.infoblox.maxResults }}
+              {{- end }}
+            {{- end }}
+            {{- if and (eq .Values.provider "oci") .Values.oci.useInstancePrincipal }}
+            # OCI Arguments
+            - --oci-auth-instance-principal
+              {{- if .Values.oci.compartmentOCID }}
+            - --oci-compartment-ocid={{ .Values.oci.compartmentOCID }}
               {{- end }}
             {{- end }}
             {{- if eq .Values.provider "ns1" }}
             # ns1 arguments
             - --ns1-min-ttl={{ .Values.ns1.minTTL }}
+            {{- end }}
+            {{- if eq .Values.provider "pihole" }}
+              {{- if .Values.pihole.server }}
+            - --pihole-server={{ .Values.pihole.server }}
+              {{- end }}
+              {{- if .Values.pihole.tlsSkipVerify }}
+            - --pihole-tls-skip-verify
+              {{- end }}
             {{- end }}
             {{- if eq .Values.provider "rfc2136" }}
             # RFC 2136 arguments
@@ -288,6 +334,17 @@ spec:
             # TransIP arguments
             - --transip-account={{ .Values.transip.account }}
             - --transip-keyfile=/transip/transip-api-key
+            {{- end }}
+            {{- if .Values.traefik.disableLegacy }}
+            - --traefik-disable-legacy
+            {{- end }}
+            {{- if .Values.traefik.disableNew }}
+            - --traefik-disable-new
+            {{- end }}
+            {{- if .Values.txtEncrypt.enabled }}
+            # TXT registry encryption
+            - --txt-encrypt-enabled
+            - --txt-encrypt-aes-key=$(TXT_AES_ENCRYPTION_KEY)
             {{- end }}
             {{- range $key, $value := .Values.extraArgs }}
              # Extra arguments
@@ -345,8 +402,15 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.aws.credentials.secretAccessKeySecretRef.name}}
-                  key: {{ .Values.aws.credentials.secretAccessKeySecretRef.key }}  
+                  key: {{ .Values.aws.credentials.secretAccessKeySecretRef.key }}
             {{- end }}
+            {{- end }}
+            {{- if eq .Values.provider "civo" }}
+            - name: CIVO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: apiToken
             {{- end }}
             {{- if eq .Values.provider "cloudflare" }}
             # Cloudflare environment variables
@@ -520,14 +584,14 @@ spec:
             {{- end }}
             {{- if eq .Values.provider "scaleway" }}
             # Scaleway environment variables
-            {{- if .Values.scaleway.scwAccessKey }}
+            {{- if or (.Values.scaleway.scwAccessKey) (.Values.scaleway.secretName) }}
             - name: SCW_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ template "external-dns.secretName" . }}
                   key: scw_access_key
             {{- end }}
-            {{- if .Values.scaleway.scwSecretKey }}
+            {{- if or (.Values.scaleway.scwSecretKey) (.Values.scaleway.secretName) }}
             - name: SCW_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -611,6 +675,13 @@ spec:
               {{- if .Values.extraEnvVars }}
               {{- include "common.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 12 }}
               {{- end }}
+            {{- if .Values.pihole.secretName }}
+            - name: EXTERNAL_DNS_PIHOLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: pihole_password
+            {{- end }}
             {{- if eq .Values.provider "ns1" }}
             # NS1 environment variables
             {{- if or (.Values.ns1.apiKey) (.Values.ns1.secretName) }}
@@ -620,6 +691,13 @@ spec:
                   name: {{ template "external-dns.secretName" . }}
                   key: ns1-api-key
             {{- end }}
+            {{- end }}
+            {{- if and .Values.txtEncrypt.enabled }}
+            - name: TXT_AES_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.txtEncryptKeySecretName" . }}
+                  key: txt_aes_encryption_key
             {{- end }}
           envFrom:
             {{- if .Values.extraEnvVarsCM }}
@@ -637,8 +715,7 @@ spec:
           livenessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customLivenessProbe "context" $) | nindent 12 }}
           {{- else if .Values.livenessProbe.enabled }}
           livenessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
@@ -672,16 +749,21 @@ spec:
             successThreshold: {{ .Values.startupProbe.successThreshold }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
           {{- end }}
-          {{- if .Values.containerSecurityContext }}
-          securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- if .Values.containerSecurityContext.enabled }}
+          securityContext: {{- include "common.compatibility.renderSecurityContext" (dict "secContext" .Values.containerSecurityContext "context" $) | nindent 12 }}
           {{- end }}
           {{- if .Values.lifecycleHooks }}
           lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.lifecycleHooks "context" $) | nindent 12 }}
           {{- end }}
           {{- if .Values.resources }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- else if ne .Values.resourcesPreset "none" }}
+          resources: {{- include "common.resources.preset" (dict "type" .Values.resourcesPreset) | nindent 12 }}
           {{- end }}
           volumeMounts:
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
             {{- if and (eq .Values.provider "alibabacloud") (or (and .Values.alibabacloud.accessKeyId .Values.alibabacloud.accessKeySecret) .Values.alibabacloud.secretName) }}
             # Alibaba Cloud mountPath(s)
             - name: alibabacloud-config-file
@@ -715,7 +797,7 @@ spec:
             - name: google-service-account
               mountPath: /etc/secrets/service-account/
             {{- end }}
-            {{- if eq .Values.provider "oci" }}
+            {{- if and (eq .Values.provider "oci") (not .Values.oci.useInstancePrincipal) }}
             - name: oci-config-file
               mountPath: /etc/kubernetes/
             {{- end }}
@@ -752,6 +834,8 @@ spec:
         {{- include "common.tplvalues.render" (dict "value" .Values.sidecars "context" $) | nindent 8 }}
         {{- end }}
       volumes:
+        - name: empty-dir
+          emptyDir: {}
         {{- if and (eq .Values.provider "alibabacloud") (or (and .Values.alibabacloud.accessKeyId .Values.alibabacloud.accessKeySecret) .Values.alibabacloud.secretName) }}
         # Alibaba Cloud volume(s)
         - name: alibabacloud-config-file
@@ -770,6 +854,9 @@ spec:
           {{- if or .Values.azure.secretName (and .Values.azure.resourceGroup .Values.azure.tenantId .Values.azure.subscriptionId) }}
           secret:
             secretName: {{ template "external-dns.secretName" . }}
+          {{- else if .Values.azure.useWorkloadIdentityExtension }}
+          secret:
+            secretName: {{ template "external-dns.fullname" . }}
           {{- else if .Values.azure.useManagedIdentityExtension }}
           secret:
             secretName: {{ template "external-dns.fullname" . }}
@@ -779,7 +866,7 @@ spec:
             type: File
           {{- end }}
         {{- end }}
-        {{- if (eq .Values.provider "oci")}}
+        {{- if and (eq .Values.provider "oci") (not .Values.oci.useInstancePrincipal) }}
         - name: oci-config-file
           secret:
             secretName: {{ template "external-dns.secretName" . }}

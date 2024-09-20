@@ -1,3 +1,8 @@
+{{/*
+Copyright Broadcom, Inc. All Rights Reserved.
+SPDX-License-Identifier: APACHE-2.0
+*/}}
+
 {{/* vim: set filetype=mustache: */}}
 {{/*
 Generate secret name.
@@ -72,7 +77,9 @@ Params:
   - strong - Boolean - Optional - Whether to add symbols to the generated random password.
   - chartName - String - Optional - Name of the chart used when said chart is deployed as a subchart.
   - context - Context - Required - Parent context.
-
+  - failOnNew - Boolean - Optional - Default to true. If set to false, skip errors adding new keys to existing secrets.
+  - skipB64enc - Boolean - Optional - Default to false. If set to true, no the secret will not be base64 encrypted.
+  - skipQuote - Boolean - Optional - Default to false. If set to true, no quotes will be added around the secret.
 The order in which this function returns a secret password:
   1. Already existing 'Secret' resource
      (If a 'Secret' resource is found under the name provided to the 'secret' parameter to this function and that 'Secret' resource contains a key with the name passed as the 'key' parameter to this function then the value of this existing secret password will be returned)
@@ -93,33 +100,45 @@ The order in which this function returns a secret password:
 {{- $secretData := (lookup "v1" "Secret" (include "common.names.namespace" .context) .secret).data }}
 {{- if $secretData }}
   {{- if hasKey $secretData .key }}
-    {{- $password = index $secretData .key | quote }}
-  {{- else }}
+    {{- $password = index $secretData .key | b64dec }}
+  {{- else if not (eq .failOnNew false) }}
     {{- printf "\nPASSWORDS ERROR: The secret \"%s\" does not contain the key \"%s\"\n" .secret .key | fail -}}
   {{- end -}}
-{{- else if $providedPasswordValue }}
-  {{- $password = $providedPasswordValue | toString | b64enc | quote }}
-{{- else }}
+{{- end }}
 
-  {{- if .context.Values.enabled }}
-    {{- $subchart = $chartName }}
-  {{- end -}}
-
-  {{- $requiredPassword := dict "valueKey" $providedPasswordKey "secret" .secret "field" .key "subchart" $subchart "context" $.context -}}
-  {{- $requiredPasswordError := include "common.validations.values.single.empty" $requiredPassword -}}
-  {{- $passwordValidationErrors := list $requiredPasswordError -}}
-  {{- include "common.errors.upgrade.passwords.empty" (dict "validationErrors" $passwordValidationErrors "context" $.context) -}}
-
-  {{- if .strong }}
-    {{- $subStr := list (lower (randAlpha 1)) (randNumeric 1) (upper (randAlpha 1)) | join "_" }}
-    {{- $password = randAscii $passwordLength }}
-    {{- $password = regexReplaceAllLiteral "\\W" $password "@" | substr 5 $passwordLength }}
-    {{- $password = printf "%s%s" $subStr $password | toString | shuffle | b64enc | quote }}
+{{- if not $password }}
+  {{- if $providedPasswordValue }}
+    {{- $password = $providedPasswordValue | toString }}
   {{- else }}
-    {{- $password = randAlphaNum $passwordLength | b64enc | quote }}
-  {{- end }}
+    {{- if .context.Values.enabled }}
+      {{- $subchart = $chartName }}
+    {{- end -}}
+
+    {{- if not (eq .failOnNew false) }}
+      {{- $requiredPassword := dict "valueKey" $providedPasswordKey "secret" .secret "field" .key "subchart" $subchart "context" $.context -}}
+      {{- $requiredPasswordError := include "common.validations.values.single.empty" $requiredPassword -}}
+      {{- $passwordValidationErrors := list $requiredPasswordError -}}
+      {{- include "common.errors.upgrade.passwords.empty" (dict "validationErrors" $passwordValidationErrors "context" $.context) -}}
+    {{- end }}
+
+    {{- if .strong }}
+      {{- $subStr := list (lower (randAlpha 1)) (randNumeric 1) (upper (randAlpha 1)) | join "_" }}
+      {{- $password = randAscii $passwordLength }}
+      {{- $password = regexReplaceAllLiteral "\\W" $password "@" | substr 5 $passwordLength }}
+      {{- $password = printf "%s%s" $subStr $password | toString | shuffle }}
+    {{- else }}
+      {{- $password = randAlphaNum $passwordLength }}
+    {{- end }}
+  {{- end -}}
 {{- end -}}
+{{- if not .skipB64enc }}
+{{- $password = $password | b64enc }}
+{{- end -}}
+{{- if .skipQuote -}}
 {{- printf "%s" $password -}}
+{{- else -}}
+{{- printf "%s" $password | quote -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -137,14 +156,15 @@ Params:
 */}}
 {{- define "common.secrets.lookup" -}}
 {{- $value := "" -}}
-{{- $defaultValue := required "\n'common.secrets.lookup': Argument 'defaultValue' missing or empty" .defaultValue -}}
 {{- $secretData := (lookup "v1" "Secret" (include "common.names.namespace" .context) .secret).data -}}
 {{- if and $secretData (hasKey $secretData .key) -}}
   {{- $value = index $secretData .key -}}
-{{- else -}}
-  {{- $value = $defaultValue | toString | b64enc -}}
+{{- else if .defaultValue -}}
+  {{- $value = .defaultValue | toString | b64enc -}}
 {{- end -}}
+{{- if $value -}}
 {{- printf "%s" $value -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

@@ -3,7 +3,9 @@ use base64::Engine;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
+use crate::container_registry::{
+    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+};
 
 use crate::io_models::context::Context;
 
@@ -63,14 +65,45 @@ impl GenericCr {
             raw_error_message: err.to_string(),
         })?;
 
+        const MAX_REGISTRY_NAME_LENGTH: usize = 90; // 100 (github limit) - 10 (prefix length)
         let container_registry_info = ContainerRegistryInfo {
             endpoint: url.clone(),
             registry_name: name.to_string(),
             registry_docker_json_config,
             insecure_registry: skip_tls_verification,
+            get_shared_image_name: Box::new({
+                let repository = repository_name.clone();
+                move |image_build_context| {
+                    let git_repo_truncated: String = take_last_x_chars(
+                        image_build_context.git_repo_url_sanitized.as_str(),
+                        MAX_REGISTRY_NAME_LENGTH,
+                    );
+                    format!(
+                        "{}/{}-{}",
+                        repository,
+                        image_build_context.cluster_id.short(),
+                        git_repo_truncated
+                    )
+                }
+            }),
             get_image_name: Box::new({
                 let repository = repository_name.clone();
                 move |name| format!("{}/{}", repository, name)
+            }),
+            get_shared_repository_name: Box::new({
+                let repository = repository_name.clone();
+                move |image_build_context| {
+                    let git_repo_truncated: String = take_last_x_chars(
+                        image_build_context.git_repo_url_sanitized.as_str(),
+                        MAX_REGISTRY_NAME_LENGTH,
+                    );
+                    format!(
+                        "{}/{}-{}",
+                        repository,
+                        image_build_context.cluster_id.short(),
+                        git_repo_truncated
+                    )
+                }
             }),
             get_repository_name: Box::new({
                 let repository = repository_name.clone();
