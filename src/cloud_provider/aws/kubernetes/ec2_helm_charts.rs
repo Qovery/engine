@@ -359,9 +359,23 @@ pub fn ec2_aws_helm_charts(
         chart_config_prerequisites.cluster_long_id.to_string(),
         chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Ec2,
-        None,
-        None,
-        None,
+        // VPA for K3S doesn't make sense for most use cases since there is only one node
+        // By default, control plane will send min / max replicas to be 1, but if user wants to enable it, they can do so
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_min_number_instances,
+        ),
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_max_number_instances,
+        ),
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_hpa_cpu_utilization_percentage_threshold,
+        ),
         HelmChartNamespaces::NginxIngress,
         None,
         chart_config_prerequisites
