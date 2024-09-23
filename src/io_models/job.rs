@@ -303,7 +303,10 @@ impl Job {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: cr_info.get_shared_image_name(cluster_id, sanitized_git_url(git_url)),
+            name: match self.shared_image_feature_enabled {
+                true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(git_url)),
+                false => cr_info.get_image_name(&self.name),
+            },
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
