@@ -43,8 +43,8 @@ app.kubernetes.io/part-of: {{ include "prometheus-node-exporter.name" . }}
 {{- with .Chart.AppVersion }}
 app.kubernetes.io/version: {{ . | quote }}
 {{- end }}
-{{- with .Values.podLabels }}
-{{ toYaml . }}
+{{- with .Values.commonLabels }}
+{{ tpl (toYaml .) $ }}
 {{- end }}
 {{- if .Values.releaseLabel }}
 release: {{ .Release.Name }}
@@ -181,5 +181,22 @@ labelNameLengthLimit: {{ . }}
 {{- end }}
 {{- with .labelValueLengthLimit }}
 labelValueLengthLimit: {{ . }}
+{{- end }}
+{{- end }}
+
+{{/* Sets sidecar volumeMounts */}}
+{{- define "prometheus-node-exporter.sidecarVolumeMounts" -}}
+{{- range $_, $mount := $.Values.sidecarVolumeMount }}
+- name: {{ $mount.name }}
+  mountPath: {{ $mount.mountPath }}
+  readOnly: {{ $mount.readOnly }}
+{{- end }}
+{{- range $_, $mount := $.Values.sidecarHostVolumeMounts }}
+- name: {{ $mount.name }}
+  mountPath: {{ $mount.mountPath }}
+  readOnly: {{ $mount.readOnly }}
+{{- if $mount.mountPropagation }}
+  mountPropagation: {{ $mount.mountPropagation }}
+{{- end }}
 {{- end }}
 {{- end }}

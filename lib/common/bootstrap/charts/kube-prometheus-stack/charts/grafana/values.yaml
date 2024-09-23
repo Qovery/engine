@@ -4,7 +4,7 @@ global:
 
   # To help compatibility with other charts which use global.imagePullSecrets.
   # Allow either an array of {name: pullSecret} maps (k8s-style), or an array of strings (more common helm-style).
-  # Can be tempalted.
+  # Can be templated.
   # global:
   #   imagePullSecrets:
   #   - name: pullSecret1
@@ -38,15 +38,21 @@ serviceAccount:
   nameTest:
   ## ServiceAccount labels.
   labels: {}
-## Service account annotations. Can be templated.
-#  annotations:
-#    eks.amazonaws.com/role-arn: arn:aws:iam::123456789000:role/iam-role-name-here
-  autoMount: true
+  ## Service account annotations. Can be templated.
+  #  annotations:
+  #    eks.amazonaws.com/role-arn: arn:aws:iam::123456789000:role/iam-role-name-here
+
+  ## autoMount is deprecated in favor of automountServiceAccountToken
+  # autoMount: false
+  automountServiceAccountToken: false
 
 replicas: 1
 
 ## Create a headless service for the deployment
 headlessService: false
+
+## Should the service account be auto mounted on the pod
+automountServiceAccountToken: true
 
 ## Create HorizontalPodAutoscaler object for deployment type
 #
@@ -115,6 +121,13 @@ testFramework:
     tag: "v1.4.1"
   imagePullPolicy: IfNotPresent
   securityContext: {}
+  resources: {}
+  #  limits:
+  #    cpu: 100m
+  #    memory: 128Mi
+  #  requests:
+  #    cpu: 100m
+  #    memory: 128Mi
 
 # dns configuration for pod
 dnsPolicy: ~
@@ -151,6 +164,7 @@ extraConfigmapMounts: []
   #   subPath: certificates.crt # (optional)
   #   configMap: certs-configmap
   #   readOnly: true
+  #   optional: false
 
 
 extraEmptyDirMounts: []
@@ -192,6 +206,10 @@ downloadDashboards:
 ## Pod Annotations
 # podAnnotations: {}
 
+## ConfigMap Annotations
+# configMapAnnotations: {}
+  # argocd.argoproj.io/sync-options: Replace=true
+
 ## Pod Labels
 # podLabels: {}
 
@@ -207,6 +225,13 @@ gossipPortName: gossip
 service:
   enabled: true
   type: ClusterIP
+  # Set the ip family policy to configure dual-stack see [Configure dual-stack](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#services)
+  ipFamilyPolicy: ""
+  # Sets the families that should be supported and the order in which they should be applied to ClusterIP as well. Can be IPv4 and/or IPv6.
+  ipFamilies: []
+  loadBalancerIP: ""
+  loadBalancerClass: ""
+  loadBalancerSourceRanges: []
   port: 80
   targetPort: 3000
     # targetPort: 4181 To be used with a proxy extraContainer
@@ -218,7 +243,7 @@ service:
   appProtocol: ""
 
 serviceMonitor:
-  ## If true, a ServiceMonitor CRD is created for a prometheus operator
+  ## If true, a ServiceMonitor CR is created for a prometheus operator
   ## https://github.com/coreos/prometheus-operator
   ##
   enabled: false
@@ -342,7 +367,7 @@ extraContainerVolumes: []
 #    emptyDir: {}
 
 ## Enable persistence using Persistent Volume Claims
-## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+## ref: https://kubernetes.io/docs/user-guide/persistent-volumes/
 ##
 persistence:
   type: pvc
@@ -361,6 +386,7 @@ persistence:
   # existingClaim:
   ## Extra labels to apply to a PVC.
   extraPvcLabels: {}
+  disableWarning: false
 
   ## If persistence is not enabled, this allows to mount the
   ## local storage in-memory to improve performance
@@ -372,6 +398,10 @@ persistence:
     ## here and the sum of memory limits of all containers in a pod
     ##
     # sizeLimit: 300Mi
+
+  ## If 'lookupVolumeName' is set to true, Helm will attempt to retrieve
+  ## the current value of 'spec.volumeName' and incorporate it into the template.
+  lookupVolumeName: true
 
 initChownData:
   ## If false, data ownership will not be reset at startup
@@ -487,6 +517,7 @@ envRenderSecret: {}
 ## Name is templated.
 envFromSecrets: []
 ## - name: secret-name
+##   prefix: prefix
 ##   optional: true
 
 ## The names of conifgmaps in the same kubernetes namespace which contain values to be added to the environment
@@ -495,6 +526,7 @@ envFromSecrets: []
 ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmapenvsource-v1-core
 envFromConfigMaps: []
 ## - name: configmap-name
+##   prefix: prefix
 ##   optional: true
 
 # Inject Kubernetes services as environment variables.
@@ -508,6 +540,7 @@ extraSecretMounts: []
   #   mountPath: /etc/secrets
   #   secretName: grafana-secret-files
   #   readOnly: true
+  #   optional: false
   #   subPath: ""
   #
   # for AWS EKS (cloudwatch) use the following (see also instruction in env: above)
@@ -551,7 +584,9 @@ extraVolumes: []
   # - name: extra-volume-0
   #   existingClaim: volume-claim
   # - name: extra-volume-1
-  #   hostPath: /usr/shared/
+  #   hostPath:
+  #     path: /usr/shared/
+  #     type: ""
   # - name: grafana-secrets
   #   csi:
   #     driver: secrets-store.csi.k8s.io
@@ -762,7 +797,7 @@ grafana.ini:
   grafana_net:
     url: https://grafana.net
   server:
-    domain: "{{ if (and .Values.ingress.enabled .Values.ingress.hosts) }}{{ .Values.ingress.hosts | first }}{{ else }}''{{ end }}"
+    domain: "{{ if (and .Values.ingress.enabled .Values.ingress.hosts) }}{{ tpl (.Values.ingress.hosts | first) . }}{{ else }}''{{ end }}"
 ## grafana Authentication can be enabled with the following values on grafana.ini
  # server:
       # The full public facing url you use in browser, used for redirects and emails
@@ -826,7 +861,7 @@ sidecar:
     # -- The Docker registry
     registry: quay.io
     repository: kiwigrid/k8s-sidecar
-    tag: 1.25.2
+    tag: 1.27.4
     sha: ""
   imagePullPolicy: IfNotPresent
   resources: {}
@@ -896,6 +931,19 @@ sidecar:
     enabled: false
     # Additional environment variables for the dashboards sidecar
     env: {}
+    ## "valueFrom" environment variable references that will be added to deployment pods. Name is templated.
+    ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#envvarsource-v1-core
+    ## Renders in container spec as:
+    ##   env:
+    ##     ...
+    ##     - name: <key>
+    ##       valueFrom:
+    ##         <value rendered as YAML>
+    envValueFrom: {}
+    #  ENV_NAME:
+    #    configMapKeyRef:
+    #      name: configmap-name
+    #      key: value_key
     # Do not reprocess already processed unchanged resources on k8s API reconnect.
     # ignoreAlreadyProcessed: true
     SCProvider: true
@@ -943,6 +991,8 @@ sidecar:
       orgid: 1
       # folder in which the dashboards should be imported in grafana
       folder: ''
+      # <string> folder UID. will be automatically generated if not specified
+      folderUid: ''
       # type of the provider
       type: file
       # disableDelete to activate a import-only behaviour
@@ -959,6 +1009,19 @@ sidecar:
     enabled: false
     # Additional environment variables for the datasourcessidecar
     env: {}
+    ## "valueFrom" environment variable references that will be added to deployment pods. Name is templated.
+    ## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#envvarsource-v1-core
+    ## Renders in container spec as:
+    ##   env:
+    ##     ...
+    ##     - name: <key>
+    ##       valueFrom:
+    ##         <value rendered as YAML>
+    envValueFrom: {}
+    #  ENV_NAME:
+    #    configMapKeyRef:
+    #      name: configmap-name
+    #      key: value_key
     # Do not reprocess already processed unchanged resources on k8s API reconnect.
     # ignoreAlreadyProcessed: true
     # label that the configmaps with datasources are marked with
@@ -990,8 +1053,8 @@ sidecar:
     # Absolute path to shell script to execute after a datasource got reloaded
     script: null
     skipReload: false
-    # Deploy the datasource sidecar as an initContainer in addition to a container.
     # This is needed if skipReload is true, to load any datasources defined at startup time.
+    # Deploy the datasources sidecar as an initContainer.
     initDatasources: false
     # Sets the size limit of the datasource sidecar emptyDir volume
     sizeLimit: {}
@@ -1097,6 +1160,10 @@ imageRenderer:
     targetCPU: "60"
     targetMemory: ""
     behavior: {}
+  # The url of remote image renderer if it is not in the same namespace with the grafana instance
+  serverURL: ""
+  # The callback url of grafana instances if it is not in the same namespace with the remote image renderer
+  renderingCallbackURL: ""
   image:
     # -- The Docker registry
     registry: docker.io
@@ -1216,6 +1283,18 @@ imageRenderer:
   ##
   # schedulerName: "default-scheduler"
 
+  # Extra configmaps to mount in image-renderer pods
+  extraConfigmapMounts: []
+
+  # Extra secrets to mount in image-renderer pods
+  extraSecretMounts: []
+
+  # Extra volumes to mount in image-renderer pods
+  extraVolumeMounts: []
+
+  # Extra volumes for image-renderer pods
+  extraVolumes: []
+
 networkPolicy:
   ## @param networkPolicy.enabled Enable creation of NetworkPolicy resources. Only Ingress traffic is filtered for now.
   ##
@@ -1295,3 +1374,13 @@ extraObjects: []
   #     data:
   #       - key: grafana-admin-password
   #         name: adminPassword
+
+# assertNoLeakedSecrets is a helper function defined in _helpers.tpl that checks if secret
+# values are not exposed in the rendered grafana.ini configmap. It is enabled by default.
+#
+# To pass values into grafana.ini without exposing them in a configmap, use variable expansion:
+# https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/#variable-expansion
+#
+# Alternatively, if you wish to allow secret values to be exposed in the rendered grafana.ini configmap,
+# you can disable this check by setting assertNoLeakedSecrets to false.
+assertNoLeakedSecrets: true
