@@ -6,9 +6,14 @@ metadata:
   namespace: {{ include "grafana.namespace" . }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
-  {{- with .Values.annotations }}
+  {{- if or .Values.configMapAnnotations .Values.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
+    {{- with .Values.annotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.configMapAnnotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 data:
   {{- include "grafana.configData" . | nindent 2 }}

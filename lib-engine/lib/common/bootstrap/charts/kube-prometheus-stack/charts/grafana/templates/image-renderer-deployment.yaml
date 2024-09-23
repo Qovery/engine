@@ -109,6 +109,24 @@ spec:
           volumeMounts:
             - mountPath: /tmp
               name: image-renderer-tmpfs
+            {{- range .Values.imageRenderer.extraConfigmapMounts }}
+            - name: {{ tpl .name $root }}
+              mountPath: {{ tpl .mountPath $root }}
+              subPath: {{ tpl (.subPath | default "") $root }}
+              readOnly: {{ .readOnly }}
+            {{- end }}
+            {{- range .Values.imageRenderer.extraSecretMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: {{ .readOnly }}
+              subPath: {{ .subPath | default "" }}
+            {{- end }}
+            {{- range .Values.imageRenderer.extraVolumeMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              subPath: {{ .subPath | default "" }}
+              readOnly: {{ .readOnly }}
+            {{- end }}
           {{- with .Values.imageRenderer.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -128,4 +146,54 @@ spec:
       volumes:
         - name: image-renderer-tmpfs
           emptyDir: {}
+        {{- range .Values.imageRenderer.extraConfigmapMounts }}
+        - name: {{ tpl .name $root }}
+          configMap:
+            name: {{ tpl .configMap $root }}
+            {{- with .items }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- end }}
+        {{- range .Values.imageRenderer.extraSecretMounts }}
+        {{- if .secretName }}
+        - name: {{ .name }}
+          secret:
+            secretName: {{ .secretName }}
+            defaultMode: {{ .defaultMode }}
+            {{- with .items }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- else if .projected }}
+        - name: {{ .name }}
+          projected:
+            {{- toYaml .projected | nindent 12 }}
+        {{- else if .csi }}
+        - name: {{ .name }}
+          csi:
+            {{- toYaml .csi | nindent 12 }}
+        {{- end }}
+        {{- end }}
+        {{- range .Values.imageRenderer.extraVolumes }}
+        - name: {{ .name }}
+          {{- if .existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .existingClaim }}
+          {{- else if .hostPath }}
+          hostPath:
+            {{ toYaml .hostPath | nindent 12 }}
+          {{- else if .csi }}
+          csi:
+            {{- toYaml .csi | nindent 12 }}
+          {{- else if .configMap }}
+          configMap:
+            {{- toYaml .configMap | nindent 12 }}
+          {{- else if .emptyDir }}
+          emptyDir:
+            {{- toYaml .emptyDir | nindent 12 }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
 {{- end }}

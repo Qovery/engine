@@ -5,7 +5,7 @@ metadata:
   name: {{ include "grafana.fullname" . }}-test
   namespace: {{ include "grafana.namespace" . }}
   annotations:
-    "helm.sh/hook": test-success
+    "helm.sh/hook": test
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
   labels:
     {{- include "grafana.labels" . | nindent 4 }}

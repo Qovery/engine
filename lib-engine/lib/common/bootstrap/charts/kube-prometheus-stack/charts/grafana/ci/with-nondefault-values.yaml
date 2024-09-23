@@ -1,0 +1,6 @@
+global:
+  environment: prod
+ingress:
+  enabled: true
+  hosts:
+    - monitoring-{{ .Values.global.environment }}.example.com

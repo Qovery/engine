@@ -2,6 +2,7 @@
  Generate config map data
  */}}
 {{- define "grafana.configData" -}}
+{{ include "grafana.assertNoLeakedSecrets" . }}
 {{- $files := .Files }}
 {{- $root := . -}}
 {{- with .Values.plugins }}
@@ -145,6 +146,7 @@ provider.yaml: |-
       orgId: {{ .Values.sidecar.dashboards.provider.orgid }}
       {{- if not .Values.sidecar.dashboards.provider.foldersFromFilesStructure }}
       folder: '{{ .Values.sidecar.dashboards.provider.folder }}'
+      folderUid: '{{ .Values.sidecar.dashboards.provider.folderUid }}'
       {{- end }}
       type: {{ .Values.sidecar.dashboards.provider.type }}
       disableDeletion: {{ .Values.sidecar.dashboards.provider.disableDelete }}

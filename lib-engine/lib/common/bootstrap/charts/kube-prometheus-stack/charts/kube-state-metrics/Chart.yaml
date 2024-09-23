@@ -4,7 +4,7 @@ annotations:
     - name: Chart Source
       url: https://github.com/prometheus-community/helm-charts
 apiVersion: v2
-appVersion: 2.10.1
+appVersion: 2.13.0
 description: Install kube-state-metrics to generate and expose cluster-level metrics
 home: https://github.com/kubernetes/kube-state-metrics/
 keywords:
@@ -23,4 +23,4 @@ name: kube-state-metrics
 sources:
 - https://github.com/kubernetes/kube-state-metrics/
 type: application
-version: 5.15.2
+version: 5.25.1
