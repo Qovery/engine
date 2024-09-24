@@ -253,7 +253,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 service_id: "my_application_id".to_string(),
                 service_long_id: long_id,
                 service_name: "my_application_name".to_string(),
-                name: "my_image_shared_name".to_string(),
+                name: "my_image_name".to_string(),
                 tag: "my_image_tag".to_string(),
                 commit_id: "my_image_commit".to_string(),
                 registry_name: "my_image_registry_name".to_string(),
@@ -261,8 +261,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 registry_url: Url::parse("https://my_image_registry_url.com").unwrap(),
                 registry_insecure: false,
                 repository_name: "my_image_repository_name".to_string(),
-                shared_repository_name: "my_image_shared_repository_name".to_string(),
-                shared_image_feature_enabled: true,
             },
             environment_variables: BTreeMap::new(),
             disable_cache: false,
@@ -346,7 +344,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         KubernetesCpuResourceUnit::MilliCpu(2),
         KubernetesMemoryResourceUnit::MebiByte(3),
         KubernetesMemoryResourceUnit::MebiByte(3),
-        true,
     )
     .unwrap()
 }
@@ -668,7 +665,6 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_job(),
         get_labels_group(),
-        true,
     )
     .unwrap()
 }

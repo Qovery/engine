@@ -24,7 +24,6 @@ pub fn working_environment(
     test_domain: &str,
     with_router: bool,
     with_sticky: bool,
-    git_url_override: Option<&str>,
 ) -> EnvironmentRequest {
     let application_id = QoveryIdentifier::new_random();
     let application_name = application_id.short().to_string();
@@ -50,10 +49,7 @@ pub fn working_environment(
             long_id: application_id.to_uuid(),
             name: application_name.clone(),
             kube_name: application_name,
-            git_url: match git_url_override {
-                None => "https://github.com/Qovery/engine-testing.git".to_string(),
-                Some(git_url) => git_url.to_string(),
-            },
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "4bc6a902e83129a118185660b3c9e13dfd0ffc27".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
@@ -109,8 +105,6 @@ pub fn working_environment(
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: git_url_override.is_some(),
         }],
         containers: vec![],
         jobs: vec![],
@@ -140,16 +134,12 @@ pub fn working_environment(
     req
 }
 
-pub fn working_minimal_environment_with_custom_git_url(context: &Context, git_url: &str) -> EnvironmentRequest {
-    working_environment(context, "", false, false, Some(git_url))
-}
-
 pub fn working_minimal_environment(context: &Context) -> EnvironmentRequest {
-    working_environment(context, "", false, false, None)
+    working_environment(context, "", false, false)
 }
 
 pub fn working_minimal_environment_with_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    working_environment(context, test_domain, true, false, None)
+    working_environment(context, test_domain, true, false)
 }
 
 pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
@@ -157,7 +147,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     mounted_file: &MountedFile,
     storage_class: &str,
 ) -> EnvironmentRequest {
-    let mut environment = working_environment(context, "", false, false, None);
+    let mut environment = working_environment(context, "", false, false);
 
     let mut application = environment
         .applications
@@ -349,8 +339,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 container_registries: Vec::new(),
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
-                should_delete_shared_registry: false,
-                shared_image_feature_enabled: true,
             },
             Application {
                 long_id: application_id2,
@@ -418,8 +406,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: btreeset! {},
-                should_delete_shared_registry: false,
-                shared_image_feature_enabled: true,
             },
         ],
         containers: vec![],
@@ -461,7 +447,7 @@ pub fn environment_2_app_2_routers_1_psql(
 }
 
 pub fn non_working_environment(context: &Context) -> EnvironmentRequest {
-    let mut environment = working_environment(context, "", false, false, None);
+    let mut environment = working_environment(context, "", false, false);
     environment.applications = environment
         .applications
         .into_iter()
@@ -555,8 +541,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: true,
         }],
         containers: vec![],
         jobs: vec![],
@@ -670,8 +654,6 @@ pub fn environment_only_http_server(
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: true,
         }],
         containers: vec![],
         jobs: vec![],

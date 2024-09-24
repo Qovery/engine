@@ -1,9 +1,7 @@
 use crate::build_platform::Image;
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{
-    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
-};
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
 use crate::io_models::context::Context;
 use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::models::gcp::JsonCredentials;
@@ -44,7 +42,7 @@ impl GoogleArtifactRegistry {
                 raw_error_message: e.to_string(),
             }
         })?;
-        let registry_raw_url = format!("https://{}-docker.pkg.dev", region.to_cloud_provider_format());
+        let registry_raw_url = format!("https://{}-docker.pkg.dev", region.to_cloud_provider_format(),);
 
         let mut registry =
             Url::parse(registry_raw_url.as_str()).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
@@ -62,37 +60,20 @@ impl GoogleArtifactRegistry {
         }
 
         let project_name = project_id.to_string();
-        let project_name2 = project_id.to_string();
-        const MAX_REGISTRY_NAME_LENGTH: usize = 53; // 63 (Artifact Registry limit) - 10 (prefix length)
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
             insecure_registry: false,
-            get_shared_image_name: Box::new(move |image_build_context| {
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
-                format!(
-                    "{}/{}-{}/built-by-qovery",
-                    &project_name,
-                    image_build_context.cluster_id.short(),
-                    git_repo_truncated
-                )
-            }),
             get_image_name: Box::new(move |img_name| {
                 format!(
                     "{}/{}/{img_name}",
-                    &project_name2,
+                    &project_name.clone(),
                     match img_name.starts_with("qovery-") {
                         true => img_name.to_string(),
                         false => format!("qovery-{img_name}"), // repository name must start with a letter, then forcing `qovery-` prefix
                     }
                 )
-            }),
-            get_shared_repository_name: Box::new(|image_build_context| {
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
-                format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
             }),
             get_repository_name: Box::new(|repository_name| match repository_name.starts_with("qovery-") {
                 true => repository_name.to_string(),
@@ -221,7 +202,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
             .delete_docker_image(
                 self.project_id.as_str(),
                 self.region.clone(),
-                image.repository_name(),
+                image.repository_name.as_str(),
                 image
                     .name
                     .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
@@ -229,7 +210,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
             )
             .map_err(|e| ContainerRegistryError::CannotDeleteImage {
                 registry_name: self.name.to_string(),
-                repository_name: image.repository_name().to_string(),
+                repository_name: image.repository_name.to_string(),
                 image_name: image
                     .name
                     .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
@@ -244,7 +225,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
             .get_docker_image(
                 self.project_id.as_str(),
                 self.region.clone(),
-                image.repository_name(),
+                image.repository_name.as_str(),
                 image
                     .name
                     .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
