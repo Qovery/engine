@@ -30,7 +30,7 @@ charts:
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap
-    version: 9.32.1
+    version: 9.39.0
     comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
   - name: aws-load-balancer-controller
     repo_name: aws
