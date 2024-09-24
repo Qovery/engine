@@ -21,7 +21,6 @@ use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
@@ -278,7 +277,6 @@ pub fn clean_environments(
                     registry_url,
                     Arc::from(FakeQoveryApi {}),
                     vec![CpuArchitecture::AMD64, CpuArchitecture::ARM64],
-                    &QoveryIdentifier::new(*context.cluster_long_id()),
                 )
             })
             .collect::<Vec<Build>>()

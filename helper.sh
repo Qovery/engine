@@ -409,7 +409,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   # overriding default profile to output junit report
   echo '[profile.default.junit]' > nextest.config.toml
   echo 'path = "junit.xml"' >> nextest.config.toml # output junit report
-  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run $features_to_test_option --lib --tests --message-format libtest-json --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --no-fail-fast --profile default -- >> $output_log_file 2>&1
+  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run $features_to_test_option --lib --tests --message-format libtest-json --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --profile default -- >> $output_log_file 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
   echo "Test status: $TESTS_STATUS"
 
