@@ -1,3 +1,4 @@
+{{- if not .Values.nodeComponentOnly -}}
 # Controller Service
 kind: Deployment
 apiVersion: apps/v1
@@ -6,6 +7,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "aws-ebs-csi-driver.labels" . | nindent 4 }}
+  {{- with .Values.controller.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
   {{- if or (kindIs "float64" .Values.controller.revisionHistoryLimit) (kindIs "int64" .Values.controller.revisionHistoryLimit) }}
@@ -223,6 +228,12 @@ spec:
             - --kube-api-burst=100
             - --worker-threads=100
             {{- end }}
+            {{- if not (regexMatch "(-retry-interval-max)" (join " " .Values.sidecars.provisioner.additionalArgs)) }}
+            - --retry-interval-max=30m
+            {{- end }}
+            {{- if .Capabilities.APIVersions.Has "storage.k8s.io/v1beta1/VolumeAttributesClass" }}
+            - --feature-gates=VolumeAttributesClass=true
+            {{- end }}
             {{- range .Values.sidecars.provisioner.additionalArgs }}
             - {{ . }}
             {{- end }}
@@ -276,6 +287,9 @@ spec:
             - --kube-api-burst=100
             - --worker-threads=100
             {{- end }}
+            {{- if not (regexMatch "(-retry-interval-max)" (join " " .Values.sidecars.attacher.additionalArgs)) }}
+            - --retry-interval-max=5m
+            {{- end }}
             {{- range .Values.sidecars.attacher.additionalArgs }}
             - {{ . }}
             {{- end }}
@@ -310,6 +324,7 @@ spec:
           args:
             - --csi-address=$(ADDRESS)
             - --leader-election=true
+            - --v={{ .Values.sidecars.snapshotter.logLevel }}
             {{- if .Values.controller.extraCreateMetadata }}
             - --extra-create-metadata
             {{- end}}
@@ -317,6 +332,9 @@ spec:
             - --kube-api-qps=20
             - --kube-api-burst=100
             - --worker-threads=100
+            {{- end }}
+            {{- if not (regexMatch "(-retry-interval-max)" (join " " .Values.sidecars.snapshotter.additionalArgs)) }}
+            - --retry-interval-max=30m
             {{- end }}
             {{- range .Values.sidecars.snapshotter.additionalArgs }}
             - {{ . }}
@@ -431,6 +449,12 @@ spec:
             - --kube-api-burst=100
             - --workers=100
             {{- end }}
+            {{- if not (regexMatch "(-retry-interval-max)" (join " " .Values.sidecars.resizer.additionalArgs)) }}
+            - --retry-interval-max=30m
+            {{- end }}
+            {{- if .Capabilities.APIVersions.Has "storage.k8s.io/v1beta1/VolumeAttributesClass" }}
+            - --feature-gates=VolumeAttributesClass=true
+            {{- end }}
             {{- range .Values.sidecars.resizer.additionalArgs }}
             - {{ . }}
             {{- end }}
@@ -497,3 +521,8 @@ spec:
         {{- with .Values.controller.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- if .Values.controller.dnsConfig }}
+      dnsConfig:
+        {{- toYaml .Values.controller.dnsConfig | nindent 8 }}
+      {{- end }}
+{{- end }}

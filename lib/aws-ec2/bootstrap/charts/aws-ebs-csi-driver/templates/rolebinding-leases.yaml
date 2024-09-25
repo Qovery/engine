@@ -1,3 +1,4 @@
+{{- if not .Values.nodeComponentOnly -}}
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -13,3 +14,4 @@ roleRef:
   kind: Role
   name: ebs-csi-leases-role
   apiGroup: rbac.authorization.k8s.io
+{{- end }}

@@ -1,3 +1,4 @@
+{{- if and .Values.helmTester.enabled (not .Values.nodeComponentOnly) -}}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -135,7 +136,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: ebs-csi-driver-test
-    namespace: kube-system
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: ebs-csi-driver-test
@@ -193,10 +194,18 @@ metadata:
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+    "ignore-check.kube-linter.io/run-as-non-root": "kubetest2 image runs as root"
+    "ignore-check.kube-linter.io/no-read-only-root-fs": "test pod requires privileged access"
 spec:
   containers:
     - name: kubetest2
-      image: gcr.io/k8s-staging-test-infra/kubekins-e2e:v20231206-f7b83ffbe6-master
+      image: {{ .Values.helmTester.image }}
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 4Gi
+        limits:
+          memory: 4Gi
       command: [ "/bin/sh", "-c" ]
       args:
         - |
@@ -205,18 +214,25 @@ spec:
           kubectl config set-context kubetest2 --cluster=cluster
           kubectl config set-credentials sa --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
           kubectl config set-context kubetest2 --user=sa && kubectl config use-context kubetest2
-          kubectl get crd volumesnapshots.snapshot.storage.k8s.io
-          if [ $? -eq 0 ]; then 
-            SNAPSHOTS="|snapshot fields"
+          export FOCUS_REGEX='\bebs.csi.aws.com\b.+(validate content|resize volume|offline PVC|AllowedTopologies|store data'
+          if kubectl get crd volumesnapshots.snapshot.storage.k8s.io; then
+            FOCUS_REGEX="${FOCUS_REGEX}|snapshot fields)"
+          else
+            FOCUS_REGEX="${FOCUS_REGEX})"
           fi
-          export FOCUS_REGEX="\bebs.csi.aws.com\b.+(validate content|resize volume|offline PVC|AllowedTopologies|store data$SNAPSHOTS)"
-          kubetest2 noop --run-id='e2e-kubernetes' --test=ginkgo -- --test-package-version=$(curl -L https://dl.k8s.io/release/stable-1.28.txt) --skip-regex='\[Disruptive\]|\[Serial\]' --focus-regex="$FOCUS_REGEX" --parallel=25 --test-args='-storage.testdriver=/etc/config/manifests.yaml'
+          export KUBE_VERSION=$(kubectl version --output json | jq -r '.serverVersion.major + "." + .serverVersion.minor')
+          kubetest2 noop --run-id='e2e-kubernetes' --test=ginkgo -- --test-package-version="$(curl -L https://dl.k8s.io/release/stable-${KUBE_VERSION}.txt)" --skip-regex='[Disruptive]|[Serial]' --focus-regex="$FOCUS_REGEX" --parallel=25 --test-args='-storage.testdriver=/etc/config/manifests.yaml'
       volumeMounts:
       - name: config-vol
         mountPath: /etc/config
+  # kubekins-e2e v1 image is linux amd64 only.
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
   serviceAccountName: ebs-csi-driver-test
   volumes:
     - name: config-vol
       configMap:
         name: ebs-csi-driver-test
   restartPolicy: Never
+{{- end }}
