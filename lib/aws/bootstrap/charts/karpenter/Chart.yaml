@@ -17,7 +17,7 @@ annotations:
       displayName: NodePool
       description: NodePool is the Schema for the NodePools API.
 apiVersion: v2
-appVersion: 0.36.2
+appVersion: 0.36.5
 description: A Helm chart for Karpenter, an open-source node provisioning project
   built for Kubernetes.
 home: https://karpenter.sh/
@@ -32,4 +32,4 @@ name: karpenter
 sources:
 - https://github.com/aws/karpenter-provider-aws/
 type: application
-version: 0.36.2
+version: 0.36.5
