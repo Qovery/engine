@@ -1,4 +1,4 @@
-{{- if .Values.controller.enableMetrics -}}
+{{- if and .Values.controller.enableMetrics (not .Values.nodeComponentOnly) -}}
 ---
 apiVersion: v1
 kind: Service
@@ -37,6 +37,6 @@ spec:
   endpoints:
     - targetPort: 3301
       path: /metrics
-      interval: 15s
+      interval: {{ .Values.controller.serviceMonitor.interval | default "15s"}}
 {{- end }}
 {{- end }}
