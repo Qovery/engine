@@ -13,3 +13,6 @@ serviceAccount:
   }
 
 dnsPolicy: Default
+
+webhook:
+  enabled: true
