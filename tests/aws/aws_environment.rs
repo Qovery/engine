@@ -436,6 +436,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Buildpacks to be deactivated soon PRDT-1339"]
 fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
