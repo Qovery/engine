@@ -314,8 +314,6 @@ pub fn environment_3_apps_3_databases(
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: BTreeSet::new(),
-                should_delete_shared_registry: false,
-                shared_image_feature_enabled: true,
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -383,8 +381,6 @@ pub fn environment_3_apps_3_databases(
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: BTreeSet::new(),
-                should_delete_shared_registry: false,
-                shared_image_feature_enabled: true,
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -454,8 +450,6 @@ pub fn environment_3_apps_3_databases(
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: BTreeSet::new(),
-                should_delete_shared_registry: false,
-                shared_image_feature_enabled: true,
             },
         ],
         containers: vec![],
@@ -599,8 +593,6 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: true,
         }],
         containers: vec![],
         jobs: vec![],
@@ -658,8 +650,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             container_registries: Vec::new(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: true,
         }],
         containers: vec![],
         jobs: vec![],
@@ -784,14 +774,23 @@ pub fn test_db(
 
     environment.databases = vec![db.clone()];
 
-    let app_name = format!("{}-app-{}", db_kind_str, generate_id());
+    let app_name = format!("{}-app-{}", db_kind_str, QoveryIdentifier::new_random().short());
+    let branch = format!(
+        "{}-app",
+        match db_kind {
+            DatabaseKind::Postgresql => "postgres",
+            DatabaseKind::Mysql => "mysql",
+            DatabaseKind::Mongodb => "mongo",
+            DatabaseKind::Redis => "redis",
+        }
+    );
     environment.applications = environment
         .applications
         .into_iter()
         .map(|mut app| {
             app.long_id = app_id;
-            app.name = to_short_id(&app_id);
-            app.branch.clone_from(&app_name);
+            app.name = app_name.to_string();
+            app.branch.clone_from(&branch);
             app.commit_id.clone_from(&db_infos.app_commit);
             app.ports = vec![Port {
                 long_id: Default::default(),

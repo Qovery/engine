@@ -27,8 +27,7 @@ use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    MountedFile, QoveryIdentifier,
+    fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
 };
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
@@ -312,10 +311,6 @@ pub struct Application {
     pub annotations_group_ids: BTreeSet<Uuid>,
     #[serde(default)]
     pub labels_group_ids: BTreeSet<Uuid>,
-    #[serde(default)] // Default is false
-    pub should_delete_shared_registry: bool,
-    #[serde(default)] // Default is false
-    pub shared_image_feature_enabled: bool,
 }
 
 fn default_root_path_value() -> String {
@@ -382,7 +377,6 @@ impl Application {
                         KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                         KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                         KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
@@ -415,7 +409,6 @@ impl Application {
                         KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                         KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                         KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
                     )?))
                 }
             }
@@ -449,7 +442,6 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                self.should_delete_shared_registry,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -481,7 +473,6 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                self.should_delete_shared_registry,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -513,20 +504,16 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                self.should_delete_shared_registry,
             )?)),
         }
     }
 
-    fn to_image(&self, cr_info: &ContainerRegistryInfo, cluster_id: &QoveryIdentifier) -> Image {
+    fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: match self.shared_image_feature_enabled {
-                true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(self.git_url.as_str())),
-                false => cr_info.get_image_name(&self.name),
-            },
+            name: cr_info.get_image_name(&self.name),
             tag: "".to_string(), // It needs to be computed after creation
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
@@ -534,9 +521,6 @@ impl Application {
             registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
             repository_name: cr_info.get_repository_name(&self.name),
-            shared_repository_name: cr_info
-                .get_shared_repository_name(cluster_id, sanitized_git_url(self.git_url.as_str())),
-            shared_image_feature_enabled: self.shared_image_feature_enabled,
         }
     }
 
@@ -545,7 +529,6 @@ impl Application {
         registry_url: &ContainerRegistryInfo,
         qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
-        cluster_id: &QoveryIdentifier,
     ) -> Build {
         // Get passphrase and public key if provided by the user
         let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars_with_infos);
@@ -573,7 +556,7 @@ impl Application {
                 root_path,
                 buildpack_language: self.buildpack_language.clone(),
             },
-            image: self.to_image(registry_url, cluster_id),
+            image: self.to_image(registry_url),
             environment_variables: self
                 .environment_vars_with_infos
                 .iter()

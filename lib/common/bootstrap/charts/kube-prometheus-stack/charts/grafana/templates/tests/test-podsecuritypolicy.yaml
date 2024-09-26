@@ -4,7 +4,7 @@ kind: PodSecurityPolicy
 metadata:
   name: {{ include "grafana.fullname" . }}-test
   annotations:
-    "helm.sh/hook": test-success
+    "helm.sh/hook": test
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
   labels:
     {{- include "grafana.labels" . | nindent 4 }}

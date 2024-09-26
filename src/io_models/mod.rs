@@ -7,7 +7,6 @@ use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -207,14 +206,4 @@ pub fn fetch_git_token(
         login: creds.login,
         password: creds.access_token,
     })
-}
-
-pub fn sanitized_git_url(git_url: &str) -> String {
-    let sanitized_git_url = git_url
-        .to_ascii_lowercase()
-        .replace(|c: char| !c.is_ascii_alphanumeric(), "-");
-    Regex::new(r"-+")
-        .unwrap()
-        .replace_all(&sanitized_git_url, "-")
-        .to_string()
 }

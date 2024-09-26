@@ -20,7 +20,7 @@ charts:
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 55.4.1
+    version: 62.6.0
     comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: aws-node-termination-handler
     repo_name: aws
@@ -30,12 +30,12 @@ charts:
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap
-    version: 9.32.1
+    version: 9.39.0
     comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
   - name: aws-load-balancer-controller
     repo_name: aws
     dest: aws-bootstrap
-    version: 1.8.0
+    version: 1.8.3
     comment: |
       This chart should be replaced by the EKS addon once it will be out
       https://github.com/aws/eks-charts/tree/gh-pages
@@ -130,12 +130,12 @@ charts:
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 0.36.2
+    version: 0.36.5
   - name: karpenter-crd
     dest_folder_override: karpenter-crd
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 0.36.2
+    version: 0.36.5
 
 repos:
   - name: stable

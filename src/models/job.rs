@@ -63,7 +63,6 @@ pub struct Job<T: CloudProvider> {
     pub(super) liveness_probe: Option<Probe>,
     pub(super) annotations_group: AnnotationsGroupTeraContext,
     pub(super) labels_group: LabelsGroupTeraContext,
-    pub(super) should_delete_shared_registry: bool,
 }
 
 // Here we define the common behavior among all providers
@@ -95,7 +94,6 @@ impl<T: CloudProvider> Job<T> {
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
-        should_delete_shared_registry: bool,
     ) -> Result<Self, JobError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -136,7 +134,6 @@ impl<T: CloudProvider> Job<T> {
             default_port,
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
-            should_delete_shared_registry,
         })
     }
 
@@ -285,10 +282,6 @@ impl<T: CloudProvider> Job<T> {
 
     pub fn workspace_directory(&self) -> &str {
         self.workspace_directory.to_str().unwrap_or("")
-    }
-
-    pub fn should_delete_shared_registry(&self) -> bool {
-        self.should_delete_shared_registry
     }
 }
 

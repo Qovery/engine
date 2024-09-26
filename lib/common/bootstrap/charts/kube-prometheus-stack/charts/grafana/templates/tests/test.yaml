@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
   annotations:
-    "helm.sh/hook": test-success
+    "helm.sh/hook": test
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
   namespace: {{ include "grafana.namespace" . }}
 spec:
@@ -41,6 +41,10 @@ spec:
         - mountPath: /tests
           name: tests
           readOnly: true
+      {{- with .Values.testFramework.resources }}
+      resources:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
   volumes:
     - name: tests
       configMap:

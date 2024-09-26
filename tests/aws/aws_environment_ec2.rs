@@ -379,8 +379,6 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: true,
         }];
 
         let mut environment_for_delete = environment.clone();

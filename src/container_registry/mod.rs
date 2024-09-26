@@ -51,8 +51,7 @@ pub trait ContainerRegistry: Send + Sync {
     // Call to create a specific repository in the registry
     // i.e: docker.io/erebe or docker.io/qovery
     // All providers requires action for that
-    // The convention for us is that we create one per cluster/git_repo_url
-    // DEPRECATED: The convention for us is that we create one per application
+    // The convention for us is that we create one per application
     fn create_repository(
         &self,
         repository_name: &str,
@@ -88,28 +87,19 @@ pub fn to_engine_error(event_details: EventDetails, err: ContainerRegistryError)
     EngineError::new_container_registry_error(event_details, err)
 }
 
-pub struct ImageBuildContext {
-    pub cluster_id: QoveryIdentifier,
-    pub git_repo_url_sanitized: String,
-}
-
 pub struct ContainerRegistryInfo {
     pub endpoint: Url,
     // Contains username and password if necessary
     pub registry_name: String,
     pub registry_docker_json_config: Option<String>,
     pub insecure_registry: bool,
-    // this one is deprecated in favor of shared one, but we still need it for registry deletion purpose
     // give it the name of your image, and it returns the full name with prefix if needed
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
     get_image_name: Box<dyn Fn(&str) -> String + Send + Sync>,
-    get_shared_image_name: Box<dyn Fn(&ImageBuildContext) -> String + Send + Sync>,
 
-    // this one is deprecated in favor of shared one, but we still need it for registry deletion purpose
     // Give it the name of your image, and it returns the name of the repository that will be used
     get_repository_name: Box<dyn Fn(&str) -> String + Send + Sync>,
-    get_shared_repository_name: Box<dyn Fn(&ImageBuildContext) -> String + Send + Sync>,
 }
 
 impl ContainerRegistryInfo {
@@ -117,22 +107,8 @@ impl ContainerRegistryInfo {
         (self.get_repository_name)(image_name)
     }
 
-    pub fn get_shared_repository_name(&self, cluster_id: &QoveryIdentifier, git_repo_url_sanitized: String) -> String {
-        (self.get_shared_repository_name)(&ImageBuildContext {
-            cluster_id: cluster_id.clone(),
-            git_repo_url_sanitized,
-        })
-    }
-
     pub fn get_image_name(&self, image_name: &str) -> String {
         (self.get_image_name)(image_name)
-    }
-
-    pub fn get_shared_image_name(&self, cluster_id: &QoveryIdentifier, git_repo_url_sanitized: String) -> String {
-        (self.get_shared_image_name)(&ImageBuildContext {
-            cluster_id: cluster_id.clone(),
-            git_repo_url_sanitized,
-        })
     }
 }
 
@@ -148,9 +124,4 @@ pub enum Kind {
 #[derive(Clone, PartialEq, Debug)]
 pub struct RepositoryInfo {
     pub created: bool,
-}
-
-fn take_last_x_chars(input: &str, max_length: usize) -> String {
-    let length_to_skip = input.len().saturating_sub(max_length);
-    input.chars().skip(length_to_skip).collect()
 }

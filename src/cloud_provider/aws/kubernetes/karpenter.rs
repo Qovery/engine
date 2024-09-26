@@ -9,6 +9,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::kubectl::kubectl_exec_get_pods;
+use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::models::ToCloudProviderFormat;
@@ -19,10 +21,15 @@ use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
 use jsonptr::Pointer;
 use k8s_openapi::api::core::v1::Node;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use std::str::FromStr;
 use std::string::ToString;
 use std::time::Duration;
 
+const KARPENTER_NAMESPACE: &str = "kube-system";
+const KARPENTER_LABEL_SELECTOR: &str = "app.kubernetes.io/instance=karpenter";
+const KARPENTER_EXPECTED_POD_COUNT: u32 = 2;
 const KARPENTER_DEPLOYMENT_NAME: &str = "karpenter";
 const KARPENTER_MIN_NODES_DRAIN_TIMEOUT: ChronoDuration = ChronoDuration::seconds(60);
 
@@ -65,9 +72,11 @@ impl Karpenter {
                 event_details.clone(),
                 KARPENTER_DEPLOYMENT_NAME,
                 &HelmChartNamespaces::KubeSystem.to_string(),
-                2,
+                KARPENTER_EXPECTED_POD_COUNT,
             )
             .await?;
+
+        Self::wait_for_karpenter_pods(kubernetes, cloud_provider, &event_details).await?;
 
         Self::install_karpenter_configuration(
             kubernetes,
@@ -352,6 +361,44 @@ impl Karpenter {
         })?;
 
         Ok(karpenter_configuration_chart.chart_info)
+    }
+
+    async fn wait_for_karpenter_pods(
+        kubernetes: &dyn Kubernetes,
+        cloud_provider: &dyn CloudProvider,
+        event_details: &EventDetails,
+    ) -> Result<(), Box<EngineError>> {
+        retry::retry(Fixed::from(Duration::from_secs(10)).take(10), || {
+            match kubectl_exec_get_pods(
+                kubernetes.kubeconfig_local_file_path(),
+                Some(KARPENTER_NAMESPACE),
+                Some(KARPENTER_LABEL_SELECTOR),
+                cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(res) => {
+                    let running_pods_count = res
+                        .items
+                        .iter()
+                        .filter(|pod| pod.status.phase == KubernetesPodStatusPhase::Running)
+                        .count();
+
+                    if running_pods_count == KARPENTER_EXPECTED_POD_COUNT as usize {
+                        OperationResult::Ok(())
+                    } else {
+                        OperationResult::Retry(CommandError::new_from_safe_message(
+                            "Pods didn't restart yet. Waiting...".to_string(),
+                        ))
+                    }
+                }
+                Err(e) => OperationResult::Retry(e),
+            }
+        })
+        .map_err(|e| {
+            Box::new(EngineError::new_k8s_cannot_get_pods(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!("Error while trying to scale up Karpenter: {e}")),
+            ))
+        })
     }
 }
 

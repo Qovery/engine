@@ -49,7 +49,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --config.file=%CONTAINER_SANDBOX_MOUNT_POINT%/config.yml
-            - --collector.textfile.directory=%CONTAINER_SANDBOX_MOUNT_POINT%
+            - --collector.textfile.directories=%CONTAINER_SANDBOX_MOUNT_POINT%
             - --web.listen-address=:{{ .Values.service.port }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
@@ -75,7 +75,7 @@ spec:
               - name: {{ $header.name }}
                 value: {{ $header.value }}
               {{- end }}
-              path: /
+              path: {{ .Values.livenessProbe.httpGet.path }}
               port: {{ .Values.service.port }}
               scheme: {{ upper .Values.livenessProbe.httpGet.scheme }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
@@ -90,7 +90,7 @@ spec:
               - name: {{ $header.name }}
                 value: {{ $header.value }}
               {{- end }}
-              path: /
+              path: {{ .Values.readinessProbe.httpGet.path }}
               port: {{ .Values.service.port }}
               scheme: {{ upper .Values.readinessProbe.httpGet.scheme }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}

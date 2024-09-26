@@ -196,11 +196,11 @@ impl ObjectStorage for ScalewayOS {
                 tag_set: vec![
                     Tag {
                         key: "CreationDate".to_string(),
-                        value: format!("CreationDate={}", creation_date.to_rfc3339()),
+                        value: format!("CreationDate:{}", creation_date.to_rfc3339()),
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("Ttl={}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                        value: format!("Ttl:{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                     },
                 ],
             },

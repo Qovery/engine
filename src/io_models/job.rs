@@ -13,8 +13,7 @@ use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    MountedFile, QoveryIdentifier,
+    fetch_git_token, normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action, MountedFile,
 };
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
@@ -183,10 +182,6 @@ pub struct Job {
     pub annotations_group_ids: BTreeSet<Uuid>,
     #[serde(default)]
     pub labels_group_ids: BTreeSet<Uuid>,
-    #[serde(default)] // Default is false
-    pub should_delete_shared_registry: bool,
-    #[serde(default)] // Default is false
-    pub shared_image_feature_enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -200,7 +195,6 @@ impl Job {
         registry_url: &ContainerRegistryInfo,
         qovery_api: Arc<dyn QoveryApi>,
         architectures: Vec<CpuArchitecture>,
-        cluster_id: &QoveryIdentifier,
     ) -> Option<Build> {
         let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
         let (git_url, git_credentials, _branch, commit_id, dockerfile_path, dockerfile_content, root_path) =
@@ -260,7 +254,7 @@ impl Job {
                 root_path,
                 buildpack_language: None,
             },
-            image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
+            image: self.to_image(commit_id.to_string(), registry_url),
             environment_variables: self
                 .environment_vars_with_infos
                 .iter()
@@ -292,21 +286,12 @@ impl Job {
         Some(build)
     }
 
-    fn to_image(
-        &self,
-        commit_id: String,
-        cr_info: &ContainerRegistryInfo,
-        cluster_id: &QoveryIdentifier,
-        git_url: &str,
-    ) -> Image {
+    fn to_image(&self, commit_id: String, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: match self.shared_image_feature_enabled {
-                true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(git_url)),
-                false => cr_info.get_image_name(&self.name),
-            },
+            name: cr_info.get_image_name(&self.long_id.to_string()),
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
@@ -314,8 +299,6 @@ impl Job {
             registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
             repository_name: cr_info.get_repository_name(&self.long_id.to_string()),
-            shared_repository_name: cr_info.get_shared_repository_name(cluster_id, sanitized_git_url(git_url)),
-            shared_image_feature_enabled: self.shared_image_feature_enabled,
         }
     }
 
@@ -334,11 +317,10 @@ impl Job {
                     default_container_registry.registry_info(),
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
-                    &QoveryIdentifier::new(*cluster.long_id()),
                 ) {
                     Some(build) => Ok(build),
                     None => Err(JobError::InvalidConfig(
-                        "Cannot convert docker JobSource to Build source".to_string(),
+                        "Cannot convert docker JobSoure to Build source".to_string(),
                     )),
                 }?;
 
@@ -413,7 +395,6 @@ impl Job {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        self.should_delete_shared_registry,
                     )?)
                 } else {
                     Box::new(models::job::Job::<AWSEc2>::new(
@@ -446,7 +427,6 @@ impl Job {
                         |transmitter| context.get_event_details(transmitter),
                         annotations_groups,
                         labels_groups,
-                        self.should_delete_shared_registry,
                     )?)
                 }
             }
@@ -480,7 +460,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.should_delete_shared_registry,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -512,7 +491,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.should_delete_shared_registry,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -544,7 +522,6 @@ impl Job {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
-                self.should_delete_shared_registry,
             )?),
         };
 

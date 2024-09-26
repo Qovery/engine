@@ -41,7 +41,7 @@ pub enum SelectK8sResourceBy {
 }
 
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[kube(group = "karpenter.k8s.aws", version = "v1beta1", kind = "EC2NodeClass")]
+#[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
 
 impl QubeClient {

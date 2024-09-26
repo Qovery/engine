@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 0.22.0
+appVersion: 0.28.1
 description: A Helm chart for prometheus windows-exporter
 home: https://github.com/prometheus-community/windows_exporter/
 keywords:
@@ -14,4 +14,4 @@ name: prometheus-windows-exporter
 sources:
 - https://github.com/prometheus-community/windows_exporter/
 type: application
-version: 0.1.2
+version: 0.6.0

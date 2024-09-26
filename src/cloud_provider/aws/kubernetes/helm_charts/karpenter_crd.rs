@@ -1,18 +1,26 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, CommonChart, HelmChartError, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+};
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct KarpenterCrdChart {
     chart_path: HelmChartPath,
+    chart_values_path: HelmChartValuesFilePath,
 }
 
 impl KarpenterCrdChart {
     pub fn new(chart_prefix_path: Option<&str>) -> Self {
         KarpenterCrdChart {
             chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                KarpenterCrdChart::chart_name(),
+            ),
+            chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 KarpenterCrdChart::chart_name(),
@@ -32,6 +40,7 @@ impl ToCommonHelmChart for KarpenterCrdChart {
                 name: KarpenterCrdChart::chart_name(),
                 namespace: HelmChartNamespaces::KubeSystem,
                 path: self.chart_path.to_string(),
+                values_files: vec![self.chart_values_path.to_string()],
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KarpenterCrdChartChecker::new())),

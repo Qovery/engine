@@ -87,7 +87,6 @@ fn should_increase_app_storage_size() {
                 infra_ctx.container_registry().registry_info(),
                 infra_ctx.context().qovery_api.clone(),
                 infra_ctx.kubernetes().cpu_architectures(),
-                &QoveryIdentifier::new(*infra_ctx.kubernetes().long_id()),
             ),
             resized_app.command_args.clone(),
             resized_app.entrypoint.clone(),
@@ -105,7 +104,6 @@ fn should_increase_app_storage_size() {
             KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_limit_in_milli),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_request_in_mib),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_limit_in_mib),
-            true,
         )
         .expect("Unable to create application");
 

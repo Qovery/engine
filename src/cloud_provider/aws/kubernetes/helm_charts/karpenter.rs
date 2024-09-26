@@ -134,7 +134,7 @@ mod tests {
         // These values must be equal to the ones define in the CustomResource in the kube_client.rs file
         // #[kube(group = "karpenter.k8s.aws", version = "v1beta1", kind = "EC2NodeClass")]
         assert_eq!(group.as_str(), Some("karpenter.k8s.aws"));
-        assert_eq!(version.as_str(), Some("v1beta1"));
+        assert_eq!(version.as_str(), Some("v1"));
         assert_eq!(kind.as_str(), Some("EC2NodeClass"));
     }
 
