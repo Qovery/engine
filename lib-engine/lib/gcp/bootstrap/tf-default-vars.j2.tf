@@ -374,7 +374,7 @@ variable "identity_namespace" {
 variable "release_channel" {
   type        = string
   description = "The release channel of this cluster. Accepted values are `UNSPECIFIED`, `RAPID`, `REGULAR` and `STABLE`. Defaults to `REGULAR`."
-  default     = "REGULAR"
+  default     = "STABLE"
 }
 
 variable "gateway_api_channel" {
