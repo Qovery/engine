@@ -127,6 +127,8 @@ hashicorp_vault = "2.1.1"
 curl = "0.4.46"
 dotenv = "0.15.0"
 faux = "0.1.10"
+testcontainers = { version = "0.22.0", features = ["blocking"] }
+
 
 [features]
 default = []
@@ -153,10 +155,19 @@ test-all-minimal = [
 ]
 
 # functionnal tests by type
-test-aws-self-hosted = ["env-logger-check"]
+test-aws-self-hosted = [
+    "env-logger-check",
+    "test-git-container",
+]
 test-aws-ec2-self-hosted = ["env-logger-check"]
-test-scw-self-hosted = ["env-logger-check"]
-test-gcp-self-hosted = ["env-logger-check"]
+test-scw-self-hosted = [
+    "env-logger-check",
+    "test-git-container",
+]
+test-gcp-self-hosted = [
+    "env-logger-check",
+    "test-git-container",
+]
 test-all-self-hosted = [
     "test-aws-self-hosted",
     "test-aws-ec2-self-hosted",
@@ -224,6 +235,9 @@ test-gcp-all = [
 ]
 
 test-quarantine = []
+
+# functionnal test with specific action for git processing not meant to be used in production
+test-git-container = []
 
 # functionnal test with only a k8s cluster as a dependency
 test-local-kube = []

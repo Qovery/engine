@@ -5,6 +5,7 @@ pub mod database;
 pub mod dns;
 pub mod environment;
 pub mod gcp;
+pub mod git_server;
 pub mod kubernetes;
 mod on_premise;
 pub mod scaleway;

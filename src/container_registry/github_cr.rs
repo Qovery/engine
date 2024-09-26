@@ -181,7 +181,7 @@ impl ContainerRegistry for GithubCr {
         let to_error = |raw_error_message: String| ContainerRegistryError::CannotDeleteImage {
             registry_name: self.name().to_string(),
             repository_name: image.repository_name().to_string(),
-            image_name: image.name.to_string(),
+            image_name: image.name().to_string(),
             raw_error_message,
         };
 
