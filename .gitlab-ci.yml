@@ -625,7 +625,7 @@ scw-self-hosted:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
-  allow_failure: true # SCW issues with registry
+  allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
 
 scw-whole-enchilada:
   stage: tests

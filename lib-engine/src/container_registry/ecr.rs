@@ -18,7 +18,9 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
+use crate::container_registry::{
+    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+};
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
@@ -75,13 +77,24 @@ impl ECR {
             .docker
             .login(&registry_url)
             .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
+        const MAX_REGISTRY_NAME_LENGTH: usize = 118; // 128 (ECR limit) - 10 (prefix length)
 
         let registry_info = ContainerRegistryInfo {
             endpoint: registry_url,
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
             insecure_registry: false,
+            get_shared_image_name: Box::new(|image_build_context| {
+                let git_repo_truncated: String =
+                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
+            }),
             get_image_name: Box::new(|img_name| img_name.to_string()),
+            get_shared_repository_name: Box::new(|image_build_context| {
+                let git_repo_truncated: String =
+                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
+            }),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
 
@@ -152,22 +165,22 @@ impl ECR {
         }
     }
 
-    fn delete_image(&self, imge: &Image) -> Result<(), ContainerRegistryError> {
+    fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {
         let request = BatchDeleteImageRequest {
             registry_id: None,
-            repository_name: imge.repository_name.clone(),
+            repository_name: image.repository_name().to_string(),
             image_ids: vec![ImageIdentifier {
                 image_digest: None,
-                image_tag: Some(imge.tag.to_string()),
+                image_tag: Some(image.tag.to_string()),
             }],
         };
 
         match block_on_with_timeout(self.ecr_client().batch_delete_image(request)) {
             Ok(_) => Ok(()),
             Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
-                registry_name: imge.registry_name.clone(),
-                repository_name: imge.registry_name.clone(),
-                image_name: imge.name(),
+                registry_name: image.registry_name.clone(),
+                repository_name: image.registry_name.clone(),
+                image_name: image.name(),
                 raw_error_message: format!("{e}"),
             }),
         }

@@ -10,7 +10,7 @@ use crate::io_models::helm_chart::HelmChart;
 use crate::io_models::job::Job;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::router::Router;
-use crate::io_models::Action;
+use crate::io_models::{Action, QoveryIdentifier};
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::container::{ContainerError, ContainerService};
 use crate::models::database::{DatabaseError, DatabaseService};
@@ -99,6 +99,7 @@ impl EnvironmentRequest {
                     container_registry.registry_info(),
                     context.qovery_api.clone(),
                     cluster.cpu_architectures(),
+                    &QoveryIdentifier::new(*cluster.long_id()),
                 );
                 srv.to_application_domain(context, build, cloud_provider, &self.annotations_groups, &self.labels_groups)
             })
