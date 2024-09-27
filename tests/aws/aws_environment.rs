@@ -255,6 +255,117 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+fn deploy_a_working_environment_with_shared_registry() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry_for_deployment = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+
+        let repo_id = Uuid::new_v4().to_string();
+        let container = helpers::git_server::init_git_server_testcontainer(repo_id.clone());
+
+        let repo_url = format!(
+            "http://{}:{}/{}.git",
+            container.get_host().expect("git container has a host"),
+            container
+                .get_host_port_ipv4(80)
+                .expect("git container has an exposed port"),
+            repo_id
+        );
+
+        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+
+        let environment =
+            helpers::environment::working_minimal_environment_with_custom_git_url(&context, repo_url.as_str());
+        let environment2 =
+            helpers::environment::working_minimal_environment_with_custom_git_url(&context, repo_url.as_str());
+
+        let env_to_deploy = environment.clone();
+        let env_to_deploy2 = environment2.clone();
+
+        let ret = environment.deploy_environment(&env_to_deploy, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+        let ret = environment2.deploy_environment(&env_to_deploy2, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+        // Check take both deployment used the same image
+        let env = environment
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .expect("Environment should be valid");
+        let env2 = environment2
+            .to_environment_domain(
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
+                infra_ctx.kubernetes(),
+            )
+            .expect("Environment should be valid");
+
+        assert_eq!(
+            env.applications[0].get_build().image.name,
+            env2.applications[0].get_build().image.name
+        );
+        let img_exist = infra_ctx
+            .container_registry()
+            .image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        let mut environment_to_delete = environment.clone();
+        let mut environment_to_delete2 = environment2.clone();
+        environment_to_delete.action = Action::Delete;
+        environment_to_delete.applications[0].should_delete_shared_registry = false;
+        environment_to_delete2.action = Action::Delete;
+        environment_to_delete2.applications[0].should_delete_shared_registry = true;
+
+        let ret = environment_to_delete.delete_environment(&environment_to_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+        let img_exist = infra_ctx
+            .container_registry()
+            .image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+        let ret = environment_to_delete2.delete_environment(&environment_to_delete2, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+        let img_exist = infra_ctx
+            .container_registry()
+            .image_exists(&env.applications[0].get_build().image);
+        assert!(!img_exist);
+        // stick a guard on the repository to delete after test
+
+        let _created_repository_name_guard =
+            scopeguard::guard(&env.applications[0].get_build().image.repository_name, |repository_name| {
+                // make sure to delete the repository after test
+                infra_ctx
+                    .container_registry()
+                    .delete_repository(repository_name.as_str())
+                    .unwrap_or_else(|_| println!("Cannot delete test repository `{}` after test", repository_name));
+            });
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
 fn deploy_a_working_environment_and_pause_it_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -2327,6 +2438,8 @@ fn deploy_job_on_aws_eks() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2436,6 +2549,8 @@ CMD ["/bin/sh", "-c", "echo hello"]
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2535,6 +2650,8 @@ fn deploy_cronjob_on_aws_eks() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2652,6 +2769,8 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2780,6 +2899,8 @@ fn build_and_deploy_job_on_aws_eks() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3174,6 +3295,8 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             container_registries: ContainerRegistries { registries: vec![] },
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
         }];
 
         let mut environment_for_delete = environment.clone();

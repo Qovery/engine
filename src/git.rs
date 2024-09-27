@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::build_platform::{BuildError, GitCmd};
-use git2::build::CheckoutBuilder;
+use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
 use git2::{
@@ -155,8 +155,19 @@ fn fetch<P>(
 where
     P: AsRef<Path>,
 {
-    if repository_url.scheme() != "https" {
-        return Err(Error::from_str("Repository URL have to start with https://"));
+    #[cfg(not(feature = "test-git-container"))]
+    {
+        if repository_url.scheme() != "https" {
+            return Err(Error::from_str("Repository URL have to start with https://"));
+        }
+    }
+    #[cfg(feature = "test-git-container")]
+    {
+        // http is allowed only for tests (git server on testcontainer)
+        if !(repository_url.scheme() == "https" || repository_url.scheme() == "http") {
+            // if repository_url.scheme() != "https" {
+            return Err(Error::from_str("Repository URL have to start with https://"));
+        }
     }
 
     // Prepare authentication callbacks.
@@ -175,10 +186,25 @@ where
         let _ = std::fs::remove_dir_all(into_dir.as_ref());
     }
 
-    let repo = Repository::init(into_dir)?;
-    remote_fetch(repository_url, &commit_id, &mut fo, &repo)?;
-
-    Ok(repo)
+    #[cfg(not(feature = "test-git-container"))]
+    {
+        let repo = Repository::init(into_dir.as_ref())?;
+        remote_fetch(repository_url, &commit_id, &mut fo, &repo)?;
+        Ok(repo)
+    }
+    #[cfg(feature = "test-git-container")]
+    {
+        // git clone is allowed only for tests (git server on testcontainer)
+        let mut repo = Repository::init(into_dir.as_ref())?;
+        let fetch_status = remote_fetch(repository_url, &commit_id, &mut fo, &repo);
+        if fetch_status.is_err() {
+            std::fs::remove_dir_all(repo.path()).unwrap_or_default();
+            repo = RepoBuilder::new()
+                .fetch_options(fo)
+                .clone(repository_url.as_str(), into_dir.as_ref())?;
+        }
+        Ok(repo)
+    }
 }
 
 fn remote_fetch(

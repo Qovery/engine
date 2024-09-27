@@ -4,7 +4,9 @@ use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo};
+use crate::container_registry::{
+    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+};
 use crate::io_models::context::Context;
 use crate::models::scaleway::ScwRegion;
 use crate::runtime::block_on_with_timeout;
@@ -51,13 +53,30 @@ impl ScalewayCR {
         if context.docker.login(&registry).is_err() {
             return Err(ContainerRegistryError::InvalidCredentials);
         }
-
+        const MAX_REGISTRY_NAME_LENGTH: usize = 40; // 50 (Scaleway CR limit) - 10 (prefix)
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: Some(Self::get_docker_json_config_raw(&login, &secret_token, region.as_str())),
             insecure_registry: false,
+
+            get_shared_image_name: Box::new(|image_build_context| {
+                // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
+                let git_repo_truncated: String =
+                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                format!(
+                    "{}-{}/built-by-qovery",
+                    image_build_context.cluster_id.short(),
+                    git_repo_truncated
+                )
+            }),
             get_image_name: Box::new(move |img_name| format!("{img_name}/{img_name}")),
+            get_shared_repository_name: Box::new(|image_build_context| {
+                // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
+                let git_repo_truncated: String =
+                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
+            }),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),
         };
 
@@ -80,8 +99,8 @@ impl ScalewayCR {
         if name.len() < 4 {
             broken_rules.insert(RepositoryNamingRule::MinLengthNotReached { min_length: 4 });
         }
-        if name.len() > 54 {
-            broken_rules.insert(RepositoryNamingRule::MaxLengthReached { max_length: 54 });
+        if name.len() > 50 {
+            broken_rules.insert(RepositoryNamingRule::MaxLengthReached { max_length: 50 });
         }
         if !name.chars().all(|x| x.is_alphanumeric() || x == '-' || x == '.') {
             broken_rules.insert(RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly);
@@ -445,13 +464,13 @@ mod tests {
                 expected: None,
             },
             TestCase {
-                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc".to_string(),
+                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy".to_string(),
                 expected: Some(HashSet::from_iter(vec![RepositoryNamingRule::MaxLengthReached {
-                    max_length: 54,
+                    max_length: 50,
                 }])),
             },
             TestCase {
-                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab".to_string(),
+                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx".to_string(),
                 expected: None,
             },
             TestCase {
@@ -471,7 +490,7 @@ mod tests {
                 input: "abc_def_ghi_jkl_mno_pqr_stu_vwx_yz@abc_def_ghi_jkl_mno_pqr_stu_vwx_yz".to_string(),
                 expected: Some(HashSet::from_iter(vec![
                     RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly,
-                    RepositoryNamingRule::MaxLengthReached { max_length: 54 },
+                    RepositoryNamingRule::MaxLengthReached { max_length: 50 },
                 ])),
             },
             TestCase {
