@@ -464,7 +464,7 @@ impl LocalDocker {
         workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
-            format!("build/{}", build.image.name.as_str()),
+            format!("build/{}", build.image.service_id.as_str()),
         )
         .map_err(|err| BuildError::IoError {
             application: build.image.service_id.clone(),

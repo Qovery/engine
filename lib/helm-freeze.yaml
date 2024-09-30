@@ -52,7 +52,7 @@ charts:
   - name: aws-ebs-csi-driver
     repo_name: aws-ebs-csi-driver
     dest: aws-ec2-bootstrap
-    version: 2.27.0
+    version: 2.35.1
     comment: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases?q=helm-chart&expanded=true
   - name: metrics-server
     repo_name: metrics-server
@@ -130,12 +130,12 @@ charts:
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 0.36.5
+    version: 1.0.3
   - name: karpenter-crd
     dest_folder_override: karpenter-crd
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 0.36.5
+    version: 1.0.3
 
 repos:
   - name: stable

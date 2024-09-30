@@ -8,7 +8,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.node.serviceAccount.name }}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ .Values.node.namespaceOverride | default .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: ebs-csi-node-role

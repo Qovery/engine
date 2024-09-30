@@ -237,7 +237,7 @@ impl Karpenter {
         let mut nb_retry = 0;
         let ec2_node_classes = loop {
             let result = client.get_ec2_node_classes(event_details).await;
-            if nb_retry > 10 {
+            if nb_retry > 20 {
                 break result;
             } else {
                 match result {
