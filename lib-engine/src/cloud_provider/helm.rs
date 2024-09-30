@@ -16,13 +16,12 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+use super::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
+use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::deploy_helm::default_helm_timeout;
 use crate::events::EventDetails;
 use std::{fs, thread};
-
-use super::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
-use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 #[derive(Error, Debug, Clone)]
 pub enum HelmChartError {
@@ -679,6 +678,7 @@ pub fn deploy_charts_levels(
     envs: &[(&str, &str)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
+    helm_diff_output_directory: Option<&Path>,
 ) -> Result<(), HelmChartError> {
     // first show diff
     let helm = Helm::new(Some(kubernetes_config), envs)?;
@@ -689,7 +689,7 @@ pub fn deploy_charts_levels(
             let chart_info = chart.get_chart_info();
             // don't do diff on destroy or skip
             if chart_info.action == Deploy {
-                let _ = helm.upgrade_diff(chart_info, &[]);
+                let _ = helm.upgrade_diff(chart_info, &[], helm_diff_output_directory);
             }
         }
 
@@ -887,7 +887,7 @@ impl HelmChart for ServiceChart {
         let chart_info = self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                let _ = self.helm.upgrade_diff(chart_info, &[]);
+                let _ = self.helm.upgrade_diff(chart_info, &[], None);
                 match self.helm.upgrade(chart_info, &[], cmd_killer) {
                     Ok(_) => {}
                     Err(e) => {
