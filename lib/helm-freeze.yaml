@@ -60,7 +60,7 @@ charts:
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: kube-state-metrics
     repo_name: prometheus-community
-    version: 5.15.2
+    version: 5.25.1
     comment: |
       Chart upgrade will require 1.25+
       https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
