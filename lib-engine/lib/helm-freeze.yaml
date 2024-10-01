@@ -56,7 +56,7 @@ charts:
     comment: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases?q=helm-chart&expanded=true
   - name: metrics-server
     repo_name: metrics-server
-    version: 3.11.0
+    version: 3.12.1
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: kube-state-metrics
     repo_name: prometheus-community
