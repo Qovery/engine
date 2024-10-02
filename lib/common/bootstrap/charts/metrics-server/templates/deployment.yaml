@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.replicas }}
+  {{- if or (kindIs "float64" .Values.revisionHistoryLimit) (kindIs "int64" .Values.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit | int64 }}
+  {{- end }}
   {{- with .Values.updateStrategy }}
   strategy:
     {{- toYaml . | nindent 4 }}
@@ -45,6 +48,10 @@ spec:
       {{- end }}
       {{- if .Values.hostNetwork.enabled }}
       hostNetwork: true
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: metrics-server
@@ -89,6 +96,10 @@ spec:
           {{- end }}
         {{- if .Values.addonResizer.enabled }}
         - name: metrics-server-nanny
+          {{- with .Values.addonResizer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ include "metrics-server.addonResizer.image" . }}
           env:
             - name: MY_POD_NAME
@@ -119,7 +130,7 @@ spec:
         {{- end }}
       volumes:
         - name: tmp
-          emptyDir: {}
+          {{- toYaml .Values.tmpVolume | nindent 10 }}
       {{- if .Values.addonResizer.enabled }}
         - name: nanny-config-volume
           configMap:
