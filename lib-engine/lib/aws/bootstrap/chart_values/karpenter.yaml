@@ -16,3 +16,12 @@ dnsPolicy: Default
 
 webhook:
   enabled: true
+
+controller:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
