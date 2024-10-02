@@ -30,7 +30,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
                 .as_str(),
         )
         .expect("Invalid AWS region");
-        let zones = localisation.get_zones();
+        let zones = localisation.zones();
         let cluster_id = generate_cluster_id(localisation.to_cloud_provider_format());
         let organization_id = generate_organization_id(localisation.to_cloud_provider_format());
         let mut ctx = context_for_ec2(organization_id, cluster_id);

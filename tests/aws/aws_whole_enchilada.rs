@@ -25,7 +25,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         .as_ref()
         .expect("AWS region was not found in secrets");
     let aws_region = AwsRegion::from_str(region).expect("Wasn't able to parse the desired region");
-    let aws_zones = aws_region.get_zones();
+    let aws_zones = aws_region.zones();
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
@@ -74,7 +74,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         .as_ref()
         .expect("AWS region was not found in secrets");
     let aws_region = AwsRegion::from_str(region).expect("Wasn't able to convert the desired region");
-    let aws_zones = aws_region.get_zones();
+    let aws_zones = aws_region.zones();
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
@@ -118,7 +118,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");
     let aws_region = AwsRegion::from_str(region).expect("Wasn't able to parse the desired region");
-    let aws_zones = aws_region.get_zones();
+    let aws_zones = aws_region.zones();
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
@@ -165,7 +165,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");
     let aws_region = AwsRegion::from_str(region).expect("Wasn't able to parse the desired region");
-    let aws_zones = aws_region.get_zones();
+    let aws_zones = aws_region.zones();
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
