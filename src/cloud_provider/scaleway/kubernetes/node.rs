@@ -43,11 +43,16 @@ pub enum ScwInstancesType {
     PLAY2_NANO,
     PLAY2_PICO,
     POP2_16C_64G,
+    POP2_16C_64G_WIN,
     POP2_2C_8G,
+    POP2_2C_8G_WIN,
     POP2_32C_128G,
+    POP2_32C_128G_WIN,
     POP2_4C_16G,
+    POP2_4C_16G_WIN,
     POP2_64C_256G,
     POP2_8C_32G,
+    POP2_8C_32G_WIN,
     POP2_HC_16C_32G,
     POP2_HC_2C_4G,
     POP2_HC_32C_64G,
@@ -59,6 +64,9 @@ pub enum ScwInstancesType {
     POP2_HM_32C_256G,
     POP2_HM_4C_32G,
     POP2_HM_8C_64G,
+    POP2_HN_10,
+    POP2_HN_3,
+    POP2_HN_5,
     PRO2_L,
     PRO2_M,
     PRO2_S,
@@ -113,11 +121,16 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
             ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+            ScwInstancesType::POP2_16C_64G_WIN => "pop2-16c-64g-win",
             ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+            ScwInstancesType::POP2_2C_8G_WIN => "pop2-2c-8g-win",
             ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+            ScwInstancesType::POP2_32C_128G_WIN => "pop2-32c-128g-win",
             ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_4C_16G_WIN => "pop2-4c-16g-win",
             ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
             ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+            ScwInstancesType::POP2_8C_32G_WIN => "pop2-8c-32g-win",
             ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
             ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
             ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
@@ -129,6 +142,9 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
             ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
             ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
+            ScwInstancesType::POP2_HN_10 => "pop2-hn-10",
+            ScwInstancesType::POP2_HN_3 => "pop2-hn-3",
+            ScwInstancesType::POP2_HN_5 => "pop2-hn-5",
             ScwInstancesType::PRO2_L => "pro2-l",
             ScwInstancesType::PRO2_M => "pro2-m",
             ScwInstancesType::PRO2_S => "pro2-s",
@@ -185,11 +201,16 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::PLAY2_PICO
                 | ScwInstancesType::POP2_16C_64G
+                | ScwInstancesType::POP2_16C_64G_WIN
                 | ScwInstancesType::POP2_2C_8G
+                | ScwInstancesType::POP2_2C_8G_WIN
                 | ScwInstancesType::POP2_32C_128G
+                | ScwInstancesType::POP2_32C_128G_WIN
                 | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_4C_16G_WIN
                 | ScwInstancesType::POP2_64C_256G
                 | ScwInstancesType::POP2_8C_32G
+                | ScwInstancesType::POP2_8C_32G_WIN
                 | ScwInstancesType::POP2_HC_16C_32G
                 | ScwInstancesType::POP2_HC_2C_4G
                 | ScwInstancesType::POP2_HC_32C_64G
@@ -201,6 +222,9 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::POP2_HM_32C_256G
                 | ScwInstancesType::POP2_HM_4C_32G
                 | ScwInstancesType::POP2_HM_8C_64G
+                | ScwInstancesType::POP2_HN_10
+                | ScwInstancesType::POP2_HN_3
+                | ScwInstancesType::POP2_HN_5
                 | ScwInstancesType::PRO2_L
                 | ScwInstancesType::PRO2_M
                 | ScwInstancesType::PRO2_S
@@ -257,11 +281,16 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::POP2_16C_64G
+                | ScwInstancesType::POP2_16C_64G_WIN
                 | ScwInstancesType::POP2_2C_8G
+                | ScwInstancesType::POP2_2C_8G_WIN
                 | ScwInstancesType::POP2_32C_128G
+                | ScwInstancesType::POP2_32C_128G_WIN
                 | ScwInstancesType::POP2_4C_16G
+                | ScwInstancesType::POP2_4C_16G_WIN
                 | ScwInstancesType::POP2_64C_256G
                 | ScwInstancesType::POP2_8C_32G
+                | ScwInstancesType::POP2_8C_32G_WIN
                 | ScwInstancesType::POP2_HC_16C_32G
                 | ScwInstancesType::POP2_HC_2C_4G
                 | ScwInstancesType::POP2_HC_32C_64G
@@ -273,6 +302,9 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::POP2_HM_32C_256G
                 | ScwInstancesType::POP2_HM_4C_32G
                 | ScwInstancesType::POP2_HM_8C_64G
+                | ScwInstancesType::POP2_HN_10
+                | ScwInstancesType::POP2_HN_3
+                | ScwInstancesType::POP2_HN_5
                 | ScwInstancesType::PRO2_L
                 | ScwInstancesType::PRO2_M
                 | ScwInstancesType::PRO2_S
@@ -327,11 +359,16 @@ impl ScwInstancesType {
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
             ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+            ScwInstancesType::POP2_16C_64G_WIN => "pop2-16c-64g-win",
             ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+            ScwInstancesType::POP2_2C_8G_WIN => "pop2-2c-8g-win",
             ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+            ScwInstancesType::POP2_32C_128G_WIN => "pop2-32c-128g-win",
             ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+            ScwInstancesType::POP2_4C_16G_WIN => "pop2-4c-16g-win",
             ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
             ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+            ScwInstancesType::POP2_8C_32G_WIN => "pop2-8c-32g-win",
             ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
             ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
             ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
@@ -343,6 +380,9 @@ impl ScwInstancesType {
             ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
             ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
             ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
+            ScwInstancesType::POP2_HN_10 => "pop2-hn-10",
+            ScwInstancesType::POP2_HN_3 => "pop2-hn-3",
+            ScwInstancesType::POP2_HN_5 => "pop2-hn-5",
             ScwInstancesType::PRO2_L => "pro2-l",
             ScwInstancesType::PRO2_M => "pro2-m",
             ScwInstancesType::PRO2_S => "pro2-s",
@@ -399,11 +439,16 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::PLAY2_NANO => write!(f, "play2-nano"),
             ScwInstancesType::PLAY2_PICO => write!(f, "play2-pico"),
             ScwInstancesType::POP2_16C_64G => write!(f, "pop2-16c-64g"),
+            ScwInstancesType::POP2_16C_64G_WIN => write!(f, "pop2-16c-64g-win"),
             ScwInstancesType::POP2_2C_8G => write!(f, "pop2-2c-8g"),
+            ScwInstancesType::POP2_2C_8G_WIN => write!(f, "pop2-2c-8g-win"),
             ScwInstancesType::POP2_32C_128G => write!(f, "pop2-32c-128g"),
+            ScwInstancesType::POP2_32C_128G_WIN => write!(f, "pop2-32c-128g-win"),
             ScwInstancesType::POP2_4C_16G => write!(f, "pop2-4c-16g"),
+            ScwInstancesType::POP2_4C_16G_WIN => write!(f, "pop2-4c-16g-win"),
             ScwInstancesType::POP2_64C_256G => write!(f, "pop2-64c-256g"),
             ScwInstancesType::POP2_8C_32G => write!(f, "pop2-8c-32g"),
+            ScwInstancesType::POP2_8C_32G_WIN => write!(f, "pop2-8c-32g-win"),
             ScwInstancesType::POP2_HC_16C_32G => write!(f, "pop2-hc-16c-32g"),
             ScwInstancesType::POP2_HC_2C_4G => write!(f, "pop2-hc-2c-4g"),
             ScwInstancesType::POP2_HC_32C_64G => write!(f, "pop2-hc-32c-64g"),
@@ -415,6 +460,9 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::POP2_HM_32C_256G => write!(f, "pop2-hm-32c-256g"),
             ScwInstancesType::POP2_HM_4C_32G => write!(f, "pop2-hm-4c-32g"),
             ScwInstancesType::POP2_HM_8C_64G => write!(f, "pop2-hm-8c-64g"),
+            ScwInstancesType::POP2_HN_10 => write!(f, "pop2-hn-10"),
+            ScwInstancesType::POP2_HN_3 => write!(f, "pop2-hn-3"),
+            ScwInstancesType::POP2_HN_5 => write!(f, "pop2-hn-5"),
             ScwInstancesType::PRO2_L => write!(f, "pro2-l"),
             ScwInstancesType::PRO2_M => write!(f, "pro2-m"),
             ScwInstancesType::PRO2_S => write!(f, "pro2-s"),
@@ -473,11 +521,16 @@ impl FromStr for ScwInstancesType {
             "play2-nano" => Ok(ScwInstancesType::PLAY2_NANO),
             "play2-pico" => Ok(ScwInstancesType::PLAY2_PICO),
             "pop2-16c-64g" => Ok(ScwInstancesType::POP2_16C_64G),
+            "pop2-16c-64g-win" => Ok(ScwInstancesType::POP2_16C_64G_WIN),
             "pop2-2c-8g" => Ok(ScwInstancesType::POP2_2C_8G),
+            "pop2-2c-8g-win" => Ok(ScwInstancesType::POP2_2C_8G_WIN),
             "pop2-32c-128g" => Ok(ScwInstancesType::POP2_32C_128G),
+            "pop2-32c-128g-win" => Ok(ScwInstancesType::POP2_32C_128G_WIN),
             "pop2-4c-16g" => Ok(ScwInstancesType::POP2_4C_16G),
+            "pop2-4c-16g-win" => Ok(ScwInstancesType::POP2_4C_16G_WIN),
             "pop2-64c-256g" => Ok(ScwInstancesType::POP2_64C_256G),
             "pop2-8c-32g" => Ok(ScwInstancesType::POP2_8C_32G),
+            "pop2-8c-32g-win" => Ok(ScwInstancesType::POP2_8C_32G_WIN),
             "pop2-hc-16c-32g" => Ok(ScwInstancesType::POP2_HC_16C_32G),
             "pop2-hc-2c-4g" => Ok(ScwInstancesType::POP2_HC_2C_4G),
             "pop2-hc-32c-64g" => Ok(ScwInstancesType::POP2_HC_32C_64G),
@@ -489,6 +542,9 @@ impl FromStr for ScwInstancesType {
             "pop2-hm-32c-256g" => Ok(ScwInstancesType::POP2_HM_32C_256G),
             "pop2-hm-4c-32g" => Ok(ScwInstancesType::POP2_HM_4C_32G),
             "pop2-hm-8c-64g" => Ok(ScwInstancesType::POP2_HM_8C_64G),
+            "pop2-hn-10" => Ok(ScwInstancesType::POP2_HN_10),
+            "pop2-hn-3" => Ok(ScwInstancesType::POP2_HN_3),
+            "pop2-hn-5" => Ok(ScwInstancesType::POP2_HN_5),
             "pro2-l" => Ok(ScwInstancesType::PRO2_L),
             "pro2-m" => Ok(ScwInstancesType::PRO2_M),
             "pro2-s" => Ok(ScwInstancesType::PRO2_S),
@@ -602,11 +658,16 @@ mod tests {
                     ScwInstancesType::PLAY2_NANO => "play2-nano",
                     ScwInstancesType::PLAY2_PICO => "play2-pico",
                     ScwInstancesType::POP2_16C_64G => "pop2-16c-64g",
+                    ScwInstancesType::POP2_16C_64G_WIN => "pop2-16c-64g-win",
                     ScwInstancesType::POP2_2C_8G => "pop2-2c-8g",
+                    ScwInstancesType::POP2_2C_8G_WIN => "pop2-2c-8g-win",
                     ScwInstancesType::POP2_32C_128G => "pop2-32c-128g",
+                    ScwInstancesType::POP2_32C_128G_WIN => "pop2-32c-128g-win",
                     ScwInstancesType::POP2_4C_16G => "pop2-4c-16g",
+                    ScwInstancesType::POP2_4C_16G_WIN => "pop2-4c-16g-win",
                     ScwInstancesType::POP2_64C_256G => "pop2-64c-256g",
                     ScwInstancesType::POP2_8C_32G => "pop2-8c-32g",
+                    ScwInstancesType::POP2_8C_32G_WIN => "pop2-8c-32g-win",
                     ScwInstancesType::POP2_HC_16C_32G => "pop2-hc-16c-32g",
                     ScwInstancesType::POP2_HC_2C_4G => "pop2-hc-2c-4g",
                     ScwInstancesType::POP2_HC_32C_64G => "pop2-hc-32c-64g",
@@ -618,6 +679,9 @@ mod tests {
                     ScwInstancesType::POP2_HM_32C_256G => "pop2-hm-32c-256g",
                     ScwInstancesType::POP2_HM_4C_32G => "pop2-hm-4c-32g",
                     ScwInstancesType::POP2_HM_8C_64G => "pop2-hm-8c-64g",
+                    ScwInstancesType::POP2_HN_10 => "pop2-hn-10",
+                    ScwInstancesType::POP2_HN_3 => "pop2-hn-3",
+                    ScwInstancesType::POP2_HN_5 => "pop2-hn-5",
                     ScwInstancesType::PRO2_L => "pro2-l",
                     ScwInstancesType::PRO2_M => "pro2-m",
                     ScwInstancesType::PRO2_S => "pro2-s",
