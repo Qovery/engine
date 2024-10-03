@@ -2,8 +2,8 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_alb_controller::Aws
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart,
+    HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -228,7 +228,10 @@ pub fn eks_aws_helm_charts(
             .to_common_helm_chart()?;
 
     // AWS UI view
-    let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
+    // TODO(03/10/2024): Remove aws-ui-view after all cluster has been deployed
+    // PR is here https://gitlab.com/qovery/backend/engine/-/merge_requests/1603
+    let mut aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
+    aws_ui_view.chart_info.action = HelmAction::Destroy;
 
     // Vertical pod autoscaler
     let vpa = VpaChart::new(
