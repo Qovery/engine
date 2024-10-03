@@ -9,7 +9,7 @@ variable "eks_karpenter_subnets_zone_a_public" {
 
 # External IPs
 resource "aws_eip" "eip_karpenter_zone_a" {
-  vpc  = true
+  domain = "vpc"
   tags = local.tags_eks_vpc
 }
 
