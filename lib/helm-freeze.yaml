@@ -66,7 +66,7 @@ charts:
       https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
   - name: prometheus-adapter
     repo_name: prometheus-community
-    version: 4.9.0
+    version: 4.11.0
     comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: loki
     repo_name: grafana

@@ -152,12 +152,6 @@ variable "kubernetes_cluster_name" {
   type        = string
 }
 
-variable "ec2_access_cidr_blocks" {
-  description = "Kubernetes CIDR Block"
-  default     = {{ ec2_access_cidr_blocks }}
-  type        = list(string)
-}
-
 # S3 bucket name
 
 variable "s3_bucket_kubeconfig" {

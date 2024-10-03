@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::build_platform::{BuildError, GitCmd};
-use git2::build::{CheckoutBuilder, RepoBuilder};
+use git2::build::CheckoutBuilder;
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
 use git2::{
@@ -194,6 +194,8 @@ where
     }
     #[cfg(feature = "test-git-container")]
     {
+        use git2::build::RepoBuilder;
+
         // git clone is allowed only for tests (git server on testcontainer)
         let mut repo = Repository::init(into_dir.as_ref())?;
         let fetch_status = remote_fetch(repository_url, &commit_id, &mut fo, &repo);

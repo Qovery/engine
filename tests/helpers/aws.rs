@@ -276,21 +276,6 @@ impl Cluster<AWS, Options> for AWS {
             eks_cidr_subnet: "20".to_string(),
             ec2_cidr_subnet: "20".to_string(),
             vpc_custom_routing_table: vec![],
-            eks_access_cidr_blocks: secrets
-                .EKS_ACCESS_CIDR_BLOCKS
-                .as_ref()
-                .unwrap()
-                .replace(['\"', '[', ']'], "")
-                .split(',')
-                .map(|c| c.to_string())
-                .collect(),
-            ec2_access_cidr_blocks: secrets
-                .EKS_ACCESS_CIDR_BLOCKS // FIXME ? use an EC2_ACCESS_CIDR_BLOCKS?
-                .unwrap()
-                .replace(['\"', '[', ']'], "")
-                .split(',')
-                .map(|c| c.to_string())
-                .collect(),
             rds_cidr_subnet: "23".to_string(),
             documentdb_cidr_subnet: "23".to_string(),
             elasticache_cidr_subnet: "23".to_string(),
