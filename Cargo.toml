@@ -83,13 +83,13 @@ vaultrs-login = "0.2.1"
 
 # AWS deps
 tokio = { version = "1.38.1", features = ["full"] }
-rusoto_core = "0.48.0"
-rusoto_sts = "0.48.0"
-rusoto_credential = "0.48.0"
-rusoto_ecr = "0.48.0"
-rusoto_eks = "0.48.0"
-rusoto_s3 = "0.48.0"
-rusoto_signature = "0.48.0"
+rusoto_core = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
+rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }
 aws-config = "1.5.4"
 aws-sdk-elasticloadbalancingv2 = "1.37.0"
 aws-sdk-eks = "1.40.0"
