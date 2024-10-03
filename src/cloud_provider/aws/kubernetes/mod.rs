@@ -128,9 +128,6 @@ pub struct Options {
     #[serde(default)] // TODO: remove default
     pub ec2_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
-    pub eks_access_cidr_blocks: Vec<String>,
-    #[serde(default)] // TODO: remove default
-    pub ec2_access_cidr_blocks: Vec<String>,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
@@ -414,9 +411,6 @@ fn tera_context(
     let eks_cidr_subnet = options.eks_cidr_subnet.clone();
     let ec2_cidr_subnet = options.ec2_cidr_subnet.clone();
 
-    let eks_access_cidr_blocks = format_ips(&options.eks_access_cidr_blocks);
-    let ec2_access_cidr_blocks = format_ips(&options.ec2_access_cidr_blocks);
-
     let qovery_api_url = options.qovery_api_url.clone();
     let rds_cidr_subnet = options.rds_cidr_subnet.clone();
     let documentdb_cidr_subnet = options.documentdb_cidr_subnet.clone();
@@ -589,8 +583,6 @@ fn tera_context(
         "aws_cloudwatch_eks_logs_retention_days",
         &kubernetes.advanced_settings().aws_cloudwatch_eks_logs_retention_days,
     );
-    context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
-    context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
 
     // AWS - EKS/EC2 Metadata
     // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html

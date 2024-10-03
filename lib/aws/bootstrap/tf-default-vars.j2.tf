@@ -65,12 +65,6 @@ variable "kubernetes_cluster_name" {
   type        = string
 }
 
-variable "eks_access_cidr_blocks" {
-  description = "Kubernetes CIDR Block"
-  default     = {{ eks_access_cidr_blocks }}
-  type        = list(string)
-}
-
 variable "cloudwatch_eks_log_groups" {
   description = "AWS cloudwatch log group for EKS"
   default = "{{ cloudwatch_eks_log_group }}"
