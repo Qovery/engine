@@ -4057,8 +4057,7 @@ dependencies = [
 [[package]]
 name = "rusoto_core"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1db30db44ea73551326269adcf7a2169428a054f14faf9e1768f2163494f2fa2"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -4082,8 +4081,7 @@ dependencies = [
 [[package]]
 name = "rusoto_credential"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee0a6c13db5aad6047b6a44ef023dbbc21a056b6dab5be3b79ce4283d5c02d05"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4100,8 +4098,7 @@ dependencies = [
 [[package]]
 name = "rusoto_ecr"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2acfd092a618d37dbfb6f42e519c6e530a11115859a3e1f03d1daf8cc648d09"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4114,8 +4111,7 @@ dependencies = [
 [[package]]
 name = "rusoto_eks"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d36c20a3081a49bae0a30e8a8493b138aa3501c0fabfad1951b8ef347e983e5"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4129,8 +4125,7 @@ dependencies = [
 [[package]]
 name = "rusoto_s3"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7aae4677183411f6b0b412d66194ef5403293917d66e70ab118f07cc24c5b14d"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4142,8 +4137,7 @@ dependencies = [
 [[package]]
 name = "rusoto_signature"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5ae95491c8b4847931e291b151127eccd6ff8ca13f33603eb3d0035ecb05272"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -4168,8 +4162,7 @@ dependencies = [
 [[package]]
 name = "rusoto_sts"
 version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1643f49aa67cb7cb895ebac5a2ff3f991c6dbdc58ad98b28158cd5706aecd1d"
+source = "git+https://github.com/Qovery/rusoto.git?branch=master#0e4818564fab059a40ba1d0914893250e78c95aa"
 dependencies = [
  "async-trait",
  "bytes",
