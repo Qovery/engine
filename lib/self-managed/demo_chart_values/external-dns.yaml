@@ -1,6 +1,6 @@
 fullnameOverride: external-dns
 provider: pdns
-domainFilters: [*domain]
+domainFilters: [*rootDomain]
 txtOwnerId: *shortClusterId
 txtPrefix: *externalDnsPrefix
 pdns:
