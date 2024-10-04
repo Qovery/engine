@@ -376,10 +376,9 @@ impl ContainerRegistry for ScalewayCR {
             }
         }
 
-        Err(ContainerRegistryError::CannotGetRepository {
+        Err(ContainerRegistryError::RepositoryDoesntExistInRegistry {
             registry_name: self.name.to_string(),
             repository_name: repository_name.to_string(),
-            raw_error_message: format!("No repository found with name `{}`", repository_name),
         })
     }
 
@@ -387,6 +386,14 @@ impl ContainerRegistry for ScalewayCR {
         // https://developers.scaleway.com/en/products/registry/api/#delete-c1ac9b
         let repository_to_delete = match self.get_repository(repository_name) {
             Ok(r) => r,
+            Err(ContainerRegistryError::RepositoryDoesntExistInRegistry { .. }) => return Ok(()),
+            Err(ContainerRegistryError::CannotGetRepository { raw_error_message, .. }) => {
+                return Err(ContainerRegistryError::CannotDeleteRepository {
+                    registry_name: self.name.to_string(),
+                    repository_name: repository_name.to_string(),
+                    raw_error_message,
+                })
+            }
             Err(_) => {
                 return Err(ContainerRegistryError::RepositoryDoesntExistInRegistry {
                     registry_name: self.name.to_string(),
