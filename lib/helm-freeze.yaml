@@ -74,7 +74,7 @@ charts:
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana
-    version: 6.15.3    # Remove the Tag override in the helm chart values
+    version: 6.16.6
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
   - name: mongodb
     repo_name: bitnami
