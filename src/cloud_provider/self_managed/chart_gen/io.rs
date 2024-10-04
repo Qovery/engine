@@ -299,11 +299,9 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
-            aws_load_balancer_controller: ServiceEnabled { enabled: true },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
-        value.aws_load_balancer_controller = Some(ChartConfig {
-            override_chart: Some(SupportedCharts::AlbController.to_string()),
-        });
+        value.aws_load_balancer_controller = None;
 
         value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
