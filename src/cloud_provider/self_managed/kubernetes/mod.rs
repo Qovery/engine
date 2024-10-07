@@ -11,7 +11,7 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{self, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::CpuArchitecture;
-use crate::cloud_provider::models::CpuArchitecture::AMD64;
+use crate::cloud_provider::models::CpuArchitecture::{AMD64, ARM64};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::docker;
@@ -147,34 +147,23 @@ impl Kubernetes for SelfManaged {
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
-        match self.kind {
-            Kind::Eks
-            | Kind::Ec2
-            | Kind::ScwKapsule
-            | Kind::Gke
-            | Kind::EksSelfManaged
-            | Kind::GkeSelfManaged
-            | Kind::ScwSelfManaged => vec![AMD64], // we cant know for now so we fall back to amd64
-            Kind::OnPremiseSelfManaged => {
-                // We take what is configured by the engine, if nothing is configured we default to amd64
-                info!("BUILDER_CPU_ARCHITECTURES: {:?}", env::var("BUILDER_CPU_ARCHITECTURES"));
-                let archs: Vec<CpuArchitecture> = env::var("BUILDER_CPU_ARCHITECTURES")
-                    .unwrap_or_default()
-                    .split(',')
-                    .filter_map(|x| docker::Architecture::from_str(x).ok())
-                    .map(|x| match x {
-                        docker::Architecture::AMD64 => AMD64,
-                        docker::Architecture::ARM64 => CpuArchitecture::ARM64,
-                    })
-                    .collect();
-                info!("BUILDER_CPU_ARCHITECTURES: {:?}", archs);
+        // We take what is configured by the engine, if nothing is configured we default to amd64
+        info!("BUILDER_CPU_ARCHITECTURES: {:?}", env::var("BUILDER_CPU_ARCHITECTURES"));
+        let archs: Vec<CpuArchitecture> = env::var("BUILDER_CPU_ARCHITECTURES")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|x| docker::Architecture::from_str(x).ok())
+            .map(|x| match x {
+                docker::Architecture::AMD64 => AMD64,
+                docker::Architecture::ARM64 => ARM64,
+            })
+            .collect();
+        info!("BUILDER_CPU_ARCHITECTURES: {:?}", archs);
 
-                if archs.is_empty() {
-                    vec![AMD64]
-                } else {
-                    archs
-                }
-            }
+        if archs.is_empty() {
+            vec![AMD64]
+        } else {
+            archs
         }
     }
 
