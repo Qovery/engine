@@ -1,7 +1,7 @@
 fullnameOverride: external-dns
 provider: pdns
-domainFilters: [*domain]
-txtOwnerId: *shortClusterId
+domainFilters: [*rootDomain]
+txtOwnerId: *clusterShortId
 txtPrefix: *externalDnsPrefix
 pdns:
   apiUrl: *qoveryDnsUrl

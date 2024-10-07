@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 
@@ -17,7 +18,7 @@ use crate::events::EventDetails;
 use crate::io_models::container::Registry;
 use semver::Version;
 use serde_derive::Deserialize;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::str::FromStr;
 use tempfile::TempDir;
 use url::Url;
@@ -748,7 +749,12 @@ impl Helm {
         Some((registry_url, username, password))
     }
 
-    pub fn upgrade_diff(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    pub fn upgrade_diff(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        helm_diff_output_directory: Option<&Path>,
+    ) -> Result<(), HelmError> {
         let mut args_string: Vec<String> = vec![
             "diff".to_string(),
             "upgrade".to_string(),
@@ -797,12 +803,43 @@ impl Helm {
         args_string.push(chart.name.clone());
         args_string.push(chart.path.clone());
 
+        // preparing output file for diff if requested
+        let mut output_file: Option<File> = match helm_diff_output_directory {
+            None => None,
+            Some(path) => {
+                if !Path::new(path).exists() {
+                    if let Err(e) = fs::create_dir_all(path) {
+                        warn!("Cannot create directory to write diff: {}", e);
+                    }
+                }
+                match OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true) // This will ensure the content is overridden
+                    .open(path.join(format!("{}.diff", chart.name)))
+                {
+                    Ok(f) => Some(f),
+                    Err(e) => {
+                        // Non blocking error, we will emit a warning and continue
+                        warn!("Cannot open file to write diff: {}", e);
+                        None
+                    }
+                }
+            }
+        };
+
         let mut stderr_msg = String::new();
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
             &mut |line| {
                 info!("{}", line);
+                if let Some(f) = output_file.as_mut() {
+                    if let Err(e) = writeln!(f, "{}", line) {
+                        // non blocking error
+                        warn!("Cannot write to file: {}", e);
+                    }
+                }
             },
             &mut |line| {
                 stderr_msg.push_str(&line);
@@ -1632,6 +1669,7 @@ mod tests {
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
+    use tempfile::TempDir;
     use url::Url;
     use uuid::Uuid;
 
@@ -1740,7 +1778,25 @@ mod tests {
     fn test_upgrade_diff() {
         let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade-diff");
 
-        let ret = helm.upgrade_diff(&charts[0], &[]);
+        let ret = helm.upgrade_diff(&charts[0], &[], None);
+        assert!(matches!(ret, Ok(())));
+    }
+
+    #[test]
+    fn test_upgrade_diff_with_output_diffs() {
+        // setup:
+        let helm_diffs_output_dir = TempDir::with_prefix("helm-charts-diffs").expect("Cannot create temp dir");
+        let release_name = "test-upgrade-diff";
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new(release_name);
+
+        // execute:
+        let ret = helm.upgrade_diff(&charts[0], &[], Some(helm_diffs_output_dir.path()));
+
+        // verify:
+        assert!(helm_diffs_output_dir
+            .path()
+            .join(format!("{}.diff", release_name))
+            .exists());
         assert!(matches!(ret, Ok(())));
     }
 

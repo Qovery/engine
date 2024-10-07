@@ -126,6 +126,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             None,
             fs::read_to_string(kubeconfig_path()).ok(),
             temp_dir,
+            None,
         )
         .unwrap(),
     )

@@ -60,7 +60,7 @@ charts:
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: kube-state-metrics
     repo_name: prometheus-community
-    version: 5.15.2
+    version: 5.25.1
     comment: |
       Chart upgrade will require 1.25+
       https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
@@ -74,7 +74,7 @@ charts:
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana
-    version: 6.15.3    # Remove the Tag override in the helm chart values
+    version: 6.16.6
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
   - name: mongodb
     repo_name: bitnami
@@ -112,7 +112,7 @@ charts:
     comment: |
       https://artifacthub.io/packages/helm/bitnami/redis
   - name: iam-eks-user-mapper
-    version: 1.4.1
+    version: 1.4.2
     repo_name: iam-eks-user-mapper
     dest: aws-bootstrap
   - name: datadog

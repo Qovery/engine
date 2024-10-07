@@ -7,7 +7,7 @@ environmentVariables:
   CLUSTER_JWT_TOKEN: *jwtToken
   DOCKER_HOST: tcp://0.0.0.0:2375
   LIB_ROOT_DIR: /home/qovery/lib
-  ORGANIZATION: *shortClusterId
+  ORGANIZATION: *clusterShortId
   ORGANIZATION_ID: *organizationId
   RUST_LOG: "info"
 buildContainer:

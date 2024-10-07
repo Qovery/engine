@@ -10,17 +10,14 @@ metadata:
     {{- end }}
   annotations:
     {{- if not .Values.sidecar.configReloader.enabled }}
-    {{- if not .Values.configmap.enabled }}
-    checksum/config: {{ include (print .Template.BasePath "/secret.yaml") . | sha256sum }}
-    {{- else }}
-    checksum/config: {{ include (print .Template.BasePath "/configmap.yaml") . | sha256sum }}
-    {{- end }}
+    checksum/config: {{ tpl .Values.config.file . | sha256sum }}
     {{- end }}
     {{- with .Values.podAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   serviceAccountName: {{ include "promtail.serviceAccountName" . }}
+  automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
   {{- include "promtail.enableServiceLinks" . | nindent 2 }}
   {{- with .Values.hostNetwork }}
   hostNetwork: {{ . }}
@@ -30,7 +27,7 @@ spec:
   {{- end }}
   {{- with .Values.initContainer }}
   initContainers:
-    {{- toYaml . | nindent 4 }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
   {{- end }}
   {{- with .Values.global.imagePullSecrets | default .Values.imagePullSecrets }}
   imagePullSecrets:
@@ -170,6 +167,6 @@ spec:
     {{- toYaml . | nindent 4 }}
     {{- end }}
     {{- with .Values.extraVolumes }}
-    {{- toYaml . | nindent 4 }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
     {{- end }}
 {{- end }}

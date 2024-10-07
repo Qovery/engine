@@ -165,6 +165,11 @@ pub struct ClusterAdvancedSettings {
     pub gcp_vpc_enable_flow_logs: bool,
     #[serde(alias = "gcp.vpc.flow_logs_sampling")]
     pub gcp_vpc_flow_logs_sampling: Option<Percentage>,
+
+    #[serde(alias = "qovery.static_ip_mode")]
+    pub qovery_static_ip_mode: Option<bool>,
+    #[serde(alias = "k8s.api.allowed_public_access_cidrs")]
+    pub k8s_api_allowed_public_access_cidrs: Option<Vec<String>>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -213,6 +218,8 @@ impl Default for ClusterAdvancedSettings {
             infra_pdb_enabled: false,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
+            qovery_static_ip_mode: None,
+            k8s_api_allowed_public_access_cidrs: None,
         }
     }
 }

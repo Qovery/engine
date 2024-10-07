@@ -39,17 +39,17 @@ variable "eks_subnets_zone_c_public" {
 
 # External IPs
 resource "aws_eip" "eip_zone_a" {
-  vpc = true
+  domain = "vpc"
   tags = local.tags_eks_vpc
 }
 
 resource "aws_eip" "eip_zone_b" {
-  vpc = true
+  domain = "vpc"
   tags = local.tags_eks_vpc
 }
 
 resource "aws_eip" "eip_zone_c" {
-  vpc = true
+  domain = "vpc"
   tags = local.tags_eks_vpc
 }
 

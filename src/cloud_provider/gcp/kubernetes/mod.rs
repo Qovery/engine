@@ -920,6 +920,7 @@ impl Gke {
                 .as_slice(),
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
+            Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
     }

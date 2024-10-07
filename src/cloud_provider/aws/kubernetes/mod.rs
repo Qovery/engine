@@ -53,13 +53,22 @@ use crate::models::third_parties::LetsEncryptConfig;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 
+use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
+use self::ec2::EC2;
+use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::karpenter::Karpenter;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{
     delete_kubeconfig_from_object_storage, fetch_kubeconfig, put_kubeconfig_file_to_object_storage,
 };
+use crate::cmd::command::CommandKiller;
+use crate::cmd::terraform_validators::TerraformValidators;
+use crate::dns_provider::DnsProvider;
+use crate::engine::InfrastructureContext;
+use crate::object_storage::ObjectStorage;
 use crate::services::aws::models::{QoveryAwsSdkConfigEc2, QoveryAwsSdkConfigEks};
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
@@ -68,15 +77,6 @@ use chrono::Duration as ChronoDuration;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use tokio::time::Duration;
-
-use self::addons::aws_kube_proxy::AwsKubeProxyAddon;
-use self::ec2::EC2;
-use self::eks::{delete_eks_nodegroups, select_nodegroups_autoscaling_group_behavior, NodeGroupsDeletionType};
-use crate::cmd::command::CommandKiller;
-use crate::cmd::terraform_validators::TerraformValidators;
-use crate::dns_provider::DnsProvider;
-use crate::engine::InfrastructureContext;
-use crate::object_storage::ObjectStorage;
 
 mod addons;
 pub mod ec2;
@@ -249,9 +249,17 @@ fn tera_context(
     options: &Options,
     eks_upgrade_timeout_in_min: ChronoDuration,
     bootstrap_on_fargate: bool,
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
+
+    let (public_access_cidrs, endpoint_private_access) =
+        generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
+
+    context.insert("public_access_cidrs", &public_access_cidrs);
+    context.insert("endpoint_private_access", &endpoint_private_access);
 
     context.insert("user_provided_network", &false);
     if let Some(user_network_cfg) = &options.user_provided_network {
@@ -948,6 +956,8 @@ fn create(
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
@@ -1039,6 +1049,8 @@ fn create(
             options,
             cluster_upgrade_timeout_in_min,
             bootstrap_on_fargate,
+            advanced_settings,
+            qovery_allowed_public_access_cidrs,
         )?;
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, context) {
@@ -1535,6 +1547,7 @@ fn create(
                     .as_slice(),
                 helm_charts_to_deploy.clone(),
                 kubernetes.context().is_dry_run_deploy(),
+                Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
             ) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
@@ -1565,6 +1578,7 @@ fn create(
                 .as_slice(),
             helm_charts_to_deploy,
             kubernetes.context().is_dry_run_deploy(),
+            Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
         )
         .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
 
@@ -1658,6 +1672,8 @@ fn pause(
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
@@ -1707,6 +1723,8 @@ fn pause(
         options,
         cluster_upgrade_timeout_in_min,
         false,
+        advanced_settings,
+        qovery_allowed_public_access_cidrs,
     )?;
 
     // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
@@ -1866,6 +1884,8 @@ fn delete(
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
     let mut skip_kubernetes_step = false;
@@ -1952,6 +1972,8 @@ fn delete(
         options,
         cluster_upgrade_timeout_in_min,
         false,
+        advanced_settings,
+        qovery_allowed_public_access_cidrs,
     )?;
     context.insert("is_deletion_step", &true);
 
@@ -2462,10 +2484,40 @@ async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Res
         .await
 }
 
+fn generate_public_access_cidrs(
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+) -> (Vec<String>, bool) {
+    let mut endpoint_private_access = false;
+
+    let cidrs = match (
+        advanced_settings.qovery_static_ip_mode.unwrap_or(false),
+        qovery_allowed_public_access_cidrs,
+    ) {
+        (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
+            endpoint_private_access = true;
+
+            match &advanced_settings.k8s_api_allowed_public_access_cidrs {
+                Some(k8s_api_allowed_public_access_cidrs) => [
+                    qovery_allowed_public_access_cidrs.clone(),
+                    k8s_api_allowed_public_access_cidrs.clone(),
+                ]
+                .concat(),
+                None => qovery_allowed_public_access_cidrs.clone(),
+            }
+        }
+        _ => vec!["0.0.0.0/0".to_string()],
+    };
+
+    (cidrs, endpoint_private_access)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
 
+    use super::{define_cluster_upgrade_timeout, generate_public_access_cidrs};
+    use crate::cloud_provider::io::ClusterAdvancedSettings;
     use crate::{
         cloud_provider::{
             aws::kubernetes::{patch_kube_proxy_for_aws_user_network, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION},
@@ -2473,8 +2525,6 @@ mod tests {
         },
         models::kubernetes::{K8sMetadata, K8sPod, K8sPodPhase, K8sPodStatus},
     };
-
-    use super::define_cluster_upgrade_timeout;
 
     #[ignore]
     #[tokio::test]
@@ -2530,5 +2580,108 @@ mod tests {
         assert_eq!(res.0, Duration::minutes(160));
         assert!(res.1.is_some());
         assert!(res.1.unwrap().contains("160 minutes"));
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_any_parameters_set() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: None,
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = None;
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+        assert!(!endpoint_private_access);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_disabled() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(false),
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = None;
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+        assert!(!endpoint_private_access);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_disabled_and_qovey_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(false),
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+        assert!(!endpoint_private_access);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled_but_without_qovery_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.1/32".to_string()]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec![]);
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+        assert!(!endpoint_private_access);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec![]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+        assert!(endpoint_private_access);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled_and_custom_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.4/32".to_string()]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let (cidrs, endpoint_private_access) =
+            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(
+            cidrs,
+            vec![
+                "1.1.1.2/32".to_string(),
+                "1.1.1.3/32".to_string(),
+                "1.1.1.4/32".to_string()
+            ]
+        );
+        assert!(endpoint_private_access);
     }
 }

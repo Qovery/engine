@@ -192,6 +192,7 @@ impl ValuesFile {
                 cluster_short_id: "&clusterShortId set-by-customer".to_string(),
                 organization_id: "&organizationId set-by-customer".to_string(),
                 jwt_token: "&jwtToken set-by-customer".to_string(),
+                root_domain: "&rootDomain set-by-customer".to_string(),
                 domain: "&domain set-by-customer".to_string(),
                 domain_wildcard: "&domainWildcard set-by-customer".to_string(),
                 qovery_dns_url: "&qoveryDnsUrl set-by-customer".to_string(),
@@ -298,11 +299,9 @@ impl ValuesFile {
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
-            aws_load_balancer_controller: ServiceEnabled { enabled: true },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
-        value.aws_load_balancer_controller = Some(ChartConfig {
-            override_chart: Some(SupportedCharts::AlbController.to_string()),
-        });
+        value.aws_load_balancer_controller = None;
 
         value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: false },

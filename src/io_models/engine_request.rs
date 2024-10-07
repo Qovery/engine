@@ -358,6 +358,7 @@ pub struct Kubernetes {
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub kubeconfig: Option<String>,
+    pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
 }
 
 impl Kubernetes {
@@ -424,6 +425,7 @@ impl Kubernetes {
                 decoded_helm_charts_override,
                 self.kubeconfig.clone(),
                 temp_dir,
+                self.qovery_allowed_public_access_cidrs.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),

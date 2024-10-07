@@ -392,6 +392,9 @@ pub trait Kubernetes: Send + Sync {
 
     fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
+    fn helm_charts_diffs_directory(&self) -> PathBuf {
+        self.temp_dir().join("helm-charts-diffs")
+    }
 }
 
 pub trait KubernetesNode {
