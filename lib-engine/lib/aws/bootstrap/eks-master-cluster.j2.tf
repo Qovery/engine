@@ -33,6 +33,15 @@ resource "aws_cloudwatch_log_group" "cloudwatch_eks_log_groups" {
   tags = local.tags_eks
 }
 
+variable "public_access_cidrs" {
+  type    = list(string)
+  default = [
+    {%- for cidr in public_access_cidrs -%}
+    "{{ cidr }}",
+    {%- endfor -%}
+  ]
+}
+
 resource "aws_eks_cluster" "eks_cluster" {
   name            = var.kubernetes_cluster_name
   role_arn        = aws_iam_role.eks_cluster.arn
@@ -67,6 +76,9 @@ resource "aws_eks_cluster" "eks_cluster" {
       aws_subnet.eks_zone_c_public[*].id,
       {% endif %}
     ])
+    public_access_cidrs = var.public_access_cidrs
+    endpoint_private_access =  {{ endpoint_private_access }}
+    endpoint_public_access = true
   }
 
   tags = local.tags_eks
