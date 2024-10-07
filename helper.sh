@@ -136,41 +136,6 @@ function get_release_ga() { ## Get globally available release version
   curl -s -H 'Content-Type: application/json' "https://${QOVERY_API}/engine/serviceVersion?serviceType=ENGINE"  || exit 1
 }
 
-function deploy_engines_infra() { ## Release GA to prod
-  tag=$(generate_image_tag)
-  AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY" \
-  AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY" \
-  AWS_DEFAULT_REGION="$AWS_PROD_DEFAULT_REGION" \
-  helm upgrade --kubeconfig="$AWS_PROD_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-engine-infra qovery-engine \
-  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
-  --set image.tag="$tag",\
-environmentVariables.CLOUD_PROVIDER="aws",\
-environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
-environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.DEPLOYMENT_TYPE="INFRASTRUCTURE",\
-environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
-environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
-environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
-environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
-environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
-environmentVariables.CLUSTER_ID="cb13209d-4e36-48b0-80e2-07e55c414b63",\
-environmentVariables.CLUSTER_JWT_TOKEN="$INFRA_CLUSTER_JWT_TOKEN",\
-rbac.clusterPermission="none",\
-buildContainer.enabled="false",\
-metrics.enabled="true",\
-terminationGracePeriodSeconds="14400",\
-autoscaler.enabled="true",\
-autoscaler.maxReplicas="30",\
-autoscaler.minReplicas="1",\
-autoscaler.averageValue="0.5",\
-engineResources.limits.cpu="1",\
-engineResources.limits.memory="1Gi",\
-engineResources.requests.cpu="300m",\
-engineResources.requests.memory="1Gi"
-}
-
 function deploy_engines_infra_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_ACCESS_KEY" \
@@ -556,10 +521,6 @@ build)
   ;;
 set_release_ga)
   set_release_ga
-  ;;
-# Deploy the engines dedicated for infra deployments
-deploy_engines_infra)
-  deploy_engines_infra
   ;;
 # Deploy on the engines dedicated for customer's environments deployments
 deploy_engines_envs)

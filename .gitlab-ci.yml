@@ -823,7 +823,6 @@ quarantine:
   needs:
     - create-multi-arch-image
   script:
-    - ./helper.sh deploy_engines_infra
     - ./helper.sh deploy_engines_infra_static_ip
   tags:
     - vm-250mcpu-1gmem-0g
