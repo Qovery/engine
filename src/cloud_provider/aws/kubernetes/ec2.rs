@@ -320,6 +320,8 @@ impl Kubernetes for EC2 {
                 &self.zones,
                 &[self.node_group_from_instance_type()],
                 &self.options,
+                &self.advanced_settings,
+                None,
             )
         })
     }
@@ -352,6 +354,8 @@ impl Kubernetes for EC2 {
             &self.options,
             Duration::minutes(0), // not used for EC2
             false,
+            &self.advanced_settings,
+            None,
         )?;
 
         if let Err(e) =
@@ -459,6 +463,8 @@ impl Kubernetes for EC2 {
                 &self.zones,
                 &[],
                 &self.options,
+                &self.advanced_settings,
+                None,
             )
         })
     }
@@ -485,6 +491,8 @@ impl Kubernetes for EC2 {
                 &self.zones,
                 &[self.node_group_from_instance_type()],
                 &self.options,
+                &self.advanced_settings,
+                None,
             )
         })
     }

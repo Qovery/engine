@@ -78,6 +78,7 @@ pub struct EKS {
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
+    qovery_allowed_public_access_cidrs: Option<Vec<String>>,
 }
 
 impl EKS {
@@ -97,6 +98,7 @@ impl EKS {
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
+        qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -129,6 +131,7 @@ impl EKS {
             customer_helm_charts_override,
             kubeconfig,
             temp_dir,
+            qovery_allowed_public_access_cidrs,
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
@@ -302,6 +305,8 @@ impl Kubernetes for EKS {
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
+                &self.advanced_settings,
+                self.qovery_allowed_public_access_cidrs.as_ref(),
             )
         })
     }
@@ -357,6 +362,8 @@ impl Kubernetes for EKS {
             &self.options,
             cluster_upgrade_timeout_in_min,
             false,
+            &self.advanced_settings,
+            self.qovery_allowed_public_access_cidrs.as_ref(),
         )?;
 
         //
@@ -655,6 +662,8 @@ impl Kubernetes for EKS {
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
+                &self.advanced_settings,
+                self.qovery_allowed_public_access_cidrs.as_ref(),
             )
         })
     }
@@ -681,6 +690,8 @@ impl Kubernetes for EKS {
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
+                &self.advanced_settings,
+                self.qovery_allowed_public_access_cidrs.as_ref(),
             )
         })
     }

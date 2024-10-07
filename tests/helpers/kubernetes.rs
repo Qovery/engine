@@ -379,6 +379,7 @@ pub fn get_environment_test_kubernetes(
                     None,
                     secrets.AWS_TEST_KUBECONFIG,
                     temp_dir,
+                    None,
                 )
                 .unwrap(),
             )
