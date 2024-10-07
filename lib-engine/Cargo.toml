@@ -197,6 +197,17 @@ test-all-infra = [
     "test-gcp-infra",
 ]
 
+test-aws-infra-upgrade = []
+test-aws-ec2-infra-upgrade = []
+test-scw-infra-upgrade = []
+test-gcp-infra-upgrade = []
+test-all-infra-upgrade = [
+    "test-aws-infra-upgrade",
+    "test-aws-ec2-infra-upgrade",
+    "test-scw-infra-upgrade",
+    "test-gcp-infra-upgrade",
+]
+
 test-aws-whole-enchilada = []
 test-aws-ec2-whole-enchilada = []
 test-scw-whole-enchilada = []

@@ -594,14 +594,26 @@ gcp_whole_enchilada)
 aws_infra)
   run_tests test-aws-infra $commit_id 20
   ;;
+aws_infra_upgrade)
+  run_tests test-aws-infra-upgrade $commit_id 20
+  ;;
 aws_ec2_infra)
   run_tests test-aws-ec2-infra $commit_id 20
+  ;;
+aws_ec2_infra_upgrade)
+  run_tests test-aws-ec2-infra-upgrade $commit_id 20
   ;;
 scw_infra)
   run_tests test-scw-infra $commit_id 20
   ;;
+scw_infra_upgrade)
+  run_tests test-scw-infra-upgrade $commit_id 20
+  ;;
 gcp_infra)
   run_tests test-gcp-infra $commit_id 20
+  ;;
+gcp_infra_upgrade)
+  run_tests test-gcp-infra-upgrade $commit_id 20
   ;;
 quarantine)
   run_tests test-quarantine $commit_id 20

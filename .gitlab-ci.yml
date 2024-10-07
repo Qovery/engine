@@ -355,12 +355,68 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
+aws-infra-upgrade:
+  stage: tests
+  retry: 0
+  timeout: 4 hours
+  when: manual
+  script:
+    - ./helper.sh aws_infra_upgrade
+  tags:
+    - vm-3cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-ec2-infra:
   stage: tests
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_ec2_infra
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-3cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+aws-ec2-infra-upgrade:
+  stage: tests
+  retry: 1
+  timeout: 3 hours
+  when: manual
+  script:
+    - ./helper.sh aws_ec2_infra_upgrade
   dependencies:
     - build-and-lint-code
   tags:
@@ -572,6 +628,34 @@ scw-infra:
     expire_in: 2 week
   interruptible: true
 
+scw-infra-upgrade:
+  stage: tests
+  retry: 1
+  timeout: 4 hours
+  when: manual
+  script:
+    - ./helper.sh scw_infra_upgrade
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-3cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 scw-managed-services:
   stage: tests
   retry: 1
@@ -663,6 +747,34 @@ gcp-infra:
   timeout: 4 hours
   script:
     - ./helper.sh gcp_infra
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-3cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+gcp-infra-upgrade:
+  stage: tests
+  retry: 1
+  timeout: 4 hours
+  when: manual
+  script:
+    - ./helper.sh gcp_infra_upgrade
   dependencies:
     - build-and-lint-code
   tags:
