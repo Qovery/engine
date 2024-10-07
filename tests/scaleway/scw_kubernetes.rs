@@ -11,7 +11,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
-#[cfg(feature = "test-scw-infra")]
+#[cfg(any(feature = "test-scw-infra", feature = "test-scw-infra-upgrade"))]
 fn create_and_destroy_kapsule_cluster(
     zone: ScwZone,
     test_type: ClusterTestType,
@@ -84,40 +84,36 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-scw-infra")]
+#[cfg(feature = "test-scw-infra-upgrade")]
 #[test]
 #[named]
-#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = ScwZone::Paris1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-scw-infra")]
+#[cfg(feature = "test-scw-infra-upgrade")]
 #[test]
 #[named]
-#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
     let zone = ScwZone::Paris2;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-scw-infra")]
+#[cfg(feature = "test-scw-infra-upgrade")]
 #[test]
 #[named]
-#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
     let zone = ScwZone::Amsterdam1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-scw-infra")]
+#[cfg(feature = "test-scw-infra-upgrade")]
 #[test]
 #[named]
-#[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
     let zone = ScwZone::Warsaw1;
     create_and_destroy_kapsule_cluster(zone, ClusterTestType::WithUpgrade, function_name!(), None);
