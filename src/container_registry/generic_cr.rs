@@ -4,7 +4,8 @@ use base64::Engine;
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{
-    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
+    RepositoryInfo,
 };
 
 use crate::io_models::context::Context;
@@ -74,7 +75,7 @@ impl GenericCr {
             get_shared_image_name: Box::new({
                 let repository = repository_name.clone();
                 move |image_build_context| {
-                    let git_repo_truncated: String = take_last_x_chars(
+                    let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
                         image_build_context.git_repo_url_sanitized.as_str(),
                         MAX_REGISTRY_NAME_LENGTH,
                     );
@@ -93,7 +94,7 @@ impl GenericCr {
             get_shared_repository_name: Box::new({
                 let repository = repository_name.clone();
                 move |image_build_context| {
-                    let git_repo_truncated: String = take_last_x_chars(
+                    let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
                         image_build_context.git_repo_url_sanitized.as_str(),
                         MAX_REGISTRY_NAME_LENGTH,
                     );

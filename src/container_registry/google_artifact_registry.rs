@@ -2,7 +2,8 @@ use crate::build_platform::Image;
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{
-    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
+    RepositoryInfo,
 };
 use crate::io_models::context::Context;
 use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
@@ -70,8 +71,10 @@ impl GoogleArtifactRegistry {
             registry_docker_json_config: None,
             insecure_registry: false,
             get_shared_image_name: Box::new(move |image_build_context| {
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
+                    image_build_context.git_repo_url_sanitized.as_str(),
+                    MAX_REGISTRY_NAME_LENGTH,
+                );
                 format!(
                     "{}/{}-{}/built-by-qovery",
                     &project_name,
@@ -90,8 +93,10 @@ impl GoogleArtifactRegistry {
                 )
             }),
             get_shared_repository_name: Box::new(|image_build_context| {
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
+                    image_build_context.git_repo_url_sanitized.as_str(),
+                    MAX_REGISTRY_NAME_LENGTH,
+                );
                 format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
             }),
             get_repository_name: Box::new(|repository_name| match repository_name.starts_with("qovery-") {
