@@ -606,14 +606,16 @@ impl Kubernetes for EKS {
             return Err(e);
         }
 
-        // Disable cluster autoscaler deployment and be sure we re-enable it on exist
-        let ev = event_details.clone();
-        let _guard = scopeguard::guard(
-            self.set_cluster_autoscaler_replicas(event_details.clone(), 0, infra_ctx)?,
-            |_| {
-                let _ = self.set_cluster_autoscaler_replicas(ev, 1, infra_ctx);
-            },
-        );
+        if !infra_ctx.kubernetes().is_karpenter_enabled() {
+            // Disable cluster autoscaler deployment and be sure we re-enable it on exist
+            let ev = event_details.clone();
+            let _guard = scopeguard::guard(
+                self.set_cluster_autoscaler_replicas(event_details.clone(), 0, infra_ctx)?,
+                |_| {
+                    let _ = self.set_cluster_autoscaler_replicas(ev, 1, infra_ctx);
+                },
+            );
+        }
 
         terraform_init_validate_plan_apply(
             temp_dir.to_string_lossy().as_ref(),
