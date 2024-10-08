@@ -125,6 +125,15 @@ function build() { ## Build engine app with engine lib
   sccache -s
 }
 
+function update_engine_version() {
+  set -e
+  echo "Updating Rust Engine version to $CI_COMMIT_TAG"
+  sed -ri "s/^(version\s*=\s*\").+\"/\1$CI_COMMIT_TAG\"/" lib-engine/Cargo.toml
+  echo "Updating Engine Helm chart version to $CI_COMMIT_TAG"
+  sed -ri "s/^(version: ).*/\1$CI_COMMIT_TAG\"/" lib-engine/lib/common/bootstrap/charts/qovery-engine/Chart.yaml
+  sed -ri "s/^(appVersion: ).*/\1$CI_COMMIT_TAG\"/" lib-engine/lib/common/bootstrap/charts/qovery-engine/Chart.yaml
+}
+
 function set_release_ga() { ## Release a new engine version and mark it as globally available
   tag=$(generate_image_tag)
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
