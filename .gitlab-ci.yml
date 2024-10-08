@@ -32,11 +32,12 @@ build-and-lint-code:
     - ./helper.sh lint
     - ./helper.sh unused_dependencies
     - ./helper.sh build
-  when: always
   tags:
     - bm-7cpu-16gmem-0g
-  only:
-    - merge_requests
+  when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
   interruptible: true
 
 build-engine-ci-image:
@@ -55,10 +56,10 @@ build-engine-ci-image:
       --push .
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
-  only:
-    - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
 
 release-image:
   stage: build-and-lint
@@ -71,6 +72,7 @@ release-image:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - test ! -z $CI_COMMIT_TAG && ./helper.sh update_engine_version || echo 'WARNING:\ No TAG found, version update will not be performed!'
     - docker buildx build --platform=linux/${IMAGE_ARCH}
       --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
@@ -87,13 +89,12 @@ release-image:
           - arm64
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG
       when: always
       allow_failure: false
 
@@ -108,6 +109,7 @@ release-image-slim:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - test ! -z $CI_COMMIT_TAG && ./helper.sh update_engine_version || echo 'WARNING:\ No TAG found, version update will not be performed!'
     - docker buildx build --platform=linux/${IMAGE_ARCH}
       --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
       --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
@@ -123,16 +125,15 @@ release-image-slim:
           - arm64
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
+  when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG
       when: always
       allow_failure: false
-
 
 create-multi-arch-image:
   stage: build-final
@@ -147,10 +148,30 @@ create-multi-arch-image:
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
   tags:
     - vm-1cpu-1gmem-0g
-  only:
-    refs:
-      - main
-  when: always
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+
+gitlab-release:
+  image: node:20-bookworm-slim
+  stage: build-and-lint
+  # stage: build-final
+  retry: 2
+  variables:
+    GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
+  # dependencies:
+  #   - create-multi-arch-image
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git-core ca-certificates
+    - npm install -g semantic-release @semantic-release/gitlab @semantic-release/changelog @semantic-release/git @semantic-release/release-notes-generator
+  script:
+    - semantic-release
+  tags:
+    - vm-1cpu-1gmem-0g
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+
 #gitguardian:
 #  stage: build-and-lint
 #  image: gitguardian/ggshield:latest
@@ -180,9 +201,8 @@ check-pr-labels-is-set:
   tags:
     - vm-250mcpu-1gmem-0g
   interruptible: true
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 unit-Tests:
   stage: minimal-tests
@@ -215,9 +235,8 @@ scw-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh scw_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -241,9 +260,8 @@ aws-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh aws_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -266,9 +284,8 @@ aws-ec2-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh aws_ec2_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -291,9 +308,8 @@ gcp-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh gcp_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -314,9 +330,8 @@ infra-without-cloud-providers:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh test_local_stack $DOCKER_HOST
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   dependencies:
     - build-and-lint-code
   tags:
@@ -924,10 +939,9 @@ quarantine:
     - ./helper.sh set_release_ga
   tags:
     - vm-250mcpu-1gmem-0g
-  only:
-    refs:
-      - main
-  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 2-deploy-qovery-infra-engines:
   stage: deploy
@@ -939,8 +953,8 @@ quarantine:
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  when: manual
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 3-deploy-qovery-env-engines:
   stage: deploy
@@ -953,8 +967,8 @@ quarantine:
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  when: manual
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 update_qovery_chart:
   stage: deploy
@@ -965,6 +979,6 @@ update_qovery_chart:
     - ./helper.sh update_qovery_chart
   tags:
     - bm-7cpu-16gmem-0g
-  only:
-    refs:
-      - main
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
