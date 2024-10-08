@@ -1,0 +1,23 @@
+version: 2
+builds:
+  - skip: true
+changelog:
+  use: git
+  sort: asc
+  format: >
+    {{.SHA}}: {{.Message}} {{ if contains .Message "!:" }}#BREAKING{{ end }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }}{{ end }})
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?(fix|hotfix)(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Internal changes
+      regexp: '^.*?(chore|refactor)(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Tests
+      regexp: '^.*?tests?(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999

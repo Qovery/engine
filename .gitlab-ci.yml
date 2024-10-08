@@ -18,6 +18,7 @@ stages:
   - minimal-tests
   - tests
   - tests-quarantine
+  - release
   - deploy
 
 ##################
@@ -32,11 +33,12 @@ build-and-lint-code:
     - ./helper.sh lint
     - ./helper.sh unused_dependencies
     - ./helper.sh build
-  when: always
   tags:
     - bm-7cpu-16gmem-0g
-  only:
-    - merge_requests
+  when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
   interruptible: true
 
 build-engine-ci-image:
@@ -55,10 +57,11 @@ build-engine-ci-image:
       --push .
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
-  only:
-    - merge_requests
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
 
 release-image:
   stage: build-and-lint
@@ -87,15 +90,11 @@ release-image:
           - arm64
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: $CI_COMMIT_BRANCH == "main"
-      when: always
-      allow_failure: false
 
 release-image-slim:
   stage: build-and-lint
@@ -123,34 +122,12 @@ release-image-slim:
           - arm64
   tags:
     - vm-1cpu-1gmem-0g
-  when: manual
   interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: $CI_COMMIT_BRANCH == "main"
-      when: always
-      allow_failure: false
 
-
-create-multi-arch-image:
-  stage: build-final
-  retry: 2
-  dependencies:
-    - release-image
-    - release-image-slim
-  before_script:
-    - ci_helper docker_login_public_prod_ecr
-  script:
-    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
-    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
-  tags:
-    - vm-1cpu-1gmem-0g
-  only:
-    refs:
-      - main
-  when: always
 #gitguardian:
 #  stage: build-and-lint
 #  image: gitguardian/ggshield:latest
@@ -180,9 +157,9 @@ check-pr-labels-is-set:
   tags:
     - vm-250mcpu-1gmem-0g
   interruptible: true
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
 
 unit-Tests:
   stage: minimal-tests
@@ -215,9 +192,8 @@ scw-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh scw_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -241,9 +217,8 @@ aws-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh aws_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -266,9 +241,8 @@ aws-ec2-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh aws_ec2_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -291,9 +265,8 @@ gcp-minimal-tests:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh gcp_minimal_tests
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
@@ -314,9 +287,8 @@ infra-without-cloud-providers:
     - ci_helper await_docker_socket
   script:
     - ./helper.sh test_local_stack $DOCKER_HOST
-  only:
-    refs:
-      - merge_requests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   dependencies:
     - build-and-lint-code
   tags:
@@ -911,6 +883,67 @@ quarantine:
   interruptible: true
   allow_failure: true
 
+###########
+# RELEASE #
+###########
+
+create-multi-arch-image:
+  stage: build-final
+  retry: 1
+  before_script:
+    - ci_helper docker_login_public_prod_ecr
+  script:
+    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
+    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
+  tags:
+    - vm-1cpu-1gmem-0g
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: false
+
+docker-tag:
+  stage: release
+  needs:
+    - job: create-multi-arch-image
+  retry: 0
+  before_script:
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 20 ${IMAGE_ARCH}
+    - ci_helper docker_login_public_prod_ecr
+    - ci_helper docker_login_private_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
+  script:
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}
+    - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}-slim
+  tags:
+    - vm-1cpu-1gmem-0g
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+      allow_failure: false
+
+gitlab-release:
+  stage: release
+  retry: 1
+  variables:
+    GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
+    GIT_DEPTH: 0
+  needs:
+    - job: docker-tag
+  # patch versions based on tags and use goreleaser to perform a release
+  script:
+    - ./helper.sh update_engine_version
+    - apt-get update && apt-get install -y golang
+    - unset GITHUB_TOKEN ; curl -sfL https://goreleaser.com/static/run | VERSION=v2.4.4 bash -s -- release --skip=validate --clean
+  tags:
+    - vm-1cpu-1gmem-0g
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+
 ##########
 # DEPLOY #
 ##########
@@ -919,52 +952,51 @@ quarantine:
   stage: deploy
   retry: 2
   dependencies:
-    - create-multi-arch-image
+    - gitlab-release
   script:
     - ./helper.sh set_release_ga
   tags:
     - vm-250mcpu-1gmem-0g
-  only:
-    refs:
-      - main
-  when: manual
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 2-deploy-qovery-infra-engines:
   stage: deploy
   retry: 0
   needs:
-    - create-multi-arch-image
+    - gitlab-release
   script:
     - ./helper.sh deploy_engines_infra_static_ip
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  when: manual
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 3-deploy-qovery-env-engines:
   stage: deploy
   retry: 0
   needs:
-    - create-multi-arch-image
+    - gitlab-release
   script:
     - ./helper.sh deploy_engines_envs
     - ./helper.sh deploy_engines_environment_static_ip
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  when: manual
+    - if: $CI_COMMIT_TAG
+      when: manual
 
 update_qovery_chart:
   stage: deploy
   retry: 1
   dependencies:
-    - create-multi-arch-image
+    - gitlab-release
   script:
     - ./helper.sh update_qovery_chart
   tags:
     - bm-7cpu-16gmem-0g
-  only:
-    refs:
-      - main
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
