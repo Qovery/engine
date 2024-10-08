@@ -80,9 +80,14 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
-      # cant enable http checks due to missing annotations to enable proxy protocol on checks
-      # https://console.scaleway.com/support/tickets/1423150
-      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+      # We use http healthcheck for the load balancer to speed up the detection of the instance being down
+      # during termination of the pods.
+      # With TCP healthcheck, the LB is going to keep the instance in the pool as long as the port is open,
+      # even if nginx will refuse new connections, because it is shutting down.
+      # Doing real http healthcheck, will minimize the time the LB will keep the instance in the pool.
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-type: "80:http;443:https"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-http-uri: "80:/healthz;443:/healthz"
+      service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy: "true"
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
       service.beta.kubernetes.io/scw-loadbalancer-health-check-delay: "2s"
       service.beta.kubernetes.io/scw-loadbalancer-health-check-timeout: "2s"
