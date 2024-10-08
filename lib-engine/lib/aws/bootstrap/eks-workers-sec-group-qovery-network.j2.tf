@@ -45,18 +45,4 @@ resource "aws_security_group_rule" "node_ingress_cluster" {
   type                     = "ingress"
 }
 
-############################################
-# Worker Node Access to EKS Master Cluster #
-############################################
-
-resource "aws_security_group_rule" "cluster_ingress_node_https" {
-  description              = "Allow pods to communicate with the cluster API Server"
-  from_port                = 443
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.eks_cluster.id
-  source_security_group_id = aws_security_group.eks_cluster_workers.id
-  to_port                  = 443
-  type                     = "ingress"
-}
-
 {%- endif -%}
