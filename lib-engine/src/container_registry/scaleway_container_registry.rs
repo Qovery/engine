@@ -5,7 +5,8 @@ use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use crate::container_registry::{
-    take_last_x_chars, ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
+    RepositoryInfo,
 };
 use crate::io_models::context::Context;
 use crate::models::scaleway::ScwRegion;
@@ -62,8 +63,10 @@ impl ScalewayCR {
 
             get_shared_image_name: Box::new(|image_build_context| {
                 // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
+                    image_build_context.git_repo_url_sanitized.as_str(),
+                    MAX_REGISTRY_NAME_LENGTH,
+                );
                 format!(
                     "{}-{}/built-by-qovery",
                     image_build_context.cluster_id.short(),
@@ -73,8 +76,10 @@ impl ScalewayCR {
             get_image_name: Box::new(move |img_name| format!("{img_name}/{img_name}")),
             get_shared_repository_name: Box::new(|image_build_context| {
                 // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
-                let git_repo_truncated: String =
-                    take_last_x_chars(image_build_context.git_repo_url_sanitized.as_str(), MAX_REGISTRY_NAME_LENGTH);
+                let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
+                    image_build_context.git_repo_url_sanitized.as_str(),
+                    MAX_REGISTRY_NAME_LENGTH,
+                );
                 format!("{}-{}", image_build_context.cluster_id.short(), git_repo_truncated)
             }),
             get_repository_name: Box::new(|repository_name| repository_name.to_string()),

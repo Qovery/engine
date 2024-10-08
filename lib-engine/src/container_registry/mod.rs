@@ -150,7 +150,38 @@ pub struct RepositoryInfo {
     pub created: bool,
 }
 
+fn take_last_x_chars_and_remove_leading_dash_char(input: &str, max_length: usize) -> String {
+    let truncated = take_last_x_chars(input, max_length);
+    match truncated.chars().next() {
+        Some('-') => truncated.chars().skip(1).collect(),
+        _ => truncated,
+    }
+}
+
 fn take_last_x_chars(input: &str, max_length: usize) -> String {
     let length_to_skip = input.len().saturating_sub(max_length);
     input.chars().skip(length_to_skip).collect()
+}
+
+#[cfg(test)]
+mod test {
+    use crate::container_registry::take_last_x_chars_and_remove_leading_dash_char;
+
+    #[test]
+    fn when_string_is_starting_by_dash_remove_it() {
+        let result = take_last_x_chars_and_remove_leading_dash_char("-test", 5);
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn when_string_has_inner_dash_remove_it() {
+        let result = take_last_x_chars_and_remove_leading_dash_char("removed-test", 5);
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn when_string_has_no_dash_dont_remove_anything() {
+        let result = take_last_x_chars_and_remove_leading_dash_char("totest", 4);
+        assert_eq!(result, "test");
+    }
 }
