@@ -26,7 +26,7 @@ fn create_and_destroy_eks_cluster(
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let cluster_id = generate_cluster_id(region.to_string().as_str());
         let organization_id = generate_organization_id(region.to_string().as_str());
-        let zones = region.get_zones();
+        let zones = region.zones();
         cluster_test(
             test_name,
             Kind::Aws,
@@ -58,7 +58,7 @@ fn create_and_destroy_arm64_eks_cluster(
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let cluster_id = generate_cluster_id(region.to_string().as_str());
         let organization_id = generate_organization_id(region.to_string().as_str());
-        let zones = region.get_zones();
+        let zones = region.zones();
         cluster_test(
             test_name,
             Kind::Aws,
