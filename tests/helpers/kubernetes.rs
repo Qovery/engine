@@ -66,11 +66,30 @@ pub fn cluster_test(
     let _enter = span.enter();
 
     let kubernetes_boot_version = match kubernetes_kind {
-        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
-        KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
-        KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
+        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => match test_type {
+            ClusterTestType::WithUpgrade => AWS_KUBERNETES_VERSION.previous_version().expect("No previous version"),
+            _ => AWS_KUBERNETES_VERSION,
+        },
+        KubernetesKind::Ec2 => match test_type {
+            ClusterTestType::WithUpgrade => AWS_EC2_KUBERNETES_VERSION
+                .previous_version()
+                .expect("No previous version"),
+            _ => AWS_EC2_KUBERNETES_VERSION.clone(),
+        },
+        KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => match test_type {
+            ClusterTestType::WithUpgrade => SCW_KUBERNETES_VERSION.previous_version().expect("No previous version"),
+            _ => SCW_KUBERNETES_VERSION,
+        },
+        KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => match test_type {
+            ClusterTestType::WithUpgrade => GCP_KUBERNETES_VERSION.previous_version().expect("No previous version"),
+            _ => GCP_KUBERNETES_VERSION,
+        },
+        KubernetesKind::OnPremiseSelfManaged => match test_type {
+            ClusterTestType::WithUpgrade => ON_PREMISE_KUBERNETES_VERSION
+                .previous_version()
+                .expect("No previous version"),
+            _ => ON_PREMISE_KUBERNETES_VERSION,
+        },
     };
 
     let mut engine = match provider_kind {

@@ -61,3 +61,10 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
 fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_1() {
     create_and_destroy_aws_ec2_k3s_cluster(ClusterTestType::Classic, WithoutNatGateways, function_name!());
 }
+
+#[cfg(feature = "test-aws-ec2-infra-upgrade")]
+#[named]
+#[test]
+fn create_upgrade_and_destroy_aws_ec2_k3s_cluster_eu_west_1() {
+    create_and_destroy_aws_ec2_k3s_cluster(ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
+}

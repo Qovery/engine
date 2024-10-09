@@ -20,6 +20,7 @@ impl AwsEbsCsiAddon {
                 KubernetesVersion::V1_26 { .. } => "v1.20.0-eksbuild.1",
                 KubernetesVersion::V1_27 { .. } => "v1.26.1-eksbuild.1",
                 KubernetesVersion::V1_28 { .. } => "v1.27.0-eksbuild.1",
+                KubernetesVersion::V1_29 { .. } => "v1.33.0-eksbuild.1",
             }
             .to_string(),
         }
@@ -45,16 +46,78 @@ mod tests {
             expected: AwsEbsCsiAddon,
         }
 
-        let tests_cases = vec![TestCase {
-            k8s_version: KubernetesVersion::V1_26 {
-                prefix: None,
-                patch: None,
-                suffix: None,
+        let tests_cases = vec![
+            TestCase {
+                k8s_version: KubernetesVersion::V1_23 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.15.0-eksbuild.1".to_string(),
+                },
             },
-            expected: AwsEbsCsiAddon {
-                version: "v1.20.0-eksbuild.1".to_string(),
+            TestCase {
+                k8s_version: KubernetesVersion::V1_24 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.19.0-eksbuild.1".to_string(),
+                },
             },
-        }];
+            TestCase {
+                k8s_version: KubernetesVersion::V1_25 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.19.0-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_26 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.20.0-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_27 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.26.1-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_28 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.27.0-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_29 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsEbsCsiAddon {
+                    version: "v1.33.0-eksbuild.1".to_string(),
+                },
+            },
+        ];
 
         for tc in tests_cases {
             // execute:

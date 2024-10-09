@@ -20,6 +20,7 @@ impl AwsKubeProxyAddon {
                 KubernetesVersion::V1_26 { .. } => "v1.26.2-eksbuild.1",
                 KubernetesVersion::V1_27 { .. } => "v1.27.6-eksbuild.2",
                 KubernetesVersion::V1_28 { .. } => "v1.28.2-eksbuild.2",
+                KubernetesVersion::V1_29 { .. } => "v1.29.0-eksbuild.1",
             }
             .to_string(),
         }
@@ -47,6 +48,16 @@ mod tests {
 
         let tests_cases = vec![
             TestCase {
+                k8s_version: KubernetesVersion::V1_23 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.23.16-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
                 k8s_version: KubernetesVersion::V1_24 {
                     prefix: None,
                     patch: None,
@@ -64,6 +75,46 @@ mod tests {
                 },
                 expected: AwsKubeProxyAddon {
                     version: "v1.25.6-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_26 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.26.2-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_27 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.27.6-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_28 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.28.2-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_29 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.29.0-eksbuild.1".to_string(),
                 },
             },
         ];

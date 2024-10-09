@@ -21,6 +21,7 @@ impl AwsVpcCniAddon {
                 KubernetesVersion::V1_26 { .. } => "v1.13.2-eksbuild.1",
                 KubernetesVersion::V1_27 { .. } => "v1.15.1-eksbuild.1",
                 KubernetesVersion::V1_28 { .. } => "v1.18.0-eksbuild.1",
+                KubernetesVersion::V1_29 { .. } => "v1.18.3-eksbuild.2",
             }
             .to_string(),
         }
@@ -85,6 +86,36 @@ mod tests {
                 },
                 expected: AwsVpcCniAddon {
                     version: "v1.13.2-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_27 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsVpcCniAddon {
+                    version: "v1.15.1-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_28 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsVpcCniAddon {
+                    version: "v1.18.0-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_29 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsVpcCniAddon {
+                    version: "v1.18.3-eksbuild.2".to_string(),
                 },
             },
         ];

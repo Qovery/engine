@@ -15,7 +15,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(any(feature = "test-aws-infra", feature = "test-aws-infra-upgrade"))]
 fn create_and_destroy_eks_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -119,10 +119,9 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-upgrade")]
 #[named]
 #[test]
-#[ignore]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(region, ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
@@ -136,4 +135,12 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
 fn create_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_arm64_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
+}
+
+#[cfg(feature = "test-aws-infra-upgrade")]
+#[named]
+#[test]
+fn create_upgrade_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
+    let region = "eu-west-3".to_string();
+    create_and_destroy_arm64_eks_cluster(region, ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
 }

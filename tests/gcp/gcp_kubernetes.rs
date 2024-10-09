@@ -11,7 +11,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 
-#[cfg(feature = "test-gcp-infra")]
+#[cfg(any(feature = "test-gcp-infra", feature = "test-gcp-infra-upgrade"))]
 fn create_and_destroy_gke_cluster(
     region: GcpRegion,
     test_type: ClusterTestType,
@@ -64,10 +64,9 @@ fn create_and_destroy_gke_cluster_with_nat_gateway_in_europe_west_12() {
 }
 
 // only enable this test manually when we want to perform and validate upgrade process
-#[cfg(feature = "test-gcp-infra")]
+#[cfg(feature = "test-gcp-infra-upgrade")]
 #[named]
 #[test]
-#[ignore]
 fn create_upgrade_and_destroy_gke_cluster_in_europe_west_9() {
     let region = GcpRegion::EuropeWest9;
     create_and_destroy_gke_cluster(region, ClusterTestType::WithUpgrade, function_name!(), None);

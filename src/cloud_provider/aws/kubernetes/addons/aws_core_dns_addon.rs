@@ -20,6 +20,7 @@ impl AwsCoreDnsAddon {
                 KubernetesVersion::V1_26 { .. } => "v1.9.3-eksbuild.11",
                 KubernetesVersion::V1_27 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_28 { .. } => "v1.10.1-eksbuild.7",
+                KubernetesVersion::V1_29 { .. } => "v1.10.1-eksbuild.7",
             }
             .to_string(),
         }
@@ -45,16 +46,78 @@ mod tests {
             expected: AwsCoreDnsAddon,
         }
 
-        let tests_cases = vec![TestCase {
-            k8s_version: KubernetesVersion::V1_28 {
-                prefix: None,
-                patch: None,
-                suffix: None,
+        let tests_cases = vec![
+            TestCase {
+                k8s_version: KubernetesVersion::V1_23 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.8.7-eksbuild.10".to_string(),
+                },
             },
-            expected: AwsCoreDnsAddon {
-                version: "v1.10.1-eksbuild.7".to_string(),
+            TestCase {
+                k8s_version: KubernetesVersion::V1_24 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.9.3-eksbuild.11".to_string(),
+                },
             },
-        }];
+            TestCase {
+                k8s_version: KubernetesVersion::V1_25 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.9.3-eksbuild.11".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_26 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.9.3-eksbuild.11".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_27 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.10.1-eksbuild.7".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_28 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.10.1-eksbuild.7".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_29 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.10.1-eksbuild.7".to_string(),
+                },
+            },
+        ];
 
         for tc in tests_cases {
             // execute:
