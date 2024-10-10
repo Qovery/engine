@@ -1206,10 +1206,11 @@ fn create(
         }
     };
 
+    let mut kubernetes_version_upgrade_requested = false;
+
     // upgrade cluster instead if required
     if kubernetes.context().is_first_cluster_deployment() {
         // terraform deployment dedicated to cloud resources
-
         terraform_apply(KubernetesClusterAction::Bootstrap)?;
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
@@ -1244,9 +1245,15 @@ fn create(
             cloud_provider.credentials_environment_variables(),
             event_details.clone(),
             kubernetes.logger(),
+            match kubernetes.is_karpenter_enabled() {
+                true => Some("eks.amazonaws.com/compute-type!=fargate"), // Exclude fargate nodes from the test in case of karpenter, those will be recreated after helm deploy
+                false => None,
+            },
         ) {
             Ok(x) => {
                 if x.required_upgrade_on.is_some() {
+                    kubernetes_version_upgrade_requested = true;
+
                     // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
                     let res = kubernetes.upgrade_with_status(infra_ctx, x);
                     // push endpoint to Vault for EC2
@@ -1440,6 +1447,7 @@ fn create(
                 is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
                 karpenter_parameters: kubernetes.get_karpenter_parameters(),
                 alb_controller_already_deployed: alb_already_deployed,
+                kubernetes_version_upgrade_requested,
             };
             eks_aws_helm_charts(
                 qovery_terraform_config_file.clone().as_str(),

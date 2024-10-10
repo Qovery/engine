@@ -677,6 +677,7 @@ impl Gke {
                 infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
+                None,
             ) {
                 Ok(kubernetes_upgrade_status) => {
                     if kubernetes_upgrade_status.required_upgrade_on.is_some() {
@@ -806,7 +807,7 @@ impl Gke {
         let _ = self.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
 
         // Ensure all nodes are ready on Kubernetes
-        match check_workers_on_create(self, infra_ctx.cloud_provider()) {
+        match check_workers_on_create(self, infra_ctx.cloud_provider(), None) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),

@@ -144,3 +144,15 @@ fn create_upgrade_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_arm64_eks_cluster(region, ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
 }
+
+// Karpenter
+
+#[cfg(feature = "test-aws-infra")]
+#[test]
+#[ignore = "TODO(ENG-1888): To be implemented"]
+fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {}
+
+#[cfg(feature = "test-aws-infra-upgrade")]
+#[test]
+#[ignore = "TODO(ENG-1888): To be implemented"]
+fn create_upgrade_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {}
