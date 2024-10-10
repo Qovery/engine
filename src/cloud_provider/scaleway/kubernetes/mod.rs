@@ -712,6 +712,7 @@ impl Kapsule {
                 infra_ctx.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
+                None,
             ) {
                 Ok(x) => {
                     if x.required_upgrade_on.is_some() {
@@ -1017,7 +1018,7 @@ impl Kapsule {
         ));
 
         // ensure all nodes are ready on Kubernetes
-        match check_workers_on_create(self, infra_ctx.cloud_provider()) {
+        match check_workers_on_create(self, infra_ctx.cloud_provider(), None) {
             Ok(_) => self.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
@@ -1249,7 +1250,7 @@ impl Kapsule {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
 
-        if let Err(e) = check_workers_on_pause(self, infra_ctx.cloud_provider()) {
+        if let Err(e) = check_workers_on_pause(self, infra_ctx.cloud_provider(), None) {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         };
 
@@ -1813,6 +1814,7 @@ impl Kubernetes for Kapsule {
                 self,
                 infra_ctx.cloud_provider(),
                 kubernetes_upgrade_status.requested_version.to_string(),
+                None,
             ) {
                 Ok(_) => {
                     self.logger().log(EngineEvent::Info(

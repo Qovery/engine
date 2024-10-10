@@ -632,6 +632,10 @@ impl Kubernetes for EKS {
             self,
             infra_ctx.cloud_provider(),
             kubernetes_upgrade_status.requested_version.to_string(),
+            match self.is_karpenter_enabled() {
+                true => Some("eks.amazonaws.com/compute-type!=fargate"),
+                false => None,
+            },
         )
         .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
 
