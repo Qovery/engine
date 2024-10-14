@@ -625,6 +625,7 @@ pub fn is_kubernetes_upgrade_required<P>(
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
     logger: &dyn Logger,
+    node_selector: Option<&str>,
 ) -> Result<KubernetesUpgradeStatus, Box<EngineError>>
 where
     P: AsRef<Path>,
@@ -657,7 +658,7 @@ where
 
     // check workers versions
     let mut workers_version: Vec<VersionsNumber> = vec![];
-    let nodes = match kubectl_exec_get_node(kubernetes_config, envs) {
+    let nodes = match kubectl_exec_get_node(kubernetes_config, envs, node_selector) {
         Ok(n) => n,
         Err(e) => return Err(Box::new(EngineError::new_cannot_get_cluster_nodes(event_details, e))),
     };
@@ -723,12 +724,13 @@ pub fn check_workers_upgrade_status<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     target_version: String,
+    node_selector: Option<&str>,
 ) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
     let result = retry::retry(Fixed::from_millis(10000).take(360), || {
-        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone(), node_selector) {
             Err(e) => OperationResult::Retry(e),
             Ok(nodes) => {
                 for node in nodes.items.iter() {
@@ -743,13 +745,13 @@ where
         }
     });
 
-    return match result {
-        Ok(_) => match check_workers_status(kubernetes_config.as_ref(), envs.clone()) {
+    match result {
+        Ok(_) => match check_workers_status(kubernetes_config.as_ref(), envs.clone(), node_selector) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         },
         Err(retry::Error { error, .. }) => Err(error),
-    };
+    }
 }
 
 pub fn check_master_version_status<P>(
@@ -790,12 +792,16 @@ where
     }
 }
 
-pub fn check_workers_status<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>
+pub fn check_workers_status<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    node_selector: Option<&str>,
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
     let result = retry::retry(Fixed::from_millis(10000).take(60), || {
-        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone(), node_selector) {
             Err(e) => OperationResult::Retry(e),
             Ok(nodes) => {
                 let mut conditions: Vec<KubernetesNodeCondition> = Vec::new();
@@ -821,12 +827,16 @@ where
     }
 }
 
-pub fn check_workers_pause<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>
+pub fn check_workers_pause<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    node_selector: Option<&str>,
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
     let result = retry::retry(Fixed::from_millis(10000).take(60), || {
-        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone(), node_selector) {
             //TODO: handle error properly
             Err(_) => OperationResult::Ok(()),
             Ok(nodes) => {

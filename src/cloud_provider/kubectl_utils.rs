@@ -12,12 +12,14 @@ pub fn check_workers_on_upgrade(
     kube: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     targeted_version: String,
+    node_selector: Option<&str>,
 ) -> Result<(), CommandError> {
     send_progress_on_long_task(kube, Action::Create, || {
         check_workers_upgrade_status(
             kube.kubeconfig_local_file_path(),
             cloud_provider.credentials_environment_variables(),
             targeted_version.clone(),
+            node_selector,
         )
     })
 }
@@ -36,20 +38,30 @@ pub fn check_control_plane_on_upgrade(
     })
 }
 
-pub fn check_workers_on_create(kube: &dyn Kubernetes, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError> {
+pub fn check_workers_on_create(
+    kube: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    node_selector: Option<&str>,
+) -> Result<(), CommandError> {
     send_progress_on_long_task(kube, Action::Create, || {
         check_workers_status(
             kube.kubeconfig_local_file_path(),
             cloud_provider.credentials_environment_variables(),
+            node_selector,
         )
     })
 }
 
-pub fn check_workers_on_pause(kube: &dyn Kubernetes, cloud_provider: &dyn CloudProvider) -> Result<(), CommandError> {
+pub fn check_workers_on_pause(
+    kube: &dyn Kubernetes,
+    cloud_provider: &dyn CloudProvider,
+    node_selector: Option<&str>,
+) -> Result<(), CommandError> {
     send_progress_on_long_task(kube, Action::Create, || {
         check_workers_pause(
             kube.kubeconfig_local_file_path(),
             cloud_provider.credentials_environment_variables(),
+            node_selector,
         )
     })
 }

@@ -14,6 +14,7 @@ pub struct KarpenterChart {
     aws_iam_karpenter_controller_role_arn: String,
     replace_cluster_autoscaler: bool,
     enable_monitoring: bool,
+    recreate_pods: bool,
 }
 
 impl KarpenterChart {
@@ -23,6 +24,7 @@ impl KarpenterChart {
         aws_iam_karpenter_controller_role_arn: String,
         replace_cluster_autoscaler: bool,
         enable_monitoring: bool,
+        recreate_pods: bool,
     ) -> Self {
         KarpenterChart {
             chart_path: HelmChartPath::new(
@@ -39,6 +41,7 @@ impl KarpenterChart {
             aws_iam_karpenter_controller_role_arn,
             replace_cluster_autoscaler,
             enable_monitoring,
+            recreate_pods,
         }
     }
 
@@ -77,6 +80,7 @@ impl ToCommonHelmChart for KarpenterChart {
                         value: self.enable_monitoring.to_string(),
                     },
                 ],
+                recreate_pods: self.recreate_pods,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
@@ -142,7 +146,7 @@ mod tests {
     #[test]
     fn karpenter_chart_directory_exists_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -168,7 +172,7 @@ mod tests {
     #[test]
     fn karpenter_chart_values_file_exists_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -195,7 +199,7 @@ mod tests {
     #[test]
     fn karpenter_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true);
+        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

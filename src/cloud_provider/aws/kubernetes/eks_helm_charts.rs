@@ -111,6 +111,7 @@ pub struct EksChartsConfigPrerequisites {
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub alb_controller_already_deployed: bool,
+    pub kubernetes_version_upgrade_requested: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -251,6 +252,7 @@ pub fn eks_aws_helm_charts(
         qovery_terraform_config.karpenter_controller_aws_role_arn.clone(),
         chart_config_prerequisites.is_karpenter_enabled,
         false,
+        chart_config_prerequisites.kubernetes_version_upgrade_requested,
     )
     .to_common_helm_chart()?;
 
@@ -263,6 +265,7 @@ pub fn eks_aws_helm_charts(
         qovery_terraform_config.karpenter_controller_aws_role_arn,
         chart_config_prerequisites.is_karpenter_enabled,
         true,
+        chart_config_prerequisites.kubernetes_version_upgrade_requested,
     )
     .to_common_helm_chart()?;
 

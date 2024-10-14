@@ -500,11 +500,18 @@ where
 pub fn kubectl_exec_get_node<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
+    selector: Option<&str>,
 ) -> Result<KubernetesList<KubernetesNode>, CommandError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, KubernetesList<KubernetesNode>>(vec!["get", "node", "-o", "json"], kubernetes_config, envs)
+    let mut args = vec!["get", "node", "-o", "json"];
+    if let Some(s) = selector {
+        args.push("--selector");
+        args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesNode>>(args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_count_all_objects<P>(
