@@ -1,12 +1,17 @@
 use crate::cloud_provider::models::CustomDomain;
-use crate::cloud_provider::utilities::{await_domain_resolve_cname, await_domain_resolve_ip};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::models::abort::Abort;
 use std::net::IpAddr;
+use std::thread;
 use std::time::Duration;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::error::ResolveError;
+use trust_dns_resolver::lookup_ip::LookupIp;
+use trust_dns_resolver::proto::rr::{RData, RecordType};
+use trust_dns_resolver::{Name, Resolver};
 
 pub struct CheckDnsForDomains<'a> {
     pub resolve_to_ip: Vec<String>,
@@ -15,6 +20,90 @@ pub struct CheckDnsForDomains<'a> {
 }
 
 const DEFAULT_CHECK_FREQUENCY: Duration = Duration::from_secs(30);
+
+fn dns_resolvers() -> Vec<Resolver> {
+    let mut resolver_options = ResolverOpts::default();
+
+    //  We want to avoid cache and using host file of the host, as some provider force caching
+    //  which lead to stale response
+    resolver_options.cache_size = 0;
+    resolver_options.use_hosts_file = true;
+    //resolver_options.ip_strategy = LookupIpStrategy::Ipv4Only;
+
+    vec![
+        Resolver::new(ResolverConfig::google(), resolver_options).expect("Invalid google DNS resolver configuration"),
+        Resolver::new(ResolverConfig::cloudflare(), resolver_options)
+            .expect("Invalid cloudflare DNS resolver configuration"),
+        Resolver::new(ResolverConfig::quad9(), resolver_options).expect("Invalid quad9 DNS resolver configuration"),
+        Resolver::from_system_conf().expect("Invalid system DNS resolver configuration"),
+    ]
+}
+
+fn await_resolve<R>(
+    with_resolver: &impl Fn(&Resolver) -> Result<R, ResolveError>,
+    check_frequency: Duration,
+    should_abort: &CommandKiller,
+) -> Result<R, ResolveError> {
+    let resolvers = dns_resolvers();
+
+    let mut ix: usize = 0;
+    let mut next_resolver = || {
+        let resolver = &resolvers[ix % resolvers.len()];
+        ix += 1;
+        resolver
+    };
+
+    loop {
+        match with_resolver(next_resolver()) {
+            Ok(ip) => break Ok(ip),
+            Err(err) => {
+                if should_abort.should_abort().is_some() {
+                    break Err(err);
+                }
+
+                thread::sleep(check_frequency)
+            }
+        }
+    }
+}
+
+fn await_domain_resolve_cname<'a>(
+    domain_to_check: impl Fn() -> &'a str,
+    check_frequency: Duration,
+    should_abort: CommandKiller,
+) -> Result<Name, ResolveError> {
+    await_resolve(
+        &|resolver| {
+            resolver
+                .lookup(domain_to_check(), RecordType::CNAME)
+                .into_iter()
+                .flat_map(|lookup| lookup.into_iter())
+                .filter_map(|rdata| {
+                    if let RData::CNAME(cname) = rdata {
+                        Some(cname.0)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+                .ok_or_else(|| ResolveError::from("no CNAME record available for this domain"))
+        },
+        check_frequency,
+        &should_abort,
+    )
+}
+
+fn await_domain_resolve_ip<'a>(
+    domain_to_check: impl Fn() -> &'a str,
+    check_frequency: Duration,
+    should_abort: CommandKiller,
+) -> Result<LookupIp, ResolveError> {
+    await_resolve(
+        &|resolver| resolver.lookup_ip(domain_to_check()),
+        check_frequency,
+        &should_abort,
+    )
+}
 
 fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), abort: &dyn Abort) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
@@ -108,5 +197,21 @@ impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
 
     fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test_cname_resolution() {
+        let cname = await_domain_resolve_cname(
+            || "ci-test-no-delete.qovery.io",
+            Duration::from_secs(10),
+            CommandKiller::from_timeout(Duration::from_secs(30)),
+        );
+
+        assert_eq!(cname.unwrap().to_utf8(), String::from("qovery.io."));
     }
 }
