@@ -1382,7 +1382,10 @@ fn create(
     // https://aws.amazon.com/premiumsupport/knowledge-center/eks-troubleshoot-unhealthy-targets-nlb/
     // https://github.com/kubernetes/kubernetes/issues/80579
     // https://github.com/kubernetes/cloud-provider-aws/issues/87
-    if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
+    if kubernetes.is_network_managed_by_user()
+        && kubernetes.kind() == Kind::Eks
+        && !kubernetes.advanced_settings().aws_eks_enable_alb_controller
+    {
         info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
         block_on(patch_kube_proxy_for_aws_user_network(
             infra_ctx.mk_kube_client()?.client().clone(),
