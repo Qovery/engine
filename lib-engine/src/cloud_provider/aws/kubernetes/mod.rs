@@ -605,16 +605,16 @@ fn tera_context(
     context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
     context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
     context.insert(
-        "database_postgresql_deny_public_access",
-        &kubernetes.advanced_settings().database_postgresql_deny_public_access,
+        "database_postgresql_deny_any_access",
+        &kubernetes.advanced_settings().database_postgresql_deny_any_access,
     );
     context.insert(
         "database_postgresql_allowed_cidrs",
         &format_ips(&kubernetes.advanced_settings().database_postgresql_allowed_cidrs),
     );
     context.insert(
-        "database_mysql_deny_public_access",
-        &kubernetes.advanced_settings().database_mysql_deny_public_access,
+        "database_mysql_deny_any_access",
+        &kubernetes.advanced_settings().database_mysql_deny_any_access,
     );
     context.insert(
         "database_mysql_allowed_cidrs",
@@ -627,8 +627,8 @@ fn tera_context(
     context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
     context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
     context.insert(
-        "database_mongodb_deny_public_access",
-        &kubernetes.advanced_settings().database_mongodb_deny_public_access,
+        "database_mongodb_deny_any_access",
+        &kubernetes.advanced_settings().database_mongodb_deny_any_access,
     );
     context.insert(
         "database_mongodb_allowed_cidrs",
@@ -641,8 +641,8 @@ fn tera_context(
     context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
     context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
     context.insert(
-        "database_redis_deny_public_access",
-        &kubernetes.advanced_settings().database_redis_deny_public_access,
+        "database_redis_deny_any_access",
+        &kubernetes.advanced_settings().database_redis_deny_any_access,
     );
     context.insert(
         "database_redis_allowed_cidrs",
