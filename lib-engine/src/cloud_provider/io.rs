@@ -116,22 +116,18 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_encrypt_secrets_kms_key_arn: String,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
-    #[serde(alias = "database.postgresql.deny_public_access")]
     #[serde(alias = "database.postgresql.deny_any_access")]
     pub database_postgresql_deny_any_access: bool,
     #[serde(alias = "database.postgresql.allowed_cidrs")]
     pub database_postgresql_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.mysql.deny_public_access")]
     #[serde(alias = "database.mysql.deny_any_access")]
     pub database_mysql_deny_any_access: bool,
     #[serde(alias = "database.mysql.allowed_cidrs")]
     pub database_mysql_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.redis.deny_public_access")]
     #[serde(alias = "database.redis.deny_any_access")]
     pub database_redis_deny_any_access: bool,
     #[serde(alias = "database.redis.allowed_cidrs")]
     pub database_redis_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.mongodb.deny_public_access")]
     #[serde(alias = "database.mongodb.deny_any_access")]
     pub database_mongodb_deny_any_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
