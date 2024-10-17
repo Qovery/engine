@@ -89,7 +89,7 @@ resource "aws_docdb_subnet_group" "documentdb" {
 
 # Todo: create a bastion to avoid this
 
-{% if not database_mongodb_deny_public_access -%}
+{% if not database_mongodb_deny_any_access -%}
 resource "aws_security_group_rule" "documentdb_remote_access" {
   cidr_blocks       = var.database_mongodb_allowed_cidrs
   description       = "Allow DocumentDB incoming access from anywhere"

@@ -89,7 +89,7 @@ resource "aws_elasticache_subnet_group" "elasticache" {
 
 # Todo: create a bastion to avoid this
 
-{% if not database_redis_deny_public_access -%}
+{% if not database_redis_deny_any_access -%}
 resource "aws_security_group_rule" "elasticache_remote_access" {
   cidr_blocks       = var.database_redis_allowed_cidrs
   description       = "Allow Redis incoming access from anywhere"
