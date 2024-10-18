@@ -353,8 +353,11 @@ fn test_delete_bucket_using_run_job() {
     });
 
     // execute:
-    let delete_result =
-        service.delete_bucket_non_blocking(existing_bucket_name.as_str(), GcpStorageRegion::from(GCP_REGION));
+    let delete_result = service.delete_bucket_non_blocking(
+        existing_bucket_name.as_str(),
+        GcpStorageRegion::from(GCP_REGION),
+        Some(*GCP_RESOURCE_TTL),
+    );
 
     // verify:
     assert!(delete_result.is_ok());
