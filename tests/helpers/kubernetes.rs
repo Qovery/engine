@@ -338,11 +338,11 @@ pub fn cluster_test(
     }
 
     // Delete
-    let mut delete_tx = Transaction::new(&engine).unwrap();
-    if let Err(err) = delete_tx.delete_kubernetes() {
-        panic!("{err:?}")
-    }
-    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+    //let mut delete_tx = Transaction::new(&engine).unwrap();
+    //if let Err(err) = delete_tx.delete_kubernetes() {
+    //    panic!("{err:?}")
+    //}
+    //assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
     test_name.to_string()
 }

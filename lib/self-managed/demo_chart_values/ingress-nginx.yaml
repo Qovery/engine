@@ -3,6 +3,8 @@ controller:
   useComponentLabel: true
   allowSnippetAnnotations: true
   ingressClass: nginx-qovery
+  ingressClassResource:
+    name: nginx-qovery
   extraArgs:
     default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
   publishService:

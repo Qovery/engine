@@ -116,20 +116,20 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_encrypt_secrets_kms_key_arn: String,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
-    #[serde(alias = "database.postgresql.deny_public_access")]
-    pub database_postgresql_deny_public_access: bool,
+    #[serde(alias = "database.postgresql.deny_any_access")]
+    pub database_postgresql_deny_any_access: bool,
     #[serde(alias = "database.postgresql.allowed_cidrs")]
     pub database_postgresql_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.mysql.deny_public_access")]
-    pub database_mysql_deny_public_access: bool,
+    #[serde(alias = "database.mysql.deny_any_access")]
+    pub database_mysql_deny_any_access: bool,
     #[serde(alias = "database.mysql.allowed_cidrs")]
     pub database_mysql_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.redis.deny_public_access")]
-    pub database_redis_deny_public_access: bool,
+    #[serde(alias = "database.redis.deny_any_access")]
+    pub database_redis_deny_any_access: bool,
     #[serde(alias = "database.redis.allowed_cidrs")]
     pub database_redis_allowed_cidrs: Vec<String>,
-    #[serde(alias = "database.mongodb.deny_public_access")]
-    pub database_mongodb_deny_public_access: bool,
+    #[serde(alias = "database.mongodb.deny_any_access")]
+    pub database_mongodb_deny_any_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
     pub database_mongodb_allowed_cidrs: Vec<String>,
     #[serde(alias = "registry.mirroring_mode", default = "default_registry_mirroring_mode")]
@@ -191,13 +191,13 @@ impl Default for ClusterAdvancedSettings {
             aws_vpc_flow_logs_retention_days: 365,
             aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
-            database_postgresql_deny_public_access: false,
+            database_postgresql_deny_any_access: false,
             database_postgresql_allowed_cidrs: default_database_cirds.clone(),
-            database_mysql_deny_public_access: false,
+            database_mysql_deny_any_access: false,
             database_mysql_allowed_cidrs: default_database_cirds.clone(),
-            database_redis_deny_public_access: false,
+            database_redis_deny_any_access: false,
             database_redis_allowed_cidrs: default_database_cirds.clone(),
-            database_mongodb_deny_public_access: false,
+            database_mongodb_deny_any_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
             registry_mirroring_mode: RegistryMirroringMode::Service,
             nginx_vcpu_request_in_milli_cpu: 100,

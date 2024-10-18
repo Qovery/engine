@@ -3034,6 +3034,15 @@ impl EngineError {
                 None,
                 None,
             ),
+            TerraformError::OutputCannotBeDeserialized { .. } =>
+                EngineError::new(
+                    event_details,
+                    Tag::TerraformConfigFileInvalidContent,
+                    terraform_error.to_safe_message(),
+                    Some(terraform_error.into()),
+                    None,
+                    None,
+                ),
         }
     }
 

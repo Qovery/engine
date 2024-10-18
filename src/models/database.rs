@@ -399,14 +399,14 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
-        // we can't link a security group to an NLB, so we need this to deny public access
-        let cluster_denied_public_access = match T::db_type() {
-            service::DatabaseType::PostgreSQL => kubernetes.advanced_settings().database_postgresql_deny_public_access,
-            service::DatabaseType::MongoDB => kubernetes.advanced_settings().database_mongodb_deny_public_access,
-            service::DatabaseType::MySQL => kubernetes.advanced_settings().database_mysql_deny_public_access,
-            service::DatabaseType::Redis => kubernetes.advanced_settings().database_redis_deny_public_access,
+        // we can't link a security group to an NLB, so we need this to deny any access
+        let cluster_denied_any_access = match T::db_type() {
+            service::DatabaseType::PostgreSQL => kubernetes.advanced_settings().database_postgresql_deny_any_access,
+            service::DatabaseType::MongoDB => kubernetes.advanced_settings().database_mongodb_deny_any_access,
+            service::DatabaseType::MySQL => kubernetes.advanced_settings().database_mysql_deny_any_access,
+            service::DatabaseType::Redis => kubernetes.advanced_settings().database_redis_deny_any_access,
         };
-        let container_database_publicly_accessible = !cluster_denied_public_access && self.publicly_accessible;
+        let container_database_publicly_accessible = !cluster_denied_any_access && self.publicly_accessible;
 
         // repository and image location
         let registry_name = "public.ecr.aws";

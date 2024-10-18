@@ -440,7 +440,6 @@ pub trait Kubernetes: Send + Sync {
     fn update_vault_config(
         &self,
         event_details: EventDetails,
-        qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
         kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>>;

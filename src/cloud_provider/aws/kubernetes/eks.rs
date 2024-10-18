@@ -709,7 +709,6 @@ impl Kubernetes for EKS {
     fn update_vault_config(
         &self,
         event_details: EventDetails,
-        _qovery_terraform_config_file: String,
         cluster_secrets: crate::cloud_provider::vault::ClusterSecrets,
         kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {

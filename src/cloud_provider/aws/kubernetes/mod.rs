@@ -19,9 +19,11 @@ use crate::cloud_provider::aws::kubernetes::addons::aws_core_dns_addon::AwsCoreD
 use crate::cloud_provider::aws::kubernetes::addons::aws_ebs_csi_addon::AwsEbsCsiAddon;
 use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
-    ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
+    ec2_aws_helm_charts, AwsEc2QoveryTerraformOutput, Ec2ChartsConfigPrerequisites,
 };
-use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
+use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{
+    eks_aws_helm_charts, AwsEksQoveryTerraformOutput, EksChartsConfigPrerequisites,
+};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -40,7 +42,7 @@ use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     force_terraform_ec2_instance_type_switch, terraform_apply_with_tf_workers_resources, terraform_import,
-    terraform_init_validate_plan_apply, terraform_init_validate_state_list, TerraformError,
+    terraform_init_validate_plan_apply, terraform_init_validate_state_list, terraform_output, TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
@@ -605,16 +607,16 @@ fn tera_context(
     context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
     context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
     context.insert(
-        "database_postgresql_deny_public_access",
-        &kubernetes.advanced_settings().database_postgresql_deny_public_access,
+        "database_postgresql_deny_any_access",
+        &kubernetes.advanced_settings().database_postgresql_deny_any_access,
     );
     context.insert(
         "database_postgresql_allowed_cidrs",
         &format_ips(&kubernetes.advanced_settings().database_postgresql_allowed_cidrs),
     );
     context.insert(
-        "database_mysql_deny_public_access",
-        &kubernetes.advanced_settings().database_mysql_deny_public_access,
+        "database_mysql_deny_any_access",
+        &kubernetes.advanced_settings().database_mysql_deny_any_access,
     );
     context.insert(
         "database_mysql_allowed_cidrs",
@@ -627,8 +629,8 @@ fn tera_context(
     context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
     context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
     context.insert(
-        "database_mongodb_deny_public_access",
-        &kubernetes.advanced_settings().database_mongodb_deny_public_access,
+        "database_mongodb_deny_any_access",
+        &kubernetes.advanced_settings().database_mongodb_deny_any_access,
     );
     context.insert(
         "database_mongodb_allowed_cidrs",
@@ -641,8 +643,8 @@ fn tera_context(
     context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
     context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
     context.insert(
-        "database_redis_deny_public_access",
-        &kubernetes.advanced_settings().database_redis_deny_public_access,
+        "database_redis_deny_any_access",
+        &kubernetes.advanced_settings().database_redis_deny_any_access,
     );
     context.insert(
         "database_redis_allowed_cidrs",
@@ -966,7 +968,7 @@ fn create(
         EventMessage::new_from_safe(format!("Preparing {} cluster deployment.", kubernetes.kind())),
     ));
 
-    let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+    let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
         cloud_provider.access_key_id(),
         kubernetes.region().to_string(),
         cloud_provider.secret_access_key(),
@@ -981,7 +983,6 @@ fn create(
         kubernetes.context().is_test_cluster(),
     ));
     let temp_dir = kubernetes.temp_dir();
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
     // old method with rusoto
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
@@ -1258,16 +1259,17 @@ fn create(
                     let res = kubernetes.upgrade_with_status(infra_ctx, x);
                     // push endpoint to Vault for EC2
                     if kubernetes.kind() == Kind::Ec2 {
-                        let qovery_terraform_config =
-                            get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-                        cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
-                        let _ = kubernetes.update_vault_config(
-                            event_details.clone(),
-                            qovery_terraform_config_file.clone(),
-                            cluster_secrets.clone(),
-                            None,
-                        );
+                        // TODO: FIX for EC2
+                        //let qovery_terraform_config =
+                        //    get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                        //        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+                        //cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
+                        //let _ = kubernetes.update_vault_config(
+                        //    event_details.clone(),
+                        //    qovery_terraform_config_file.clone(),
+                        //    cluster_secrets.clone(),
+                        //    None,
+                        //);
                     };
                     // return error on upgrade failure
                     res?;
@@ -1293,6 +1295,34 @@ fn create(
 
     // apply to generate tf_qovery_config.json
     terraform_apply(KubernetesClusterAction::Update(None))?;
+    let (eks_tf_output, ec2_tf_output) = match kubernetes.kind() {
+        Kind::Eks => {
+            let eks_tf_output = terraform_output(
+                temp_dir.to_string_lossy().as_ref(),
+                cloud_provider.credentials_environment_variables().as_slice(),
+            )
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+            (eks_tf_output, AwsEc2QoveryTerraformOutput::default())
+        }
+        Kind::Ec2 => {
+            let ec2_tf_output = terraform_output(
+                temp_dir.to_string_lossy().as_ref(),
+                cloud_provider.credentials_environment_variables().as_slice(),
+            )
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+            (AwsEksQoveryTerraformOutput::default(), ec2_tf_output)
+        }
+        _ => {
+            return Err(Box::new(EngineError::new_unsupported_cluster_kind(
+                event_details,
+                &kubernetes.kind().to_string(),
+                CommandError::new_from_safe_message(format!(
+                    "expected AWS provider here, while {} was found",
+                    kubernetes.kind()
+                )),
+            )));
+        }
+    };
 
     let kubeconfig_path = match kubernetes.kind() {
         Kind::Eks => {
@@ -1302,14 +1332,15 @@ fn create(
         Kind::Ec2 => {
             // wait for EC2 k3S kubeconfig to be ready and valid
             // no need to push it to object storage, it's already done by the EC2 instance itself
-            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-            cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
+            // TODO: fix for ec2
+            //let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+            //    .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+            //cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
             EC2::get_and_check_if_kubeconfig_is_valid(
                 kubernetes,
                 object_store,
                 event_details.clone(),
-                qovery_terraform_config,
+                ec2_tf_output.clone(),
             )?
         }
         _ => {
@@ -1327,12 +1358,7 @@ fn create(
     // send cluster info with kubeconfig
     // create vault connection (Vault connectivity should not be on the critical deployment path,
     // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-    let _ = kubernetes.update_vault_config(
-        event_details.clone(),
-        qovery_terraform_config_file.clone(),
-        cluster_secrets,
-        Some(&kubeconfig_path),
-    );
+    let _ = kubernetes.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
@@ -1360,9 +1386,9 @@ fn create(
             block_on(Karpenter::restart(
                 kubernetes,
                 cloud_provider,
+                &eks_tf_output,
                 &kube_client,
                 kubernetes_long_id,
-                &qovery_terraform_config_file,
                 options,
             ))?;
         }
@@ -1449,15 +1475,23 @@ fn create(
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
                 is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
                 karpenter_parameters: kubernetes.get_karpenter_parameters(),
+                aws_account_id: eks_tf_output.aws_account_id.clone(),
+                aws_iam_eks_user_mapper_role_arn: eks_tf_output.aws_iam_eks_user_mapper_role_arn.clone(),
+                aws_iam_cluster_autoscaler_role_arn: eks_tf_output.aws_iam_cluster_autoscaler_role_arn.clone(),
+                aws_iam_cloudwatch_role_arn: eks_tf_output.aws_iam_cloudwatch_role_arn.clone(),
+                aws_iam_loki_role_arn: eks_tf_output.aws_iam_loki_role_arn.clone(),
+                aws_s3_loki_bucket_name: eks_tf_output.aws_s3_loki_bucket_name.clone(),
+                loki_storage_config_aws_s3: eks_tf_output.loki_storage_config_aws_s3.clone(),
+                karpenter_controller_aws_role_arn: eks_tf_output.karpenter_controller_aws_role_arn.clone(),
+                cluster_security_group_id: eks_tf_output.cluster_security_group_id.clone(),
                 alb_controller_already_deployed: alb_already_deployed,
                 kubernetes_version_upgrade_requested,
+                aws_iam_alb_controller_arn: eks_tf_output.aws_iam_alb_controller_arn.clone(),
             };
             eks_aws_helm_charts(
-                qovery_terraform_config_file.clone().as_str(),
                 &charts_prerequisites,
                 Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
-                &credentials_environment_variables,
                 &*kubernetes.context().qovery_api,
                 kubernetes.customer_helm_charts_override(),
                 dns_provider.domain(),
@@ -1475,32 +1509,29 @@ fn create(
                 cluster_name: kubernetes.cluster_name(),
                 cpu_architectures: cpu_architectures[0],
                 cloud_provider: "aws".to_string(),
-                test_cluster: kubernetes.context().is_test_cluster(),
                 aws_access_key_id: cloud_provider.access_key_id(),
                 aws_secret_access_key: cloud_provider.secret_access_key(),
-                vpc_qovery_network_mode: options.vpc_qovery_network_mode.clone(),
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
-                ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
                 managed_domain: dns_provider.domain().clone(),
-                managed_dns_name: dns_provider.domain().to_string(),
                 managed_dns_name_wildcarded: dns_provider.domain().wildcarded().to_string(),
                 managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: terraform_list_format(
                     dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect(),
                 ),
                 managed_dns_root_domain_helm_format: dns_provider.domain().root_domain().to_helm_format_string(),
-                external_dns_provider: dns_provider.provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
+                aws_iam_alb_controller_arn: ec2_tf_output.aws_iam_alb_controller_arn.clone(),
                 alb_controller_already_deployed: alb_already_deployed,
+                aws_account_id: ec2_tf_output.aws_aws_account_id.clone(),
+                aws_ec2_public_hostname: ec2_tf_output.aws_ec2_public_hostname.clone(),
             };
             ec2_aws_helm_charts(
-                qovery_terraform_config_file.as_str(),
                 &charts_prerequisites,
                 Some(temp_dir.to_string_lossy().as_ref()),
                 kubeconfig_path,
@@ -1912,7 +1943,6 @@ fn delete(
     };
 
     let temp_dir = kubernetes.temp_dir();
-    let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
     let node_groups_with_desired_states = match kubernetes.kind() {
         Kind::Eks => {
             let applied_node_groups = if kubernetes.is_karpenter_enabled() {
@@ -2051,10 +2081,14 @@ fn delete(
     let kubernetes_config_file_path = match kubernetes.kind() {
         Kind::Eks => kubernetes.kubeconfig_local_file_path(),
         Kind::Ec2 => {
-            // read config generated after terraform infra bootstrap/update
-            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
+            let qovery_terraform_output: AwsEc2QoveryTerraformOutput = terraform_output(
+                temp_dir.to_string_lossy().as_ref(),
+                infra_ctx
+                    .cloud_provider()
+                    .credentials_environment_variables()
+                    .as_slice(),
+            )
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
             // send cluster info to vault if info mismatch
             // create vault connection (Vault connectivity should not be on the critical deployment path,
             // if it temporarily fails, just ignore it, data will be pushed on the next sync)
@@ -2062,12 +2096,12 @@ fn delete(
                 Ok(x) => Some(x),
                 Err(_) => None,
             };
-            let mut cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+            let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
                 cloud_provider.access_key_id(),
                 kubernetes.region().to_string(),
                 cloud_provider.secret_access_key(),
                 None,
-                None,
+                Some(qovery_terraform_output.aws_ec2_public_hostname.clone()),
                 kubernetes.kind(),
                 kubernetes.cluster_name(),
                 kubernetes.long_id().to_string(),
@@ -2077,18 +2111,17 @@ fn delete(
                 kubernetes.context().is_test_cluster(),
             ));
             if let Some(vault) = vault_conn {
-                cluster_secrets.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname.clone());
                 // update info without taking care of the kubeconfig because we don't have it yet
                 let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
             };
 
-            let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+            let port = match qovery_terraform_output.kubernetes_port_to_u16() {
                 Ok(p) => p,
                 Err(e) => {
                     return Err(Box::new(EngineError::new_terraform_error(
                         event_details,
                         TerraformError::ConfigFileInvalidContent {
-                            path: qovery_terraform_config_file,
+                            path: "ec2 terraform output".to_string(),
                             raw_message: e,
                         },
                     )));
@@ -2098,7 +2131,7 @@ fn delete(
             // wait for k3s port to be open
             // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
             wait_until_port_is_open(
-                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                &TcpCheckSource::DnsName(qovery_terraform_output.aws_ec2_public_hostname.as_str()),
                 port,
                 600,
                 kubernetes.logger(),
@@ -2120,13 +2153,13 @@ fn delete(
                 // ensure the kubeconfig content address match with the current instance dns
                 let mut buffer = String::new();
                 let _ = kubeconfig_file.read_to_string(&mut buffer);
-                match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
+                match buffer.contains(&qovery_terraform_output.aws_ec2_public_hostname) {
                     true => {
                         kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!(
                                 "kubeconfig stored on s3 do correspond with the actual host {}",
-                                &qovery_terraform_config.aws_ec2_public_hostname
+                                &qovery_terraform_output.aws_ec2_public_hostname
                             )),
                         ));
                         OperationResult::Ok(current_kubeconfig_path)
@@ -2136,7 +2169,7 @@ fn delete(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!(
                                 "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_config.aws_ec2_public_hostname
+                                &qovery_terraform_output.aws_ec2_public_hostname
                             )),
                         ));
                         OperationResult::Retry(Box::new(

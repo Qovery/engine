@@ -11,8 +11,8 @@ use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStora
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::Kind;
-use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
@@ -25,7 +25,6 @@ use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryCluste
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-    VpcQoveryNetworkMode,
 };
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
@@ -35,22 +34,24 @@ use crate::models::third_parties::LetsEncryptConfig;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AwsEc2QoveryTerraformConfig {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AwsEc2QoveryTerraformOutput {
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_ec2_public_hostname: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_ec2_kubernetes_port: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_aws_account_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
 }
 
-impl AwsEc2QoveryTerraformConfig {
+impl AwsEc2QoveryTerraformOutput {
     pub fn kubernetes_port_to_u16(&self) -> Result<u16, String> {
         match self.aws_ec2_kubernetes_port.parse::<u16>() {
             Ok(x) => Ok(x),
@@ -62,7 +63,6 @@ impl AwsEc2QoveryTerraformConfig {
     }
 }
 
-#[allow(dead_code)]
 pub struct Ec2ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
@@ -72,53 +72,27 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub cluster_name: String,
     pub cpu_architectures: CpuArchitecture,
     pub cloud_provider: String,
-    pub test_cluster: bool,
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,
-    pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
-    pub ff_metrics_history_enabled: bool,
     pub managed_domain: Domain,
-    pub managed_dns_name: String,
     pub managed_dns_name_wildcarded: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
-    pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub alb_controller_already_deployed: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
-}
-
-pub fn get_aws_ec2_qovery_terraform_config(
-    qovery_terraform_config_file: &str,
-) -> Result<AwsEc2QoveryTerraformConfig, TerraformError> {
-    let content_file = match File::open(qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(TerraformError::ConfigFileNotFound {
-                path: qovery_terraform_config_file.to_string(),
-                raw_message: e.to_string(),
-            });
-        }
-    };
-
-    let reader = BufReader::new(content_file);
-    match serde_json::from_reader(reader) {
-        Ok(config) => Ok(config),
-        Err(e) => Err(TerraformError::ConfigFileInvalidContent {
-            path: qovery_terraform_config_file.to_string(),
-            raw_message: e.to_string(),
-        }),
-    }
+    pub aws_iam_alb_controller_arn: String,
+    pub aws_account_id: String,
+    pub aws_ec2_public_hostname: String,
 }
 
 pub fn ec2_aws_helm_charts(
-    qovery_terraform_config_file: &str,
     chart_config_prerequisites: &Ec2ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
@@ -139,7 +113,6 @@ pub fn ec2_aws_helm_charts(
         });
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
 
     // CSI driver
     let aws_ebs_csi_driver_secret = CommonChart {
@@ -202,7 +175,7 @@ pub fn ec2_aws_helm_charts(
     // ALB controller
     let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
         chart_prefix_path,
-        qovery_terraform_config.aws_iam_alb_controller_arn,
+        chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
         chart_config_prerequisites.cluster_name.clone(),
         false, // no vpa on EC2
         chart_config_prerequisites.alb_controller_already_deployed
@@ -245,7 +218,7 @@ pub fn ec2_aws_helm_charts(
             ],
             values_string: vec![ChartSetValue {
                 key: "ecr.awsAccount".to_string(),
-                value: qovery_terraform_config.aws_aws_account_id,
+                value: chart_config_prerequisites.aws_account_id.clone(),
             }],
             ..Default::default()
         },
@@ -359,23 +332,11 @@ pub fn ec2_aws_helm_charts(
         chart_config_prerequisites.cluster_long_id.to_string(),
         chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Ec2,
-        // VPA for K3S doesn't make sense for most use cases since there is only one node
-        // By default, control plane will send min / max replicas to be 1, but if user wants to enable it, they can do so
-        Some(
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_hpa_min_number_instances,
-        ),
-        Some(
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_hpa_max_number_instances,
-        ),
-        Some(
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_hpa_cpu_utilization_percentage_threshold,
-        ),
+        // HPA for K3S doesn't make sense for most use cases since there is only one node
+        // and there can't be more than 1 port exposed. (2 pods, means twice the same port on the same node, which is not possible)
+        None,
+        None,
+        None,
         HelmChartNamespaces::NginxIngress,
         None,
         chart_config_prerequisites
@@ -407,7 +368,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "destination".to_string(),
-                    value: qovery_terraform_config.aws_ec2_public_hostname,
+                    value: chart_config_prerequisites.aws_ec2_public_hostname.clone(),
                 },
             ],
             ..Default::default()

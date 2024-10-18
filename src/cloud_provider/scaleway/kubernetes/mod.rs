@@ -16,7 +16,9 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
+use crate::cloud_provider::scaleway::kubernetes::helm_charts::{
+    scw_helm_charts, ChartsConfigPrerequisites, ScalewayQoveryTerraformOutput,
+};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::print_action;
@@ -28,6 +30,7 @@ use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
+    terraform_output,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -738,7 +741,6 @@ impl Kapsule {
         }
 
         let temp_dir = self.temp_dir();
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context(infra_ctx)?;
@@ -819,6 +821,14 @@ impl Kapsule {
         ) {
             return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
         }
+        let qovery_terraform_output: ScalewayQoveryTerraformOutput = terraform_output(
+            temp_dir.to_string_lossy().as_ref(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+        )
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         // push config file to object storage
         let kubeconfig_path = self.kubeconfig_local_file_path();
@@ -856,12 +866,7 @@ impl Kapsule {
         // send cluster info with kubeconfig
         // create vault connection (Vault connectivity should not be on the critical deployment path,
         // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-        let _ = self.update_vault_config(
-            event_details.clone(),
-            qovery_terraform_config_file,
-            cluster_secrets,
-            Some(&kubeconfig_path),
-        );
+        let _ = self.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
         let current_nodegroups = match self
             .get_existing_sanitized_node_groups(cluster_info.expect("A cluster should be present at this create stage"))
@@ -1066,7 +1071,7 @@ impl Kapsule {
                     .dns_provider()
                     .resolvers()
                     .iter()
-                    .map(|x| x.clone().to_string())
+                    .map(|x| x.to_string())
                     .collect(),
             ),
             infra_ctx.dns_provider().domain().root_domain().to_helm_format_string(),
@@ -1075,6 +1080,7 @@ impl Kapsule {
             infra_ctx.dns_provider().provider_configuration(),
             self.options.clone(),
             self.advanced_settings().clone(),
+            qovery_terraform_output.loki_storage_config_scaleway_s3,
         );
 
         self.logger().log(EngineEvent::Info(
@@ -1082,11 +1088,9 @@ impl Kapsule {
             EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
         ));
         let helm_charts_to_deploy = scw_helm_charts(
-            format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
             Some(temp_dir.to_string_lossy().as_ref()),
             &kubeconfig_path,
-            &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
             infra_ctx.dns_provider().domain(),
@@ -1873,7 +1877,6 @@ impl Kubernetes for Kapsule {
     fn update_vault_config(
         &self,
         event_details: EventDetails,
-        _qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
         kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {

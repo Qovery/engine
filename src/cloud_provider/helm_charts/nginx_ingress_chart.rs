@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 use strum_macros::EnumIter;
 
+use super::{HelmChartResources, HelmChartResourcesConstraintType};
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
     HelmChartNamespaces,
@@ -10,6 +11,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::kubernetes::Kind::Ec2;
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
@@ -18,8 +20,6 @@ use crate::errors::CommandError;
 use crate::models::domain::Domain;
 use kube::Client;
 use tera::{Context, Tera};
-
-use super::{HelmChartResources, HelmChartResourcesConstraintType};
 
 #[derive(Clone)]
 pub enum LogFormat {
@@ -235,7 +235,11 @@ defaultBackend:
             },
             ChartSetValue {
                 key: "controller.autoscaling.enabled".to_string(),
-                value: true.to_string(),
+                value: if self.kubernetes_kind == Ec2 {
+                    false.to_string()
+                } else {
+                    true.to_string()
+                },
             },
             ChartSetValue {
                 key: "controller.config.enable-real-ip".to_string(),

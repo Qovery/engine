@@ -23,6 +23,7 @@ use crate::cloud_provider::models::{
     VpcQoveryNetworkMode,
 };
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -64,24 +65,32 @@ use crate::models::ToCloudProviderFormat;
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AwsEksQoveryTerraformConfig {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AwsEksQoveryTerraformOutput {
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_account_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_eks_user_mapper_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_cluster_autoscaler_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_cloudwatch_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_loki_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_s3_loki_bucket_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub loki_storage_config_aws_s3: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub karpenter_controller_aws_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub cluster_security_group_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
 }
 
@@ -117,14 +126,22 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub is_karpenter_enabled: bool,
     pub karpenter_parameters: Option<KarpenterParameters>,
+    pub aws_account_id: String,
+    pub aws_iam_eks_user_mapper_role_arn: String,
+    pub aws_iam_cluster_autoscaler_role_arn: String,
+    pub aws_iam_cloudwatch_role_arn: String,
+    pub aws_iam_loki_role_arn: String,
+    pub aws_s3_loki_bucket_name: String,
+    pub loki_storage_config_aws_s3: String,
+    pub karpenter_controller_aws_role_arn: String,
+    pub cluster_security_group_id: String,
+    pub aws_iam_alb_controller_arn: String,
 }
 
 pub fn eks_aws_helm_charts(
-    qovery_terraform_config_file: &str,
     chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
-    envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,
@@ -140,7 +157,6 @@ pub fn eks_aws_helm_charts(
             }
         });
 
-    let qovery_terraform_config = get_qovery_terraform_config(qovery_terraform_config_file, envs)?;
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
 
@@ -177,7 +193,7 @@ pub fn eks_aws_helm_charts(
             AwsIamEksUserMapperChart::new(
                 chart_prefix_path,
                 "iam-eks-user-mapper".to_string(),
-                qovery_terraform_config.aws_iam_eks_user_mapper_role_arn,
+                chart_config_prerequisites.aws_iam_eks_user_mapper_role_arn.clone(),
                 match &chart_config_prerequisites
                     .cluster_advanced_settings
                     .aws_iam_user_mapper_group_enabled
@@ -211,7 +227,7 @@ pub fn eks_aws_helm_charts(
                 },
                 match chart_config_prerequisites.is_karpenter_enabled {
                     true => KarpenterConfig::Enabled {
-                        aws_account_id: qovery_terraform_config.aws_account_id,
+                        aws_account_id: chart_config_prerequisites.aws_account_id.clone(),
                         cluster_name: chart_config_prerequisites.cluster_name.clone(),
                     },
                     false => KarpenterConfig::Disabled,
@@ -249,7 +265,7 @@ pub fn eks_aws_helm_charts(
     let karpenter = KarpenterChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
-        qovery_terraform_config.karpenter_controller_aws_role_arn.clone(),
+        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
         chart_config_prerequisites.is_karpenter_enabled,
         false,
         chart_config_prerequisites.kubernetes_version_upgrade_requested,
@@ -262,7 +278,7 @@ pub fn eks_aws_helm_charts(
     let karpenter_with_monitoring = KarpenterChart::new(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
-        qovery_terraform_config.karpenter_controller_aws_role_arn,
+        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
         chart_config_prerequisites.is_karpenter_enabled,
         true,
         chart_config_prerequisites.kubernetes_version_upgrade_requested,
@@ -274,7 +290,7 @@ pub fn eks_aws_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.cluster_name.to_string(),
         chart_config_prerequisites.is_karpenter_enabled,
-        qovery_terraform_config.cluster_security_group_id,
+        chart_config_prerequisites.cluster_security_group_id.clone(),
         &chart_config_prerequisites.cluster_id,
         chart_config_prerequisites.cluster_long_id,
         &chart_config_prerequisites.organization_id,
@@ -292,7 +308,7 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.cloud_provider.to_string(),
         chart_config_prerequisites.region.clone(),
         chart_config_prerequisites.cluster_name.to_string(),
-        qovery_terraform_config.aws_iam_cluster_autoscaler_role_arn.to_string(),
+        chart_config_prerequisites.aws_iam_cluster_autoscaler_role_arn.clone(),
         prometheus_namespace,
         chart_config_prerequisites.ff_metrics_history_enabled,
         chart_config_prerequisites.is_karpenter_enabled,
@@ -313,7 +329,7 @@ pub fn eks_aws_helm_charts(
     // ALB controller
     let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
         chart_prefix_path,
-        qovery_terraform_config.aws_iam_alb_controller_arn,
+        chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
         chart_config_prerequisites.cluster_name.clone(),
         true,
         chart_config_prerequisites.alb_controller_already_deployed
@@ -368,9 +384,9 @@ pub fn eks_aws_helm_charts(
                     .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
                     region: Some(chart_config_prerequisites.region.to_cloud_provider_format().to_string()), // TODO(benjaminch): region to be struct instead of String
-                    bucketname: Some(qovery_terraform_config.aws_s3_loki_bucket_name),
-                    s3_config: Some(qovery_terraform_config.loki_storage_config_aws_s3),
-                    aws_iam_loki_role_arn: Some(qovery_terraform_config.aws_iam_loki_role_arn),
+                    bucketname: Some(chart_config_prerequisites.aws_s3_loki_bucket_name.clone()),
+                    s3_config: Some(chart_config_prerequisites.loki_storage_config_aws_s3.clone()),
+                    aws_iam_loki_role_arn: Some(chart_config_prerequisites.aws_iam_loki_role_arn.clone()),
                     insecure: false,
                     use_path_style: false,
                 }),
@@ -488,7 +504,7 @@ pub fn eks_aws_helm_charts(
                     loki_namespace: loki_namespace.to_string(),
                     cloudwatch_config: Some(CloudWatchConfig::new(
                         chart_config_prerequisites.region.to_cloud_provider_format().to_string(), // TODO(benjaminch): region to be struct instead of String
-                        qovery_terraform_config.aws_iam_cloudwatch_role_arn,
+                        chart_config_prerequisites.aws_iam_cloudwatch_role_arn.clone(),
                     )),
                 },
                 AwsStorageType::GP2.to_k8s_storage_class(),
@@ -835,32 +851,4 @@ pub fn eks_aws_helm_charts(
     Ok(vec![
         level_0, level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8,
     ])
-}
-
-pub fn get_qovery_terraform_config(
-    qovery_terraform_config_file: &str,
-    envs: &[(String, String)],
-) -> Result<AwsEksQoveryTerraformConfig, CommandError> {
-    let content_file = match File::open(qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
-    let reader = BufReader::new(content_file);
-    let qovery_terraform_config: AwsEksQoveryTerraformConfig = match serde_json::from_reader(reader) {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(CommandError::new(
-                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
-    Ok(qovery_terraform_config)
 }

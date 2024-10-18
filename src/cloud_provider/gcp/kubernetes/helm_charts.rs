@@ -40,7 +40,6 @@ use crate::models::domain::Domain;
 use crate::models::gcp::{GcpStorageType, JsonCredentials};
 use crate::models::third_parties::LetsEncryptConfig;
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 use time::Duration;
@@ -134,11 +133,9 @@ impl ChartsConfigPrerequisites {
 }
 
 pub fn gcp_helm_charts(
-    qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
-    envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,
@@ -154,16 +151,6 @@ pub fn gcp_helm_charts(
             }
         });
 
-    let _config_file = match File::open(qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Qovery;

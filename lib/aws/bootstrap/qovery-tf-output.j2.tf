@@ -1,0 +1,10 @@
+output "aws_iam_eks_user_mapper_role_arn" { value = aws_iam_role.iam_eks_user_mapper.arn }
+output "aws_iam_cluster_autoscaler_role_arn" { value = aws_iam_role.iam_eks_cluster_autoscaler.arn }
+output "aws_iam_cloudwatch_role_arn" { value = aws_iam_role.iam_grafana_cloudwatch.arn }
+output "loki_storage_config_aws_s3" { value = "s3://${var.region}/${aws_s3_bucket.loki_bucket.bucket}" }
+output "aws_iam_loki_role_arn" { value = aws_iam_role.iam_eks_loki.arn }
+output "aws_s3_loki_bucket_name" { value = aws_iam_role.iam_eks_loki.name }
+output "aws_account_id" { value = data.aws_caller_identity.current.account_id }
+output "karpenter_controller_aws_role_arn" { value = aws_iam_role.karpenter_controller_role.arn }
+output "cluster_security_group_id" { value = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id }
+output "aws_iam_alb_controller_arn" { value = aws_iam_role.aws_load_balancer_controller.arn }

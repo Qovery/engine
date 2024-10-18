@@ -64,7 +64,7 @@ resource "aws_security_group" "ec2_instance" {
   }
 
   // MySQL
-{% if not database_mysql_deny_public_access -%}
+{% if not database_mysql_deny_any_access -%}
   ingress {
     description = "MySQL access"
     from_port   = 3306
@@ -75,7 +75,7 @@ resource "aws_security_group" "ec2_instance" {
 {% endif -%}
 
   // PostgreSQL
-{% if not database_postgresql_deny_public_access -%}
+{% if not database_postgresql_deny_any_access -%}
   ingress {
     description = "PostgreSQL access"
     from_port   = 5432
@@ -86,7 +86,7 @@ resource "aws_security_group" "ec2_instance" {
 {% endif -%}
 
   // MongoDB
-{% if not database_mongodb_deny_public_access -%}
+{% if not database_mongodb_deny_any_access -%}
   ingress {
     description = "MongoDB access"
     from_port   = 27017
@@ -97,7 +97,7 @@ resource "aws_security_group" "ec2_instance" {
 {% endif -%}
 
   // Redis
-{% if not database_redis_deny_public_access -%}
+{% if not database_redis_deny_any_access -%}
   ingress {
     description = "Redis access"
     from_port   = 6379

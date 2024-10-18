@@ -10,6 +10,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::logger::Logger;
 use rand::Rng;
 use regex::Regex;
+use serde::de::DeserializeOwned;
 use std::fmt::{Display, Formatter};
 use std::{env, fs, thread, time};
 
@@ -42,6 +43,7 @@ bitflags! {
         const APPLY = 0b00001000;
         const DESTROY = 0b00010000;
         const STATE_LIST = 0b00100000;
+        const OUTPUT = 0b01000000;
     }
 }
 
@@ -204,6 +206,10 @@ pub enum TerraformError {
         validator_name: String,
         validator_description: String,
         /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
+    OutputCannotBeDeserialized {
+        /// raw_message: raw serde error.
         raw_message: String,
     },
 }
@@ -869,6 +875,7 @@ impl TerraformError {
             TerraformError::ValidatorError { validator_name, validator_description: validation_description,  raw_message, .. } => {
                 format!("Error, validator `{validator_name}` ({validation_description}) has raised an error: {raw_message}")
             }
+            TerraformError::OutputCannotBeDeserialized { .. } => "Error, cannot deserialize Terraform output. Check the logs for more details.".to_string(),
         }
     }
 }
@@ -949,6 +956,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::ValidatorError { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::OutputCannotBeDeserialized { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1120,6 +1130,23 @@ fn terraform_validate(
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
+        }
+    });
+
+    match result {
+        Ok(output) => Ok(output),
+        Err(retry::Error { error, .. }) => Err(error),
+    }
+}
+
+fn terraform_output_internal(root_dir: &str, envs: &[(&str, &str)]) -> Result<TerraformOutput, TerraformError> {
+    let terraform_args = vec!["output", "-json"];
+
+    // Retry is not needed, fixing it to 1 only for the time being
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
+        match terraform_exec(root_dir, terraform_args.clone(), envs, &TerraformValidators::None) {
+            Ok(output) => OperationResult::Ok(output),
+            Err(err) => OperationResult::Retry(err),
         }
     });
 
@@ -1384,6 +1411,10 @@ fn terraform_run(
         output.extend(terraform_state_list(root_dir, envs, validators)?);
     }
 
+    if actions.contains(TerraformAction::OUTPUT) {
+        output.extend(terraform_output_internal(root_dir, envs)?);
+    }
+
     if actions.contains(TerraformAction::APPLY) && !dry_run {
         output.extend(terraform_apply(root_dir, envs, validators)?);
     }
@@ -1409,6 +1440,14 @@ pub fn terraform_init_validate_plan_apply(
         envs,
         validators,
     )
+}
+
+pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {
+    // Terraform output must call alone and after init, because we need to retrieve the json output from stdout
+    let output = terraform_run(TerraformAction::OUTPUT, root_dir, false, envs, &TerraformValidators::None)?;
+    serde_json::from_str(&output.raw_std_output.join("\n")).map_err(|e| TerraformError::OutputCannotBeDeserialized {
+        raw_message: e.to_string(),
+    })
 }
 
 pub fn terraform_init_validate(
