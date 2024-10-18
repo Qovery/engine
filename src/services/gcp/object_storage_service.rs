@@ -216,6 +216,15 @@ impl ObjectStorageService {
         // Minimal TTL is 1 day for Google storage
         let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::from_secs(60 * 60 * 24)));
 
+        let mut bucket_labels = bucket_labels.unwrap_or_default();
+        *bucket_labels
+            .entry("creation_date".to_string())
+            .or_insert(Utc::now().timestamp().to_string()) = Utc::now().timestamp().to_string();
+        if let Some(bucket_ttl) = bucket_ttl {
+            let ttl = bucket_ttl.as_secs();
+            *bucket_labels.entry("ttl".to_string()).or_insert(ttl.to_string()) = ttl.to_string();
+        }
+
         let mut create_bucket_request = InsertBucketRequest {
             name: bucket_name.to_string(),
             param: InsertBucketParam {
@@ -223,7 +232,7 @@ impl ObjectStorageService {
                 ..Default::default()
             },
             bucket: BucketCreationConfig {
-                labels: bucket_labels,
+                labels: Some(bucket_labels),
                 location: bucket_location.to_cloud_provider_format().to_uppercase(),
                 versioning: match bucket_versioning_activated {
                     false => None,
