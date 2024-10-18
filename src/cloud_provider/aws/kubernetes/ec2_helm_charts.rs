@@ -1,4 +1,3 @@
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_alb_controller::AwsLoadBalancerControllerChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
@@ -69,7 +68,6 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
     pub region: String,
-    pub cluster_name: String,
     pub cpu_architectures: CpuArchitecture,
     pub cloud_provider: String,
     pub aws_access_key_id: String,
@@ -83,11 +81,9 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub managed_dns_root_domain_helm_format: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
-    pub alb_controller_already_deployed: bool,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
-    pub aws_iam_alb_controller_arn: String,
     pub aws_account_id: String,
     pub aws_ec2_public_hostname: String,
 }
@@ -171,19 +167,6 @@ pub fn ec2_aws_helm_charts(
             .to_string(),
         HelmChartNamespaces::KubeSystem,
     );
-
-    // ALB controller
-    let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
-        chart_config_prerequisites.cluster_name.clone(),
-        false, // no vpa on EC2
-        chart_config_prerequisites.alb_controller_already_deployed
-            && chart_config_prerequisites
-                .cluster_advanced_settings
-                .aws_eks_enable_alb_controller,
-    )
-    .to_common_helm_chart()?;
 
     let registry_creds = CommonChart {
         chart_info: ChartInfo {
@@ -525,14 +508,6 @@ pub fn ec2_aws_helm_charts(
         Box::new(registry_creds),
         Box::new(cert_manager),
     ];
-
-    if chart_config_prerequisites
-        .cluster_advanced_settings
-        .aws_eks_enable_alb_controller
-        || chart_config_prerequisites.alb_controller_already_deployed
-    {
-        prepare_chats_to_deploy.push(Box::new(aws_load_balancer_controller));
-    }
 
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {
         prepare_chats_to_deploy.push(Box::new(qovery_webhook));

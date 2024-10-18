@@ -1506,7 +1506,6 @@ fn create(
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
                 region: kubernetes.region().to_string(),
-                cluster_name: kubernetes.cluster_name(),
                 cpu_architectures: cpu_architectures[0],
                 cloud_provider: "aws".to_string(),
                 aws_access_key_id: cloud_provider.access_key_id(),
@@ -1526,8 +1525,6 @@ fn create(
                 ),
                 dns_provider_config: dns_provider.provider_configuration(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
-                aws_iam_alb_controller_arn: ec2_tf_output.aws_iam_alb_controller_arn.clone(),
-                alb_controller_already_deployed: alb_already_deployed,
                 aws_account_id: ec2_tf_output.aws_aws_account_id.clone(),
                 aws_ec2_public_hostname: ec2_tf_output.aws_ec2_public_hostname.clone(),
             };
