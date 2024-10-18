@@ -19,6 +19,7 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
+use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -47,15 +48,14 @@ use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::BufReader;
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScalewayQoveryTerraformConfig {
+pub struct ScalewayQoveryTerraformOutput {
+    #[serde(deserialize_with = "from_terraform_value")]
     pub loki_storage_config_scaleway_s3: String,
 }
 
@@ -87,6 +87,7 @@ pub struct ChartsConfigPrerequisites {
     // qovery options form json input
     pub infra_options: KapsuleOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
+    pub loki_storage_config_scaleway_s3: String,
 }
 
 impl ChartsConfigPrerequisites {
@@ -115,6 +116,7 @@ impl ChartsConfigPrerequisites {
         dns_provider_config: DnsProviderConfiguration,
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
+        loki_storage_config_scaleway_s3: String,
     ) -> Self {
         ChartsConfigPrerequisites {
             organization_id,
@@ -142,16 +144,15 @@ impl ChartsConfigPrerequisites {
             dns_provider_config,
             infra_options,
             cluster_advanced_settings,
+            loki_storage_config_scaleway_s3,
         }
     }
 }
 
 pub fn scw_helm_charts(
-    qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
-    envs: &[(String, String)],
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,
@@ -169,30 +170,8 @@ pub fn scw_helm_charts(
             }
         });
 
-    let content_file = match File::open(qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let reader = BufReader::new(content_file);
-    let qovery_terraform_config: ScalewayQoveryTerraformConfig = match serde_json::from_reader(reader) {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(CommandError::new(
-                format!("Error while parsing terraform config file {qovery_terraform_config_file}"),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
-
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
@@ -273,7 +252,7 @@ pub fn scw_helm_charts(
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
-                    s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
+                    s3_config: Some(chart_config_prerequisites.loki_storage_config_scaleway_s3.clone()),
                     region: Some(chart_config_prerequisites.zone.region().to_string()),
                     aws_iam_loki_role_arn: None,
                     bucketname: None,

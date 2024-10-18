@@ -17,12 +17,13 @@ use crate::cloud_provider::kubernetes::{
 use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::service::Action;
+use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::Helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply, TerraformError};
+use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply, terraform_output};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
@@ -65,8 +66,6 @@ use retry::OperationResult;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -703,7 +702,6 @@ impl Gke {
         }
 
         let temp_dir = self.temp_dir();
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context(infra_ctx)?;
@@ -797,9 +795,14 @@ impl Gke {
         }
 
         // Retrieve config generated via Terraform
-        let qovery_terraform_config: GkeQoveryTerraformConfig = self
-            .get_gke_qovery_terraform_config(qovery_terraform_config_file.as_str())
-            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+        let qovery_terraform_config: GkeQoveryTerraformOutput = terraform_output(
+            temp_dir.to_string_lossy().as_ref(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+        )
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
         put_kubeconfig_file_to_object_storage(self, &self.object_storage)?;
 
@@ -900,11 +903,9 @@ impl Gke {
         );
 
         let helm_charts_to_deploy = helm_charts::gcp_helm_charts(
-            format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy()).as_str(),
             &charts_prerequisites,
             Some(temp_dir.to_string_lossy().as_ref()),
             &kubeconfig_path,
-            &credentials_environment_variables,
             &*self.context.qovery_api,
             self.customer_helm_charts_override(),
             infra_ctx.dns_provider().domain(),
@@ -1298,30 +1299,6 @@ impl Gke {
         Ok(())
     }
 
-    fn get_gke_qovery_terraform_config(
-        &self,
-        qovery_terraform_config_file: &str,
-    ) -> Result<GkeQoveryTerraformConfig, TerraformError> {
-        let content_file = match File::open(qovery_terraform_config_file) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(TerraformError::ConfigFileNotFound {
-                    path: qovery_terraform_config_file.to_string(),
-                    raw_message: e.to_string(),
-                });
-            }
-        };
-
-        let reader = BufReader::new(content_file);
-        match serde_json::from_reader(reader) {
-            Ok(config) => Ok(config),
-            Err(e) => Err(TerraformError::ConfigFileInvalidContent {
-                path: qovery_terraform_config_file.to_string(),
-                raw_message: e.to_string(),
-            }),
-        }
-    }
-
     fn update_gke_vault_config(
         &self,
         event_details: EventDetails,
@@ -1664,7 +1641,6 @@ impl Kubernetes for Gke {
     fn update_vault_config(
         &self,
         event_details: EventDetails,
-        _qovery_terraform_config_file: String,
         cluster_secrets: ClusterSecrets,
         _kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {
@@ -1693,8 +1669,10 @@ impl Kubernetes for Gke {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GkeQoveryTerraformConfig {
+pub struct GkeQoveryTerraformOutput {
+    #[serde(deserialize_with = "from_terraform_value")]
     pub gke_cluster_public_hostname: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub loki_logging_service_account_email: String,
 }
