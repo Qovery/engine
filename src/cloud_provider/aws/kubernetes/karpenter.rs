@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::eks_helm_charts::get_qovery_terraform_config;
+use crate::cloud_provider::aws::kubernetes::eks_helm_charts::AwsEksQoveryTerraformOutput;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::cloud_provider::aws::kubernetes::Options;
@@ -59,9 +59,9 @@ impl Karpenter {
     pub async fn restart(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
+        terraform_output: &AwsEksQoveryTerraformOutput,
         client: &QubeClient,
         kubernetes_long_id: uuid::Uuid,
-        qovery_terraform_config_file: &str,
         options: &Options,
     ) -> Result<(), Box<EngineError>> {
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Restart));
@@ -81,9 +81,9 @@ impl Karpenter {
         Self::install_karpenter_configuration(
             kubernetes,
             cloud_provider,
+            terraform_output,
             &event_details,
             kubernetes_long_id,
-            qovery_terraform_config_file,
             options,
         )
     }
@@ -268,9 +268,9 @@ impl Karpenter {
     fn install_karpenter_configuration(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
+        terraform_output: &AwsEksQoveryTerraformOutput,
         event_details: &EventDetails,
         cluster_long_id: uuid::Uuid,
-        qovery_terraform_config_file: &str,
         options: &Options,
     ) -> Result<(), Box<EngineError>> {
         let kubernetes_config_file_path = kubernetes.kubeconfig_local_file_path();
@@ -283,8 +283,8 @@ impl Karpenter {
         let karpenter_configuration_chart = Self::get_karpenter_configuration_chart(
             kubernetes,
             cloud_provider,
+            terraform_output,
             cluster_long_id,
-            qovery_terraform_config_file,
             event_details,
             options,
         )?;
@@ -306,8 +306,8 @@ impl Karpenter {
     fn get_karpenter_configuration_chart(
         kubernetes: &dyn Kubernetes,
         cloud_provider: &dyn CloudProvider,
+        terraform_output: &AwsEksQoveryTerraformOutput,
         cluster_long_id: uuid::Uuid,
-        qovery_terraform_config_file: &str,
         event_details: &EventDetails,
         options: &Options,
     ) -> Result<ChartInfo, Box<EngineError>> {
@@ -316,13 +316,6 @@ impl Karpenter {
                 event_details.clone(),
                 CommandError::new_from_safe_message("Karpenter parameters are missing".to_string()),
             ))
-        })?;
-
-        let qovery_terraform_config = get_qovery_terraform_config(qovery_terraform_config_file, &[]).map_err(|e| {
-            EngineError::new_k8s_node_not_ready(
-                event_details.clone(),
-                CommandError::new_from_safe_message(format!("Cannot get qovery_terraform_config: {e}")),
-            )
         })?;
 
         let organization_id = cloud_provider.organization_id().to_string();
@@ -338,7 +331,7 @@ impl Karpenter {
             Some(kubernetes.temp_dir().to_string_lossy().as_ref()),
             cluster_name.to_string(),
             true,
-            qovery_terraform_config.cluster_security_group_id,
+            terraform_output.cluster_security_group_id.clone(),
             &cluster_id,
             cluster_long_id,
             &organization_id,

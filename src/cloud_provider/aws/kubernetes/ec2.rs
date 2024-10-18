@@ -13,7 +13,7 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::utilities::{print_action, wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::terraform::terraform_init_validate_plan_apply;
+use crate::cmd::terraform::{terraform_init_validate_plan_apply, terraform_output};
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
@@ -49,7 +49,7 @@ use std::str::FromStr;
 use crate::cmd::terraform_validators::TerraformValidators;
 use uuid::Uuid;
 
-use super::ec2_helm_charts::{get_aws_ec2_qovery_terraform_config, AwsEc2QoveryTerraformConfig};
+use super::ec2_helm_charts::AwsEc2QoveryTerraformOutput;
 
 /// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
 pub struct EC2 {
@@ -161,7 +161,7 @@ impl EC2 {
         kubernetes: &dyn Kubernetes,
         object_store: &dyn ObjectStorage,
         event_details: EventDetails,
-        qovery_terraform_config: AwsEc2QoveryTerraformConfig,
+        qovery_terraform_config: AwsEc2QoveryTerraformOutput,
     ) -> Result<PathBuf, Box<EngineError>> {
         let port = match qovery_terraform_config.kubernetes_port_to_u16() {
             Ok(p) => p,
@@ -401,15 +401,21 @@ impl Kubernetes for EC2 {
             EventMessage::new_from_safe("Ensuring the upgrade has successfully been performed...".to_string()),
         ));
 
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", temp_dir.to_string_lossy());
-        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+        let qovery_terraform_output: AwsEc2QoveryTerraformOutput = terraform_output(
+            temp_dir.to_string_lossy().as_ref(),
+            infra_ctx
+                .cloud_provider()
+                .credentials_environment_variables()
+                .as_slice(),
+        )
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+
         let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
             infra_ctx.cloud_provider().access_key_id(),
             self.region().to_string(),
             infra_ctx.cloud_provider().secret_access_key(),
             None,
-            Some(qovery_terraform_config.aws_ec2_public_hostname),
+            Some(qovery_terraform_output.aws_ec2_public_hostname.clone()),
             self.kind(),
             self.cluster_name(),
             self.long_id().to_string(),
@@ -419,12 +425,9 @@ impl Kubernetes for EC2 {
             self.context().is_test_cluster(),
         ));
 
-        if let Err(e) = self.update_vault_config(
-            event_details.clone(),
-            qovery_terraform_config_file,
-            cluster_secrets,
-            Some(&self.kubeconfig_local_file_path()),
-        ) {
+        if let Err(e) =
+            self.update_vault_config(event_details.clone(), cluster_secrets, Some(&self.kubeconfig_local_file_path()))
+        {
             self.logger().log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
@@ -506,48 +509,35 @@ impl Kubernetes for EC2 {
     fn update_vault_config(
         &self,
         event_details: EventDetails,
-        qovery_terraform_config_file: String,
-        cluster_secrets: ClusterSecrets,
+        mut cluster_secrets: ClusterSecrets,
         kubeconfig_file_path: Option<&Path>,
     ) -> Result<(), Box<EngineError>> {
-        // read config generated after terraform infra bootstrap/update
-        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
         // send cluster info to vault if info mismatch
         // create vault connection (Vault connectivity should not be on the critical deployment path,
         // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-        let vault_conn = match QVaultClient::new(event_details.clone()) {
-            Ok(x) => Some(x),
-            Err(_) => None,
+        let Ok(vault_conn) = QVaultClient::new(event_details.clone()) else {
+            return Ok(());
         };
-        if let Some(vault) = &vault_conn {
-            let mut cluster_secrets_update = cluster_secrets.clone();
-            cluster_secrets_update.set_k8s_cluster_endpoint(qovery_terraform_config.aws_ec2_public_hostname);
-            match kubeconfig_file_path {
-                Some(x) => {
-                    // encode base64 kubeconfig
-                    let kubeconfig = fs::read_to_string(x)
-                        .map_err(|e| {
-                            EngineError::new_cannot_retrieve_cluster_config_file(
-                                event_details.clone(),
-                                CommandError::new_from_safe_message(format!(
-                                    "Cannot read kubeconfig file {}: {e}",
-                                    x.to_str().unwrap_or_default()
-                                )),
-                            )
-                        })
-                        .expect("kubeconfig was not found while it should be present");
-                    let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
-                    let mut cluster_secrets_update = cluster_secrets;
-                    cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
-                    cluster_secrets_update.create_or_update_secret(vault, false, event_details)?;
-                }
-                None => {
-                    cluster_secrets_update.create_or_update_secret(vault, true, event_details)?;
-                }
-            }
-        };
+
+        if let Some(x) = kubeconfig_file_path {
+            // encode base64 kubeconfig
+            let kubeconfig = fs::read_to_string(x)
+                .map_err(|e| {
+                    EngineError::new_cannot_retrieve_cluster_config_file(
+                        event_details.clone(),
+                        CommandError::new_from_safe_message(format!(
+                            "Cannot read kubeconfig file {}: {e}",
+                            x.to_str().unwrap_or_default()
+                        )),
+                    )
+                })
+                .expect("kubeconfig was not found while it should be present");
+            let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
+            cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
+        }
+
+        cluster_secrets.create_or_update_secret(&vault_conn, true, event_details)?;
+
         Ok(())
     }
 
