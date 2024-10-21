@@ -1,7 +1,7 @@
 # To find the version do an `apt list -a xxxx` helm inside the CI image
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
-ARG KUBECTL_VERSION="1.30.3-1.1"
+ARG KUBECTL_VERSION="1.30.3"
 ARG HELM_VERSION="3.15.2-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"
@@ -15,7 +15,7 @@ ARG CONTAINERD_VERSION="1.7.19-1"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.1-2024-10-17T09-20-39"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.1-2024-10-21T15-59-17"
 
 
 ###########################################
@@ -49,12 +49,13 @@ RUN apt-get update && \
   docker-buildx-plugin=$BUILDX_VERSION \
   containerd.io=$CONTAINERD_VERSION \
   helm=$HELM_VERSION \
-  kubectl=$KUBECTL_VERSION \
   vault=$VAULT_VERSION && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
   mkdir -p $TF_PLUGIN_CACHE_DIR
+
+RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # Hashicorp apt repository does not package terraform for arm64 ...
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
@@ -228,7 +229,6 @@ RUN apt-get update && apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
-  kubectl=$KUBECTL_VERSION \
   google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
@@ -238,6 +238,8 @@ RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-archit
   unzip awscliv2.zip && \
   ./aws/install && \
   rm -rf awscliv2.zip aws
+
+RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip terraform.zip && \
@@ -312,10 +314,11 @@ RUN apt-get update && apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
-  kubectl=$KUBECTL_VERSION \
   dumb-init git-lfs && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
+
+RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 RUN groupadd -g 1000 qovery && \
   useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery
