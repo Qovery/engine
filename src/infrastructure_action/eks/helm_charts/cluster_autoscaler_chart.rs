@@ -133,7 +133,6 @@ impl ChartInstallationChecker for ClusterAutoscalerChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
     use crate::cloud_provider::aws::regions::AwsRegion;
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::{
@@ -141,6 +140,7 @@ mod tests {
         HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use crate::infrastructure_action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.

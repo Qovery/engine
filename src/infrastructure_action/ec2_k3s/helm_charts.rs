@@ -10,7 +10,6 @@ use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStora
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::Kind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
@@ -31,36 +30,11 @@ use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
 use crate::models::third_parties::LetsEncryptConfig;
 use semver::Version;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
 use url::Url;
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct AwsEc2QoveryTerraformOutput {
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_ec2_public_hostname: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_ec2_kubernetes_port: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_aws_account_id: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_alb_controller_arn: String,
-}
-
-impl AwsEc2QoveryTerraformOutput {
-    pub fn kubernetes_port_to_u16(&self) -> Result<u16, String> {
-        match self.aws_ec2_kubernetes_port.parse::<u16>() {
-            Ok(x) => Ok(x),
-            Err(e) => Err(format!(
-                "error while trying to convert kubernetes port from string {} to int: {}",
-                self.aws_ec2_kubernetes_port, e
-            )),
-        }
-    }
-}
 
 pub struct Ec2ChartsConfigPrerequisites {
     pub organization_id: String,
@@ -88,7 +62,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub aws_ec2_public_hostname: String,
 }
 
-pub fn ec2_aws_helm_charts(
+pub fn ec2_k3s_helm_charts(
     chart_config_prerequisites: &Ec2ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
