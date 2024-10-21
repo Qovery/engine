@@ -291,14 +291,14 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::{
-        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
-    };
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use crate::infrastructure_action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
+        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
+    };
     use chrono::Duration;
     use std::env;
 

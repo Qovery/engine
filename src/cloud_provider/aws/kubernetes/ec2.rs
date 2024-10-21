@@ -5,18 +5,15 @@ use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, force_fetch_kubeconfig};
 use crate::cloud_provider::kubernetes::{
-    event_details, send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
-    KubernetesVersion,
+    event_details, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
 };
-use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups, NodeGroupsWithDesiredState};
-use crate::cloud_provider::service::Action;
-use crate::cloud_provider::utilities::{print_action, wait_until_port_is_open, TcpCheckSource};
-use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
+use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups};
+use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
+use crate::cloud_provider::vault::ClusterSecrets;
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::terraform::{terraform_init_validate_plan_apply, terraform_output};
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
+use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
@@ -24,18 +21,8 @@ use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager::vault::QVaultClient;
-use crate::services::aws::models::QoveryAwsSdkConfigEc2;
-use async_trait::async_trait;
-use aws_sdk_ec2::error::SdkError;
-use aws_sdk_ec2::operation::describe_instances::{DescribeInstancesError, DescribeInstancesOutput};
-use aws_sdk_ec2::operation::describe_volumes::{DescribeVolumesError, DescribeVolumesOutput};
-use aws_sdk_ec2::operation::detach_volume::{DetachVolumeError, DetachVolumeOutput};
-use aws_sdk_ec2::types::{Filter, VolumeState};
-use aws_types::sdk_config::SdkConfig;
 use base64::engine::general_purpose;
 use base64::Engine;
-use chrono::Duration;
-use function_name::named;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use std::borrow::Borrow;
@@ -46,29 +33,27 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use crate::cmd::terraform_validators::TerraformValidators;
+use crate::infrastructure_action::{AwsEc2QoveryTerraformOutput, InfrastructureAction};
 use uuid::Uuid;
-
-use super::ec2_helm_charts::AwsEc2QoveryTerraformOutput;
 
 /// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
 pub struct EC2 {
-    context: Context,
-    id: String,
-    long_id: Uuid,
-    name: String,
-    version: KubernetesVersion,
-    region: AwsRegion,
-    zones: Vec<AwsZone>,
-    s3: S3,
-    template_directory: String,
-    options: Options,
-    instance: InstanceEc2,
-    logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettings,
-    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    _kubeconfig: Option<String>,
-    temp_dir: PathBuf,
+    pub context: Context,
+    pub id: String,
+    pub long_id: Uuid,
+    pub name: String,
+    pub version: KubernetesVersion,
+    pub region: AwsRegion,
+    pub zones: Vec<AwsZone>,
+    pub s3: S3,
+    pub template_directory: String,
+    pub options: Options,
+    pub instance: InstanceEc2,
+    pub logger: Box<dyn Logger>,
+    pub advanced_settings: ClusterAdvancedSettings,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub _kubeconfig: Option<String>,
+    pub temp_dir: PathBuf,
 }
 
 impl EC2 {
@@ -135,11 +120,11 @@ impl EC2 {
         Ok(cluster)
     }
 
-    fn struct_name(&self) -> &str {
+    pub fn struct_name(&self) -> &str {
         "kubernetes"
     }
 
-    fn node_group_from_instance_type(&self) -> NodeGroups {
+    pub fn node_group_from_instance_type(&self) -> NodeGroups {
         NodeGroups::new(
             "instance".to_string(),
             1,
@@ -297,207 +282,24 @@ impl Kubernetes for EC2 {
         vec![self.instance.instance_architecture]
     }
 
-    #[named]
     fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || {
-            kubernetes::create(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                &self.s3,
-                self.long_id,
-                self.template_directory.as_str(),
-                &self.zones,
-                &[self.node_group_from_instance_type()],
-                &self.options,
-                &self.advanced_settings,
-                None,
-            )
-        })
+        (self as &dyn InfrastructureAction).on_create_cluster(infra_ctx)
+    }
+
+    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+        (self as &dyn InfrastructureAction).on_pause_cluster(infra_ctx)
+    }
+
+    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+        (self as &dyn InfrastructureAction).on_delete_cluster(infra_ctx)
     }
 
     fn upgrade_with_status(
         &self,
         infra_ctx: &InfrastructureContext,
-        _kubernetes_upgrade_status: KubernetesUpgradeStatus,
+        kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Start preparing EC2 node upgrade process".to_string()),
-        ));
-
-        let temp_dir = self.temp_dir();
-
-        // generate terraform files and copy them into temp dir
-        let context = kubernetes::tera_context(
-            self,
-            infra_ctx.cloud_provider(),
-            infra_ctx.dns_provider(),
-            &self.zones,
-            &[NodeGroupsWithDesiredState::new_from_node_groups(
-                &self.node_group_from_instance_type(),
-                1,
-                false,
-            )],
-            &self.options,
-            Duration::minutes(0), // not used for EC2
-            false,
-            &self.advanced_settings,
-            None,
-        )?;
-
-        if let Err(e) =
-            crate::template::generate_and_copy_all_files_into_dir(self.template_directory.as_str(), temp_dir, context)
-        {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                self.template_directory.to_string(),
-                temp_dir.to_string_lossy().to_string(),
-                e,
-            )));
-        }
-
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
-        let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        if let Err(e) =
-            crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
-        {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                common_bootstrap_charts,
-                common_charts_temp_dir,
-                e,
-            )));
-        }
-
-        terraform_init_validate_plan_apply(
-            temp_dir.to_string_lossy().as_ref(),
-            self.context.is_dry_run_deploy(),
-            infra_ctx
-                .cloud_provider()
-                .credentials_environment_variables()
-                .as_slice(),
-            &TerraformValidators::Default,
-        )
-        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
-        // update Vault with new cluster information
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Ensuring the upgrade has successfully been performed...".to_string()),
-        ));
-
-        let qovery_terraform_output: AwsEc2QoveryTerraformOutput = terraform_output(
-            temp_dir.to_string_lossy().as_ref(),
-            infra_ctx
-                .cloud_provider()
-                .credentials_environment_variables()
-                .as_slice(),
-        )
-        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
-        let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-            infra_ctx.cloud_provider().access_key_id(),
-            self.region().to_string(),
-            infra_ctx.cloud_provider().secret_access_key(),
-            None,
-            Some(qovery_terraform_output.aws_ec2_public_hostname.clone()),
-            self.kind(),
-            self.cluster_name(),
-            self.long_id().to_string(),
-            self.options.grafana_admin_user.clone(),
-            self.options.grafana_admin_password.clone(),
-            infra_ctx.cloud_provider().organization_long_id().to_string(),
-            self.context().is_test_cluster(),
-        ));
-
-        if let Err(e) =
-            self.update_vault_config(event_details.clone(), cluster_secrets, Some(&self.kubeconfig_local_file_path()))
-        {
-            self.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new(
-                    "Wasn't able to update Vault information for this EC2 instance".to_string(),
-                    Some(e.to_string()),
-                ),
-            ));
-        };
-
-        self.logger().log(EngineEvent::Info(
-            event_details,
-            EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded".to_string()),
-        ));
-
-        Ok(())
-    }
-
-    #[named]
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || {
-            kubernetes::pause(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                self.template_directory.as_str(),
-                &self.zones,
-                &[],
-                &self.options,
-                &self.advanced_settings,
-                None,
-            )
-        })
-    }
-
-    #[named]
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || {
-            kubernetes::delete(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                &self.s3,
-                self.template_directory.as_str(),
-                &self.zones,
-                &[self.node_group_from_instance_type()],
-                &self.options,
-                &self.advanced_settings,
-                None,
-            )
-        })
+        (self as &dyn InfrastructureAction).on_upgrade_cluster(infra_ctx, kubernetes_upgrade_status)
     }
 
     fn temp_dir(&self) -> &Path {
@@ -562,133 +364,11 @@ impl Kubernetes for EC2 {
         None
     }
 
-    fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
-        let lb_name = match cloud_provider_lb_name {
-            Some(x) => format!(",QoveryName={x}"),
-            None => "".to_string(),
-        };
-        match self.advanced_settings().aws_eks_enable_alb_controller {
-            // !!! IMPORTANT !!!
-            // Changing this may require destroy/recreate a load balancer (and so downtime)
-            true => {
-                vec![
-                    (
-                        "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
-                        "external".to_string(),
-                    ),
-                    (
-                        "service.beta.kubernetes.io/aws-load-balancer-scheme".to_string(),
-                        "internet-facing".to_string(),
-                    ),
-                    (
-                        "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type".to_string(),
-                        "ip".to_string(),
-                    ),
-                    (
-                        "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
-                        format!(
-                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
-                            self.context.organization_long_id(),
-                            self.context.organization_short_id(),
-                            self.as_kubernetes().long_id(),
-                            self.as_kubernetes().id(),
-                            lb_name
-                        ),
-                    ),
-                ]
-            }
-            false => vec![(
-                "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
-                "nlb".to_string(),
-            )],
-        }
-    }
-}
-
-#[async_trait]
-impl QoveryAwsSdkConfigEc2 for SdkConfig {
-    async fn get_volume_by_instance_id(
-        &self,
-        instance_id: String,
-    ) -> Result<DescribeVolumesOutput, SdkError<DescribeVolumesError>> {
-        let client = aws_sdk_ec2::Client::new(self);
-        client
-            .describe_volumes()
-            .filters(
-                Filter::builder()
-                    .name("tag:ClusterId".to_string())
-                    .values(instance_id.to_string())
-                    .build(),
-            )
-            .send()
-            .await
-    }
-    async fn detach_instance_volume(
-        &self,
-        volume_id: String,
-    ) -> Result<DetachVolumeOutput, SdkError<DetachVolumeError>> {
-        let client = aws_sdk_ec2::Client::new(self);
-        client.detach_volume().volume_id(volume_id).send().await
-    }
-    /// instance isn't used ATM but will be useful when we'll need to implement ec2 pause.
-    async fn _get_instance_by_id(
-        &self,
-        instance_id: String,
-    ) -> Result<DescribeInstancesOutput, SdkError<DescribeInstancesError>> {
-        let client = aws_sdk_ec2::Client::new(self);
-        client
-            .describe_instances()
-            .filters(
-                Filter::builder()
-                    .name("tag:ClusterId".to_string())
-                    .values(instance_id.to_string())
-                    .build(),
-            )
-            .send()
-            .await
-    }
-    async fn detach_ec2_volumes(
-        &self,
-        instance_id: &str,
-        event_details: &EventDetails,
-    ) -> Result<(), Box<EngineError>> {
-        let result = match self.get_volume_by_instance_id(instance_id.to_string()).await {
-            Ok(result) => result,
-            Err(e) => {
-                return Err(Box::new(EngineError::new_aws_sdk_cannot_list_ec2_volumes(
-                    event_details.clone(),
-                    e,
-                    Some(instance_id),
-                )));
-            }
-        };
-
-        for volume in result.volumes.unwrap_or_default() {
-            if let (Some(id), attachments, Some(state)) = (volume.volume_id(), volume.attachments(), volume.state()) {
-                let mut skip_root_volume = false;
-                for attachment in attachments {
-                    if let Some(device) = attachment.device() {
-                        if device.to_string().contains("/dev/xvda") || state != &VolumeState::InUse {
-                            skip_root_volume = true;
-                        }
-                    }
-                }
-                if skip_root_volume {
-                    continue;
-                }
-
-                if let Err(e) = self.detach_instance_volume(id.to_string()).await {
-                    return Err(Box::new(EngineError::new_aws_sdk_cannot_detach_ec2_volumes(
-                        event_details.clone(),
-                        e,
-                        instance_id,
-                        id,
-                    )));
-                }
-            }
-        }
-
-        Ok(())
+    fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+        vec![(
+            "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+            "nlb".to_string(),
+        )]
     }
 }
 

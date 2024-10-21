@@ -22,6 +22,7 @@ pub mod errors;
 pub mod events;
 pub mod fs;
 pub mod git;
+mod infrastructure_action;
 pub mod io_models;
 pub mod kubers_utils;
 pub mod log_file_writer;

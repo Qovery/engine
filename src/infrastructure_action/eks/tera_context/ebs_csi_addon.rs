@@ -1,33 +1,33 @@
 use crate::cloud_provider::kubernetes::KubernetesVersion;
 use serde_derive::Serialize;
 
-/// AWS Kube proxy addon
+/// AWS EBS CSI addon
+/// https://docs.aws.amazon.com/eks/latest/userguide/managing-ebs-csi.html
 #[derive(Debug, PartialEq, Serialize)]
-pub struct AwsKubeProxyAddon {
+pub struct AwsEbsCsiAddon {
     version: String,
 }
 
-impl AwsKubeProxyAddon {
+impl AwsEbsCsiAddon {
     pub fn new_from_k8s_version(k8s_version: KubernetesVersion) -> Self {
-        AwsKubeProxyAddon {
-            // Get current default build of an kube-proxy add-on:
-            // https://docs.aws.amazon.com/en_us/eks/latest/userguide/managing-kube-proxy.html
-            // aws eks describe-addon-versions --kubernetes-version 1.25 --addon-name kube-proxy | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
+        AwsEbsCsiAddon {
+            // Get current default build of an aws-ebs-csi add-on:
+            // aws eks describe-addon-versions --kubernetes-version 1.22 --addon-name aws-ebs-csi-driver | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
-                KubernetesVersion::V1_23 { .. } => "v1.23.16-eksbuild.2",
-                KubernetesVersion::V1_24 { .. } => "v1.24.10-eksbuild.2",
-                KubernetesVersion::V1_25 { .. } => "v1.25.6-eksbuild.1",
-                KubernetesVersion::V1_26 { .. } => "v1.26.2-eksbuild.1",
-                KubernetesVersion::V1_27 { .. } => "v1.27.6-eksbuild.2",
-                KubernetesVersion::V1_28 { .. } => "v1.28.2-eksbuild.2",
-                KubernetesVersion::V1_29 { .. } => "v1.29.0-eksbuild.1",
+                KubernetesVersion::V1_23 { .. } => "v1.15.0-eksbuild.1",
+                KubernetesVersion::V1_24 { .. } => "v1.19.0-eksbuild.1",
+                KubernetesVersion::V1_25 { .. } => "v1.19.0-eksbuild.2",
+                KubernetesVersion::V1_26 { .. } => "v1.20.0-eksbuild.1",
+                KubernetesVersion::V1_27 { .. } => "v1.26.1-eksbuild.1",
+                KubernetesVersion::V1_28 { .. } => "v1.27.0-eksbuild.1",
+                KubernetesVersion::V1_29 { .. } => "v1.33.0-eksbuild.1",
             }
             .to_string(),
         }
     }
 
     pub fn new_with_overridden_version(addon_version: &str) -> Self {
-        AwsKubeProxyAddon {
+        AwsEbsCsiAddon {
             version: addon_version.to_string(),
         }
     }
@@ -35,15 +35,15 @@ impl AwsKubeProxyAddon {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::addons::aws_kube_proxy::AwsKubeProxyAddon;
+    use super::*;
     use crate::cloud_provider::kubernetes::KubernetesVersion;
 
     #[test]
-    fn aws_addon_kube_proxy_new_test() {
+    fn aws_addon_ebs_csi_new_test() {
         // setup:
         struct TestCase {
             k8s_version: KubernetesVersion,
-            expected: AwsKubeProxyAddon,
+            expected: AwsEbsCsiAddon,
         }
 
         let tests_cases = vec![
@@ -53,8 +53,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.23.16-eksbuild.2".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.15.0-eksbuild.1".to_string(),
                 },
             },
             TestCase {
@@ -63,8 +63,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.24.10-eksbuild.2".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.19.0-eksbuild.1".to_string(),
                 },
             },
             TestCase {
@@ -73,8 +73,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.25.6-eksbuild.1".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.19.0-eksbuild.2".to_string(),
                 },
             },
             TestCase {
@@ -83,8 +83,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.26.2-eksbuild.1".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.20.0-eksbuild.1".to_string(),
                 },
             },
             TestCase {
@@ -93,8 +93,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.27.6-eksbuild.2".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.26.1-eksbuild.1".to_string(),
                 },
             },
             TestCase {
@@ -103,8 +103,8 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.28.2-eksbuild.2".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.27.0-eksbuild.1".to_string(),
                 },
             },
             TestCase {
@@ -113,15 +113,15 @@ mod tests {
                     patch: None,
                     suffix: None,
                 },
-                expected: AwsKubeProxyAddon {
-                    version: "v1.29.0-eksbuild.1".to_string(),
+                expected: AwsEbsCsiAddon {
+                    version: "v1.33.0-eksbuild.1".to_string(),
                 },
             },
         ];
 
         for tc in tests_cases {
             // execute:
-            let result = AwsKubeProxyAddon::new_from_k8s_version(tc.k8s_version);
+            let result = AwsEbsCsiAddon::new_from_k8s_version(tc.k8s_version);
 
             // verify:
             assert_eq!(tc.expected, result);
@@ -129,17 +129,17 @@ mod tests {
     }
 
     #[test]
-    fn aws_addon_kube_proxy_new_with_overridden_version() {
+    fn aws_addon_ebs_csi_new_with_overriden_version() {
         // setup:
-        let tests_cases = vec!["toto", "v1.24.10-eksbuild.1", "v1.25.6-eksbuild.2"];
+        let tests_cases = vec!["toto", "v1.11.4-eksbuild.1", "v1.11.6-eksbuild.2"];
 
         for tc in tests_cases {
             // execute:
-            let result = AwsKubeProxyAddon::new_with_overridden_version(tc);
+            let result = AwsEbsCsiAddon::new_with_overridden_version(tc);
 
             // verify:
             assert_eq!(
-                AwsKubeProxyAddon {
+                AwsEbsCsiAddon {
                     version: tc.to_string()
                 },
                 result

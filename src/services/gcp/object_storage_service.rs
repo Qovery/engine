@@ -26,6 +26,7 @@ use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{clock, RateLimiter};
 
+use chrono::{DateTime, Utc};
 use reqwest::Body;
 use std::cmp::max;
 use std::collections::HashMap;
@@ -343,7 +344,9 @@ impl ObjectStorageService {
         &self,
         bucket_name: &str,
         bucket_location: GcpStorageRegion,
+        job_ttl: Option<Duration>,
     ) -> Result<(), ObjectStorageServiceError> {
+        let creation_date: DateTime<Utc> = Utc::now();
         match self.cloud_job_service.create_job(
             format!("delete-bucket-{}", bucket_name).as_str(),
             "gcr.io/google.com/cloudsdktool/google-cloud-cli:latest",
@@ -375,6 +378,8 @@ impl ObjectStorageService {
                     "bucket_location".to_string(),
                     bucket_location.to_cloud_provider_format().to_lowercase(),
                 ),
+                ("creation_date".to_string(), creation_date.timestamp().to_string()),
+                ("ttl".to_string(), format!("{}", job_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0))),
             ])),
         ) {
             Ok(_) => Ok(()),

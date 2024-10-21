@@ -1,21 +1,23 @@
-use crate::cloud_provider::aws::kubernetes::eks_helm_charts::AwsEksQoveryTerraformOutput;
-use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::kubectl_exec_get_pods;
 use crate::cmd::structs::KubernetesPodStatusPhase;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
+use crate::infrastructure_action::eks::helm_charts::karpenter::KarpenterChart;
+use crate::infrastructure_action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::infrastructure_action::eks::sdk::QoveryAwsSdkConfigEks;
+use crate::infrastructure_action::eks::AwsEksQoveryTerraformOutput;
 use crate::models::ToCloudProviderFormat;
 use crate::runtime::block_on;
-use crate::services::aws::models::QoveryAwsSdkConfigEks;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
@@ -452,4 +454,44 @@ fn uninstall_chart(
                 HelmChartError::HelmError(err),
             ))
         })
+}
+
+pub fn bootstrap_on_fargate_when_karpenter_is_enabled(
+    kubernetes: &dyn Kubernetes,
+    kubernetes_action: KubernetesClusterAction,
+) -> bool {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap => true,
+        KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
+        KubernetesClusterAction::Update(_) => false,
+        KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => false,
+    }
+}
+
+pub fn node_groups_when_karpenter_is_enabled<'a>(
+    kubernetes: &dyn Kubernetes,
+    infra_context: &InfrastructureContext,
+    node_groups: &'a [NodeGroups],
+    event_details: &EventDetails,
+    kubernetes_action: KubernetesClusterAction,
+) -> Result<&'a [NodeGroups], Box<EngineError>> {
+    match kubernetes_action {
+        KubernetesClusterAction::Bootstrap
+        | KubernetesClusterAction::Upgrade(_)
+        | KubernetesClusterAction::Pause
+        | KubernetesClusterAction::Resume(_)
+        | KubernetesClusterAction::Delete
+        | KubernetesClusterAction::CleanKarpenterMigration => Ok(&[]),
+        KubernetesClusterAction::Update(_)
+            if kubernetes.context().is_first_cluster_deployment()
+                || Karpenter::deployment_is_installed(&infra_context.mk_kube_client()?, event_details) =>
+        {
+            Ok(&[])
+        }
+        KubernetesClusterAction::Update(_) => Ok(node_groups),
+    }
 }

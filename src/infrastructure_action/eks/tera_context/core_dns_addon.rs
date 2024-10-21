@@ -35,7 +35,7 @@ impl AwsCoreDnsAddon {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::addons::aws_core_dns_addon::AwsCoreDnsAddon;
+    use super::*;
     use crate::cloud_provider::kubernetes::KubernetesVersion;
 
     #[test]
