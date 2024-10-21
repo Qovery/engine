@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError,
 };
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -7,106 +7,81 @@ use crate::cloud_provider::helm_charts::{
 use crate::errors::CommandError;
 use kube::Client;
 
-pub struct KarpenterChart {
+pub struct AwsNodeTermHandlerChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
-    cluster_name: String,
-    aws_iam_karpenter_controller_role_arn: String,
-    replace_cluster_autoscaler: bool,
-    enable_monitoring: bool,
-    recreate_pods: bool,
+    replaced_by_karpenter: bool,
 }
 
-impl KarpenterChart {
-    pub fn new(
-        chart_prefix_path: Option<&str>,
-        cluster_name: String,
-        aws_iam_karpenter_controller_role_arn: String,
-        replace_cluster_autoscaler: bool,
-        enable_monitoring: bool,
-        recreate_pods: bool,
-    ) -> Self {
-        KarpenterChart {
+impl AwsNodeTermHandlerChart {
+    pub fn new(chart_prefix_path: Option<&str>, replaced_by_karpenter: bool) -> AwsNodeTermHandlerChart {
+        AwsNodeTermHandlerChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
-                KarpenterChart::chart_name(),
+                "aws-node-termination-handler".to_string(),
             ),
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
-                KarpenterChart::chart_name(),
+                AwsNodeTermHandlerChart::chart_name(),
             ),
-            cluster_name,
-            aws_iam_karpenter_controller_role_arn,
-            replace_cluster_autoscaler,
-            enable_monitoring,
-            recreate_pods,
+            replaced_by_karpenter,
         }
     }
 
     pub fn chart_name() -> String {
-        "karpenter".to_string()
+        "aws-node-term-handler".to_string()
     }
 }
 
-impl ToCommonHelmChart for KarpenterChart {
+impl ToCommonHelmChart for AwsNodeTermHandlerChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         Ok(CommonChart {
             chart_info: ChartInfo {
-                name: KarpenterChart::chart_name(),
-                action: match self.replace_cluster_autoscaler {
-                    true => HelmAction::Deploy,
-                    false => HelmAction::Destroy,
+                name: AwsNodeTermHandlerChart::chart_name(),
+                action: match self.replaced_by_karpenter {
+                    true => HelmAction::Destroy,
+                    false => HelmAction::Deploy,
                 },
-                namespace: HelmChartNamespaces::KubeSystem,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
-                        key: "settings.clusterName".to_string(),
-                        value: self.cluster_name.to_string(),
+                        key: "nameOverride".to_string(),
+                        value: AwsNodeTermHandlerChart::chart_name(),
                     },
                     ChartSetValue {
-                        key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
-                        value: self.aws_iam_karpenter_controller_role_arn.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "settings.interruptionQueue".to_string(),
-                        value: self.cluster_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "serviceMonitor.enabled".to_string(),
-                        value: self.enable_monitoring.to_string(),
+                        key: "fullnameOverride".to_string(),
+                        value: AwsNodeTermHandlerChart::chart_name(),
                     },
                 ],
-                recreate_pods: self.recreate_pods,
                 ..Default::default()
             },
-            chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
-            vertical_pod_autoscaler: None, // enabled in the chart configuration
+            chart_installation_checker: Some(Box::new(AwsNodeTermHandlerChecker::new())),
+            vertical_pod_autoscaler: None,
         })
     }
 }
 
 #[derive(Clone)]
-pub struct KarpenterChartChecker {}
+pub struct AwsNodeTermHandlerChecker {}
 
-impl KarpenterChartChecker {
-    pub fn new() -> KarpenterChartChecker {
-        KarpenterChartChecker {}
+impl AwsNodeTermHandlerChecker {
+    pub fn new() -> AwsNodeTermHandlerChecker {
+        AwsNodeTermHandlerChecker {}
     }
 }
 
-impl Default for KarpenterChartChecker {
+impl Default for AwsNodeTermHandlerChecker {
     fn default() -> Self {
-        KarpenterChartChecker::new()
+        AwsNodeTermHandlerChecker::new()
     }
 }
 
-impl ChartInstallationChecker for KarpenterChartChecker {
+impl ChartInstallationChecker for AwsNodeTermHandlerChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO(ENG-1366): Implement chart install verification
+        // TODO(ENG-1363): Implement chart install verification
         Ok(())
     }
 
@@ -117,40 +92,23 @@ impl ChartInstallationChecker for KarpenterChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+    use crate::infrastructure_action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
     use std::env;
-    use std::fs::File;
-
-    #[test]
-    fn test_ec2_node_classes_custom_resource_is_aligned_with_definition() {
-        let filename = "./lib/aws/bootstrap/charts/karpenter/crds/karpenter.k8s.aws_ec2nodeclasses.yaml";
-        let file = File::open(filename).unwrap();
-        let yaml: serde_yaml::Value = serde_yaml::from_reader(file).unwrap();
-        let group = &yaml["spec"]["group"];
-        let version = &yaml["spec"]["versions"][0]["name"];
-        let kind = &yaml["spec"]["names"]["kind"];
-
-        // These values must be equal to the ones define in the CustomResource in the kube_client.rs file
-        // #[kube(group = "karpenter.k8s.aws", version = "v1beta1", kind = "EC2NodeClass")]
-        assert_eq!(group.as_str(), Some("karpenter.k8s.aws"));
-        assert_eq!(version.as_str(), Some("v1"));
-        assert_eq!(kind.as_str(), Some("EC2NodeClass"));
-    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
-    fn karpenter_chart_directory_exists_test() {
+    fn aws_node_term_handler_chart_directory_exists_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
-            "{}/lib/{}/bootstrap/charts/{}/Chart.yaml",
+            "{}/lib/{}/bootstrap/charts/aws-node-termination-handler/Chart.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
@@ -158,7 +116,6 @@ mod tests {
                 chart.chart_path.helm_path(),
                 HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
             ),
-            KarpenterChart::chart_name(),
         );
 
         // execute
@@ -170,9 +127,9 @@ mod tests {
 
     /// Makes sure chart values file exists.
     #[test]
-    fn karpenter_chart_values_file_exists_test() {
+    fn aws_node_term_handler_chart_values_file_exists_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -184,7 +141,7 @@ mod tests {
                 chart.chart_values_path.helm_path(),
                 HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
             ),
-            KarpenterChart::chart_name(),
+            AwsNodeTermHandlerChart::chart_name(),
         );
 
         // execute
@@ -194,12 +151,12 @@ mod tests {
         assert!(values_file.is_ok(), "Chart values file should exist: `{chart_values_path}`");
     }
 
-    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// Make sure rust code deosn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn karpenter_rust_overridden_values_exists_in_values_yaml_test() {
+    fn aws_node_term_handler_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = KarpenterChart::new(None, "whatever".to_string(), "whatever".to_string(), true, true, false);
+        let chart = AwsNodeTermHandlerChart::new(None, false);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
@@ -211,7 +168,7 @@ mod tests {
                     chart.chart_values_path.helm_path(),
                     HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
                 ),
-                KarpenterChart::chart_name()
+                AwsNodeTermHandlerChart::chart_name()
             ),
         );
 

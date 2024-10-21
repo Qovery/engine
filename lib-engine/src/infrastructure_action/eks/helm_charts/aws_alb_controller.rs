@@ -12,7 +12,6 @@ pub struct AwsLoadBalancerControllerChart {
     pub chart_prefix_path: Option<String>,
     pub chart_info: ChartInfo,
     pub vpa_enabled: bool,
-    pub enable_mutator_webhook: bool,
 }
 
 impl AwsLoadBalancerControllerChart {
@@ -82,7 +81,6 @@ impl AwsLoadBalancerControllerChart {
                 ..Default::default()
             },
             vpa_enabled,
-            enable_mutator_webhook,
         }
     }
 

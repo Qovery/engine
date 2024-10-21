@@ -31,7 +31,7 @@ pub mod gcp;
 pub mod helm;
 pub mod helm_charts;
 pub mod io;
-mod kubeconfig_helper;
+pub mod kubeconfig_helper;
 mod kubectl_utils;
 pub mod kubernetes;
 pub mod metrics;

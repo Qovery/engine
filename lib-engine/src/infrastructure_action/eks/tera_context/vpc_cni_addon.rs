@@ -36,7 +36,7 @@ impl AwsVpcCniAddon {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::addons::aws_vpc_cni_addon::AwsVpcCniAddon;
+    use super::*;
     use crate::cloud_provider::kubernetes::KubernetesVersion;
 
     #[test]

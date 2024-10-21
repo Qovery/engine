@@ -202,7 +202,6 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -210,6 +209,7 @@ mod tests {
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CpuArchitecture::{AMD64, ARM64};
+    use crate::infrastructure_action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]

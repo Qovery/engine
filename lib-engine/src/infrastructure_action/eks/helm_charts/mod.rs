@@ -1,9 +1,7 @@
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_alb_controller::AwsLoadBalancerControllerChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter::KarpenterChart;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart,
-    HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -20,23 +18,15 @@ use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-    VpcQoveryNetworkMode,
 };
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::from_terraform_value;
 use crate::cloud_provider::Kind;
+use aws_alb_controller::AwsLoadBalancerControllerChart;
+use karpenter::KarpenterChart;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::{
-    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
-};
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
-use crate::cloud_provider::aws::kubernetes::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -56,43 +46,33 @@ use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryCluste
 use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::infrastructure_action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
+    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
+};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::models::aws::AwsStorageType;
 use crate::models::domain::Domain;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::ToCloudProviderFormat;
+use aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use chrono::Duration;
-use serde::{Deserialize, Serialize};
+use cluster_autoscaler_chart::ClusterAutoscalerChart;
+use karpenter_configuration::KarpenterConfigurationChart;
+use karpenter_crd::KarpenterCrdChart;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct AwsEksQoveryTerraformOutput {
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_account_id: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_eks_user_mapper_role_arn: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_cluster_autoscaler_role_arn: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_cloudwatch_role_arn: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_loki_role_arn: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_s3_loki_bucket_name: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub loki_storage_config_aws_s3: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub karpenter_controller_aws_role_arn: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub cluster_security_group_id: String,
-    #[serde(deserialize_with = "from_terraform_value")]
-    pub aws_iam_alb_controller_arn: String,
-}
+pub mod aws_alb_controller;
+pub mod aws_iam_eks_user_mapper_chart;
+pub mod aws_node_term_handler_chart;
+pub mod cluster_autoscaler_chart;
+pub mod karpenter;
+pub mod karpenter_configuration;
+pub mod karpenter_crd;
 
 pub struct EksChartsConfigPrerequisites {
     pub organization_id: String,
@@ -103,20 +83,13 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_name: String,
     pub cpu_architectures: Vec<CpuArchitecture>,
     pub cloud_provider: String,
-    pub test_cluster: bool,
-    pub aws_access_key_id: String,
-    pub aws_secret_access_key: String,
-    pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub ff_grafana_enabled: bool,
-    pub managed_domain: Domain,
-    pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
-    pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub alb_controller_already_deployed: bool,
@@ -138,7 +111,7 @@ pub struct EksChartsConfigPrerequisites {
     pub aws_iam_alb_controller_arn: String,
 }
 
-pub fn eks_aws_helm_charts(
+pub fn eks_helm_charts(
     chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
@@ -243,12 +216,6 @@ pub fn eks_aws_helm_charts(
     let aws_node_term_handler =
         AwsNodeTermHandlerChart::new(chart_prefix_path, chart_config_prerequisites.is_karpenter_enabled)
             .to_common_helm_chart()?;
-
-    // AWS UI view
-    // TODO(03/10/2024): Remove aws-ui-view after all cluster has been deployed
-    // PR is here https://gitlab.com/qovery/backend/engine/-/merge_requests/1603
-    let mut aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart()?;
-    aws_ui_view.chart_info.action = HelmAction::Destroy;
 
     // Vertical pod autoscaler
     let vpa = VpaChart::new(
@@ -762,7 +729,7 @@ pub fn eks_aws_helm_charts(
         level_1.push(Box::new(aws_iam_eks_user_mapper));
     }
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(aws_ui_view), Box::new(vpa)];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
