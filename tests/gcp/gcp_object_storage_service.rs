@@ -8,7 +8,7 @@ use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::cmp::max;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tracing::error;
 use uuid::Uuid;
@@ -26,7 +26,7 @@ struct BucketParams {
 
 impl BucketParams {
     /// Check if current bucket params matches google bucket.
-    fn matches(&self, bucket: &Bucket) -> bool {
+    fn matches(&self, bucket: &Bucket, exclude_labels: Option<HashSet<&str>>) -> bool {
         let bucket_location = match &bucket.location {
             BucketRegion::GcpRegion(gcp_location) => gcp_location,
             _ => return false,
@@ -34,9 +34,21 @@ impl BucketParams {
 
         self.bucket_name == bucket.name
             && &self.bucket_location == bucket_location
-            && self.bucket_labels == bucket.labels
-            // TTL
-            && match (self.bucket_ttl, bucket.ttl) {
+            && match exclude_labels {
+            None => self.bucket_labels == bucket.labels,
+            Some(exclusion) => {
+                match (&self.bucket_labels, &bucket.labels) {
+                    (Some(labels_1), Some(labels_2)) => {
+                        let labels_1: HashSet<_> = labels_1.keys().collect();
+                        let labels_2: HashSet<_> = labels_2.keys().collect();
+                        labels_1.symmetric_difference(&labels_2).all(|l| exclusion.contains(l.as_str()))
+                    },
+                    _ => false,
+                }
+            },
+        }
+        // TTL
+        && match (self.bucket_ttl, bucket.ttl) {
             (Some(self_bucket_ttl), Some(bucket_ttl)) => bucket_ttl == max(self_bucket_ttl, Duration::from_secs(24 * 60 * 60)),
             (None, None) => true,
             _ => false,
@@ -252,7 +264,10 @@ fn test_create_bucket_success() {
         });
 
         // verify:
-        assert!(tc.input.matches(&created_bucket));
+        assert!(tc.input.matches(
+            &created_bucket,
+            Some(HashSet::from_iter(["ttl", "creation_date"].iter().cloned())) // exclude TTL and creation date as added automatically by the service
+        ));
     }
 }
 
