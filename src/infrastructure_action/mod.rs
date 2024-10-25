@@ -1,5 +1,6 @@
 mod ec2_k3s;
 mod eks;
+mod gke;
 mod scaleway;
 mod utils;
 
