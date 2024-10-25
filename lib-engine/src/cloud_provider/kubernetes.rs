@@ -1135,7 +1135,7 @@ impl InstanceEc2 {
 pub fn send_progress_on_long_task<K, R, F>(kubernetes: &K, action: Action, long_task: F) -> R
 where
     K: Kubernetes + ?Sized,
-    F: Fn() -> R,
+    F: FnOnce() -> R,
 {
     let waiting_message = match action {
         Action::Create => Some(format!(
@@ -1167,7 +1167,7 @@ pub fn send_progress_on_long_task_with_message<K, R, F>(
 ) -> R
 where
     K: Kubernetes + ?Sized,
-    F: Fn() -> R,
+    F: FnOnce() -> R,
 {
     let logger = kubernetes.logger().clone_dyn();
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));

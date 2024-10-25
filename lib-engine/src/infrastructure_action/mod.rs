@@ -1,5 +1,6 @@
 mod ec2_k3s;
-pub mod eks;
+mod eks;
+mod scaleway;
 mod utils;
 
 use crate::cloud_provider::kubernetes::KubernetesUpgradeStatus;
