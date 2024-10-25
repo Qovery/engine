@@ -151,7 +151,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::gcp::kubernetes::io::{GkeOptions, UserProvidedVPCNetwork};
+    use super::*;
     use crate::cloud_provider::gcp::kubernetes::VpcMode as GkeVpcMode;
     use crate::cloud_provider::qovery::EngineLocation;
     use ipnet::IpNet;

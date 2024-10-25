@@ -21,6 +21,7 @@ pub mod context;
 pub mod database;
 pub mod engine_request;
 pub mod environment;
+mod gke;
 pub mod helm_chart;
 pub mod job;
 pub mod labels_group;
