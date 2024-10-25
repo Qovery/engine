@@ -77,18 +77,19 @@ resource "aws_db_instance" "postgresql_instance" {
   monitoring_interval = 10
   monitoring_role_arn = data.aws_iam_role.rds_enhanced_monitoring.arn
 
-  # Backups
+  # Backup
   backup_retention_period = var.backup_retention_period
   backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
-  {%- if not skip_final_snapshot %}
   final_snapshot_identifier = local.final_snapshot_name
   lifecycle {
     ignore_changes = [
+{%- if not skip_final_snapshot %}
       final_snapshot_identifier,
+{%- endif %}
+      parameter_group_name,
     ]
   }
-  {%- endif %}
   copy_tags_to_snapshot = true
   delete_automated_backups = var.delete_automated_backups
 
