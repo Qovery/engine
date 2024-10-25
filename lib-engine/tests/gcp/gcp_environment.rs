@@ -19,7 +19,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
-use qovery_engine::transaction::TransactionResult;
 use std::str::FromStr;
 use tracing::log::warn;
 use tracing::span;
@@ -55,7 +54,7 @@ fn gcp_test_build_phase() {
         let env_action = environment.clone();
 
         let (env, ret) = environment.build_environment(&env_action, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check the image exist in the registry
         let img_exist = infra_ctx
@@ -127,10 +126,10 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -215,9 +214,9 @@ fn deploy_a_working_environment_with_shared_registry() {
         let env_to_deploy2 = environment2.clone();
 
         let ret = environment.deploy_environment(&env_to_deploy, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let ret = environment2.deploy_environment(&env_to_deploy2, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         // Check take both deployment used the same image
         let env = environment
             .to_environment_domain(
@@ -253,13 +252,13 @@ fn deploy_a_working_environment_with_shared_registry() {
         environment_to_delete2.applications[0].should_delete_shared_registry = true;
 
         let ret = environment_to_delete.delete_environment(&environment_to_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
         assert!(img_exist);
         let ret = environment_to_delete2.delete_environment(&environment_to_delete2, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
@@ -320,10 +319,10 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
+        assert!(matches!(result, Ok(_) | Err(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -372,14 +371,14 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let selector = &environment.applications[0].long_id;
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
         let result = environment.pause_environment(&env_action, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
@@ -390,7 +389,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = gcp_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
@@ -398,7 +397,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
 
         // Cleanup
         let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -483,10 +482,10 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -645,10 +644,10 @@ fn gcp_gke_deploy_container_with_router() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })

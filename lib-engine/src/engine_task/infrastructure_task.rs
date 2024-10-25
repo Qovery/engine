@@ -1,6 +1,5 @@
 use super::Task;
 use crate::cmd::docker::Docker;
-use crate::engine::EngineConfigError;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
@@ -12,7 +11,6 @@ use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::models::abort::{Abort, AbortStatus};
-use crate::transaction::{Transaction, TransactionResult};
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
 use tokio::sync::broadcast;
@@ -85,22 +83,14 @@ impl InfrastructureTask {
         EventDetails::clone_changing_stage(self.request.event_details(), Infrastructure(step))
     }
 
-    fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: TransactionResult) {
+    fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: Result<(), Box<EngineError>>) {
         match transaction_result {
-            TransactionResult::Ok => {
-                self.send_infrastructure_progress(logger.clone(), None);
-            }
-            TransactionResult::Error(engine_error) => {
-                self.send_infrastructure_progress(logger.clone(), Some(*engine_error));
-            }
-            TransactionResult::Canceled => {
-                // should never happen by design
-                error!("Infrastructure task should never been canceled");
-            }
+            Ok(()) => self.send_infrastructure_progress(logger.clone(), None),
+            Err(err) => self.send_infrastructure_progress(logger.clone(), Some(err)),
         }
     }
 
-    fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<EngineError>) {
+    fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<Box<EngineError>>) {
         let kubernetes = &self.request.kubernetes;
         if let Some(engine_error) = option_engine_error {
             let infrastructure_step = match self.request.action {
@@ -185,35 +175,23 @@ impl Task for InfrastructureTask {
         ) {
             Ok(engine) => engine,
             Err(err) => {
-                self.send_infrastructure_progress(self.logger.clone(), Some(*err));
+                self.send_infrastructure_progress(self.logger.clone(), Some(err));
                 return;
             }
         };
 
-        // check and init the connection to all services
-        let mut tx = match Transaction::new(&engine) {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                let err = *err;
-                let engine_error = match err {
-                    EngineConfigError::BuildPlatformNotValid(engine_error) => engine_error,
-                    EngineConfigError::CloudProviderNotValid(engine_error) => engine_error,
-                    EngineConfigError::DnsProviderNotValid(engine_error) => engine_error,
-                    EngineConfigError::KubernetesNotValid(engine_error) => engine_error,
-                };
-                self.send_infrastructure_progress(self.logger.clone(), Some(engine_error));
-                return;
-            }
+        let ret: Result<(), Box<EngineError>> = match self.request.action {
+            Action::Create => engine.kubernetes().as_infra_actions().create_cluster(&engine),
+            Action::Pause => engine.kubernetes().as_infra_actions().pause_cluster(&engine),
+            Action::Delete => engine.kubernetes().as_infra_actions().delete_cluster(&engine),
+            Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
+                engine
+                    .kubernetes()
+                    .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
+            ))),
         };
 
-        let _ = match self.request.action {
-            Action::Create => tx.create_kubernetes(),
-            Action::Pause => tx.pause_kubernetes(),
-            Action::Delete => tx.delete_kubernetes(),
-            Action::Restart => tx.restart_kubernetes(),
-        };
-
-        self.handle_transaction_result(self.logger.clone(), tx.commit());
+        self.handle_transaction_result(self.logger.clone(), ret);
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
         // So we early drop the guard to notify core that the task is done

@@ -20,6 +20,7 @@ use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::infrastructure_action::gke::helm_charts::{gke_helm_charts, GkeChartsConfigPrerequisites};
 use crate::infrastructure_action::gke::tera_context::gke_tera_context;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
+use crate::infrastructure_action::InfrastructureAction;
 use base64::Engine;
 use itertools::Itertools;
 use std::fs;
@@ -44,7 +45,7 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         ) {
             Ok(kubernetes_upgrade_status) => {
                 if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                    cluster.upgrade_with_status(infra_ctx, kubernetes_upgrade_status)?;
+                    cluster.upgrade_cluster(infra_ctx, kubernetes_upgrade_status)?;
                 } else {
                     cluster.logger().log(EngineEvent::Info(
                         event_details.clone(),

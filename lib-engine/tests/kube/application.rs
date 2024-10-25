@@ -21,7 +21,6 @@ use qovery_engine::models::application::{get_application_with_invalid_storage_si
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::models::types::AWS;
 use qovery_engine::runtime::block_on;
-use qovery_engine::transaction::TransactionResult;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::{span, Level};
 
@@ -40,7 +39,7 @@ fn should_increase_app_storage_size() {
         let (infra_ctx, environment) = kube_test_env(TestEnvOption::WithApp);
         let ea = environment.clone();
 
-        assert!(matches!(environment.deploy_environment(&ea, &infra_ctx), TransactionResult::Ok));
+        assert!(environment.deploy_environment(&ea, &infra_ctx).is_ok());
 
         let mut resized_env = environment.clone();
         resized_env.applications[0].storage[0].size_in_gib = Resize.size();
@@ -142,10 +141,7 @@ fn should_increase_app_storage_size() {
 
         // assert app can be redeployed
         let rea = resized_env.clone();
-        assert!(matches!(
-            resized_env.deploy_environment(&rea, &infra_ctx),
-            TransactionResult::Ok
-        ));
+        assert!(resized_env.deploy_environment(&rea, &infra_ctx).is_ok());
 
         // assert edited storage have good size
         let pvcs = match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
@@ -180,10 +176,7 @@ fn should_increase_app_storage_size() {
         let mut env_to_delete = environment;
         env_to_delete.action = Action::Delete;
         let ead = env_to_delete.clone();
-        assert!(matches!(
-            env_to_delete.delete_environment(&ead, &infra_ctx),
-            TransactionResult::Ok
-        ));
+        assert!(env_to_delete.delete_environment(&ead, &infra_ctx).is_ok());
 
         test_name.to_string()
     });
@@ -278,16 +271,13 @@ fn should_have_mounted_files_as_volume() {
         let deployment_result = environment.deploy_environment(&ea, &infra_ctx);
 
         // verify:
-        assert!(matches!(deployment_result, TransactionResult::Ok));
+        assert!(deployment_result.is_ok());
 
         // clean up:
         let mut env_to_delete = environment;
         env_to_delete.action = Action::Delete;
         let ead = env_to_delete.clone();
-        assert!(matches!(
-            env_to_delete.delete_environment(&ead, &infra_ctx),
-            TransactionResult::Ok
-        ));
+        assert!(env_to_delete.delete_environment(&ead, &infra_ctx).is_ok());
 
         test_name.to_string()
     });

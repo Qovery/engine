@@ -2,6 +2,7 @@ mod ec2_k3s;
 mod eks;
 mod gke;
 mod scaleway;
+mod self_managed;
 mod utils;
 
 use crate::cloud_provider::kubernetes::KubernetesUpgradeStatus;
@@ -12,10 +13,10 @@ use crate::errors::EngineError;
 pub use ec2_k3s::AwsEc2QoveryTerraformOutput;
 
 pub trait InfrastructureAction: Send + Sync {
-    fn on_create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn on_pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn on_delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn on_upgrade_cluster(
+    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn upgrade_cluster(
         &self,
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,

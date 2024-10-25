@@ -15,6 +15,7 @@ use crate::infrastructure_action::scaleway::helm_charts::{kapsule_helm_charts, K
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
 use crate::infrastructure_action::scaleway::tera_context::kapsule_tera_context;
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
+use crate::infrastructure_action::InfrastructureAction;
 use crate::io_models::context::Features;
 use crate::models::domain::ToHelmString;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -45,7 +46,7 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         ) {
             Ok(x) => {
                 if x.required_upgrade_on.is_some() {
-                    cluster.upgrade_with_status(infra_ctx, x)?;
+                    cluster.upgrade_cluster(infra_ctx, x)?;
                 } else {
                     cluster.logger().log(EngineEvent::Info(
                         event_details.clone(),

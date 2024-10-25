@@ -20,7 +20,6 @@ use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
-use crate::transaction::DeploymentOption;
 use base64::Engine;
 use itertools::Itertools;
 use std::cmp::{max, min};
@@ -33,6 +32,12 @@ use std::time::Duration;
 use std::{env, fs, thread};
 use tokio::sync::broadcast;
 use uuid::Uuid;
+
+#[derive(Clone)]
+pub struct DeploymentOption {
+    pub force_build: bool,
+    pub force_push: bool,
+}
 
 pub struct EnvironmentTask {
     workspace_root_dir: String,

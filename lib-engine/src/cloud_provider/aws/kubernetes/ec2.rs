@@ -1,17 +1,14 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
-use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
+use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, force_fetch_kubeconfig};
-use crate::cloud_provider::kubernetes::{
-    event_details, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion,
-};
+use crate::cloud_provider::kubernetes::{event_details, InstanceType, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::vault::ClusterSecrets;
 use crate::cloud_provider::CloudProvider;
-use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::io_models::context::Context;
@@ -282,26 +279,6 @@ impl Kubernetes for EC2 {
         vec![self.instance.instance_architecture]
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_create_cluster(infra_ctx)
-    }
-
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_pause_cluster(infra_ctx)
-    }
-
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_delete_cluster(infra_ctx)
-    }
-
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_upgrade_cluster(infra_ctx, kubernetes_upgrade_status)
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -356,19 +333,19 @@ impl Kubernetes for EC2 {
         self
     }
 
-    fn is_karpenter_enabled(&self) -> bool {
-        false
-    }
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        None
-    }
-
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         vec![(
             "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
             "nlb".to_string(),
         )]
+    }
+
+    fn as_ec2(&self) -> Option<&EC2> {
+        Some(self)
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+        self
     }
 }
 

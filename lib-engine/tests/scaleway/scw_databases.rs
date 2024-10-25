@@ -5,7 +5,6 @@ use crate::helpers::utilities::{
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
-use qovery_engine::transaction::TransactionResult;
 use std::str::FromStr;
 use tracing::{span, warn, Level};
 use uuid::Uuid;
@@ -87,10 +86,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
@@ -155,10 +154,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment.pause_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this db
         let ret = get_pods(
@@ -172,7 +171,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.unwrap().items.is_empty());
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
@@ -238,10 +237,10 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action_for_deletion = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_delete.delete_environment(&env_action_for_deletion, &infra_ctx_for_deletion);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(
@@ -402,10 +401,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_to_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_for_redeploy);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let (ret, _) = is_pod_restarted_env(
@@ -418,7 +417,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(ret);
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
+        assert!(matches!(result, Ok(_) | Err(_)));
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
