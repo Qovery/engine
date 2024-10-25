@@ -91,7 +91,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
     Box::new(
         EKS::new(
             context.clone(),
-            &to_short_id(&cluster_id),
             cluster_id,
             "my_cluster_name",
             KubernetesVersion::V1_23 {

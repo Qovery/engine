@@ -1,3 +1,5 @@
+use super::models::NodeGroupsWithDesiredState;
+use super::vault::ClusterSecrets;
 use crate::cloud_provider::aws::kubernetes::ec2::EC2;
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
@@ -40,9 +42,6 @@ use std::time::Duration;
 use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
-
-use super::models::NodeGroupsWithDesiredState;
-use super::vault::ClusterSecrets;
 
 pub trait ProviderOptions {}
 
@@ -414,15 +413,14 @@ impl FromStr for KubernetesVersion {
 pub trait Kubernetes: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
-    fn as_kubernetes(&self) -> &dyn Kubernetes;
-    fn id(&self) -> &str;
+    fn short_id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
+        format!("{} ({})", self.name(), self.short_id())
     }
     fn cluster_name(&self) -> String {
-        format!("qovery-{}", self.id())
+        format!("qovery-{}", self.short_id())
     }
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
@@ -437,7 +435,6 @@ pub trait Kubernetes: Send + Sync {
     fn logger(&self) -> &dyn Logger;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
-    fn is_self_managed(&self) -> bool;
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -453,8 +450,8 @@ pub trait Kubernetes: Send + Sync {
 
     fn kubeconfig_local_file_path(&self) -> PathBuf {
         self.temp_dir()
-            .join(format!("qovery-kubeconfigs-{}", self.id()))
-            .join(format!("{}.yaml", self.id()))
+            .join(format!("qovery-kubeconfigs-{}", self.short_id()))
+            .join(format!("{}.yaml", self.short_id()))
     }
 
     fn temp_dir(&self) -> &Path;
@@ -514,6 +511,13 @@ impl Kind {
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
             Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
         }
+    }
+
+    pub fn is_self_managed(&self) -> bool {
+        matches!(
+            self,
+            Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged
+        )
     }
 }
 

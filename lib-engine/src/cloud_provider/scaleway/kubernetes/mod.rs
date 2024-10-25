@@ -279,7 +279,7 @@ impl Kapsule {
     }
 
     pub fn kubeconfig_bucket_name(&self) -> String {
-        format!("qovery-kubeconfigs-{}", self.id())
+        format!("qovery-kubeconfigs-{}", self.short_id())
     }
 
     pub fn logs_bucket_name(&self) -> String {
@@ -296,11 +296,7 @@ impl Kubernetes for Kapsule {
         Kind::ScwKapsule
     }
 
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
-    }
-
-    fn id(&self) -> &str {
+    fn short_id(&self) -> &str {
         self.id.as_str()
     }
 
@@ -343,10 +339,6 @@ impl Kubernetes for Kapsule {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        false
-    }
-
-    fn is_self_managed(&self) -> bool {
         false
     }
 

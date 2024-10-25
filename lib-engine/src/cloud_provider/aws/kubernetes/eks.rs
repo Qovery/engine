@@ -25,6 +25,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::infrastructure_action::InfrastructureAction;
+use crate::utilities::to_short_id;
 use uuid::Uuid;
 
 /// EKS kubernetes provider allowing to deploy an EKS cluster.
@@ -51,7 +52,6 @@ pub struct EKS {
 impl EKS {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         version: KubernetesVersion,
@@ -77,7 +77,7 @@ impl EKS {
 
         let cluster = EKS {
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
             version,
@@ -142,11 +142,7 @@ impl Kubernetes for EKS {
         Kind::Eks
     }
 
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
-    }
-
-    fn id(&self) -> &str {
+    fn short_id(&self) -> &str {
         self.id.as_str()
     }
 
@@ -180,10 +176,6 @@ impl Kubernetes for EKS {
 
     fn is_network_managed_by_user(&self) -> bool {
         self.options.user_provided_network.is_some()
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
@@ -276,8 +268,8 @@ impl Kubernetes for EKS {
                             "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
                             self.context.organization_long_id(),
                             self.context.organization_short_id(),
-                            self.as_kubernetes().long_id(),
-                            self.as_kubernetes().id(),
+                            self.long_id,
+                            self.short_id(),
                             lb_name
                         ),
                     ),

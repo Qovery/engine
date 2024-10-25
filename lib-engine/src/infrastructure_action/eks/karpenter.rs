@@ -323,7 +323,7 @@ impl Karpenter {
 
         let organization_id = cloud_provider.organization_id().to_string();
         let organization_long_id = cloud_provider.organization_long_id();
-        let cluster_id = kubernetes.id().to_string();
+        let cluster_id = kubernetes.short_id().to_string();
         let region = AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
             EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
         })?;

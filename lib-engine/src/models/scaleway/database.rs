@@ -140,7 +140,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
             context.insert(k, v);
         }
 
-        context.insert("kubernetes_cluster_id", kubernetes.id());
+        context.insert("kubernetes_cluster_id", kubernetes.short_id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());

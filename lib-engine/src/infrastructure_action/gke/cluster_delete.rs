@@ -59,7 +59,7 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
     let message = format!(
         "Ensuring everything is up to date before deleting cluster {}/{}",
         cluster.name(),
-        cluster.id()
+        cluster.short_id()
     );
     cluster
         .logger()
@@ -95,7 +95,7 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         let message = format!(
             "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
             cluster.name(),
-            cluster.id()
+            cluster.short_id()
         );
         cluster
             .logger()
@@ -159,7 +159,7 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         let message = format!(
             "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
             cluster.name(),
-            cluster.id()
+            cluster.short_id()
         );
         cluster
             .logger()
@@ -278,7 +278,7 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         }
     };
 
-    let message = format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.id());
+    let message = format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id());
     cluster
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));

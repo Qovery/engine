@@ -238,7 +238,7 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
     let charts_prerequisites = GkeChartsConfigPrerequisites::new(
         infra_ctx.cloud_provider().organization_id().to_string(),
         infra_ctx.cloud_provider().organization_long_id(),
-        cluster.id().to_string(),
+        cluster.short_id().to_string(),
         cluster.long_id,
         cluster.context.is_feature_enabled(&Features::LogsHistory),
         cluster.context.is_feature_enabled(&Features::MetricsHistory),
