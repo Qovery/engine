@@ -32,7 +32,6 @@ use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
 use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::runtime::block_on;
-use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
@@ -72,7 +71,7 @@ fn aws_test_build_phase() {
         let ea = environment.clone();
 
         let (env, ret) = environment.build_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check the the image exist in the registry
         let img_exist = infra_ctx
@@ -115,7 +114,7 @@ fn aws_test_build_phase_with_git_lfs() {
         ea.applications[0].git_url = "https://github.com/qovery/engine-testing-lfs".to_string();
         ea.applications[0].commit_id = "1252dacc15a605c860e9f3c02e676daf02611011".to_string();
         let (env, ret) = environment.build_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check the the image exist in the registry
         let img_exist = infra_ctx
@@ -161,7 +160,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ea_delete = environment_for_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let records = metrics_registry_for_deployment.get_records(environment.applications.first().unwrap().long_id);
         assert_eq!(records.len(), 6);
 
@@ -246,7 +245,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         // assert!(record_provision.duration.is_some());
 
         let ret = environment_for_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -299,9 +298,9 @@ fn deploy_a_working_environment_with_shared_registry() {
         let env_to_deploy2 = environment2.clone();
 
         let ret = environment.deploy_environment(&env_to_deploy, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let ret = environment2.deploy_environment(&env_to_deploy2, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         // Check take both deployment used the same image
         let env = environment
             .to_environment_domain(
@@ -337,13 +336,13 @@ fn deploy_a_working_environment_with_shared_registry() {
         environment_to_delete2.applications[0].should_delete_shared_registry = true;
 
         let ret = environment_to_delete.delete_environment(&environment_to_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
         assert!(img_exist);
         let ret = environment_to_delete2.delete_environment(&environment_to_delete2, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
@@ -394,14 +393,14 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let srv_id = &environment.applications[0].long_id;
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
         let ret = environment.pause_environment(&ea, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
@@ -412,7 +411,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets);
         assert!(ret.is_ok());
@@ -420,7 +419,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Cleanup
         let ret = environment.delete_environment(&ea, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -460,10 +459,10 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Error(_)));
+        assert!(ret.is_err());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
+        assert!(matches!(ret, Ok(_) | Err(_)));
 
         test_name.to_string()
     })
@@ -535,10 +534,10 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -610,10 +609,10 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -660,10 +659,10 @@ fn deploy_a_working_environment_with_domain() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -745,10 +744,10 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -808,7 +807,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets) {
             Ok(pvc) => assert_eq!(
@@ -819,7 +818,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         };
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -876,7 +875,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -914,7 +913,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         }
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -980,7 +979,7 @@ fn redeploy_same_app_with_ebs() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -999,7 +998,7 @@ fn redeploy_same_app_with_ebs() {
         );
 
         let ret = environment_redeploy.deploy_environment(&ea2, &infra_ctx_bis);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let (_, number2) = is_pod_restarted_env(
             &infra_ctx,
@@ -1011,7 +1010,7 @@ fn redeploy_same_app_with_ebs() {
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1069,13 +1068,13 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let ea_delete = environment_for_delete.clone();
 
         let ret = environment_for_not_working.deploy_environment(&ea_not_working, &infra_ctx_for_not_working);
-        assert!(matches!(ret, TransactionResult::Error(_)));
+        assert!(ret.is_err());
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1145,22 +1144,22 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // OK
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // FAIL and rollback
         let ret = not_working_env_1.deploy_environment(&ea_not_working_1, &infra_ctx_for_not_working_1);
-        assert!(matches!(ret, TransactionResult::Error(_)));
+        assert!(ret.is_err());
 
         // FAIL and Rollback again
         let ret = not_working_env_2.deploy_environment(&ea_not_working_2, &infra_ctx_for_not_working_2);
-        assert!(matches!(ret, TransactionResult::Error(_)));
+        assert!(ret.is_err());
 
         // Should be working
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = delete_env.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1199,10 +1198,10 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let ea_delete = delete_env.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Error(_)));
+        assert!(ret.is_err());
 
         let ret = delete_env.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1250,7 +1249,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // checking cookie is properly set on the app
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
@@ -1308,7 +1307,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         }
 
         let ret = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1358,7 +1357,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
         let env_action_for_delete = whitelist_all_environment_for_delete.clone();
 
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
@@ -1426,10 +1425,10 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 
         let result =
             whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = env_action_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1479,7 +1478,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         let env_action_for_delete = whitelist_all_environment_for_delete.clone();
 
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
@@ -1547,10 +1546,10 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 
         let result =
             whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = env_action_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1665,7 +1664,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let kube_conn = infra_ctx.mk_kube_client().expect("kube client is not set");
         // ensure default pod affinity is set to preferred
@@ -1706,7 +1705,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         };
         let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let requirred = block_on(kube_conn.get_deployments_from_api(
             context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
@@ -1762,7 +1761,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         "".to_string()
     })
 }
@@ -1880,7 +1879,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let records = metrics_registry_for_deployment.get_records(environment.containers.first().unwrap().long_id);
         let mirror_record = records
@@ -2014,10 +2013,10 @@ fn deploy_container_with_storages_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2146,7 +2145,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -2184,7 +2183,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2343,10 +2342,10 @@ fn deploy_container_with_router_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2446,10 +2445,10 @@ fn deploy_job_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2557,10 +2556,10 @@ CMD ["/bin/sh", "-c", "echo hello"]
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2676,10 +2675,10 @@ fn deploy_cronjob_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2777,7 +2776,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // verify cronjob is well uninstalled
         let cronjob_namespace = format!(
@@ -2807,7 +2806,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
 
         // delete environment
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2929,10 +2928,10 @@ fn build_and_deploy_job_on_aws_eks() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3051,15 +3050,15 @@ fn test_restart_deployment() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         sleep(Duration::from_secs(20));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3186,15 +3185,15 @@ fn test_restart_statefulset() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         sleep(Duration::from_secs(10));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3303,7 +3302,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -3341,7 +3340,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3415,7 +3414,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
             Ok(pvc) => {
@@ -3452,7 +3451,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         let resized_context = context.clone_not_same_execution_id();
         let resized_infra_ctx = aws_default_infra_config(&resized_context, logger.clone(), metrics_registry());
         let resized_ret = resized_environment.deploy_environment(&resized_ea, &resized_infra_ctx);
-        assert!(matches!(resized_ret, TransactionResult::Ok));
+        assert!(resized_ret.is_ok());
 
         match get_pvc(&resized_infra_ctx, Kind::Aws, &resized_environment, secrets) {
             Ok(pvc) => {
@@ -3484,7 +3483,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         };
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -3623,7 +3622,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check we can connect on ports
         sleep(Duration::from_secs(30));
@@ -3654,7 +3653,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3729,10 +3728,10 @@ fn deploy_helm_chart() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3806,7 +3805,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
 
         // Deploy the helm chart and check config map is well created
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let kube_client = infra_ctx
             .mk_kube_client()
@@ -3882,7 +3881,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         std::fs::remove_dir_all(Path::new(chart_dir)).unwrap();
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
         let config_map_data = config_map.data.unwrap();
@@ -3895,7 +3894,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         );
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -3975,14 +3974,14 @@ fn deploy_helm_chart_and_pause_it() {
             environment_for_delete.action = Action::Delete;
 
             let ret = environment.deploy_environment(&environment, &infra_ctx);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
             assert!(ret.is_ok());
             assert!(!ret.unwrap().items.is_empty());
 
             let ret = environment.pause_environment(&environment, &infra_ctx_for_delete);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             // Check that we have actually 0 pods running for this app
             let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
@@ -3993,7 +3992,7 @@ fn deploy_helm_chart_and_pause_it() {
             let ctx_resume = context.clone_not_same_execution_id();
             let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
             let ret = environment.deploy_environment(&environment, &infra_ctx_resume);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets);
             assert!(ret.is_ok());
@@ -4001,7 +4000,7 @@ fn deploy_helm_chart_and_pause_it() {
 
             // Cleanup
             let ret = environment.delete_environment(&environment, &infra_ctx_for_delete);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             "".to_string()
         })
@@ -4082,14 +4081,14 @@ fn deploy_helm_chart_and_restart_it() {
             environment_for_delete.action = Action::Delete;
 
             let ret = environment.deploy_environment(&environment, &infra_ctx);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
             assert!(ret.is_ok());
             assert!(!ret.unwrap().items.is_empty());
 
             let ret = environment.restart_environment(&environment, &infra_ctx_for_delete);
-            assert!(matches!(ret, TransactionResult::Ok));
+            assert!(ret.is_ok());
 
             "".to_string()
         })
@@ -4205,10 +4204,10 @@ fn deploy_helm_chart_with_router() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })

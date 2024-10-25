@@ -1,9 +1,7 @@
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
-use crate::cloud_provider::kubernetes::{
-    Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
-};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::vault::ClusterSecrets;
@@ -27,7 +25,6 @@ use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use crate::infrastructure_action::InfrastructureAction;
 use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
@@ -396,26 +393,6 @@ impl Kubernetes for Gke {
         vec![CpuArchitecture::AMD64]
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_create_cluster(infra_ctx)
-    }
-
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>> {
-        self.on_upgrade_cluster(infra_ctx, kubernetes_upgrade_status)
-    }
-
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_pause_cluster(infra_ctx)
-    }
-
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_delete_cluster(infra_ctx)
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -437,15 +414,11 @@ impl Kubernetes for Gke {
         self.customer_helm_charts_override.clone()
     }
 
-    fn is_karpenter_enabled(&self) -> bool {
-        false
-    }
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        None
-    }
-
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         Vec::with_capacity(0)
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+        self
     }
 }

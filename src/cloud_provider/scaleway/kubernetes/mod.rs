@@ -2,9 +2,7 @@ pub mod node;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
-use crate::cloud_provider::kubernetes::{
-    self, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion, ProviderOptions,
-};
+use crate::cloud_provider::kubernetes::{self, InstanceType, Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
@@ -18,8 +16,6 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
-use crate::engine::InfrastructureContext;
 use crate::infrastructure_action::InfrastructureAction;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::scaleway_object_storage::ScalewayOS;
@@ -361,26 +357,6 @@ impl Kubernetes for Kapsule {
             .collect()
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_create_cluster(infra_ctx)
-    }
-
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>> {
-        self.on_upgrade_cluster(infra_ctx, kubernetes_upgrade_status)
-    }
-
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_pause_cluster(infra_ctx)
-    }
-
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        self.on_delete_cluster(infra_ctx)
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -429,14 +405,6 @@ impl Kubernetes for Kapsule {
         self.customer_helm_charts_override.clone()
     }
 
-    fn is_karpenter_enabled(&self) -> bool {
-        false
-    }
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        None
-    }
-
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         // SCW doesn't support UDP loadbalancer
         // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
@@ -467,5 +435,9 @@ impl Kubernetes for Kapsule {
                 "false".to_string(),
             ),
         ]
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+        self
     }
 }

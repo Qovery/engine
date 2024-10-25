@@ -518,7 +518,7 @@ pub fn delete_eks_cluster(
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-    if kubernetes.kind() != Kind::Ec2 {
+    if let Some(kubernetes) = kubernetes.as_eks() {
         // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
         block_on(delete_eks_nodegroups(
             aws_conn,

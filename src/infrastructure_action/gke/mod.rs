@@ -23,7 +23,7 @@ use serde_derive::{Deserialize, Serialize};
 
 impl InfrastructureAction for Gke {
     #[named]
-    fn on_create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
@@ -37,7 +37,7 @@ impl InfrastructureAction for Gke {
     }
 
     #[named]
-    fn on_pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
@@ -51,7 +51,7 @@ impl InfrastructureAction for Gke {
     }
 
     #[named]
-    fn on_delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
@@ -65,7 +65,7 @@ impl InfrastructureAction for Gke {
     }
 
     #[named]
-    fn on_upgrade_cluster(
+    fn upgrade_cluster(
         &self,
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,

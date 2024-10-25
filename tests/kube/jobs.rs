@@ -8,7 +8,6 @@ use qovery_engine::io_models::container::Registry;
 use qovery_engine::io_models::job::{JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use tracing::{span, Level};
 use url::Url;
@@ -98,16 +97,13 @@ fn should_have_mounted_files_as_volume() {
         let deployment_result = environment.deploy_environment(&ea, &infra_ctx);
 
         // verify:
-        assert!(matches!(deployment_result, TransactionResult::Ok));
+        assert!(deployment_result.is_ok());
 
         // clean up:
         let mut env_to_delete = environment;
         env_to_delete.action = Action::Delete;
         let ead = env_to_delete.clone();
-        assert!(matches!(
-            env_to_delete.delete_environment(&ead, &infra_ctx),
-            TransactionResult::Ok
-        ));
+        assert!(env_to_delete.delete_environment(&ead, &infra_ctx).is_ok());
 
         test_name.to_string()
     });

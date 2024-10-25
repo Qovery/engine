@@ -1,4 +1,25 @@
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
+use crate::cloud_provider::aws::kubernetes::ec2::EC2;
+use crate::cloud_provider::aws::kubernetes::eks::EKS;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::service::Action;
+use crate::cloud_provider::CloudProvider;
+use crate::cloud_provider::Kind as CloudProviderKind;
+use crate::cmd::kubectl::kubectl_delete_apiservice;
+use crate::cmd::kubectl::{
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    kubectl_exec_version, kubernetes_get_all_pdbs,
+};
+use crate::cmd::structs::KubernetesNodeCondition;
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::infrastructure_action::InfrastructureAction;
+use crate::io_models::context::Context;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::QoveryIdentifier;
+use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
 use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
@@ -19,27 +40,6 @@ use std::time::Duration;
 use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
-
-use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
-use crate::cloud_provider::service::Action;
-use crate::cloud_provider::CloudProvider;
-use crate::cloud_provider::Kind as CloudProviderKind;
-use crate::cmd::kubectl::kubectl_delete_apiservice;
-use crate::cmd::kubectl::{
-    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
-    kubectl_exec_version, kubernetes_get_all_pdbs,
-};
-use crate::cmd::structs::KubernetesNodeCondition;
-use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::io_models::context::Context;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::io_models::QoveryIdentifier;
-use crate::logger::Logger;
-use crate::models::types::VersionsNumber;
 
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
@@ -457,14 +457,6 @@ pub trait Kubernetes: Send + Sync {
             .join(format!("{}.yaml", self.id()))
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>>;
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
 
     fn update_vault_config(
@@ -475,15 +467,24 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
-
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
-
-    fn is_karpenter_enabled(&self) -> bool;
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
     fn helm_charts_diffs_directory(&self) -> PathBuf {
         self.temp_dir().join("helm-charts-diffs")
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction;
+
+    // TODO: Remove those methods when we remove EC2
+    // It is needed because our integration sucks
+    fn as_ec2(&self) -> Option<&EC2> {
+        None
+    }
+    fn as_eks(&self) -> Option<&EKS> {
+        None
     }
 }
 

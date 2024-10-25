@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{self, Kind, Kubernetes, KubernetesVersion};
@@ -13,10 +12,10 @@ use crate::cloud_provider::models::CpuArchitecture::{AMD64, ARM64};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::docker;
-use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::InfrastructureAction;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use serde::{Deserialize, Serialize};
@@ -164,25 +163,6 @@ impl Kubernetes for SelfManaged {
         }
     }
 
-    fn on_create(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn upgrade_with_status(
-        &self,
-        _infra_ctx: &InfrastructureContext,
-        _kubernetes_upgrade_status: kubernetes::KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn on_pause(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
-    fn on_delete(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -212,15 +192,11 @@ impl Kubernetes for SelfManaged {
         None
     }
 
-    fn is_karpenter_enabled(&self) -> bool {
-        false
-    }
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        None
-    }
-
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         Vec::with_capacity(0)
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+        self
     }
 }

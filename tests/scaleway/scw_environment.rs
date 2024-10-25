@@ -25,7 +25,6 @@ use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::scaleway::ScwZone;
-use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
@@ -67,7 +66,7 @@ fn scaleway_test_build_phase() {
         let env_action = environment.clone();
 
         let (env, ret) = environment.build_environment(&env_action, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check the image exist in the registry
         let img_exist = infra_ctx
@@ -123,10 +122,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -186,9 +185,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_shared_registry() {
         let env_to_deploy2 = environment2.clone();
 
         let ret = environment.deploy_environment(&env_to_deploy, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let ret = environment2.deploy_environment(&env_to_deploy2, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         // Check take both deployment used the same image
         let env = environment
             .to_environment_domain(
@@ -224,13 +223,13 @@ fn scaleway_kapsule_deploy_a_working_environment_with_shared_registry() {
         environment_to_delete2.applications[0].should_delete_shared_registry = true;
 
         let ret = environment_to_delete.delete_environment(&environment_to_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
         assert!(img_exist);
         let ret = environment_to_delete2.delete_environment(&environment_to_delete2, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);
@@ -293,10 +292,10 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
+        assert!(matches!(result, Ok(_) | Err(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -347,14 +346,14 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let selector = &environment.applications[0].long_id;
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
         let result = environment.pause_environment(&env_action, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
@@ -365,7 +364,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
@@ -373,7 +372,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         // Cleanup
         let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -449,10 +448,10 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -539,10 +538,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -612,7 +611,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         match get_pvc(&infra_ctx, Kind::Scw, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -623,7 +622,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         };
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -685,7 +684,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -723,7 +722,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         }
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -760,14 +759,14 @@ fn deploy_a_working_environment_and_pause_it() {
         let selector = &environment.applications[0].long_id;
 
         let result = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
         let result = environment.pause_environment(&ea, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets.clone());
@@ -778,7 +777,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&ea, &infra_ctx_resume);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let ret = get_pods(&infra_ctx, Kind::Scw, &environment, selector, secrets);
         assert!(ret.is_ok());
@@ -786,7 +785,7 @@ fn deploy_a_working_environment_and_pause_it() {
 
         // Cleanup
         let result = environment.delete_environment(&ea, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
         test_name.to_string()
     })
 }
@@ -861,7 +860,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         match get_pvc(&infra_ctx, Kind::Scw, &environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -880,7 +879,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         );
 
         let result = environment_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_bis);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let (_, number2) = is_pod_restarted_env(
             &infra_ctx,
@@ -894,7 +893,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         assert!(number.eq(&number2));
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -969,13 +968,13 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
 
         let result =
             environment_for_not_working.deploy_environment(&env_action_not_working, &infra_ctx_for_not_working);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = environment_for_delete.delete_environment(&env_action_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1059,22 +1058,22 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
 
         // OK
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // FAIL and rollback
         let result = not_working_env_1.deploy_environment(&env_action_not_working_1, &infra_ctx_for_not_working_1);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         // FAIL and Rollback again
         let result = not_working_env_2.deploy_environment(&env_action_not_working_2, &infra_ctx_for_not_working_2);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         // Should be working
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1128,10 +1127,10 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let env_action_delete = delete_env.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Error(_)));
+        assert!(result.is_err());
 
         let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1195,7 +1194,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // checking cookie is properly set on the app
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
@@ -1253,7 +1252,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         }
 
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1318,7 +1317,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
         let env_action_for_delete = whitelist_all_environment_for_delete.clone();
 
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
         let router = whitelist_all_environment
@@ -1386,7 +1385,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
 
         let result =
             whitelist_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![whitelist_all_environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1451,7 +1450,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         let env_action_for_delete = deny_all_environment_for_delete.clone();
 
         let result = whitelist_all_environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         // checking cookie is properly set on the app
         let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
@@ -1519,7 +1518,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
         }
 
         let result = deny_all_environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(result, TransactionResult::Ok));
+        assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![whitelist_all_environment], secrets, region) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -1644,10 +1643,10 @@ fn deploy_container_with_no_router_on_scw() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -1779,7 +1778,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -1817,7 +1816,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -1971,10 +1970,10 @@ fn deploy_container_with_router_on_scw() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2096,10 +2095,10 @@ fn deploy_job_on_scw_kapsule() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2195,10 +2194,10 @@ fn deploy_cronjob_on_scw_kapsule() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2294,10 +2293,10 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2395,10 +2394,10 @@ fn build_and_deploy_job_on_scw_kapsule() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2507,7 +2506,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -2545,7 +2544,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -2678,7 +2677,7 @@ fn deploy_container_with_tcp_public_port() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check we can connect on ports
         sleep(Duration::from_secs(30));
@@ -2707,7 +2706,7 @@ fn deploy_container_with_tcp_public_port() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })

@@ -4,11 +4,10 @@ use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
-use crate::cloud_provider::kubernetes::{event_details, Kind, Kubernetes, KubernetesUpgradeStatus, KubernetesVersion};
+use crate::cloud_provider::kubernetes::{event_details, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::CloudProvider;
-use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep};
@@ -109,8 +108,28 @@ impl EKS {
         Ok(cluster)
     }
 
-    pub fn struct_name(&self) -> &str {
-        "kubernetes"
+    pub fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
+        if let Some(karpenter_parameters) = &self.options.karpenter_parameters {
+            return Some(KarpenterParameters {
+                spot_enabled: karpenter_parameters.spot_enabled,
+                max_node_drain_time_in_secs: karpenter_parameters.max_node_drain_time_in_secs,
+                disk_size_in_gib: karpenter_parameters.disk_size_in_gib,
+                default_service_architecture: karpenter_parameters.default_service_architecture,
+            });
+        }
+
+        if self.advanced_settings.aws_enable_karpenter {
+            if let Some(node_group) = self.nodes_groups.first() {
+                return Some(KarpenterParameters {
+                    spot_enabled: self.advanced_settings.aws_karpenter_enable_spot,
+                    max_node_drain_time_in_secs: self.advanced_settings.aws_karpenter_max_node_drain_in_sec,
+                    disk_size_in_gib: node_group.disk_size_in_gib,
+                    default_service_architecture: node_group.instance_architecture,
+                });
+            }
+        }
+
+        None
     }
 }
 
@@ -175,26 +194,6 @@ impl Kubernetes for EKS {
         }
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_create_cluster(infra_ctx)
-    }
-
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_upgrade_cluster(infra_ctx, kubernetes_upgrade_status)
-    }
-
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_pause_cluster(infra_ctx)
-    }
-
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        (self as &dyn InfrastructureAction).on_delete_cluster(infra_ctx)
-    }
-
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
     }
@@ -249,30 +248,6 @@ impl Kubernetes for EKS {
         self.options.karpenter_parameters.is_some() || self.advanced_settings.aws_enable_karpenter
     }
 
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        if let Some(karpenter_parameters) = &self.options.karpenter_parameters {
-            return Some(KarpenterParameters {
-                spot_enabled: karpenter_parameters.spot_enabled,
-                max_node_drain_time_in_secs: karpenter_parameters.max_node_drain_time_in_secs,
-                disk_size_in_gib: karpenter_parameters.disk_size_in_gib,
-                default_service_architecture: karpenter_parameters.default_service_architecture,
-            });
-        }
-
-        if self.advanced_settings.aws_enable_karpenter {
-            if let Some(node_group) = self.nodes_groups.first() {
-                return Some(KarpenterParameters {
-                    spot_enabled: self.advanced_settings.aws_karpenter_enable_spot,
-                    max_node_drain_time_in_secs: self.advanced_settings.aws_karpenter_max_node_drain_in_sec,
-                    disk_size_in_gib: node_group.disk_size_in_gib,
-                    default_service_architecture: node_group.instance_architecture,
-                });
-            }
-        }
-
-        None
-    }
-
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         let lb_name = match cloud_provider_lb_name {
             Some(x) => format!(",QoveryName={x}"),
@@ -313,5 +288,13 @@ impl Kubernetes for EKS {
                 "nlb".to_string(),
             )],
         }
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+        self
+    }
+
+    fn as_eks(&self) -> Option<&EKS> {
+        Some(self)
     }
 }

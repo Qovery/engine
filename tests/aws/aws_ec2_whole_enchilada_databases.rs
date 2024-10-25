@@ -8,7 +8,6 @@ use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
-use qovery_engine::transaction::{Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 
 use tracing::{span, Level};
@@ -78,9 +77,8 @@ fn test_ec2_database(
             EngineLocation::QoverySide,
         );
 
-        let mut deploy_tx = Transaction::new(&infra_ctx).unwrap();
-        assert!(deploy_tx.create_kubernetes().is_ok());
-        assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+        let deploy_tx = infra_ctx.kubernetes().as_infra_actions().create_cluster(&infra_ctx);
+        assert!(deploy_tx.is_ok());
         context.update_is_first_cluster_deployment(false);
         let environment = helpers::database::database_test_environment(&context);
 

@@ -17,7 +17,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::models::aws::AwsStorageType;
-use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
@@ -73,7 +72,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -111,7 +110,7 @@ fn deploy_a_working_environment_on_aws_ec2_with_mounted_files_as_volume() {
         }
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -241,7 +240,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -279,7 +278,7 @@ fn deploy_container_on_aws_ec2_with_mounted_files_as_volume() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })
@@ -387,7 +386,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // check if secret exists
         let service_id = QoveryIdentifier::new(
@@ -425,7 +424,7 @@ fn build_and_deploy_job_on_aws_ec2_with_mounted_files_as_volume() {
         }
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         "".to_string()
     })

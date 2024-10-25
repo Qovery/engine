@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
@@ -39,7 +40,7 @@ pub struct Karpenter {}
 
 impl Karpenter {
     pub async fn pause(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         client: &QubeClient,
     ) -> Result<(), Box<EngineError>> {
@@ -59,7 +60,7 @@ impl Karpenter {
     }
 
     pub async fn restart(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         terraform_output: &AwsEksQoveryTerraformOutput,
         client: &QubeClient,
@@ -91,7 +92,7 @@ impl Karpenter {
     }
 
     pub async fn delete(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         client: &QubeClient,
     ) -> Result<(), Box<EngineError>> {
@@ -173,7 +174,7 @@ impl Karpenter {
     }
 
     async fn delete_nodes_spawned_by_karpenter(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         client: &QubeClient,
         event_details: &EventDetails,
@@ -268,7 +269,7 @@ impl Karpenter {
     }
 
     fn install_karpenter_configuration(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         terraform_output: &AwsEksQoveryTerraformOutput,
         event_details: &EventDetails,
@@ -306,7 +307,7 @@ impl Karpenter {
     }
 
     fn get_karpenter_configuration_chart(
-        kubernetes: &dyn Kubernetes,
+        kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         terraform_output: &AwsEksQoveryTerraformOutput,
         cluster_long_id: uuid::Uuid,
