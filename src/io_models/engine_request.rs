@@ -348,7 +348,6 @@ pub struct KubernetesConnection {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
     pub kind: cloud_provider::kubernetes::Kind,
-    pub id: String,
     pub long_id: Uuid,
     pub name: String,
     pub version: String,
@@ -409,7 +408,6 @@ impl Kubernetes {
         match self.kind {
             cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
-                self.id.as_str(),
                 self.long_id,
                 self.name.as_str(),
                 KubernetesVersion::from_str(&self.version)
@@ -468,7 +466,6 @@ impl Kubernetes {
                 };
                 match EC2::new(
                     context.clone(),
-                    self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
                     KubernetesVersion::from_str(&self.version)
@@ -504,7 +501,6 @@ impl Kubernetes {
                 })?;
                 match Gke::new(
                     context.clone(),
-                    &self.id,
                     self.long_id,
                     &self.name,
                     KubernetesVersion::from_str(&self.version)
@@ -532,7 +528,6 @@ impl Kubernetes {
             | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
                 match cloud_provider::self_managed::kubernetes::SelfManaged::new(
                     context.clone(),
-                    self.id.to_string(),
                     self.long_id,
                     self.name.to_string(),
                     self.kind,

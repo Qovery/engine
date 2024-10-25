@@ -371,7 +371,7 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     let charts_prerequisites = KapsuleChartsConfigPrerequisites::new(
         infra_ctx.cloud_provider().organization_id().to_string(),
         infra_ctx.cloud_provider().organization_long_id(),
-        cluster.id().to_string(),
+        cluster.short_id().to_string(),
         cluster.long_id,
         cluster.zone,
         cluster.options.qovery_engine_location.clone(),

@@ -26,6 +26,7 @@ use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 
 use crate::infrastructure_action::InfrastructureAction;
+use crate::utilities::to_short_id;
 use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
 use nonzero_ext::nonzero;
@@ -187,7 +188,6 @@ pub struct Gke {
 impl Gke {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         version: KubernetesVersion,
@@ -238,8 +238,9 @@ impl Gke {
             }
         })
         .map_err(|error| Box::new(error.error))?;
+        let short_id = to_short_id(&long_id);
         let google_object_storage = GoogleOS::new(
-            id,
+            &short_id,
             long_id,
             name,
             &options.gcp_json_credentials.project_id.to_string(),
@@ -249,7 +250,7 @@ impl Gke {
 
         let cluster = Self {
             context: context.clone(),
-            id: id.to_string(),
+            id: short_id,
             long_id,
             name: name.to_string(),
             version,
@@ -278,7 +279,7 @@ impl Gke {
     }
 
     pub fn kubeconfig_bucket_name(&self) -> String {
-        format!("qovery-kubeconfigs-{}", self.id())
+        format!("qovery-kubeconfigs-{}", self.short_id())
     }
 
     pub fn logs_bucket_name(&self) -> String {
@@ -340,11 +341,7 @@ impl Kubernetes for Gke {
         Kind::Gke
     }
 
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
-    }
-
-    fn id(&self) -> &str {
+    fn short_id(&self) -> &str {
         self.id.as_str()
     }
 
@@ -382,10 +379,6 @@ impl Kubernetes for Gke {
 
     fn is_network_managed_by_user(&self) -> bool {
         matches!(self.options.vpc_mode, VpcMode::UserNetworkConfig { .. })
-    }
-
-    fn is_self_managed(&self) -> bool {
-        false
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {

@@ -48,7 +48,7 @@ pub(super) fn gke_tera_context(
     // Kubernetes
     context.insert("test_cluster", &cluster.context.is_test_cluster());
     context.insert("kubernetes_cluster_long_id", &cluster.long_id);
-    context.insert("kubernetes_cluster_id", cluster.id());
+    context.insert("kubernetes_cluster_id", cluster.short_id());
     context.insert("kubernetes_cluster_name", cluster.cluster_name().as_str());
     context.insert("kubernetes_cluster_version", &cluster.version.to_string());
     context.insert("qovery_api_url", cluster.options.qovery_api_url.as_str());

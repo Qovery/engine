@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::infrastructure_action::{AwsEc2QoveryTerraformOutput, InfrastructureAction};
+use crate::utilities::to_short_id;
 use uuid::Uuid;
 
 /// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
@@ -56,7 +57,6 @@ pub struct EC2 {
 impl EC2 {
     pub fn new(
         context: Context,
-        id: &str,
         long_id: Uuid,
         name: &str,
         version: KubernetesVersion,
@@ -95,7 +95,7 @@ impl EC2 {
         // copy listeners from CloudProvider
         let cluster = EC2 {
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
             version,
@@ -235,7 +235,7 @@ impl Kubernetes for EC2 {
         Kind::Ec2
     }
 
-    fn id(&self) -> &str {
+    fn short_id(&self) -> &str {
         self.id.as_str()
     }
 
@@ -268,10 +268,6 @@ impl Kubernetes for EC2 {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        false
-    }
-
-    fn is_self_managed(&self) -> bool {
         false
     }
 
@@ -327,10 +323,6 @@ impl Kubernetes for EC2 {
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
         //todo(pmavro): use box/arc instead of clone
         self.customer_helm_charts_override.clone()
-    }
-
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
     }
 
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {

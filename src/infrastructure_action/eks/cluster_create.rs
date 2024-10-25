@@ -551,7 +551,7 @@ pub fn create_eks_cluster(
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
-                cluster_id: kubernetes.id().to_string(),
+                cluster_id: kubernetes.short_id().to_string(),
                 cluster_long_id: kubernetes_long_id,
                 region: AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
                     EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
@@ -604,7 +604,7 @@ pub fn create_eks_cluster(
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
-                cluster_id: kubernetes.id().to_string(),
+                cluster_id: kubernetes.short_id().to_string(),
                 cluster_long_id: kubernetes_long_id,
                 region: kubernetes.region().to_string(),
                 cpu_architectures: cpu_architectures[0],

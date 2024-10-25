@@ -353,7 +353,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EKS::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
@@ -388,7 +387,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EC2::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
@@ -439,7 +437,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 Gke::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,

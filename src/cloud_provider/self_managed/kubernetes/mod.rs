@@ -18,6 +18,7 @@ use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::InfrastructureAction;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
+use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -40,7 +41,6 @@ pub struct SelfManaged {
 impl SelfManaged {
     pub fn new(
         context: Context,
-        id: String,
         long_id: Uuid,
         name: String,
         kind: Kind,
@@ -54,7 +54,7 @@ impl SelfManaged {
     ) -> Result<SelfManaged, Box<EngineError>> {
         let cluster = SelfManaged {
             context,
-            id,
+            id: to_short_id(&long_id),
             kind,
             long_id,
             name,
@@ -98,11 +98,7 @@ impl Kubernetes for SelfManaged {
         self.kind
     }
 
-    fn as_kubernetes(&self) -> &dyn Kubernetes {
-        self
-    }
-
-    fn id(&self) -> &str {
+    fn short_id(&self) -> &str {
         self.id.as_str()
     }
 
@@ -135,10 +131,6 @@ impl Kubernetes for SelfManaged {
     }
 
     fn is_network_managed_by_user(&self) -> bool {
-        true
-    }
-
-    fn is_self_managed(&self) -> bool {
         true
     }
 
