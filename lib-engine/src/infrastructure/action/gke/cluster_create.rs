@@ -1,6 +1,7 @@
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
@@ -12,6 +13,7 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::object_storage::ObjectStorage;
+use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use crate::utilities::envs_to_string;
 use std::path::PathBuf;
 
@@ -21,6 +23,8 @@ pub(super) fn create_gke_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
+    let kube_client = infra_ctx.mk_kube_client()?;
+
     logger.info("Preparing GKE cluster deployment.");
 
     logger.info("Deploying GKE cluster.");
@@ -64,6 +68,39 @@ pub(super) fn create_gke_cluster(
         cluster,
     );
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
+
+    if !infra_ctx.context().is_first_cluster_deployment() {
+        let cloud_provider = infra_ctx.cloud_provider();
+        let target_kubernetes_version = VersionsNumber::from(match cluster.version().next_version() {
+            Some(v) => v,
+            None => cluster.version().clone(),
+        });
+        logger.info(format!(
+            "Check if cluster has calls to deprecated kubernetes API for version `{}`",
+            target_kubernetes_version
+        ));
+        match infra_ctx
+            .kubernetes_api_deprecation_service()
+            .is_cluster_fully_compatible_with_kubernetes_version(
+                cluster.kubeconfig_local_file_path().as_path(),
+                Some(&target_kubernetes_version),
+                &cloud_provider.credentials_environment_variables(),
+                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
+                    kube_client: kube_client.client(),
+                },
+            ) {
+            Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
+            Err(e) => {
+                // Non blocking error, just more FYI for user, to act on it if needed before upgrading
+                let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found(
+                    event_details.clone(),
+                    &target_kubernetes_version,
+                    e,
+                );
+                logger.warn(EventMessage::from(deprecation_error));
+            }
+        }
+    }
 
     Ok(())
 }

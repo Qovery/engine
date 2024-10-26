@@ -109,10 +109,9 @@ impl Karpenter {
             &HelmChartNamespaces::KubeSystem.to_string(),
             None,
         ) {
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(*e),
-            ));
+            kubernetes
+                .logger()
+                .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
         }
 
         Ok(())
@@ -208,10 +207,9 @@ impl Karpenter {
             Some(nodes_drain_timeout),
         ) {
             // this error is not blocking because it will be the case if some PDB prevent the nodes to be stopped
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(*e),
-            ));
+            kubernetes
+                .logger()
+                .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
         }
 
         // remove finalizer of the remaining nodes
