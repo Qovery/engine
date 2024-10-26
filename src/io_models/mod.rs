@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use uuid::Uuid;
 
 pub mod annotations_group;
@@ -46,6 +47,12 @@ pub enum PodAntiAffinity {
     Required,
 }
 
+#[derive(thiserror::Error, Clone, Debug, PartialEq)]
+pub enum QoveryIdentifierError {
+    #[error("Error while parsing Qovery identifier: {raw_error_message}")]
+    ParsingError { raw_error_message: String },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QoveryIdentifier {
     long_id: Uuid,
@@ -70,6 +77,18 @@ impl QoveryIdentifier {
 
     pub fn to_uuid(&self) -> Uuid {
         self.long_id
+    }
+}
+
+impl FromStr for QoveryIdentifier {
+    type Err = QoveryIdentifierError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(QoveryIdentifier::new(Uuid::parse_str(s).map_err(|e| {
+            QoveryIdentifierError::ParsingError {
+                raw_error_message: e.to_string(),
+            }
+        })?))
     }
 }
 
