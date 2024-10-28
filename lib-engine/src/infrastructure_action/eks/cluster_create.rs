@@ -336,7 +336,7 @@ pub fn create_eks_cluster(
                     // push endpoint to Vault for EC2
                     let res = match (kubernetes.as_ec2(), kubernetes.as_eks()) {
                         (Some(ec2), None) => ec2.upgrade_cluster(infra_ctx, x),
-                        (None, Some(gke)) => gke.upgrade_cluster(infra_ctx, x),
+                        (None, Some(eks)) => eks.upgrade_cluster(infra_ctx, x),
                         _ => unreachable!("only one kind of cluster is expected here"),
                     };
 

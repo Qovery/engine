@@ -293,18 +293,34 @@ pub fn upgrade_eks_cluster(
     )
     .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-    check_workers_on_upgrade(
-        kubernetes,
-        infra_ctx.cloud_provider(),
-        kubernetes_upgrade_status.requested_version.to_string(),
-        match kubernetes.is_karpenter_enabled() {
-            true => Some("eks.amazonaws.com/compute-type!=fargate"),
-            false => None,
-        },
-    )
-    .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
+    // In case of karpenter, we don't need to upgrade workers, it will do it by itself
+    match infra_ctx.kubernetes().is_karpenter_enabled() {
+        false => {
+            check_workers_on_upgrade(
+                kubernetes,
+                infra_ctx.cloud_provider(),
+                kubernetes_upgrade_status.requested_version.to_string(),
+                match kubernetes.is_karpenter_enabled() {
+                    true => Some("eks.amazonaws.com/compute-type!=fargate"),
+                    false => None,
+                },
+            )
+            .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
 
-    logger.info("Kubernetes worker nodes have been successfully upgraded.");
+            logger.info("Kubernetes worker nodes have been successfully upgraded.");
+        }
+        // Karpenter asynchronously manages worker node upgrades, meaning that when the control plane version is updated,
+        // it detects the change in the AMI (Amazon Machine Image) and identifies which nodes need upgrading by marking them as "drifted".
+        // Once a new AMI is detected, Karpenter marks the existing version as drifted and starts upgrading it automatically.
+        //
+        // The amount of time that a node can be draining before it's forcibly deleted. A node begins draining when a delete call is made against it,
+        // starting its finalization flow.
+        // Pods with TerminationGracePeriodSeconds will be deleted preemptively before this terminationGracePeriod ends to give as much time to cleanup as possible.
+        // If pod's terminationGracePeriodSeconds is larger than this terminationGracePeriod, Karpenter may forcibly delete the pod before it has its full terminationGracePeriod to cleanup.
+        // Note: changing this value in the nodepool will drift the nodeclaims.
+        // `terminationGracePeriod: 48h`
+        true => logger.info("Kubernetes nodes will be upgraded by karpenter."),
+    }
 
     Ok(())
 }
