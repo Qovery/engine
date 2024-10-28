@@ -109,27 +109,7 @@ impl EKS {
     }
 
     pub fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        if let Some(karpenter_parameters) = &self.options.karpenter_parameters {
-            return Some(KarpenterParameters {
-                spot_enabled: karpenter_parameters.spot_enabled,
-                max_node_drain_time_in_secs: karpenter_parameters.max_node_drain_time_in_secs,
-                disk_size_in_gib: karpenter_parameters.disk_size_in_gib,
-                default_service_architecture: karpenter_parameters.default_service_architecture,
-            });
-        }
-
-        if self.advanced_settings.aws_enable_karpenter {
-            if let Some(node_group) = self.nodes_groups.first() {
-                return Some(KarpenterParameters {
-                    spot_enabled: self.advanced_settings.aws_karpenter_enable_spot,
-                    max_node_drain_time_in_secs: self.advanced_settings.aws_karpenter_max_node_drain_in_sec,
-                    disk_size_in_gib: node_group.disk_size_in_gib,
-                    default_service_architecture: node_group.instance_architecture,
-                });
-            }
-        }
-
-        None
+        self.options.karpenter_parameters.clone()
     }
 }
 
@@ -237,7 +217,7 @@ impl Kubernetes for EKS {
     }
 
     fn is_karpenter_enabled(&self) -> bool {
-        self.options.karpenter_parameters.is_some() || self.advanced_settings.aws_enable_karpenter
+        self.options.karpenter_parameters.is_some()
     }
 
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
