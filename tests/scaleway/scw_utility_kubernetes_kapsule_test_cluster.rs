@@ -5,8 +5,6 @@ use crate::helpers::utilities::{
 use ::function_name::named;
 use tracing::{span, Level};
 
-use qovery_engine::transaction::{Transaction, TransactionResult};
-
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran
 // This is not really a test but a convenient way to create the test cluster if needed to be manually created at some point.
@@ -35,14 +33,10 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
         let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
-        let mut tx = Transaction::new(&engine).unwrap();
 
         // Deploy
-        if let Err(err) = tx.create_kubernetes() {
-            panic!("{err:?}")
-        }
-
-        assert!(matches!(tx.commit(), TransactionResult::Ok));
+        let tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+        assert!(tx.is_ok());
 
         test_name.to_string()
     });
@@ -76,14 +70,10 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
         let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
-        let mut tx = Transaction::new(&engine).unwrap();
 
         // Destroy
-        if let Err(err) = tx.delete_kubernetes() {
-            panic!("{err:?}")
-        }
-        let ret = tx.commit();
-        assert!(matches!(ret, TransactionResult::Ok));
+        let tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);
+        assert!(tx.is_ok());
 
         test_name.to_string()
     });

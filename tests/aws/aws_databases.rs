@@ -21,7 +21,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::Action;
 use qovery_engine::models::aws::AwsStorageType;
-use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use std::thread::sleep;
 use std::time::Duration;
@@ -75,10 +74,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -129,10 +128,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         let ret = environment.pause_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // Check that we have actually 0 pods running for this db
         let ret = get_pods(&infra_ctx, Kind::Aws, &environment, &environment.databases[0].long_id, secrets);
@@ -140,7 +139,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.unwrap().items.is_empty());
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -201,7 +200,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea_for_deletion = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // TODO: should be uncommented as soon as cert-manager is fixed
         // for the moment this assert report a SSL issue on the second router, so it's works well
@@ -211,7 +210,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         }*/
 
         let ret = environment_delete.delete_environment(&ea_for_deletion, &infra_ctx_for_deletion);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -342,12 +341,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         sleep(Duration::from_secs(60));
 
         let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, &infra_ctx_for_redeploy);
-        assert!(matches!(ret, TransactionResult::Ok));
+        assert!(ret.is_ok());
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let (ret, _) = is_pod_restarted_env(
@@ -360,7 +359,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(ret);
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
+        assert!(matches!(ret, Ok(_) | Err(_)));
 
         test_name.to_string()
     })

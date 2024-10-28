@@ -6,7 +6,7 @@ use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::gcp::kubernetes::Gke;
+use crate::cloud_provider::gcp::kubernetes::{Gke, GkeOptions};
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::gcp::Google;
 use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
@@ -38,7 +38,7 @@ use crate::models::gcp::JsonCredentials;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
-use crate::{build_platform, cloud_provider, container_registry, dns_provider};
+use crate::{build_platform, cloud_provider, container_registry, dns_provider, io_models};
 use anyhow::{anyhow, Context as OtherContext};
 use derivative::Derivative;
 use governor::{Quota, RateLimiter};
@@ -348,7 +348,6 @@ pub struct KubernetesConnection {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
     pub kind: cloud_provider::kubernetes::Kind,
-    pub id: String,
     pub long_id: Uuid,
     pub name: String,
     pub version: String,
@@ -409,7 +408,6 @@ impl Kubernetes {
         match self.kind {
             cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
-                self.id.as_str(),
                 self.long_id,
                 self.name.as_str(),
                 KubernetesVersion::from_str(&self.version)
@@ -468,7 +466,6 @@ impl Kubernetes {
                 };
                 match EC2::new(
                     context.clone(),
-                    self.id.as_str(),
                     self.long_id,
                     self.name.as_str(),
                     KubernetesVersion::from_str(&self.version)
@@ -490,16 +487,20 @@ impl Kubernetes {
                 }
             }
             cloud_provider::kubernetes::Kind::Gke => {
-                let options =
-                    serde_json::from_value::<cloud_provider::gcp::kubernetes::io::GkeOptions>(self.options.clone())
-                        .expect("What's wronnnnng -- JSON Options payload for GCP is not the expected one")
-                        .try_into()
-                        .map_err(|e: String| {
-                            Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
-                        })?;
+                let options = serde_json::from_value::<io_models::gke::GkeOptions>(self.options.clone()).map_err(
+                    |e: serde_json::Error| {
+                        Box::new(EngineError::new_invalid_engine_payload(
+                            event_details.clone(),
+                            &e.to_string(),
+                            None,
+                        ))
+                    },
+                )?;
+                let options = GkeOptions::try_from(options).map_err(|e: String| {
+                    Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
+                })?;
                 match Gke::new(
                     context.clone(),
-                    &self.id,
                     self.long_id,
                     &self.name,
                     KubernetesVersion::from_str(&self.version)
@@ -527,7 +528,6 @@ impl Kubernetes {
             | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
                 match cloud_provider::self_managed::kubernetes::SelfManaged::new(
                     context.clone(),
-                    self.id.to_string(),
                     self.long_id,
                     self.name.to_string(),
                     self.kind,

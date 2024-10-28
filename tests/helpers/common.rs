@@ -8,13 +8,12 @@ use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernet
 use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::engine::InfrastructureContext;
-
+use qovery_engine::errors::EngineError;
 use qovery_engine::io_models::context::Context;
 
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use qovery_engine::transaction::TransactionResult;
 
 pub const DEFAULT_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 pub const DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
@@ -61,31 +60,31 @@ pub trait Infrastructure {
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> (Environment, TransactionResult);
+    ) -> (Environment, Result<(), Box<EngineError>>);
 
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult;
+    ) -> Result<(), Box<EngineError>>;
 
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult;
+    ) -> Result<(), Box<EngineError>>;
 
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult;
+    ) -> Result<(), Box<EngineError>>;
 
     fn restart_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult;
+    ) -> Result<(), Box<EngineError>>;
 }
 
 pub(crate) fn compute_test_cluster_endpoint(cluster_domain: &ClusterDomain, default_domain: String) -> String {

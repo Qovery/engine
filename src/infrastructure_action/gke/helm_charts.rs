@@ -1,5 +1,4 @@
 use crate::cloud_provider::gcp::kubernetes::GkeOptions;
-use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -26,9 +25,8 @@ use crate::cloud_provider::helm_charts::{
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
-    CpuArchitecture, CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
-use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::Kind;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::dns_provider::DnsProviderConfiguration;
@@ -37,7 +35,7 @@ use crate::errors::CommandError;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
-use crate::models::gcp::{GcpStorageType, JsonCredentials};
+use crate::models::gcp::GcpStorageType;
 use crate::models::third_parties::LetsEncryptConfig;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -45,26 +43,15 @@ use std::sync::Arc;
 use time::Duration;
 use url::Url;
 
-pub struct ChartsConfigPrerequisites {
+pub struct GkeChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
-    pub region: GcpRegion,
-    pub cluster_name: String,
-    pub cpu_architectures: Vec<CpuArchitecture>,
-    pub cloud_provider: String,
-    pub test_cluster: bool,
-    pub gcp_credentials: JsonCredentials,
-    pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
-    pub ff_grafana_enabled: bool,
-    pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
-    pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
-    pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub loki_logging_service_account_email: String,
@@ -74,27 +61,16 @@ pub struct ChartsConfigPrerequisites {
     pub cluster_advanced_settings: ClusterAdvancedSettings,
 }
 
-impl ChartsConfigPrerequisites {
+impl GkeChartsConfigPrerequisites {
     pub fn new(
         organization_id: String,
         organization_long_id: uuid::Uuid,
         cluster_id: String,
         cluster_long_id: uuid::Uuid,
-        region: GcpRegion,
-        cluster_name: String,
-        cpu_architectures: Vec<CpuArchitecture>,
-        cloud_provider: String,
-        test_cluster: bool,
-        gcp_credentials: JsonCredentials,
-        qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
-        ff_grafana_enabled: bool,
-        managed_dns_name: String,
         managed_dns_helm_format: String,
-        managed_dns_resolvers_terraform_format: String,
         managed_dns_root_domain_helm_format: String,
-        external_dns_provider: String,
         lets_encrypt_config: LetsEncryptConfig,
         dns_provider_config: DnsProviderConfiguration,
         loki_logging_service_account_email: String,
@@ -107,21 +83,10 @@ impl ChartsConfigPrerequisites {
             organization_long_id,
             cluster_id,
             cluster_long_id,
-            region,
-            cluster_name,
-            cpu_architectures,
-            cloud_provider,
-            test_cluster,
-            gcp_credentials,
-            qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
-            ff_grafana_enabled,
-            managed_dns_name,
             managed_dns_helm_format,
-            managed_dns_resolvers_terraform_format,
             managed_dns_root_domain_helm_format,
-            external_dns_provider,
             lets_encrypt_config,
             dns_provider_config,
             loki_logging_service_account_email,
@@ -132,8 +97,8 @@ impl ChartsConfigPrerequisites {
     }
 }
 
-pub fn gcp_helm_charts(
-    chart_config_prerequisites: &ChartsConfigPrerequisites,
+pub(super) fn gke_helm_charts(
+    chart_config_prerequisites: &GkeChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     _kubernetes_config: &Path,
     qovery_api: &dyn QoveryApi,

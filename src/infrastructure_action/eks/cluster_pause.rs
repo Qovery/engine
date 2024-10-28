@@ -213,6 +213,7 @@ pub fn pause_eks_cluster(
 
     if kubernetes.is_karpenter_enabled() {
         let kube_client = infra_ctx.mk_kube_client()?;
+        let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
         block_on(Karpenter::pause(kubernetes, cloud_provider, &kube_client))?;
     }
 

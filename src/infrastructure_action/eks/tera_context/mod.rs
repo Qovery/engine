@@ -113,7 +113,7 @@ pub fn eks_tera_context(
     );
     context.insert(
         "s3_flow_logs_bucket_name",
-        format!("qovery-vpc-flow-logs-{}", kubernetes.id()).as_str(),
+        format!("qovery-vpc-flow-logs-{}", kubernetes.short_id()).as_str(),
     );
 
     match options.vpc_qovery_network_mode {
@@ -192,7 +192,7 @@ pub fn eks_tera_context(
             false => format_ips(&options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public),
         };
 
-    let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
+    let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.short_id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
     let cloudwatch_eks_log_group = format!("/aws/eks/{}/cluster", kubernetes.cluster_name());
     let eks_cidr_subnet = options.eks_cidr_subnet.clone();
@@ -316,14 +316,14 @@ pub fn eks_tera_context(
     context.insert("aws_region", &kubernetes.region());
     context.insert("vpc_cidr_block", &vpc_cidr_block);
     context.insert("vpc_custom_routing_table", &options.vpc_custom_routing_table);
-    context.insert("s3_kubeconfig_bucket", &format!("qovery-kubeconfigs-{}", kubernetes.id()));
+    context.insert("s3_kubeconfig_bucket", &format!("qovery-kubeconfigs-{}", kubernetes.short_id()));
 
     // AWS - EKS
     context.insert("aws_availability_zones", &aws_zones);
     context.insert("eks_cidr_subnet", &eks_cidr_subnet);
     context.insert("ec2_cidr_subnet", &ec2_cidr_subnet);
     context.insert("kubernetes_cluster_name", kubernetes.name());
-    context.insert("kubernetes_cluster_id", kubernetes.id());
+    context.insert("kubernetes_cluster_id", kubernetes.short_id());
     context.insert("kubernetes_cluster_long_id", kubernetes.context().cluster_long_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);

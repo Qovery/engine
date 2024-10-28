@@ -29,7 +29,7 @@ use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
-use qovery_engine::engine_task::environment_task::EnvironmentTask;
+use qovery_engine::engine_task::environment_task::{DeploymentOption, EnvironmentTask};
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
@@ -44,9 +44,9 @@ use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::errors::EngineError;
 use qovery_engine::models::abort::AbortStatus;
 use qovery_engine::models::types::VersionsNumber;
-use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
@@ -59,7 +59,7 @@ impl Infrastructure for EnvironmentRequest {
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> (Environment, TransactionResult) {
+    ) -> (Environment, Result<(), Box<EngineError>>) {
         let mut env = environment
             .to_environment_domain(
                 infra_ctx.context(),
@@ -92,16 +92,15 @@ impl Infrastructure for EnvironmentRequest {
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| AbortStatus::None,
         );
-        ret.unwrap();
 
-        (env, TransactionResult::Ok)
+        (env, ret)
     }
 
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult {
+    ) -> Result<(), Box<EngineError>> {
         let mut env = environment
             .to_environment_domain(
                 infra_ctx.context(),
@@ -112,18 +111,14 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
-        match ret {
-            Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(err),
-        }
+        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
     }
 
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult {
+    ) -> Result<(), Box<EngineError>> {
         let mut env = environment
             .to_environment_domain(
                 infra_ctx.context(),
@@ -134,18 +129,14 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
-        match ret {
-            Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(err),
-        }
+        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
     }
 
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult {
+    ) -> Result<(), Box<EngineError>> {
         let mut env = environment
             .to_environment_domain(
                 infra_ctx.context(),
@@ -156,18 +147,14 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
-        match ret {
-            Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(err),
-        }
+        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
     }
 
     fn restart_environment(
         &self,
         environment: &EnvironmentRequest,
         infra_ctx: &InfrastructureContext,
-    ) -> TransactionResult {
+    ) -> Result<(), Box<EngineError>> {
         let mut env = environment
             .to_environment_domain(
                 infra_ctx.context(),
@@ -178,11 +165,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None);
-        match ret {
-            Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(err),
-        }
+        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
     }
 }
 
@@ -907,15 +890,12 @@ pub fn test_db(
 
     let ret = environment.deploy_environment(&ea, infra_ctx);
     match storage_size {
-        StorageSize::NormalSize => assert!(matches!(ret, TransactionResult::Ok)),
-        StorageSize::OverSize => assert!(matches!(ret, TransactionResult::Error(..))),
+        StorageSize::NormalSize => assert!(ret.is_ok()),
+        StorageSize::OverSize => assert!(ret.is_err()),
         StorageSize::Resize => {
             let mut resized_env = environment.clone();
             resized_env.databases[0].disk_size_in_gib = StorageSize::Resize.size();
-            assert!(matches!(
-                resized_env.deploy_environment(&resized_env, infra_ctx),
-                TransactionResult::Ok
-            ))
+            assert!(resized_env.deploy_environment(&resized_env, infra_ctx).is_ok())
         }
     }
 
@@ -1043,15 +1023,14 @@ pub fn test_db(
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, infra_ctx_for_delete);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     if kubernetes_kind == KubernetesKind::Ec2 {
-        let delete_tx = Transaction::new(infra_ctx_for_delete);
-        assert!(delete_tx.is_ok());
-        if let Ok(mut tx) = delete_tx {
-            assert!(tx.delete_kubernetes().is_ok());
-            assert!(matches!(tx.commit(), TransactionResult::Ok));
-        }
+        let ret = infra_ctx_for_delete
+            .kubernetes()
+            .as_infra_actions()
+            .delete_cluster(infra_ctx_for_delete);
+        assert!(ret.is_ok());
     }
 
     test_name.to_string()
@@ -1237,7 +1216,7 @@ pub fn test_pause_managed_db(
     };
 
     let ret = environment.deploy_environment(&environment, infra_ctx);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     match database_mode {
         CONTAINER => {
@@ -1350,10 +1329,10 @@ pub fn test_pause_managed_db(
     };
 
     let ret = environment_pause.pause_environment(&environment_pause, infra_ctx);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     let ret = environment_delete.delete_environment(&environment_delete, infra_ctx_for_delete);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     test_name.to_string()
 }
@@ -1531,7 +1510,7 @@ pub fn test_db_on_upgrade(
     };
 
     let ret = environment.deploy_environment(&ea, &infra_ctx);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     match database_mode {
         CONTAINER => {
@@ -1620,7 +1599,7 @@ pub fn test_db_on_upgrade(
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
-    assert!(matches!(ret, TransactionResult::Ok));
+    assert!(ret.is_ok());
 
     test_name.to_string()
 }

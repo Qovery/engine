@@ -12,6 +12,7 @@ impl AwsCoreDnsAddon {
     pub fn new_from_k8s_version(k8s_version: KubernetesVersion) -> Self {
         AwsCoreDnsAddon {
             // Get current default build of an aws-codedns add-on:
+            // https://docs.aws.amazon.com/eks/latest/userguide/managing-coredns.html
             // aws eks describe-addon-versions --kubernetes-version 1.22 --addon-name aws-coredns | jq -r '.addons[].addonVersions[] | select(.compatibilities[].defaultVersion == true) | .addonVersion'
             version: match k8s_version {
                 KubernetesVersion::V1_23 { .. } => "v1.8.7-eksbuild.10",
@@ -21,6 +22,7 @@ impl AwsCoreDnsAddon {
                 KubernetesVersion::V1_27 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_28 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_29 { .. } => "v1.10.1-eksbuild.7",
+                KubernetesVersion::V1_30 { .. } => "v1.11.3-eksbuild.1",
             }
             .to_string(),
         }
@@ -115,6 +117,16 @@ mod tests {
                 },
                 expected: AwsCoreDnsAddon {
                     version: "v1.10.1-eksbuild.7".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_30 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.11.3-eksbuild.1".to_string(),
                 },
             },
         ];

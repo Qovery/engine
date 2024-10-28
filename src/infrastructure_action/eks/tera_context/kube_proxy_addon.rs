@@ -21,6 +21,7 @@ impl AwsKubeProxyAddon {
                 KubernetesVersion::V1_27 { .. } => "v1.27.6-eksbuild.2",
                 KubernetesVersion::V1_28 { .. } => "v1.28.2-eksbuild.2",
                 KubernetesVersion::V1_29 { .. } => "v1.29.0-eksbuild.1",
+                KubernetesVersion::V1_30 { .. } => "v1.30.3-eksbuild.5",
             }
             .to_string(),
         }

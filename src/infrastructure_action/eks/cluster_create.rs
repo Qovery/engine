@@ -17,7 +17,6 @@ use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
-use crate::infrastructure_action::ec2_k3s;
 use crate::infrastructure_action::ec2_k3s::helm_charts::{ec2_k3s_helm_charts, Ec2ChartsConfigPrerequisites};
 use crate::infrastructure_action::ec2_k3s::AwsEc2QoveryTerraformOutput;
 use crate::infrastructure_action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
@@ -33,6 +32,7 @@ use crate::infrastructure_action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
+use crate::infrastructure_action::{ec2_k3s, InfrastructureAction};
 use crate::io_models::context::Features;
 use crate::models::domain::ToHelmString;
 use crate::models::kubernetes::K8sObject;
@@ -357,8 +357,13 @@ pub fn create_eks_cluster(
                     kubernetes_version_upgrade_requested = true;
 
                     // useful for debug purpose: we update here Vault with the name of the instance only because k3s is not ready yet (after upgrade)
-                    let res = kubernetes.upgrade_with_status(infra_ctx, x);
                     // push endpoint to Vault for EC2
+                    let res = match (kubernetes.as_ec2(), kubernetes.as_eks()) {
+                        (Some(ec2), None) => ec2.upgrade_cluster(infra_ctx, x),
+                        (None, Some(gke)) => gke.upgrade_cluster(infra_ctx, x),
+                        _ => unreachable!("only one kind of cluster is expected here"),
+                    };
+
                     if kubernetes.kind() == Kind::Ec2 {
                         // TODO: FIX for EC2
                         //let qovery_terraform_config =
@@ -476,6 +481,7 @@ pub fn create_eks_cluster(
         .collect();
 
     if kubernetes.is_karpenter_enabled() {
+        let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
         if let Some(karpenter_parameters) = &kubernetes.get_karpenter_parameters() {
             if karpenter_parameters.spot_enabled {
                 block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
@@ -540,11 +546,12 @@ pub fn create_eks_cluster(
     let cpu_architectures = kubernetes.cpu_architectures();
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
+            let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
             let charts_prerequisites = EksChartsConfigPrerequisites {
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
-                cluster_id: kubernetes.id().to_string(),
+                cluster_id: kubernetes.short_id().to_string(),
                 cluster_long_id: kubernetes_long_id,
                 region: AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
                     EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
@@ -597,7 +604,7 @@ pub fn create_eks_cluster(
                 organization_id: cloud_provider.organization_id().to_string(),
                 organization_long_id: cloud_provider.organization_long_id(),
                 infra_options: options.clone(),
-                cluster_id: kubernetes.id().to_string(),
+                cluster_id: kubernetes.short_id().to_string(),
                 cluster_long_id: kubernetes_long_id,
                 region: kubernetes.region().to_string(),
                 cpu_architectures: cpu_architectures[0],

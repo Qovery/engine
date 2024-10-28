@@ -21,7 +21,7 @@ use super::utils::from_terraform_value;
 
 impl InfrastructureAction for EC2 {
     #[named]
-    fn on_create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             infra_ctx.cloud_provider().name(),
@@ -50,7 +50,7 @@ impl InfrastructureAction for EC2 {
     }
 
     #[named]
-    fn on_pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             infra_ctx.cloud_provider().name(),
@@ -77,7 +77,7 @@ impl InfrastructureAction for EC2 {
     }
 
     #[named]
-    fn on_delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             infra_ctx.cloud_provider().name(),
@@ -105,7 +105,7 @@ impl InfrastructureAction for EC2 {
     }
 
     #[named]
-    fn on_upgrade_cluster(
+    fn upgrade_cluster(
         &self,
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,

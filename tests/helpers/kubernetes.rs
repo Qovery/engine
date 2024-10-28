@@ -28,7 +28,6 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
-use qovery_engine::transaction::{Transaction, TransactionResult};
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use qovery_engine::models::abort::AbortStatus;
@@ -138,19 +137,13 @@ pub fn cluster_test(
         Kind::OnPremise => todo!(),
     };
     // Bootstrap
-    let mut bootstrap_tx = Transaction::new(&engine).unwrap();
-    if let Err(err) = bootstrap_tx.create_kubernetes() {
-        panic!("{err:?}")
-    }
-    assert!(matches!(bootstrap_tx.commit(), TransactionResult::Ok));
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    assert!(deploy_tx.is_ok());
 
     // update
     engine.context_mut().update_is_first_cluster_deployment(false);
-    let mut update_tx = Transaction::new(&engine).unwrap();
-    if let Err(err) = update_tx.create_kubernetes() {
-        panic!("{err:?}")
-    }
-    assert!(matches!(update_tx.commit(), TransactionResult::Ok));
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    assert!(deploy_tx.is_ok());
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -173,21 +166,13 @@ pub fn cluster_test(
         // TODO new test type
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
-            let mut pause_tx = Transaction::new(&engine).unwrap();
-            let mut resume_tx = Transaction::new(&engine).unwrap();
-
             // Pause
-            if let Err(err) = pause_tx.pause_kubernetes() {
-                panic!("{err:?}")
-            }
-            assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
+            let pause_tx = engine.kubernetes().as_infra_actions().pause_cluster(&engine);
+            assert!(pause_tx.is_ok());
 
             // Resume
-            if let Err(err) = resume_tx.create_kubernetes() {
-                panic!("{err:?}")
-            }
-
-            assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
+            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            assert!(resume_tx.is_ok());
         }
         ClusterTestType::WithUpgrade => {
             let upgrade_to_version = kubernetes_boot_version.next_version().unwrap_or_else(|| {
@@ -238,20 +223,14 @@ pub fn cluster_test(
                 ),
                 Kind::OnPremise => todo!(),
             };
-            let mut upgrade_tx = Transaction::new(&engine).unwrap();
-            let mut delete_tx = Transaction::new(&engine).unwrap();
 
             // Upgrade
-            if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{err:?}")
-            }
-            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
+            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            assert!(upgrade_tx.is_ok());
 
             // Delete
-            if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{err:?}")
-            }
-            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+            let delete_tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);
+            assert!(delete_tx.is_ok());
 
             return test_name.to_string();
         }
@@ -303,19 +282,15 @@ pub fn cluster_test(
                 ),
                 Kind::OnPremise => todo!(),
             };
-            let mut upgrade_tx = Transaction::new(&engine).unwrap();
-            let mut delete_tx = Transaction::new(&engine).unwrap();
+
             // Upgrade
-            if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{err:?}")
-            }
-            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
+            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            assert!(upgrade_tx.is_ok());
 
             // Delete
-            if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{err:?}")
-            }
-            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+            let delete_tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);
+            assert!(delete_tx.is_ok());
+
             return test_name.to_string();
         }
     }
@@ -342,7 +317,7 @@ pub fn cluster_test(
     //if let Err(err) = delete_tx.delete_kubernetes() {
     //    panic!("{err:?}")
     //}
-    //assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+    //assert!(matches!(delete_tx.commit(), Ok(_)));
 
     test_name.to_string()
 }
@@ -378,7 +353,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EKS::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
@@ -413,7 +387,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EC2::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
@@ -464,7 +437,6 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 Gke::new(
                     context.clone(),
-                    context.cluster_short_id(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,

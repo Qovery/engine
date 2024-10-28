@@ -171,7 +171,7 @@ pub fn delete_eks_cluster(
     let message = format!(
         "Ensuring everything is up to date before deleting cluster {}/{}",
         kubernetes.name(),
-        kubernetes.id()
+        kubernetes.short_id()
     );
 
     kubernetes
@@ -326,7 +326,7 @@ pub fn delete_eks_cluster(
         let message = format!(
             "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
             kubernetes.name(),
-            kubernetes.id()
+            kubernetes.short_id()
         );
 
         kubernetes
@@ -388,7 +388,7 @@ pub fn delete_eks_cluster(
         let message = format!(
             "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
             kubernetes.name(),
-            kubernetes.id()
+            kubernetes.short_id()
         );
 
         kubernetes
@@ -513,12 +513,12 @@ pub fn delete_eks_cluster(
         }
     };
 
-    let message = format!("Deleting Kubernetes cluster {}/{}", kubernetes.name(), kubernetes.id());
+    let message = format!("Deleting Kubernetes cluster {}/{}", kubernetes.name(), kubernetes.short_id());
     kubernetes
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-    if kubernetes.kind() != Kind::Ec2 {
+    if let Some(kubernetes) = kubernetes.as_eks() {
         // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
         block_on(delete_eks_nodegroups(
             aws_conn,
@@ -586,7 +586,7 @@ pub fn delete_eks_cluster(
     if kubernetes.kind() == Kind::Ec2 {
         match cloud_provider.aws_sdk_client() {
             None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
-            Some(client) => block_on(client.detach_ec2_volumes(kubernetes.id(), &event_details))?,
+            Some(client) => block_on(client.detach_ec2_volumes(kubernetes.short_id(), &event_details))?,
         };
     }
 
@@ -609,7 +609,7 @@ pub fn delete_eks_cluster(
         let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
 
         // ignore on failure
-        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.id());
+        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.short_id());
     };
 
     Ok(())

@@ -32,7 +32,7 @@ pub mod helm;
 pub mod helm_charts;
 pub mod io;
 pub mod kubeconfig_helper;
-mod kubectl_utils;
+pub mod kubectl_utils;
 pub mod kubernetes;
 pub mod metrics;
 pub mod models;

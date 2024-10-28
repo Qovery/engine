@@ -1,4 +1,27 @@
-use crate::cloud_provider::aws::kubernetes::KarpenterParameters;
+use super::models::NodeGroupsWithDesiredState;
+use super::vault::ClusterSecrets;
+use crate::cloud_provider::aws::kubernetes::ec2::EC2;
+use crate::cloud_provider::aws::kubernetes::eks::EKS;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::service::Action;
+use crate::cloud_provider::CloudProvider;
+use crate::cloud_provider::Kind as CloudProviderKind;
+use crate::cmd::kubectl::kubectl_delete_apiservice;
+use crate::cmd::kubectl::{
+    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
+    kubectl_exec_version, kubernetes_get_all_pdbs,
+};
+use crate::cmd::structs::KubernetesNodeCondition;
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::infrastructure_action::InfrastructureAction;
+use crate::io_models::context::Context;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::QoveryIdentifier;
+use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
 use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
@@ -19,30 +42,6 @@ use std::time::Duration;
 use strum_macros::EnumIter;
 use tracing::Span;
 use uuid::Uuid;
-
-use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
-use crate::cloud_provider::service::Action;
-use crate::cloud_provider::CloudProvider;
-use crate::cloud_provider::Kind as CloudProviderKind;
-use crate::cmd::kubectl::kubectl_delete_apiservice;
-use crate::cmd::kubectl::{
-    kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
-    kubectl_exec_version, kubernetes_get_all_pdbs,
-};
-use crate::cmd::structs::KubernetesNodeCondition;
-use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::io_models::context::Context;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::io_models::QoveryIdentifier;
-use crate::logger::Logger;
-use crate::models::types::VersionsNumber;
-
-use super::models::NodeGroupsWithDesiredState;
-use super::vault::ClusterSecrets;
 
 pub trait ProviderOptions {}
 
@@ -120,6 +119,11 @@ pub enum KubernetesVersion {
         patch: Option<u8>,
         suffix: Option<Arc<str>>,
     },
+    V1_30 {
+        prefix: Option<Arc<str>>,
+        patch: Option<u8>,
+        suffix: Option<Arc<str>>,
+    },
 }
 
 impl KubernetesVersion {
@@ -132,6 +136,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_27 { prefix, .. } => prefix,
             KubernetesVersion::V1_28 { prefix, .. } => prefix,
             KubernetesVersion::V1_29 { prefix, .. } => prefix,
+            KubernetesVersion::V1_30 { prefix, .. } => prefix,
         }
     }
 
@@ -144,6 +149,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_27 { .. } => 1,
             KubernetesVersion::V1_28 { .. } => 1,
             KubernetesVersion::V1_29 { .. } => 1,
+            KubernetesVersion::V1_30 { .. } => 1,
         }
     }
 
@@ -156,6 +162,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_27 { .. } => 27,
             KubernetesVersion::V1_28 { .. } => 28,
             KubernetesVersion::V1_29 { .. } => 29,
+            KubernetesVersion::V1_30 { .. } => 30,
         }
     }
 
@@ -168,6 +175,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_27 { patch, .. } => patch,
             KubernetesVersion::V1_28 { patch, .. } => patch,
             KubernetesVersion::V1_29 { patch, .. } => patch,
+            KubernetesVersion::V1_30 { patch, .. } => patch,
         }
     }
 
@@ -180,6 +188,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_27 { suffix, .. } => suffix,
             KubernetesVersion::V1_28 { suffix, .. } => suffix,
             KubernetesVersion::V1_29 { suffix, .. } => suffix,
+            KubernetesVersion::V1_30 { suffix, .. } => suffix,
         }
     }
 
@@ -212,6 +221,11 @@ impl KubernetesVersion {
                 suffix: None,
             }),
             KubernetesVersion::V1_29 { .. } => Some(KubernetesVersion::V1_28 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_30 { .. } => Some(KubernetesVersion::V1_29 {
                 prefix: None,
                 patch: None,
                 suffix: None,
@@ -251,7 +265,12 @@ impl KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            KubernetesVersion::V1_29 { .. } => None,
+            KubernetesVersion::V1_29 { .. } => Some(KubernetesVersion::V1_30 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_30 { .. } => None,
         }
     }
 
@@ -340,6 +359,11 @@ impl FromStr for KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
+            "1.30" => Ok(KubernetesVersion::V1_30 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
             // EC2 specifics
             "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
                 prefix: Some(Arc::from("v")),
@@ -376,6 +400,11 @@ impl FromStr for KubernetesVersion {
                 patch: Some(7),
                 suffix: Some(Arc::from("+k3s1")),
             }),
+            "v1.30.5+k3s1" => Ok(KubernetesVersion::V1_30 {
+                prefix: Some(Arc::from("v")),
+                patch: Some(5),
+                suffix: Some(Arc::from("+k3s1")),
+            }),
             _ => Err(()),
         }
     }
@@ -384,15 +413,14 @@ impl FromStr for KubernetesVersion {
 pub trait Kubernetes: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
-    fn as_kubernetes(&self) -> &dyn Kubernetes;
-    fn id(&self) -> &str;
+    fn short_id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
+        format!("{} ({})", self.name(), self.short_id())
     }
     fn cluster_name(&self) -> String {
-        format!("qovery-{}", self.id())
+        format!("qovery-{}", self.short_id())
     }
     fn version(&self) -> KubernetesVersion;
     fn region(&self) -> &str;
@@ -407,7 +435,6 @@ pub trait Kubernetes: Send + Sync {
     fn logger(&self) -> &dyn Logger;
     fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
-    fn is_self_managed(&self) -> bool;
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -423,18 +450,10 @@ pub trait Kubernetes: Send + Sync {
 
     fn kubeconfig_local_file_path(&self) -> PathBuf {
         self.temp_dir()
-            .join(format!("qovery-kubeconfigs-{}", self.id()))
-            .join(format!("{}.yaml", self.id()))
+            .join(format!("qovery-kubeconfigs-{}", self.short_id()))
+            .join(format!("{}.yaml", self.short_id()))
     }
 
-    fn on_create(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn upgrade_with_status(
-        &self,
-        infra_ctx: &InfrastructureContext,
-        kubernetes_upgrade_status: KubernetesUpgradeStatus,
-    ) -> Result<(), Box<EngineError>>;
-    fn on_pause(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
-    fn on_delete(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn temp_dir(&self) -> &Path;
 
     fn update_vault_config(
@@ -445,15 +464,24 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
-
     fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
-
-    fn is_karpenter_enabled(&self) -> bool;
-
-    fn get_karpenter_parameters(&self) -> Option<KarpenterParameters>;
+    fn is_karpenter_enabled(&self) -> bool {
+        false
+    }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
     fn helm_charts_diffs_directory(&self) -> PathBuf {
         self.temp_dir().join("helm-charts-diffs")
+    }
+
+    fn as_infra_actions(&self) -> &dyn InfrastructureAction;
+
+    // TODO: Remove those methods when we remove EC2
+    // It is needed because our integration sucks
+    fn as_ec2(&self) -> Option<&EC2> {
+        None
+    }
+    fn as_eks(&self) -> Option<&EKS> {
+        None
     }
 }
 
@@ -483,6 +511,13 @@ impl Kind {
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
             Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
         }
+    }
+
+    pub fn is_self_managed(&self) -> bool {
+        matches!(
+            self,
+            Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged
+        )
     }
 }
 
@@ -1135,7 +1170,7 @@ impl InstanceEc2 {
 pub fn send_progress_on_long_task<K, R, F>(kubernetes: &K, action: Action, long_task: F) -> R
 where
     K: Kubernetes + ?Sized,
-    F: Fn() -> R,
+    F: FnOnce() -> R,
 {
     let waiting_message = match action {
         Action::Create => Some(format!(
@@ -1167,7 +1202,7 @@ pub fn send_progress_on_long_task_with_message<K, R, F>(
 ) -> R
 where
     K: Kubernetes + ?Sized,
-    F: Fn() -> R,
+    F: FnOnce() -> R,
 {
     let logger = kubernetes.logger().clone_dyn();
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
@@ -2012,6 +2047,11 @@ mod tests {
                         patch: None,
                         suffix: None,
                     }),
+                    "1.30" => Ok(kubernetes::KubernetesVersion::V1_30 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
                     _ => panic!("unsupported k8s version string"),
                 },
                 K8sVersion::from_str(&k8s_version_str)
@@ -2027,6 +2067,7 @@ mod tests {
             "v1.27.9+k3s1",
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
+            "v1.30.5+k3s1",
         ] {
             assert_eq!(
                 match k3s_versions {
@@ -2065,6 +2106,11 @@ mod tests {
                         patch: Some(7),
                         suffix: Some(Arc::from("+k3s1")),
                     }),
+                    "v1.30.5+k3s1" => Ok(kubernetes::KubernetesVersion::V1_30 {
+                        prefix: Some(Arc::from("v")),
+                        patch: Some(5),
+                        suffix: Some(Arc::from("+k3s1")),
+                    }),
                     _ => panic!("unsupported k3s version string"),
                 },
                 K8sVersion::from_str(k3s_versions)
@@ -2099,6 +2145,7 @@ mod tests {
             "v1.27.9+k3s1",
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
+            "v1.30.5+k3s1",
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2150,6 +2197,11 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
+                    K8sVersion::V1_30 { .. } => Some(K8sVersion::V1_29 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
                 },
                 k8s_version.previous_version(),
             );
@@ -2164,6 +2216,7 @@ mod tests {
             "v1.27.9+k3s1",
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
+            "v1.30.5+k3s1",
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2195,6 +2248,11 @@ mod tests {
                         suffix: None
                     }),
                     K8sVersion::V1_29 { .. } => Some(K8sVersion::V1_28 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_30 { .. } => Some(K8sVersion::V1_29 {
                         prefix: None,
                         patch: None,
                         suffix: None
@@ -2241,7 +2299,12 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
-                    K8sVersion::V1_29 { .. } => None,
+                    K8sVersion::V1_29 { .. } => Some(K8sVersion::V1_30 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_30 { .. } => None,
                 },
                 k8s_version.next_version(),
             );
@@ -2256,6 +2319,7 @@ mod tests {
             "v1.27.9+k3s1",
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
+            "v1.30.5+k3s1",
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2290,7 +2354,12 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
-                    K8sVersion::V1_29 { .. } => None,
+                    K8sVersion::V1_29 { .. } => Some(K8sVersion::V1_30 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_30 { .. } => None,
                 },
                 k3s_version.next_version(),
             );
