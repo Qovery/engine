@@ -1,3 +1,4 @@
+use std::fmt::Write as FmtWrite;
 use std::fs;
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
@@ -1477,6 +1478,47 @@ impl Helm {
             Err(err) => {
                 error!("Helm error: {:?}", err);
                 Err(CmdError(chart.name.clone(), HelmCommand::TEMPLATE, err.into()))
+            }
+        }
+    }
+
+    pub fn get_template(&self, chart_path: &str, chart: &ChartInfo) -> Result<String, HelmError> {
+        let mut output = String::new();
+        let mut args_string: Vec<String> = vec!["template".to_string(), chart.name.to_string(), chart_path.to_string()];
+
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value in &chart.values_string {
+            args_string.push("--set-string".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &[],
+            &mut |line| {
+                if let Err(e) = writeln!(output, "{}", line) {
+                    error!("Error writing to output: {:?}", e);
+                }
+                debug!("{}", line);
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart.name, line);
+            },
+            &CommandKiller::never(),
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(output),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+                Err(CmdError(chart.name.to_string(), HelmCommand::TEMPLATE, err.into()))
             }
         }
     }
