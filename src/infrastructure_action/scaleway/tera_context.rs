@@ -4,6 +4,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::io_models::context::Features;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::string::terraform_list_format;
@@ -11,10 +12,13 @@ use reqwest::header;
 use serde_derive::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-pub(super) fn kapsule_tera_context(
-    cluster: &Kapsule,
-    infra_ctx: &InfrastructureContext,
-) -> Result<TeraContext, Box<EngineError>> {
+impl ToInfraTeraContext for Kapsule {
+    fn to_infra_tera_context(&self, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
+        kapsule_tera_context(self, infra_ctx)
+    }
+}
+
+fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 

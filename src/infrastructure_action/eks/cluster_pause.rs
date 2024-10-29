@@ -222,6 +222,7 @@ pub fn pause_eks_cluster(
         tf_workers_resources,
         cloud_provider.credentials_environment_variables().as_slice(),
         &TerraformValidators::Default,
+        infra_ctx.context().is_dry_run_deploy(),
     ) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());

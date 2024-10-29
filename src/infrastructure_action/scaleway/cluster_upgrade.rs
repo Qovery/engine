@@ -7,7 +7,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
-use crate::infrastructure_action::scaleway::tera_context::kapsule_tera_context;
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 
@@ -24,7 +24,7 @@ pub fn upgrade_kapsule_cluster(
 
     let temp_dir = cluster.temp_dir();
     // generate terraform files and copy them into temp dir
-    let mut context = kapsule_tera_context(cluster, infra_ctx)?;
+    let mut context = cluster.to_infra_tera_context(infra_ctx)?;
 
     //
     // Upgrade nodes

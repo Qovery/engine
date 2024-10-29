@@ -4,16 +4,17 @@ use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply};
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::engine::InfrastructureContext;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
-use crate::infrastructure_action::scaleway::tera_context::kapsule_tera_context;
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use std::path::PathBuf;
 
 pub fn delete_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Delete));
@@ -25,12 +26,48 @@ pub fn delete_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     ));
 
     let temp_dir = cluster.temp_dir();
-    // generate terraform files and copy them into temp dir
-    let context = kapsule_tera_context(cluster, infra_ctx)?;
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, context)
-    {
+    // generate terraform files and copy them into temp dir
+    // We re-update the cluster to be sure it is in a correct state before deleting it
+    let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    let tf_resources = TerraformInfraResources::new(
+        tera_context.clone(),
+        PathBuf::from(cluster.template_directory.as_str()).join("terraform"),
+        PathBuf::from(temp_dir).join("terraform"),
+        event_details.clone(),
+        cluster.context().is_dry_run_deploy(),
+    );
+
+    // should apply before destroy to be sure destroy will compute on all resources
+    // don't exit on failure, it can happen if we resume a destroy process
+    let message = format!(
+        "Ensuring everything is up to date before deleting cluster {}/{}",
+        cluster.name(),
+        cluster.short_id()
+    );
+    cluster
+        .logger()
+        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
+
+    cluster.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
+    ));
+
+    let _qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(
+        infra_ctx
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+    )?;
+
+    let kubeconfig_path = cluster.kubeconfig_local_file_path();
+
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        cluster.template_directory.as_str(),
+        temp_dir,
+        tera_context,
+    ) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             cluster.template_directory.to_string(),
@@ -52,33 +89,6 @@ pub fn delete_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         )));
     }
 
-    // should apply before destroy to be sure destroy will compute on all resources
-    // don't exit on failure, it can happen if we resume a destroy process
-    let message = format!(
-        "Ensuring everything is up to date before deleting cluster {}/{}",
-        cluster.name(),
-        cluster.short_id()
-    );
-    cluster
-        .logger()
-        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
-    ));
-
-    if let Err(e) =
-        terraform_init_validate_plan_apply(temp_dir.to_string_lossy().as_ref(), false, &[], &TerraformValidators::None)
-    {
-        // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-        cluster.logger().log(EngineEvent::Error(
-            EngineError::new_terraform_error(event_details.clone(), e),
-            None,
-        ));
-    };
-
-    let kubeconfig_path = cluster.kubeconfig_local_file_path();
     if !skip_kubernetes_step {
         // should make the diff between all namespaces and qovery managed namespaces
         let message = format!(
@@ -284,17 +294,12 @@ pub fn delete_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         EventMessage::new_from_safe("Running Terraform destroy".to_string()),
     ));
 
-    if let Err(err) = terraform_init_validate_destroy(
-        temp_dir.to_string_lossy().as_ref(),
-        false,
+    tf_resources.delete(
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
-        &TerraformValidators::None,
-    ) {
-        return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
-    }
+    )?;
 
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details.clone());

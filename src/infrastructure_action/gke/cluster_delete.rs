@@ -11,7 +11,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
-use crate::infrastructure_action::gke::tera_context::gke_tera_context;
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
@@ -28,7 +28,7 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
     let temp_dir = cluster.temp_dir();
 
     // generate terraform files and copy them into temp dir
-    let context = gke_tera_context(cluster, infra_ctx)?;
+    let context = cluster.to_infra_tera_context(infra_ctx)?;
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, context)
