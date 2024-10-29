@@ -257,6 +257,7 @@ pub fn kapsule_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
+                false,
             )
             .to_common_helm_chart()?,
         ),
@@ -272,6 +273,7 @@ pub fn kapsule_helm_charts(
                 prometheus_namespace,
                 get_chart_override_fn.clone(),
                 true,
+                false,
             )
             .to_common_helm_chart()?,
         ),
