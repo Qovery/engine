@@ -18,9 +18,8 @@ use base64::engine::general_purpose;
 
 use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::infrastructure_action::gke::helm_charts::{gke_helm_charts, GkeChartsConfigPrerequisites};
-use crate::infrastructure_action::gke::tera_context::gke_tera_context;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_action::{InfrastructureAction, ToInfraTeraContext};
 use base64::Engine;
 use itertools::Itertools;
 use std::fs;
@@ -69,7 +68,7 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
     let temp_dir = cluster.temp_dir();
 
     // generate terraform files and copy them into temp dir
-    let context = gke_tera_context(cluster, infra_ctx)?;
+    let context = cluster.to_infra_tera_context(infra_ctx)?;
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, context)

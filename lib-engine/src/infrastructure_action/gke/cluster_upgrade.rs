@@ -11,7 +11,7 @@ use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 
 use crate::cloud_provider::gcp::kubernetes::{Gke, GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES};
-use crate::infrastructure_action::gke::tera_context::gke_tera_context;
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use std::str::FromStr;
@@ -28,7 +28,7 @@ pub(super) fn upgrade_gke_cluster(
     ));
     let temp_dir = cluster.temp_dir();
     // generate terraform files and copy them into temp dir
-    let mut context = gke_tera_context(cluster, infra_ctx)?;
+    let mut context = cluster.to_infra_tera_context(infra_ctx)?;
     context.insert(
         "kubernetes_cluster_version",
         format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),

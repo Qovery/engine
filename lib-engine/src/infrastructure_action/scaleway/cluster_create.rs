@@ -5,17 +5,15 @@ use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, Kubernet
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
-use crate::cmd::terraform::{terraform_init_validate_plan_apply, terraform_output};
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::helm_charts::{kapsule_helm_charts, KapsuleChartsConfigPrerequisites};
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
-use crate::infrastructure_action::scaleway::tera_context::kapsule_tera_context;
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_action::{InfrastructureAction, ToInfraTeraContext};
 use crate::io_models::context::Features;
 use crate::models::domain::ToHelmString;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -24,6 +22,7 @@ use crate::string::terraform_list_format;
 use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::OperationResult;
+use std::path::PathBuf;
 
 pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
@@ -69,44 +68,6 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
 
     let temp_dir = cluster.temp_dir();
 
-    // generate terraform files and copy them into temp dir
-    let context = kapsule_tera_context(cluster, infra_ctx)?;
-
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", cluster.context().lib_root_dir()),
-            format!("{}/common/charts", temp_dir.to_string_lossy()),
-        ),
-        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/scaleway/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", cluster.context().lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
     cluster.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe("Deploying SCW cluster.".to_string()),
@@ -140,26 +101,67 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     }
 
     // terraform deployment dedicated to cloud resources
-    if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.to_string_lossy().as_ref(),
+    let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    let tf_action = TerraformInfraResources::new(
+        tera_context.clone(),
+        PathBuf::from(cluster.template_directory.as_str()).join("terraform"),
+        PathBuf::from(temp_dir).join("terraform"),
+        event_details.clone(),
         cluster.context().is_dry_run_deploy(),
-        &[],
-        &TerraformValidators::Default,
-    ) {
-        return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
-    }
-    let qovery_terraform_output: ScalewayQoveryTerraformOutput = terraform_output(
-        temp_dir.to_string_lossy().as_ref(),
+    );
+    let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
-    )
-    .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+    )?;
+
+    // Dry run is not supported after the terraform action for now
+    if cluster.context().is_dry_run_deploy() {
+        return Ok(());
+    }
 
     // push config file to object storage
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
     put_kubeconfig_file_to_object_storage(cluster, &cluster.object_storage)?;
+
+    // Prepare charts directories
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        cluster.template_directory.as_str(),
+        temp_dir,
+        tera_context,
+    ) {
+        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            cluster.template_directory.to_string(),
+            temp_dir.to_string_lossy().to_string(),
+            e,
+        )));
+    }
+
+    let dirs_to_be_copied_to = vec![
+        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
+        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
+        (
+            format!("{}/common/bootstrap/charts", cluster.context().lib_root_dir()),
+            format!("{}/common/charts", temp_dir.to_string_lossy()),
+        ),
+        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/scaleway/bootstrap/common/chart_values directory.
+        (
+            format!("{}/common/bootstrap/chart_values", cluster.context().lib_root_dir()),
+            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
+        ),
+    ];
+    for (source_dir, target_dir) in dirs_to_be_copied_to {
+        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details,
+                source_dir,
+                target_dir,
+                e,
+            )));
+        }
+    }
 
     let cluster_info = cluster.get_scw_cluster_info()?;
     if cluster_info.is_none() {

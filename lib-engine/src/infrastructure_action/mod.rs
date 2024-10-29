@@ -1,3 +1,4 @@
+mod deploy_terraform;
 mod ec2_k3s;
 mod eks;
 mod gke;
@@ -8,6 +9,7 @@ mod utils;
 use crate::cloud_provider::kubernetes::KubernetesUpgradeStatus;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
+use tera::Context as TeraContext;
 
 // TODO: Remove pub export if possible
 pub use ec2_k3s::AwsEc2QoveryTerraformOutput;
@@ -21,4 +23,8 @@ pub trait InfrastructureAction: Send + Sync {
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>>;
+}
+
+pub trait ToInfraTeraContext {
+    fn to_infra_tera_context(&self, target: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>>;
 }
