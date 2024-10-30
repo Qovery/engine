@@ -1206,7 +1206,13 @@ fn terraform_apply_internal(
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, "", &err, validators);
-                // error while trying to Terraform validate on the rendered templates
+
+                // We have to re-do a plan to update the tf_plan file state
+                let _ = match terraform_plan_internal(root_dir, envs, validators, false) {
+                    Ok(plan) => plan,
+                    Err(err) => return OperationResult::Retry(err),
+                };
+
                 OperationResult::Retry(err)
             }
         }
