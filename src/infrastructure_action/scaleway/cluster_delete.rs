@@ -57,7 +57,7 @@ pub fn delete_kapsule_cluster(
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
 
     if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(&cluster.template_directory, temp_dir, tera_context)
+        crate::template::generate_and_copy_all_files_into_dir(&cluster.template_directory, temp_dir, &tera_context)
     {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,

@@ -99,7 +99,7 @@ pub fn upgrade_eks_cluster(
             if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
                 kubernetes.template_directory.as_str(),
                 temp_dir,
-                context.clone(),
+                &context,
             ) {
                 return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                     event_details,
@@ -187,7 +187,7 @@ pub fn upgrade_eks_cluster(
     if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
         kubernetes.template_directory.as_str(),
         temp_dir,
-        context.clone(),
+        &context,
     ) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,

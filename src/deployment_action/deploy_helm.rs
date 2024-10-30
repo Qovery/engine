@@ -51,7 +51,7 @@ impl HelmDeployment {
 
     pub fn prepare_helm_chart(&self) -> Result<(), Box<EngineError>> {
         // Copy the root folder
-        generate_and_copy_all_files_into_dir(&self.chart_orginal_dir, &self.helm_chart.path, self.tera_context.clone())
+        generate_and_copy_all_files_into_dir(&self.chart_orginal_dir, &self.helm_chart.path, &self.tera_context)
             .map_err(|e| {
                 EngineError::new_cannot_copy_files_from_one_directory_to_another(
                     self.event_details.clone(),
@@ -65,19 +65,15 @@ impl HelmDeployment {
         if let Some(custom_value) = self.render_custom_values_file.clone() {
             let custom_value_dir_path = custom_value.parent().unwrap_or_else(|| Path::new("./"));
 
-            generate_and_copy_all_files_into_dir(
-                custom_value_dir_path,
-                &self.helm_chart.path,
-                self.tera_context.clone(),
-            )
-            .map_err(|e| {
-                EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                    self.event_details.clone(),
-                    self.chart_orginal_dir.to_string_lossy().to_string(),
-                    self.helm_chart.path.clone(),
-                    e,
-                )
-            })?;
+            generate_and_copy_all_files_into_dir(custom_value_dir_path, &self.helm_chart.path, &self.tera_context)
+                .map_err(|e| {
+                    EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                        self.event_details.clone(),
+                        self.chart_orginal_dir.to_string_lossy().to_string(),
+                        self.helm_chart.path.clone(),
+                        e,
+                    )
+                })?;
         }
 
         Ok(())

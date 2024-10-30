@@ -11,13 +11,13 @@ use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
 
-pub fn generate_and_copy_all_files_into_dir<S, P>(from_dir: S, to_dir: P, context: Context) -> Result<(), CommandError>
+pub fn generate_and_copy_all_files_into_dir<S, P>(from_dir: S, to_dir: P, context: &Context) -> Result<(), CommandError>
 where
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
     // generate j2 templates
-    let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context.clone()) {
+    let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context) {
         Ok(rt) => rt,
         Err(e) => {
             let error_msg = match e.kind {
@@ -44,7 +44,11 @@ where
                 tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
-            return Err(CommandError::new(error_msg, Some(context.into_json().to_string()), None));
+            return Err(CommandError::new(
+                error_msg,
+                Some(context.clone().into_json().to_string()),
+                None,
+            ));
         }
     };
 
@@ -72,7 +76,7 @@ where
     }
 }
 
-pub fn generate_j2_template_files<P>(root_dir: P, context: Context) -> Result<Vec<RenderedTemplate>, TeraError>
+pub fn generate_j2_template_files<P>(root_dir: P, context: &Context) -> Result<Vec<RenderedTemplate>, TeraError>
 where
     P: AsRef<Path>,
 {
@@ -107,7 +111,7 @@ where
         let j2_root_path: String = j2_path_split.as_slice()[..j2_path_split.len() - 1].join("/");
         let file_name = j2_file_name.replace(".j2", "");
 
-        let content = tera.render(&j2_path[1..], &context)?;
+        let content = tera.render(&j2_path[1..], context)?;
 
         results.push(RenderedTemplate::new(j2_root_path, file_name, content));
     }
