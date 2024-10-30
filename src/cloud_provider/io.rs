@@ -142,6 +142,10 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_min_number_instances: u32,
     #[serde(alias = "nginx.controller.enable_client_ip")]
     pub nginx_controller_enable_client_ip: bool,
+    #[serde(alias = "nginx.controller.use_forwarded_headers")]
+    pub nginx_controller_use_forwarded_headers: bool,
+    #[serde(alias = "nginx.controller.compute_full_forwarded_for")]
+    pub nginx_controller_compute_full_forwarded_for: bool,
     #[serde(alias = "nginx.controller.log_format_upstream")]
     pub nginx_controller_log_format_upstream: Option<String>,
     #[serde(
@@ -202,6 +206,8 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
             nginx_controller_enable_client_ip: false,
+            nginx_controller_use_forwarded_headers: false,
+            nginx_controller_compute_full_forwarded_for: false,
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             scaleway_enable_private_network_migration: false,

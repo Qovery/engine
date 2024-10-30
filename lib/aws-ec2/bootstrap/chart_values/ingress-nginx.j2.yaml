@@ -15,6 +15,10 @@ controller:
     use-proxy-protocol: "false"
     # enable real IP (client IP)
     enable-real-ip: set-by-engine-code
+    # passes the incoming X-Forwarded-* headers to upstreams
+    use-forwarded-headers: "false" # set-by-engine-code
+    # append the remote address to the X-Forwarded-For header instead of replacing it
+    compute-full-forwarded-for: "false" # set-by-engine-code
     # customize log-format / set-by-engine-code
     # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
     # nginx_controller_log_format_upstream can be a json that why we pass it in the value file

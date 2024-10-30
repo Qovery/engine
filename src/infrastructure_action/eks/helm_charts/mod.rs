@@ -562,6 +562,12 @@ pub fn eks_helm_charts(
             .nginx_controller_enable_client_ip,
         chart_config_prerequisites
             .cluster_advanced_settings
+            .nginx_controller_use_forwarded_headers,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_compute_full_forwarded_for,
+        chart_config_prerequisites
+            .cluster_advanced_settings
             .nginx_controller_log_format_escaping
             .to_model(),
         chart_config_prerequisites
