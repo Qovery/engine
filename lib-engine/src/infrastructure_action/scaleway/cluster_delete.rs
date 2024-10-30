@@ -52,6 +52,7 @@ pub fn delete_kapsule_cluster(
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
+        &logger,
     )?;
 
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
@@ -222,6 +223,7 @@ pub fn delete_kapsule_cluster(
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
+        &logger,
     )?;
 
     // delete info on vault

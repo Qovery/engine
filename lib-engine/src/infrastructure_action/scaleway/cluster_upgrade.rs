@@ -1,12 +1,11 @@
 use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_completed_jobs, delete_crashlooping_pods};
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
-use crate::cmd::terraform::terraform_init_validate_plan_apply;
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -22,42 +21,11 @@ pub fn upgrade_kapsule_cluster(
 
     let temp_dir = cluster.temp_dir();
     // generate terraform files and copy them into temp dir
-    let mut context = cluster.to_infra_tera_context(infra_ctx)?;
 
     //
     // Upgrade nodes
     //
     logger.info("Preparing nodes for upgrade for Kubernetes cluster.");
-    context.insert(
-        "kubernetes_cluster_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-    );
-
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(&cluster.template_directory, temp_dir, &context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string_lossy().to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
-    let common_bootstrap_charts = format!("{}/common/bootstrap/charts", cluster.context().lib_root_dir());
-    if let Err(e) =
-        crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            common_bootstrap_charts,
-            common_charts_temp_dir,
-            e,
-        )));
-    }
-
-    logger.info("Upgrading Kubernetes nodes.");
     logger.info("Checking clusters content health.");
 
     // disable all replicas with issues to avoid upgrade failures
@@ -145,31 +113,36 @@ pub fn upgrade_kapsule_cluster(
         return Err(e);
     }
 
-    match terraform_init_validate_plan_apply(
-        temp_dir.to_string_lossy().as_ref(),
+    logger.info("Upgrading Kubernetes nodes.");
+    let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    tera_context.insert(
+        "kubernetes_cluster_version",
+        &kubernetes_upgrade_status.requested_version.to_string(),
+    );
+    let tf_resources = TerraformInfraResources::new(
+        tera_context,
+        cluster.template_directory.join("terraform"),
+        temp_dir.join("terraform"),
+        event_details.clone(),
         cluster.context().is_dry_run_deploy(),
-        &[],
-        &TerraformValidators::Default,
-    ) {
-        Ok(_) => match check_workers_on_upgrade(
-            cluster,
-            infra_ctx.cloud_provider(),
+    );
+    tf_resources.create(&[], &logger)?;
+
+    check_workers_on_upgrade(
+        cluster,
+        infra_ctx.cloud_provider(),
+        kubernetes_upgrade_status.requested_version.to_string(),
+        None,
+    )
+    .map_err(|e| {
+        Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
+            event_details.clone(),
             kubernetes_upgrade_status.requested_version.to_string(),
-            None,
-        ) {
-            Ok(_) => logger.info("Kubernetes nodes have been successfully upgraded."),
-            Err(e) => {
-                return Err(Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
-                    event_details,
-                    kubernetes_upgrade_status.requested_version.to_string(),
-                    e,
-                )));
-            }
-        },
-        Err(e) => {
-            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
-        }
-    }
+            e,
+        ))
+    })?;
+
+    logger.info("Kubernetes nodes have been successfully upgraded.");
 
     Ok(())
 }

@@ -101,6 +101,7 @@ pub fn create_kapsule_cluster(
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
+        &logger,
     )?;
 
     // Dry run is not supported after the terraform action for now
