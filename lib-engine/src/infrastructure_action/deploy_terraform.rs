@@ -41,7 +41,7 @@ impl TerraformInfraResources {
         generate_and_copy_all_files_into_dir(
             &self.terraform_common_folder,
             &self.destination_folder,
-            self.tera_context.clone(),
+            &self.tera_context,
         )
         .map_err(|e| {
             EngineError::new_cannot_copy_files_from_one_directory_to_another(

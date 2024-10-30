@@ -35,7 +35,7 @@ pub(super) fn upgrade_gke_cluster(
     );
 
     if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, context)
+        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, &context)
     {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
