@@ -70,7 +70,8 @@ impl TerraformInfraResources {
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
-        logger.info("Creating terraform resources with the following plan");
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+        logger.info("🏗️ Creating terraform resources with the following plan");
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, false)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
@@ -85,6 +86,7 @@ impl TerraformInfraResources {
             &TerraformValidators::Default,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
         terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), envs)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
@@ -100,7 +102,8 @@ impl TerraformInfraResources {
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
-        logger.info("Deleting terraform resources with the following plan");
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+        logger.info("🏗️ Deleting terraform resources with the following plan");
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, true)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
@@ -117,6 +120,7 @@ impl TerraformInfraResources {
             &TerraformValidators::None,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
         Ok(())
     }
