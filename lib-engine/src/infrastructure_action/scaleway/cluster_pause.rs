@@ -4,18 +4,18 @@ use crate::cloud_provider::models::NodeGroupsFormat;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure_action::ToInfraTeraContext;
-use std::path::PathBuf;
+use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 
-pub fn pause_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+pub fn pause_kapsule_cluster(
+    cluster: &Kapsule,
+    infra_ctx: &InfrastructureContext,
+    logger: impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Pause));
-    cluster.logger().log(EngineEvent::Info(
-        cluster.get_event_details(Infrastructure(InfrastructureStep::Pause)),
-        EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
-    ));
+    logger.info("Preparing cluster pause.");
 
     let temp_dir = cluster.temp_dir();
 
@@ -27,17 +27,13 @@ pub fn pause_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContex
     tera_context.insert("scw_ks_worker_nodes", &scw_ks_worker_nodes);
     let tf_resources = TerraformInfraResources::new(
         tera_context,
-        PathBuf::from(cluster.template_directory.as_str()).join("terraform"),
-        PathBuf::from(temp_dir).join("terraform"),
+        cluster.template_directory.join("terraform"),
+        temp_dir.join("terraform"),
         event_details.clone(),
         cluster.context().is_dry_run_deploy(),
     );
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
-    ));
-
+    logger.info("Pausing cluster deployment.");
     tf_resources.pause(&[], &["scw_ks_worker_nodes"])?;
 
     if let Err(e) = check_workers_on_pause(cluster, infra_ctx.cloud_provider(), None) {
@@ -45,8 +41,6 @@ pub fn pause_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContex
     };
 
     let message = format!("Kubernetes cluster {} successfully paused", cluster.name());
-    cluster
-        .logger()
-        .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
+    logger.info(message);
     Ok(())
 }

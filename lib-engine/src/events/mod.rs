@@ -240,6 +240,12 @@ impl From<CommandError> for EventMessage {
     }
 }
 
+impl<S: Into<String>> From<S> for EventMessage {
+    fn from(value: S) -> Self {
+        EventMessage::new_from_safe(value.into())
+    }
+}
+
 impl Display for EventMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.message(EventMessageVerbosity::SafeOnly).as_str()) // By default, expose only the safe message.
