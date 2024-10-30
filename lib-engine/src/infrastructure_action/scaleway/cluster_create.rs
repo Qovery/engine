@@ -8,7 +8,7 @@ use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
+use crate::events::{EventMessage, InfrastructureStep};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::helm_charts::{kapsule_helm_charts, KapsuleChartsConfigPrerequisites};
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
@@ -210,12 +210,12 @@ pub fn create_kapsule_cluster(
                 ScwNodeGroupErrors::NoNodePoolFound(_) => {
                     logger.warn("Cluster exists, but no node groups found for upgrade check.")
                 }
-                ScwNodeGroupErrors::MissingNodePoolInfo => {
+                ScwNodeGroupErrors::MissingNodePoolInfo(name) => {
                     return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                         event_details,
-                        Some(CommandError::new_from_safe_message(
-                            "Error with Scaleway API while trying to retrieve node pool info".to_string(),
-                        )),
+                        Some(CommandError::new_from_safe_message(format!(
+                            "Error with Scaleway API while trying to retrieve node pool info. Missing {name} info"
+                        ))),
                     )));
                 }
                 ScwNodeGroupErrors::NodeGroupValidationError(c) => {
@@ -262,12 +262,12 @@ pub fn create_kapsule_cluster(
                                     event_details.clone(),
                                     Some(c),
                                 );
-                                cluster.logger().log(EngineEvent::Error(current_error.clone(), None));
+                                logger.warn(current_error.message(ErrorMessageVerbosity::SafeOnly));
                                 OperationResult::Retry(current_error)
                             }
                             ScwNodeGroupErrors::ClusterDoesNotExists(c) => {
                                 let current_error = EngineError::new_no_cluster_found_error(event_details.clone(), c);
-                                cluster.logger().log(EngineEvent::Error(current_error.clone(), None));
+                                logger.warn(current_error.message(ErrorMessageVerbosity::SafeOnly));
                                 OperationResult::Retry(current_error)
                             }
                             ScwNodeGroupErrors::MultipleClusterFound => {
@@ -279,10 +279,12 @@ pub fn create_kapsule_cluster(
                                 ))
                             }
                             ScwNodeGroupErrors::NoNodePoolFound(_) => OperationResult::Ok(()),
-                            ScwNodeGroupErrors::MissingNodePoolInfo => {
+                            ScwNodeGroupErrors::MissingNodePoolInfo(name) => {
                                 OperationResult::Retry(EngineError::new_missing_api_info_from_cloud_provider_error(
                                     event_details.clone(),
-                                    None,
+                                    Some(CommandError::new_from_safe_message(
+                                        format!("Error with Scaleway API while trying to retrieve node pool info. Missing {name} info"),
+                                    )),
                                 ))
                             }
                             ScwNodeGroupErrors::NodeGroupValidationError(c) => {
@@ -290,7 +292,7 @@ pub fn create_kapsule_cluster(
                                     event_details.clone(),
                                     Some(c),
                                 );
-                                cluster.logger().log(EngineEvent::Error(current_error.clone(), None));
+                                logger.warn(current_error.message(ErrorMessageVerbosity::SafeOnly));
                                 OperationResult::Retry(current_error)
                             }
                         };

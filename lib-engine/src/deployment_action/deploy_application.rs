@@ -7,7 +7,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
+use crate::events::{EnvironmentStep, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::application::{get_application_with_invalid_storage_size, Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -56,10 +56,9 @@ where
                         )?;
                     }
                 }
-                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(e.to_string()),
-                )),
+                Err(e) => target
+                    .env_logger(self, EnvironmentStep::Deploy)
+                    .send_warning(e.to_string()),
             };
 
             let chart = ChartInfo {
