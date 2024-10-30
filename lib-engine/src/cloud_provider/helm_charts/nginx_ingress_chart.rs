@@ -64,6 +64,8 @@ pub struct NginxIngressChart {
     namespace: HelmChartNamespaces,
     loadbalancer_size: Option<String>,
     enable_real_ip: bool,
+    use_forwarded_headers: bool,
+    compute_full_forwarded_for: bool,
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
 }
@@ -88,6 +90,8 @@ impl NginxIngressChart {
         namespace: HelmChartNamespaces,
         loadbalancer_size: Option<String>,
         enable_real_ip: bool,
+        use_forwarded_headers: bool,
+        compute_full_forwarded_for: bool,
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
     ) -> Self {
@@ -135,6 +139,8 @@ impl NginxIngressChart {
             namespace,
             loadbalancer_size,
             enable_real_ip,
+            use_forwarded_headers,
+            compute_full_forwarded_for,
             log_format_escaping,
             is_alb_enabled,
         }
@@ -244,6 +250,14 @@ defaultBackend:
             ChartSetValue {
                 key: "controller.config.enable-real-ip".to_string(),
                 value: self.enable_real_ip.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.config.use-forwarded-headers".to_string(),
+                value: self.use_forwarded_headers.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.config.compute_full_forwarded_for".to_string(),
+                value: self.compute_full_forwarded_for.to_string(),
             },
         ];
 
@@ -484,6 +498,8 @@ mod tests {
             HelmChartNamespaces::NginxIngress,
             None,
             false,
+            false,
+            false,
             LogFormatEscaping::Default,
             false,
         );
@@ -528,6 +544,8 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
+            false,
+            false,
             false,
             LogFormatEscaping::Default,
             false,
@@ -575,6 +593,8 @@ mod tests {
                 None,
                 HelmChartNamespaces::NginxIngress,
                 None,
+                false,
+                false,
                 false,
                 log_format_escaping.clone(),
                 false,
