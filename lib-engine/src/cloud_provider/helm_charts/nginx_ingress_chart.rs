@@ -256,7 +256,7 @@ defaultBackend:
                 value: self.use_forwarded_headers.to_string(),
             },
             ChartSetValue {
-                key: "controller.config.compute_full_forwarded_for".to_string(),
+                key: "controller.config.compute-full-forwarded-for".to_string(),
                 value: self.compute_full_forwarded_for.to_string(),
             },
         ];
@@ -448,12 +448,14 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::HelmChartNamespaces;
-    use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping;
     use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType;
     use crate::cloud_provider::helm_charts::HelmChartType;
     use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+    };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CustomerHelmChartsOverride;
     use crate::cloud_provider::Kind;
@@ -497,9 +499,9 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
-            false,
-            false,
-            false,
+            true,
+            true,
+            true,
             LogFormatEscaping::Default,
             false,
         );
@@ -544,9 +546,9 @@ mod tests {
             Some(50),
             HelmChartNamespaces::NginxIngress,
             None,
-            false,
-            false,
-            false,
+            true,
+            true,
+            true,
             LogFormatEscaping::Default,
             false,
         );
@@ -593,9 +595,9 @@ mod tests {
                 None,
                 HelmChartNamespaces::NginxIngress,
                 None,
-                false,
-                false,
-                false,
+                true,
+                true,
+                true,
                 log_format_escaping.clone(),
                 false,
             );
@@ -620,5 +622,54 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    #[ignore = "TODO: fix it, removing or handling the jinja templating for proper testing"]
+    fn nginx_ingress_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = NginxIngressChart::new(
+            None,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            true,
+            get_nginx_ingress_chart_override(),
+            get_domain().wildcarded(),
+            Kind::Aws,
+            "00000000-0000-4000-8000-000000000000".to_string(),
+            "z00000000".to_string(),
+            "10000000-0000-4000-8000-000000000000".to_string(),
+            "z10000000".to_string(),
+            KubernetesKind::Eks,
+            Some(1),
+            Some(10),
+            Some(50),
+            HelmChartNamespaces::NginxIngress,
+            None,
+            true,
+            true,
+            true,
+            LogFormatEscaping::Default,
+            false,
+        );
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            common_chart,
+            format!(
+                "/lib/{}/bootstrap/chart_values/{}.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+                ),
+                NginxIngressChart::chart_name(),
+            ),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }
