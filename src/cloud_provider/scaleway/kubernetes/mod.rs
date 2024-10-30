@@ -39,7 +39,7 @@ pub enum ScwNodeGroupErrors {
     ClusterDoesNotExists(CommandError),
     MultipleClusterFound,
     NoNodePoolFound(CommandError),
-    MissingNodePoolInfo,
+    MissingNodePoolInfo(String),
     NodeGroupValidationError(CommandError),
 }
 
