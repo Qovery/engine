@@ -5,6 +5,7 @@ use crate::cmd::terraform::{
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::infrastructure_action::InfraLogger;
 use crate::template::generate_and_copy_all_files_into_dir;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
@@ -55,7 +56,11 @@ impl TerraformInfraResources {
         Ok(())
     }
 
-    pub fn create<T: DeserializeOwned>(&self, envs: &[(&str, &str)]) -> Result<T, Box<EngineError>> {
+    pub fn create<T: DeserializeOwned>(
+        &self,
+        envs: &[(&str, &str)],
+        logger: &impl InfraLogger,
+    ) -> Result<T, Box<EngineError>> {
         self.prepare_terraform_files()?;
 
         terraform_init_validate(
@@ -65,8 +70,12 @@ impl TerraformInfraResources {
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
+        logger.info("Creating terraform resources with the following plan");
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, false)
-            .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+            .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
+            .raw_std_output
+            .into_iter()
+            .for_each(|line| logger.info(line));
 
         // Apply will be skipped/do nothing if dry run is enabled
         terraform_apply(
@@ -81,7 +90,7 @@ impl TerraformInfraResources {
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
     }
 
-    pub fn delete(&self, envs: &[(&str, &str)]) -> Result<(), Box<EngineError>> {
+    pub fn delete(&self, envs: &[(&str, &str)], logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
 
         terraform_init_validate(
@@ -92,7 +101,10 @@ impl TerraformInfraResources {
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, true)
-            .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+            .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
+            .raw_std_output
+            .into_iter()
+            .for_each(|line| logger.info(line));
 
         if self.is_dry_run {
             return Ok(());
