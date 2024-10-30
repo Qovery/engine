@@ -592,7 +592,6 @@ pub fn delete_eks_cluster(
 
     if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
         temp_dir.to_string_lossy().as_ref(),
-        false,
         cloud_provider.credentials_environment_variables().as_slice(),
         &TerraformValidators::None,
     ) {

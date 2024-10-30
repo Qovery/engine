@@ -290,7 +290,6 @@ pub(super) fn delete_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
 
     if let Err(err) = terraform_init_validate_destroy(
         temp_dir.to_string_lossy().as_ref(),
-        false,
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()

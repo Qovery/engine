@@ -1291,11 +1291,6 @@ pub fn terraform_destroy(
     // terraform destroy
     let terraform_args = vec!["destroy", "-lock=false", "-no-color", "-auto-approve"];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        // terraform plan first
-        if let Err(err) = terraform_plan_internal(root_dir, envs, validators, true) {
-            return OperationResult::Retry(err);
-        }
-
         // terraform destroy
         match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
             Ok(out) => OperationResult::Ok(out),
@@ -1402,12 +1397,21 @@ fn terraform_run(
         output.extend(terraform_state_list(root_dir, envs, validators)?);
     }
 
-    if actions.contains(TerraformAction::OUTPUT) {
-        output.extend(terraform_output_internal(root_dir, envs)?);
+    if actions.contains(TerraformAction::PLAN) {
+        output.extend(terraform_plan_internal(
+            root_dir,
+            envs,
+            validators,
+            actions.contains(TerraformAction::DESTROY),
+        )?);
     }
 
     if actions.contains(TerraformAction::APPLY) && !dry_run {
         output.extend(terraform_apply_internal(root_dir, envs, validators)?);
+    }
+
+    if actions.contains(TerraformAction::OUTPUT) {
+        output.extend(terraform_output_internal(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::DESTROY) && !dry_run {
@@ -1425,7 +1429,7 @@ pub fn terraform_init_validate_plan_apply(
 ) -> Result<TerraformOutput, TerraformError> {
     // Terraform init, validate, plan and apply
     terraform_run(
-        TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::APPLY,
+        TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::PLAN | TerraformAction::APPLY,
         root_dir,
         dry_run,
         envs,
@@ -1477,16 +1481,10 @@ pub fn terraform_init_validate(
 
 pub fn terraform_init_validate_destroy(
     root_dir: &str,
-    run_apply_before_destroy: bool,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    let mut terraform_actions_to_be_performed = TerraformAction::INIT | TerraformAction::VALIDATE;
-
-    // better to apply before destroy to ensure terraform destroy will delete on all resources
-    if run_apply_before_destroy {
-        terraform_actions_to_be_performed |= TerraformAction::APPLY;
-    }
+    let terraform_actions_to_be_performed = TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::PLAN;
 
     terraform_run(
         terraform_actions_to_be_performed | TerraformAction::DESTROY,

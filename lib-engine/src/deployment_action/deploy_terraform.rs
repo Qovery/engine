@@ -116,7 +116,6 @@ impl DeploymentAction for TerraformDeployment {
         self.prepare_terraform_files()?;
         match cmd::terraform::terraform_init_validate_destroy(
             &self.destination_folder.to_string_lossy(),
-            false,
             target.cloud_provider.credentials_environment_variables().as_slice(),
             &TerraformValidators::None,
         ) {
