@@ -100,6 +100,7 @@ impl TerraformInfraResources {
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
+        logger.info("Deleting terraform resources with the following plan");
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, true)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
