@@ -13,7 +13,7 @@ use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::helm_charts::{kapsule_helm_charts, KapsuleChartsConfigPrerequisites};
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
-use crate::infrastructure_action::{InfrastructureAction, ToInfraTeraContext};
+use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
 use crate::io_models::context::Features;
 use crate::models::domain::ToHelmString;
 use crate::models::third_parties::LetsEncryptConfig;
@@ -22,16 +22,15 @@ use crate::string::terraform_list_format;
 use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::OperationResult;
-use std::path::PathBuf;
 
-pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+pub fn create_kapsule_cluster(
+    cluster: &Kapsule,
+    infra_ctx: &InfrastructureContext,
+    logger: impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
 
-    // TODO(DEV-1061): remove legacy logger
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing SCW cluster deployment.".to_string()),
-    ));
+    logger.info("Preparing SCW cluster deployment.");
 
     // upgrade cluster instead if required
     if !cluster.context().is_first_cluster_deployment() {
@@ -47,20 +46,14 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
                 if x.required_upgrade_on.is_some() {
                     cluster.upgrade_cluster(infra_ctx, x)?;
                 } else {
-                    cluster.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
+                    logger.info("Kubernetes cluster upgrade not required");
                 }
             }
             Err(e) => {
                 // Log a warning, this error is not blocking
-                cluster.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(
-                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                    ),
+                logger.warn(EventMessage::new(
+                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                 ));
             }
         };
@@ -68,24 +61,18 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
 
     let temp_dir = cluster.temp_dir();
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Deploying SCW cluster.".to_string()),
-    ));
-
     // TODO(benjaminch): move this elsewhere
     // Create object-storage buckets
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
-    ));
+    logger.info("Create Qovery managed object storage buckets");
+
+    // (erebe): Why don't we use terraform to create those buckets ?
     if let Err(e) = cluster.object_storage.create_bucket(
         cluster.kubeconfig_bucket_name().as_str(),
         cluster.advanced_settings().resource_ttl(),
         false,
     ) {
         let error = EngineError::new_object_storage_error(event_details, e);
-        cluster.logger().log(EngineEvent::Error(error.clone(), None));
+        logger.error(error.clone(), None::<&str>);
         return Err(Box::new(error));
     }
 
@@ -96,7 +83,7 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         false,
     ) {
         let error = EngineError::new_object_storage_error(event_details, e);
-        cluster.logger().log(EngineEvent::Error(error.clone(), None));
+        logger.error(error.clone(), None::<&str>);
         return Err(Box::new(error));
     }
 
@@ -104,8 +91,8 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_action = TerraformInfraResources::new(
         tera_context.clone(),
-        PathBuf::from(cluster.template_directory.as_str()).join("terraform"),
-        PathBuf::from(temp_dir).join("terraform"),
+        cluster.template_directory.join("terraform"),
+        temp_dir.join("terraform"),
         event_details.clone(),
         cluster.context().is_dry_run_deploy(),
     );
@@ -126,14 +113,12 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     put_kubeconfig_file_to_object_storage(cluster, &cluster.object_storage)?;
 
     // Prepare charts directories
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        cluster.template_directory.as_str(),
-        temp_dir,
-        tera_context,
-    ) {
+    if let Err(e) =
+        crate::template::generate_and_copy_all_files_into_dir(&cluster.template_directory, temp_dir, tera_context)
+    {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
-            cluster.template_directory.to_string(),
+            cluster.template_directory.to_string_lossy().to_string(),
             temp_dir.to_string_lossy().to_string(),
             e,
         )));
@@ -210,12 +195,9 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
                         Some(c),
                     )));
                 }
-                ScwNodeGroupErrors::ClusterDoesNotExists(_) => cluster.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "Cluster do not exists, no node groups can be retrieved for upgrade check.".to_string(),
-                    ),
-                )),
+                ScwNodeGroupErrors::ClusterDoesNotExists(_) => {
+                    logger.warn("Cluster do not exists, no node groups can be retrieved for upgrade check.")
+                }
                 ScwNodeGroupErrors::MultipleClusterFound => {
                     return Err(Box::new(EngineError::new_multiple_cluster_found_expected_one_error(
                         event_details,
@@ -224,12 +206,9 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
                         ),
                     )));
                 }
-                ScwNodeGroupErrors::NoNodePoolFound(_) => cluster.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "Cluster exists, but no node groups found for upgrade check.".to_string(),
-                    ),
-                )),
+                ScwNodeGroupErrors::NoNodePoolFound(_) => {
+                    logger.warn("Cluster exists, but no node groups found for upgrade check.")
+                }
                 ScwNodeGroupErrors::MissingNodePoolInfo => {
                     return Err(Box::new(EngineError::new_missing_api_info_from_cloud_provider_error(
                         event_details,
@@ -250,24 +229,18 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
     };
 
     // ensure all node groups are in ready state Scaleway side
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Ensuring all groups nodes are in ready state from the Scaleway API".to_string()),
-    ));
+    logger.info("Ensuring all groups nodes are in ready state from the Scaleway API");
 
     for ng in current_nodegroups {
         let res = retry::retry(
             // retry 10 min max per nodegroup until they are ready
             Fixed::from_millis(15000).take(80),
             || {
-                cluster.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "checking node group {}/{:?}, current status: {:?}",
-                        &ng.name,
-                        &ng.id.as_ref().unwrap_or(&"unknown".to_string()),
-                        &ng.status
-                    )),
+                logger.info(format!(
+                    "checking node group {}/{:?}, current status: {:?}",
+                    &ng.name,
+                    &ng.id.as_ref().unwrap_or(&"unknown".to_string()),
+                    &ng.status
                 ));
                 let pool_id = match &ng.id {
                     None => {
@@ -339,17 +312,11 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
             Err(retry::Error { error, .. }) => return Err(Box::new(error)),
         }
     }
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("All node groups for this cluster are ready from cloud provider API".to_string()),
-    ));
+    logger.info("All node groups for this cluster are ready from cloud provider API");
 
     // ensure all nodes are ready on Kubernetes
     match check_workers_on_create(cluster, infra_ctx.cloud_provider(), None) {
-        Ok(_) => cluster.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
-        )),
+        Ok(_) => logger.info("Kubernetes nodes have been successfully created"),
         Err(e) => {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         }
@@ -364,9 +331,9 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         .collect();
 
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(&kubeconfig_path, &credentials_environment_variables) {
-        cluster.logger().log(EngineEvent::Warning(
-            event_details.clone(),
-            EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+        logger.warn(EventMessage::new(
+            "Didn't manage to restart all paused pods".to_string(),
+            Some(e.to_string()),
         ));
     }
 
@@ -400,10 +367,7 @@ pub fn create_kapsule_cluster(cluster: &Kapsule, infra_ctx: &InfrastructureConte
         qovery_terraform_output.loki_storage_config_scaleway_s3,
     );
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
-    ));
+    logger.info("Preparing chart configuration to be deployed");
     let helm_charts_to_deploy = kapsule_helm_charts(
         &charts_prerequisites,
         Some(temp_dir.to_string_lossy().as_ref()),

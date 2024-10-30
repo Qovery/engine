@@ -111,7 +111,7 @@ pub struct Kapsule {
     pub zone: ScwZone,
     pub object_storage: ScalewayOS,
     pub nodes_groups: Vec<NodeGroups>,
-    pub template_directory: String,
+    pub template_directory: PathBuf,
     pub options: KapsuleOptions,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
@@ -136,7 +136,7 @@ impl Kapsule {
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
-        let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
+        let template_directory = PathBuf::from(context.lib_root_dir()).join("scaleway").join("bootstrap");
         let event_details = kubernetes::event_details(cloud_provider, long_id, name.to_string(), &context);
 
         for node_group in &nodes_groups {
