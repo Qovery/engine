@@ -4,14 +4,14 @@ use crate::cloud_provider::kubectl_utils::{
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus, KubernetesVersion};
 use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
 
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 
 use crate::cloud_provider::gcp::kubernetes::{Gke, GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES};
-use crate::infrastructure_action::ToInfraTeraContext;
+use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use std::str::FromStr;
@@ -20,12 +20,11 @@ pub(super) fn upgrade_gke_cluster(
     cluster: &Gke,
     infra_ctx: &InfrastructureContext,
     kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Start preparing GKE cluster upgrade process".to_string()),
-    ));
+    logger.info("Start preparing GKE cluster upgrade process");
+
     let temp_dir = cluster.temp_dir();
     // generate terraform files and copy them into temp dir
     let mut context = cluster.to_infra_tera_context(infra_ctx)?;
@@ -69,28 +68,14 @@ pub(super) fn upgrade_gke_cluster(
         }
     }
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Upgrading GKE cluster.".to_string()),
-    ));
+    logger.info("Upgrading GKE cluster.");
 
     //
     // Upgrade nodes
     //
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing nodes for upgrade for Kubernetes cluster.".to_string()),
-    ));
-
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Upgrading Kubernetes nodes.".to_string()),
-    ));
-
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Checking clusters content health".to_string()),
-    ));
+    logger.info("Preparing nodes for upgrade for Kubernetes cluster.");
+    logger.info("Upgrading Kubernetes nodes.");
+    logger.info("Checking clusters content health.");
 
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
                                                              // disable all replicas with issues to avoid upgrade failures
@@ -108,12 +93,9 @@ pub(super) fn upgrade_gke_cluster(
         // if number of replicas > 0: it is not already disabled
         // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
         if replicas > 0 && ready_replicas == 0 {
-            cluster.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                    deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-                )),
+            logger.info(format!(
+                "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
             ));
             block_on(kube_client.set_deployment_replicas_number(
                 event_details.clone(),
@@ -141,12 +123,9 @@ pub(super) fn upgrade_gke_cluster(
         // if number of replicas > 0: it is not already disabled
         // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
         if status.replicas > 0 && ready_replicas == 0 {
-            cluster.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                    sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-                )),
+            logger.info(format!(
+                "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
             ));
             block_on(kube_client.set_statefulset_replicas_number(
                 event_details.clone(),
@@ -170,7 +149,7 @@ pub(super) fn upgrade_gke_cluster(
         infra_ctx.cloud_provider().credentials_environment_variables(),
         Infrastructure(InfrastructureStep::Upgrade),
     ) {
-        cluster.logger().log(EngineEvent::Error(*e.clone(), None));
+        logger.error(*e.clone(), None::<&str>);
         return Err(e);
     }
 
@@ -180,7 +159,7 @@ pub(super) fn upgrade_gke_cluster(
         Infrastructure(InfrastructureStep::Upgrade),
         Some(GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES.to_vec()),
     ) {
-        cluster.logger().log(EngineEvent::Error(*e.clone(), None));
+        logger.error(*e.clone(), None::<&str>);
         return Err(e);
     }
 
@@ -206,10 +185,7 @@ pub(super) fn upgrade_gke_cluster(
     ) {
         Ok(_) => match check_control_plane_on_upgrade(cluster, infra_ctx.cloud_provider(), kubernetes_version) {
             Ok(_) => {
-                cluster.logger().log(EngineEvent::Info(
-                    event_details,
-                    EventMessage::new_from_safe("Kubernetes control plane has been successfully upgraded.".to_string()),
-                ));
+                logger.info("Kubernetes control plane has been successfully upgraded.");
             }
             Err(e) => {
                 return Err(Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(

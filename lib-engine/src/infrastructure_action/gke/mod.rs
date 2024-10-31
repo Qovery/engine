@@ -17,7 +17,7 @@ use crate::infrastructure_action::gke::cluster_create::create_gke_cluster;
 use crate::infrastructure_action::gke::cluster_delete::delete_gke_cluster;
 use crate::infrastructure_action::gke::cluster_pause::pause_gke_cluster;
 use crate::infrastructure_action::gke::cluster_upgrade::upgrade_gke_cluster;
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_action::{InfraLoggerImpl, InfrastructureAction};
 use function_name::named;
 use serde_derive::{Deserialize, Serialize};
 
@@ -25,6 +25,10 @@ impl InfrastructureAction for Gke {
     #[named]
     fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
@@ -33,12 +37,16 @@ impl InfrastructureAction for Gke {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || create_gke_cluster(self, infra_ctx))
+        send_progress_on_long_task(self, Action::Create, || create_gke_cluster(self, infra_ctx, logger))
     }
 
     #[named]
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
@@ -47,12 +55,16 @@ impl InfrastructureAction for Gke {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Delete, || pause_gke_cluster(self, infra_ctx))
+        send_progress_on_long_task(self, Action::Pause, || pause_gke_cluster(self, infra_ctx, logger))
     }
 
     #[named]
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().kind().to_string().to_lowercase().as_str(),
             "kubernetes",
@@ -61,7 +73,7 @@ impl InfrastructureAction for Gke {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Delete, || delete_gke_cluster(self, infra_ctx))
+        send_progress_on_long_task(self, Action::Delete, || delete_gke_cluster(self, infra_ctx, logger))
     }
 
     #[named]
@@ -71,6 +83,10 @@ impl InfrastructureAction for Gke {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().name(),
             "kubernetes",
@@ -79,7 +95,7 @@ impl InfrastructureAction for Gke {
             event_details,
             self.logger(),
         );
-        upgrade_gke_cluster(self, infra_ctx, kubernetes_upgrade_status)
+        upgrade_gke_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
     }
 }
 

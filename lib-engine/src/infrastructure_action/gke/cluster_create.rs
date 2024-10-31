@@ -6,7 +6,7 @@ use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
 use crate::cmd::terraform::{terraform_init_validate_plan_apply, terraform_output};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
+use crate::events::{EventMessage, InfrastructureStep};
 use crate::io_models::context::Features;
 
 use crate::cmd::terraform_validators::TerraformValidators;
@@ -19,18 +19,18 @@ use base64::engine::general_purpose;
 use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::infrastructure_action::gke::helm_charts::{gke_helm_charts, GkeChartsConfigPrerequisites};
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
-use crate::infrastructure_action::{InfrastructureAction, ToInfraTeraContext};
+use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
 use base64::Engine;
 use itertools::Itertools;
 use std::fs;
 
-pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+pub(super) fn create_gke_cluster(
+    cluster: &Gke,
+    infra_ctx: &InfrastructureContext,
+    logger: impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
-
-    cluster.logger.log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing GKE cluster deployment.".to_string()),
-    ));
+    logger.info("Preparing GKE cluster deployment.");
 
     if !cluster.context().is_first_cluster_deployment() {
         // upgrade cluster instead if required
@@ -42,25 +42,16 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
             cluster.logger(),
             None,
         ) {
-            Ok(kubernetes_upgrade_status) => {
-                if kubernetes_upgrade_status.required_upgrade_on.is_some() {
-                    cluster.upgrade_cluster(infra_ctx, kubernetes_upgrade_status)?;
-                } else {
-                    cluster.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
-                }
+            Ok(kubernetes_upgrade_status) if kubernetes_upgrade_status.required_upgrade_on.is_some() => {
+                cluster.upgrade_cluster(infra_ctx, kubernetes_upgrade_status)?;
             }
+            Ok(_) => logger.info("Kubernetes cluster upgrade not required"),
             Err(e) => {
                 // Log a warning, this error is not blocking
-                cluster.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(
-                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                    ),
-                ));
+                logger.warn(EventMessage::new(
+                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                ))
             }
         };
     }
@@ -105,17 +96,11 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         }
     }
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Deploying GKE cluster.".to_string()),
-    ));
+    logger.info("Deploying GKE cluster.");
 
     // TODO(benjaminch): move this elsewhere
     // Create object-storage buckets
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
-    ));
+    logger.info("Create Qovery managed object storage buckets.");
     for bucket_name in [
         cluster.kubeconfig_bucket_name().as_str(),
         cluster.logs_bucket_name().as_str(),
@@ -125,24 +110,21 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
             .create_bucket(bucket_name, cluster.advanced_settings.resource_ttl(), true)
         {
             Ok(existing_bucket) => {
-                cluster.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!("Object storage bucket {bucket_name} created")),
-                ));
+                logger.info(format!("Object storage bucket {} already exists", &bucket_name));
                 // Update set versioning to true if not activated on the bucket (bucket created before this option was enabled)
                 // This can be removed at some point in the future, just here to handle legacy GCP buckets
                 // TODO(ENG-1736): remove this update once all existing buckets have versioning activated
                 if !existing_bucket.versioning_activated {
-                    cluster.object_storage.update_bucket(bucket_name, true).map_err(|e| {
-                        let error = EngineError::new_object_storage_error(event_details.clone(), e);
-                        cluster.logger().log(EngineEvent::Error(error.clone(), None));
-                        error
-                    })?;
+                    if let Err(err) = cluster.object_storage.update_bucket(bucket_name, true) {
+                        let error = EngineError::new_object_storage_error(event_details.clone(), err);
+                        logger.error(error.clone(), None::<&str>);
+                        return Err(Box::new(error));
+                    }
                 }
             }
             Err(e) => {
                 let error = EngineError::new_object_storage_error(event_details, e);
-                cluster.logger().log(EngineEvent::Error(error.clone(), None));
+                logger.error(error.clone(), None::<&str>);
                 return Err(Box::new(error));
             }
         }
@@ -178,10 +160,7 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
 
     // Ensure all nodes are ready on Kubernetes
     match check_workers_on_create(cluster, infra_ctx.cloud_provider(), None) {
-        Ok(_) => cluster.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
-        )),
+        Ok(_) => logger.info("Kubernetes nodes have been successfully created"),
         Err(e) => {
             return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
         }
@@ -215,10 +194,10 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
     ));
     // vault config is not blocking
     if let Err(e) = cluster.update_gke_vault_config(event_details.clone(), cluster_secrets) {
-        cluster.logger.log(EngineEvent::Warning(
-            event_details.clone(),
-            EventMessage::new("Cannot push cluster config to Vault".to_string(), Some(e.to_string())),
-        ))
+        logger.warn(EventMessage::new(
+            "Cannot push cluster config to Vault".to_string(),
+            Some(e.to_string()),
+        ));
     }
 
     // kubernetes helm deployments on the cluster
@@ -229,11 +208,7 @@ pub(super) fn create_gke_cluster(cluster: &Gke, infra_ctx: &InfrastructureContex
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
-    cluster.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
-    ));
-
+    logger.info("Preparing chart configuration to be deployed.");
     let charts_prerequisites = GkeChartsConfigPrerequisites::new(
         infra_ctx.cloud_provider().organization_id().to_string(),
         infra_ctx.cloud_provider().organization_long_id(),
