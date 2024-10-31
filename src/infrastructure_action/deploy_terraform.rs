@@ -56,19 +56,23 @@ impl TerraformInfraResources {
         Ok(())
     }
 
-    pub fn create<T: DeserializeOwned>(
-        &self,
-        envs: &[(&str, &str)],
-        logger: &impl InfraLogger,
-    ) -> Result<T, Box<EngineError>> {
-        self.prepare_terraform_files()?;
-
+    fn terraform_init(&self, envs: &[(&str, &str)]) -> Result<(), Box<EngineError>> {
         terraform_init_validate(
             self.destination_folder.to_string_lossy().as_ref(),
             envs,
             &TerraformValidators::Default,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        Ok(())
+    }
+
+    pub fn create<T: DeserializeOwned>(
+        &self,
+        envs: &[(&str, &str)],
+        logger: &impl InfraLogger,
+    ) -> Result<T, Box<EngineError>> {
+        self.prepare_terraform_files()?;
+        self.terraform_init(envs)?;
 
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
         logger.info("🏗️ Creating terraform resources with the following plan");
@@ -94,13 +98,7 @@ impl TerraformInfraResources {
 
     pub fn delete(&self, envs: &[(&str, &str)], logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
-
-        terraform_init_validate(
-            self.destination_folder.to_string_lossy().as_ref(),
-            envs,
-            &TerraformValidators::Default,
-        )
-        .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        self.terraform_init(envs)?;
 
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
         logger.info("🏗️ Deleting terraform resources with the following plan");
@@ -127,13 +125,7 @@ impl TerraformInfraResources {
 
     pub fn pause(&self, envs: &[(&str, &str)], resources_filters: &[&str]) -> Result<(), Box<EngineError>> {
         self.prepare_terraform_files()?;
-
-        terraform_init_validate(
-            self.destination_folder.to_string_lossy().as_ref(),
-            envs,
-            &TerraformValidators::Default,
-        )
-        .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        self.terraform_init(envs)?;
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
@@ -148,6 +140,7 @@ impl TerraformInfraResources {
         .filter(|resources| resources_filters.iter().any(|filter| resources.starts_with(filter)))
         .collect_vec();
 
+        // TODO: Extract the plan out of this function. so we can log it
         terraform_apply_with_tf_workers_resources(
             self.destination_folder.to_string_lossy().as_ref(),
             tf_workers_resources,
