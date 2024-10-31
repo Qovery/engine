@@ -180,6 +180,17 @@ impl Task for InfrastructureTask {
             }
         };
 
+        if engine.context().is_dry_run_deploy() {
+            engine.kubernetes().logger().log(EngineEvent::Info(
+                engine
+                    .kubernetes()
+                    .get_event_details(Infrastructure(InfrastructureStep::Start)),
+                EventMessage::new(
+                    "Dry run mode is enabled. No changes will be made to the infrastructure".to_string(),
+                    None,
+                ),
+            ));
+        }
         let ret: Result<(), Box<EngineError>> = match self.request.action {
             Action::Create => engine.kubernetes().as_infra_actions().create_cluster(&engine),
             Action::Pause => engine.kubernetes().as_infra_actions().pause_cluster(&engine),

@@ -2,15 +2,15 @@ use crate::cloud_provider::kubectl_utils::{
     check_control_plane_on_upgrade, delete_completed_jobs, delete_crashlooping_pods,
 };
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus, KubernetesVersion};
-use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use std::path::PathBuf;
 
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 
 use crate::cloud_provider::gcp::kubernetes::{Gke, GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES};
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -26,48 +26,6 @@ pub(super) fn upgrade_gke_cluster(
     logger.info("Start preparing GKE cluster upgrade process");
 
     let temp_dir = cluster.temp_dir();
-    // generate terraform files and copy them into temp dir
-    let mut context = cluster.to_infra_tera_context(infra_ctx)?;
-    context.insert(
-        "kubernetes_cluster_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-    );
-
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, &context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/gcp/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", cluster.context.lib_root_dir()),
-            format!("{}/common/charts", temp_dir.to_string_lossy()),
-        ),
-        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/gcp/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", cluster.context.lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
     logger.info("Upgrading GKE cluster.");
 
     //
@@ -174,31 +132,36 @@ pub(super) fn upgrade_gke_cluster(
         }
     };
 
-    match terraform_init_validate_plan_apply(
-        temp_dir.to_string_lossy().as_ref(),
-        cluster.context.is_dry_run_deploy(),
+    let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    tera_context.insert(
+        "kubernetes_cluster_version",
+        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+    );
+    let tf_resources = TerraformInfraResources::new(
+        tera_context,
+        PathBuf::from(&cluster.template_directory).join("terraform"),
+        temp_dir.join("terraform"),
+        event_details.clone(),
+        cluster.context().is_dry_run_deploy(),
+    );
+
+    tf_resources.create(
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
-        &TerraformValidators::Default,
-    ) {
-        Ok(_) => match check_control_plane_on_upgrade(cluster, infra_ctx.cloud_provider(), kubernetes_version) {
-            Ok(_) => {
-                logger.info("Kubernetes control plane has been successfully upgraded.");
-            }
-            Err(e) => {
-                return Err(Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
-                    event_details,
-                    kubernetes_upgrade_status.requested_version.to_string(),
-                    e,
-                )));
-            }
-        },
-        Err(e) => {
-            return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
-        }
-    }
+        &logger,
+    )?;
+
+    check_control_plane_on_upgrade(cluster, infra_ctx.cloud_provider(), kubernetes_version).map_err(|e| {
+        Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(
+            event_details,
+            kubernetes_upgrade_status.requested_version.to_string(),
+            e,
+        ))
+    })?;
+
+    logger.info("Kubernetes control plane has been successfully upgraded.");
 
     Ok(())
 }

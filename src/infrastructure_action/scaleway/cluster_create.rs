@@ -29,9 +29,6 @@ pub fn create_kapsule_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
-    if cluster.context().is_dry_run_deploy() {
-        logger.warn("Dry run mode is enabled. No changes will be made to the infrastructure.");
-    }
     logger.info("Preparing SCW cluster deployment.");
 
     // upgrade cluster instead if required

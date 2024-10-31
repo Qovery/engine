@@ -4,17 +4,18 @@ use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kubernetes};
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::cmd::terraform::{terraform_init_validate_destroy, terraform_init_validate_plan_apply};
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::engine::InfrastructureContext;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use std::path::PathBuf;
 
 pub(super) fn delete_gke_cluster(
     cluster: &Gke,
@@ -27,12 +28,38 @@ pub(super) fn delete_gke_cluster(
     logger.info("Preparing to delete cluster.");
     let temp_dir = cluster.temp_dir();
 
-    // generate terraform files and copy them into temp dir
-    let context = cluster.to_infra_tera_context(infra_ctx)?;
+    // should apply before destroy to be sure destroy will compute on all resources
+    // don't exit on failure, it can happen if we resume a destroy process
+    let message = format!(
+        "Ensuring everything is up to date before deleting cluster {}/{}",
+        cluster.name(),
+        cluster.short_id()
+    );
+    logger.info(message);
+    logger.info("Running Terraform apply before running a delete.");
+    let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    let tf_resources = TerraformInfraResources::new(
+        tera_context.clone(),
+        PathBuf::from(&cluster.template_directory).join("terraform"),
+        temp_dir.join("terraform"),
+        event_details.clone(),
+        cluster.context().is_dry_run_deploy(),
+    );
+    let _: GkeQoveryTerraformOutput = tf_resources.create(
+        infra_ctx
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+        &logger,
+    )?;
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(cluster.template_directory.as_str(), temp_dir, &context)
-    {
+    // generate files and copy them into temp dir
+    let kubeconfig_path = cluster.kubeconfig_local_file_path();
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        cluster.template_directory.as_str(),
+        temp_dir,
+        &tera_context,
+    ) {
         return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
             cluster.template_directory.to_string(),
@@ -54,33 +81,6 @@ pub(super) fn delete_gke_cluster(
         )));
     }
 
-    // should apply before destroy to be sure destroy will compute on all resources
-    // don't exit on failure, it can happen if we resume a destroy process
-    let message = format!(
-        "Ensuring everything is up to date before deleting cluster {}/{}",
-        cluster.name(),
-        cluster.short_id()
-    );
-    logger.info(message);
-    logger.info("Running Terraform apply before running a delete.");
-
-    if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.to_string_lossy().as_ref(),
-        false,
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &TerraformValidators::None,
-    ) {
-        // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-        logger.warn(EventMessage::new(
-            "An error occurred during the apply before destroy of Terraform. This is not blocking.".to_string(),
-            Some(e.to_safe_message()),
-        ));
-    };
-
-    let kubeconfig_path = cluster.kubeconfig_local_file_path();
     if !skip_kubernetes_step {
         // Configure kubectl to be able to connect to cluster
         let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
@@ -219,21 +219,56 @@ pub(super) fn delete_gke_cluster(
         }
     };
 
-    let message = format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id());
-    logger.info(message);
-    logger.info("Running Terraform destroy");
-    if let Err(err) = terraform_init_validate_destroy(
-        temp_dir.to_string_lossy().as_ref(),
+    logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
+    tf_resources.delete(
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
             .as_slice(),
-        &TerraformValidators::None,
-    ) {
-        return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
-    }
+        &logger,
+    )?;
 
     // delete info on vault
+    let _ = delete_vault_data(cluster, event_details.clone(), &logger);
+
+    delete_object_storage(cluster, &logger)?;
+    logger.info("Kubernetes cluster deleted successfully.");
+    Ok(())
+}
+
+fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
+    if let Err(e) = cluster
+        .object_storage
+        .delete_bucket(&cluster.kubeconfig_bucket_name(), BucketDeleteStrategy::HardDelete)
+    {
+        logger.warn(EventMessage::new(
+            format!(
+                "Cannot delete cluster kubeconfig object storage `{}`",
+                &cluster.kubeconfig_bucket_name()
+            ),
+            Some(e.to_string()),
+        ));
+    }
+
+    // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
+    if let Err(e) = cluster
+        .object_storage
+        .delete_bucket_non_blocking(&cluster.logs_bucket_name())
+    {
+        logger.warn(EventMessage::new(
+            format!("Cannot delete cluster logs object storage `{}`", &cluster.logs_bucket_name()),
+            Some(e.to_string()),
+        ));
+    }
+
+    Ok(())
+}
+
+fn delete_vault_data(
+    cluster: &Gke,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
     let vault_conn = QVaultClient::new(event_details.clone());
     if let Ok(vault_conn) = vault_conn {
         let mount = secret_manager::vault::get_vault_mount_name(cluster.context().is_test_cluster());
@@ -247,30 +282,5 @@ pub(super) fn delete_gke_cluster(
         }
     }
 
-    // delete object storages
-    if let Err(e) = cluster
-        .object_storage
-        .delete_bucket(&cluster.kubeconfig_bucket_name(), BucketDeleteStrategy::HardDelete)
-    {
-        logger.warn(EventMessage::new(
-            format!(
-                "Cannot delete cluster kubeconfig object storage `{}`",
-                &cluster.kubeconfig_bucket_name()
-            ),
-            Some(e.to_string()),
-        ));
-    }
-    // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
-    if let Err(e) = cluster
-        .object_storage
-        .delete_bucket_non_blocking(&cluster.logs_bucket_name())
-    {
-        logger.warn(EventMessage::new(
-            format!("Cannot delete cluster logs object storage `{}`", &cluster.logs_bucket_name()),
-            Some(e.to_string()),
-        ));
-    }
-
-    logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
 }
