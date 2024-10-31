@@ -27,7 +27,7 @@ KUBECONFIG
 }
 
 resource "local_file" "kubeconfig" {
-  filename = "${var.object_storage_kubeconfig_bucket}/${var.kubernetes_cluster_id}.yaml"
+  filename = "../${var.object_storage_kubeconfig_bucket}/${var.kubernetes_cluster_id}.yaml"
   content = local.kubeconfig
   file_permission = "0644"
   depends_on = [google_container_cluster.primary]
