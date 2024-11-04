@@ -38,7 +38,7 @@ pub fn create_kapsule_cluster(
             cluster.version().clone(),
             infra_ctx.cloud_provider().credentials_environment_variables(),
             event_details.clone(),
-            cluster.logger(),
+            &logger,
             None,
         ) {
             Ok(x) => {

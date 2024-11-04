@@ -17,7 +17,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
+use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure_action::ec2_k3s::sdk::QoveryAwsSdkConfigEc2;
 use crate::infrastructure_action::ec2_k3s::AwsEc2QoveryTerraformOutput;
 use crate::infrastructure_action::eks::helm_charts::karpenter::KarpenterChart;
@@ -31,6 +31,7 @@ use crate::infrastructure_action::eks::nodegroup::{
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+use crate::infrastructure_action::InfraLogger;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
@@ -54,15 +55,12 @@ pub fn delete_eks_cluster(
     options: &Options,
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+    logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
     let mut skip_kubernetes_step = false;
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
-    ));
-
+    logger.info("Preparing cluster deletion.");
     let aws_conn = match cloud_provider.aws_sdk_client() {
         Some(x) => x,
         None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
@@ -125,9 +123,7 @@ pub fn delete_eks_cluster(
         cluster_upgrade_timeout_in_min = timeout;
 
         if let Some(x) = message {
-            kubernetes
-                .logger()
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+            logger.info(x);
         }
     };
     let mut context = eks_tera_context(
@@ -174,15 +170,8 @@ pub fn delete_eks_cluster(
         kubernetes.short_id()
     );
 
-    kubernetes
-        .logger()
-        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
-    ));
-
+    logger.info(message);
+    logger.info("Running Terraform apply before running a delete.");
     if let Err(e) = terraform_init_validate_plan_apply(
         temp_dir.to_string_lossy().as_ref(),
         false,
@@ -190,12 +179,9 @@ pub fn delete_eks_cluster(
         &TerraformValidators::None,
     ) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-        kubernetes.logger().log(EngineEvent::Warning(
-            event_details.clone(),
-            EventMessage::new(
-                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                Some(e.to_string()),
-            ),
+        logger.warn(EventMessage::new(
+            "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+            Some(e.to_string()),
         ));
     };
 
@@ -281,23 +267,19 @@ pub fn delete_eks_cluster(
                 let _ = kubeconfig_file.read_to_string(&mut buffer);
                 match buffer.contains(&qovery_terraform_output.aws_ec2_public_hostname) {
                     true => {
-                        kubernetes.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do correspond with the actual host {}",
-                                &qovery_terraform_output.aws_ec2_public_hostname
-                            )),
+                        logger.info(format!(
+                            "kubeconfig stored on s3 do correspond with the actual host {}",
+                            &qovery_terraform_output.aws_ec2_public_hostname
                         ));
                         OperationResult::Ok(current_kubeconfig_path)
                     }
                     false => {
-                        kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
+                        logger.warn(
                             EventMessage::new_from_safe(format!(
                                 "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
                                 &qovery_terraform_output.aws_ec2_public_hostname
                             )),
-                        ));
+                        );
                         OperationResult::Retry(Box::new(
                             EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
                         ))
@@ -311,11 +293,7 @@ pub fn delete_eks_cluster(
             }
         }
         _ => {
-            let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_safe(safe_message.to_string()),
-            ));
+            logger.warn("Skipping Kubernetes uninstall because it can't be reached.");
             skip_kubernetes_step = true;
             PathBuf::from("")
         }
@@ -329,10 +307,7 @@ pub fn delete_eks_cluster(
             kubernetes.short_id()
         );
 
-        kubernetes
-            .logger()
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
+        logger.info(message);
         let all_namespaces = kubectl_exec_get_all_namespaces(
             &kubernetes_config_file_path,
             cloud_provider.credentials_environment_variables(),
@@ -343,31 +318,19 @@ pub fn delete_eks_cluster(
                 let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
                 let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-                kubernetes.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Deleting non Qovery namespaces".to_string()),
-                ));
-
+                logger.info("Deleting non Qovery namespaces");
                 for namespace_to_delete in namespaces_to_delete.iter() {
                     match cmd::kubectl::kubectl_exec_delete_namespace(
                         &kubernetes_config_file_path,
                         namespace_to_delete,
                         cloud_provider.credentials_environment_variables(),
                     ) {
-                        Ok(_) => kubernetes.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!(
-                                "Namespace `{namespace_to_delete}` deleted successfully."
-                            )),
-                        )),
+                        Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", namespace_to_delete)),
                         Err(e) => {
                             if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
-                                kubernetes.logger().log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!(
-                                        "Can't delete the namespace `{namespace_to_delete}`"
-                                    )),
-                                ));
+                                logger.warn(EventMessage::new_from_safe(format!(
+                                    "Can't delete the namespace `{namespace_to_delete}`"
+                                )));
                             }
                         }
                     }
@@ -378,9 +341,9 @@ pub fn delete_eks_cluster(
                     "Error while getting all namespaces for Kubernetes cluster {}",
                     kubernetes.name_with_id(),
                 );
-                kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                logger.warn(EventMessage::new(
+                    message_safe.clone(),
+                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
                 ));
             }
         }
@@ -391,10 +354,7 @@ pub fn delete_eks_cluster(
             kubernetes.short_id()
         );
 
-        kubernetes
-            .logger()
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
+        logger.info(message);
         // delete custom metrics api to avoid stale namespaces on deletion
         let helm = Helm::new(
             Some(&kubernetes_config_file_path),
@@ -404,10 +364,7 @@ pub fn delete_eks_cluster(
         let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
         if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
             // this error is not blocking
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(to_engine_error(&event_details, e)),
-            ));
+            logger.warn(EventMessage::new_from_engine_error(to_engine_error(&event_details, e)));
         }
 
         // required to avoid namespace stuck on deletion
@@ -418,20 +375,13 @@ pub fn delete_eks_cluster(
             kubernetes.logger(),
         ) {
             // this error is not blocking, logging a warning and move on
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new(
-                    "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
-                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ),
+            logger.warn(EventMessage::new(
+                "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+                Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
             ));
         }
 
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Deleting Qovery managed helm charts".to_string()),
-        ));
-
+        logger.info("Deleting Qovery managed helm charts");
         let qovery_namespaces = get_qovery_managed_namespaces();
         for qovery_namespace in qovery_namespaces.iter() {
             let charts_to_delete = helm
@@ -441,23 +391,16 @@ pub fn delete_eks_cluster(
             for chart in charts_to_delete {
                 let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                 match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                    Ok(_) => kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
-                    )),
-                    Err(e) => kubernetes.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(format!("Can't delete chart `{}`", &chart.name), Some(e.to_string())),
+                    Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
+                    Err(e) => logger.warn(EventMessage::new(
+                        format!("Can't delete chart `{}`", &chart.name),
+                        Some(e.to_string()),
                     )),
                 }
             }
         }
 
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Deleting Qovery managed namespaces".to_string()),
-        ));
-
+        logger.info("Deleting Qovery managed namespaces");
         for qovery_namespace in qovery_namespaces.iter() {
             let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path,
@@ -465,26 +408,18 @@ pub fn delete_eks_cluster(
                 cloud_provider.credentials_environment_variables(),
             );
             match deletion {
-                Ok(_) => kubernetes.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!("Namespace {qovery_namespace} is fully deleted")),
-                )),
+                Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", qovery_namespace)),
                 Err(e) => {
                     if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
-                        kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!("Can't delete namespace {qovery_namespace}.")),
-                        ))
+                        logger.warn(EventMessage::new_from_safe(format!(
+                            "Can't delete the namespace `{qovery_namespace}`"
+                        )));
                     }
                 }
             }
         }
 
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
-        ));
-
+        logger.info("Delete all remaining deployed helm applications");
         // Do not uninstall Karpenter to be able to delete the nodes properly .
         match helm.list_release(None, &[]) {
             Ok(helm_charts) => {
@@ -495,29 +430,23 @@ pub fn delete_eks_cluster(
                 }) {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                     match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                        Ok(_) => kubernetes.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
-                        )),
-                        Err(e) => kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(format!("Error deleting chart `{}`", chart.name), Some(e.to_string())),
+                        Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
+                        Err(e) => logger.warn(EventMessage::new(
+                            format!("Error deleting chart `{}`", chart.name),
+                            Some(e.to_string()),
                         )),
                     }
                 }
             }
-            Err(e) => kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
-            )),
+            Err(e) => logger.warn(EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string()))),
         }
     };
 
-    let message = format!("Deleting Kubernetes cluster {}/{}", kubernetes.name(), kubernetes.short_id());
-    kubernetes
-        .logger()
-        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
+    logger.info(format!(
+        "Deleting Kubernetes cluster {}/{}",
+        kubernetes.name(),
+        kubernetes.short_id()
+    ));
     if let Some(kubernetes) = kubernetes.as_eks() {
         // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
         block_on(delete_eks_nodegroups(
@@ -534,10 +463,7 @@ pub fn delete_eks_cluster(
         }
 
         // remove S3 buckets from tf state
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
-        ));
+        logger.info("Removing S3 buckets from tf state");
         let resources_to_be_removed_from_tf_state: Vec<(&str, &str)> = vec![
             ("aws_s3_bucket.loki_bucket", "S3 logs bucket"),
             ("aws_s3_bucket_lifecycle_configuration.loki_lifecycle", "S3 logs lifecycle"),
@@ -555,34 +481,24 @@ pub fn delete_eks_cluster(
                 &TerraformValidators::None,
             ) {
                 Ok(_) => {
-                    kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!(
-                            "{} successfully removed from tf state.",
-                            resource_to_be_removed_from_tf_state.1
-                        )),
+                    logger.info(format!(
+                        "{} successfully removed from tf state.",
+                        resource_to_be_removed_from_tf_state.1
                     ));
                 }
                 Err(err) => {
                     // We weren't able to remove S3 bucket from tf state, maybe it's not there?
                     // Anyways, this is not blocking
-                    kubernetes.logger().log(EngineEvent::Warning(
+                    logger.warn(EventMessage::new_from_engine_error(EngineError::new_terraform_error(
                         event_details.clone(),
-                        EventMessage::new_from_engine_error(EngineError::new_terraform_error(
-                            event_details.clone(),
-                            err,
-                        )),
-                    ));
+                        err,
+                    )));
                 }
             }
         }
     }
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Running Terraform destroy".to_string()),
-    ));
-
+    logger.info("Running Terraform destroy");
     if kubernetes.kind() == Kind::Ec2 {
         match cloud_provider.aws_sdk_client() {
             None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
@@ -597,10 +513,8 @@ pub fn delete_eks_cluster(
     ) {
         return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
     }
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
-    ));
+
+    logger.info("Kubernetes cluster successfully deleted");
 
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details);

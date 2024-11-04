@@ -15,8 +15,8 @@ use crate::cmd::terraform::{
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
+use crate::errors::{CommandError, EngineError, Tag};
+use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure_action::ec2_k3s::helm_charts::{ec2_k3s_helm_charts, Ec2ChartsConfigPrerequisites};
 use crate::infrastructure_action::ec2_k3s::AwsEc2QoveryTerraformOutput;
 use crate::infrastructure_action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
@@ -32,7 +32,7 @@ use crate::infrastructure_action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
-use crate::infrastructure_action::{ec2_k3s, InfrastructureAction};
+use crate::infrastructure_action::{ec2_k3s, InfraLogger, InfrastructureAction};
 use crate::io_models::context::Features;
 use crate::models::domain::ToHelmString;
 use crate::models::kubernetes::K8sObject;
@@ -61,14 +61,11 @@ pub fn create_eks_cluster(
     options: &Options,
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+    logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Preparing {} cluster deployment.", kubernetes.kind())),
-    ));
-
+    logger.info(format!("Preparing {} cluster deployment.", kubernetes.kind()));
     let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
         cloud_provider.access_key_id(),
         kubernetes.region().to_string(),
@@ -135,9 +132,7 @@ pub fn create_eks_cluster(
             cluster_upgrade_timeout_in_min = timeout;
 
             if let Some(x) = message {
-                kubernetes
-                    .logger()
-                    .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+                logger.info(x);
             }
         };
 
@@ -188,11 +183,7 @@ pub fn create_eks_cluster(
             }
         }
 
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
-        ));
-
+        logger.info(format!("Deploying {} cluster.", kubernetes.kind()));
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
             match terraform_init_validate_plan_apply(
                 temp_dir.to_string_lossy().as_ref(),
@@ -209,12 +200,9 @@ pub fn create_eks_cluster(
                             ..
                         } => {
                             // Try to import S3 bucket and relaunch Terraform apply
-                            kubernetes.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(
-                                    format!("There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it."),
-                                    Some(e.to_string()),
-                                ),
+                            logger.warn(format!(
+                                "There was an issue trying to create the S3 bucket `{bucket_name}`, trying to import it.",
+                                bucket_name = bucket_name,
                             ));
                             match terraform_import(
                                 temp_dir.to_string_lossy().as_ref(),
@@ -224,11 +212,9 @@ pub fn create_eks_cluster(
                                 &TerraformValidators::Default,
                             ) {
                                 Ok(_) => {
-                                    kubernetes.logger().log(EngineEvent::Info(
-                                        event_details.clone(),
-                                        EventMessage::new_from_safe(format!(
-                                            "S3 bucket `{bucket_name}` has been imported properly."
-                                        )),
+                                    logger.info(format!(
+                                        "S3 bucket `{bucket_name}` has been imported properly.",
+                                        bucket_name = bucket_name,
                                     ));
 
                                     // triggering retry (applying Terraform apply)
@@ -247,12 +233,7 @@ pub fn create_eks_cluster(
                             Kind::Eks => {
                                 // on EKS, clean possible nodegroup deployment failures because of quota issues
                                 // do not exit on this error to avoid masking the real Terraform issue
-                                kubernetes.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(
-                                        "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
-                                    ),
-                                ));
+                                logger.info("Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present");
                                 if let Err(e) = block_on(delete_eks_nodegroups(
                                     aws_conn.clone(),
                                     kubernetes.cluster_name(),
@@ -317,12 +298,7 @@ pub fn create_eks_cluster(
     } else {
         // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
         if kubernetes.kind() == Kind::Eks {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(
-                    "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
-                )));
-
+            logger.info("Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present");
             if let Err(e) = block_on(delete_eks_nodegroups(
                 aws_conn.clone(),
                 kubernetes.cluster_name(),
@@ -346,7 +322,7 @@ pub fn create_eks_cluster(
             kubernetes.version(),
             cloud_provider.credentials_environment_variables(),
             event_details.clone(),
-            kubernetes.logger(),
+            &logger,
             match kubernetes.is_karpenter_enabled() {
                 true => Some("eks.amazonaws.com/compute-type!=fargate"), // Exclude fargate nodes from the test in case of karpenter, those will be recreated after helm deploy
                 false => None,
@@ -380,21 +356,12 @@ pub fn create_eks_cluster(
                     // return error on upgrade failure
                     res?;
                 } else {
-                    kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ));
+                    logger.info("Kubernetes cluster upgrade not required");
                 }
             }
             Err(e) => {
                 // Log a warning, this error is not blocking
-                kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(
-                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                    ),
-                ));
+                logger.warn(format!("Error detected, upgrade won't occurs, but standard deployment. {}", e));
             }
         };
     }
@@ -466,11 +433,7 @@ pub fn create_eks_cluster(
     // if it temporarily fails, just ignore it, data will be pushed on the next sync)
     let _ = kubernetes.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
-    ));
-
+    logger.info("Preparing chart configuration to be deployed");
     // kubernetes helm deployments on the cluster
     let kubeconfig_path = Path::new(&kubeconfig_path);
 
@@ -502,9 +465,9 @@ pub fn create_eks_cluster(
     }
 
     if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
-        kubernetes.logger().log(EngineEvent::Warning(
-            event_details.clone(),
-            EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+        logger.warn(EventMessage::new(
+            "Didn't manage to restart all paused pods".to_string(),
+            Some(e.to_string()),
         ));
     }
 
@@ -691,13 +654,7 @@ pub fn create_eks_cluster(
             ) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
-                    kubernetes.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(
-                            "Didn't manage to update Helm charts. Retrying...".to_string(),
-                            Some(e.to_string()),
-                        ),
-                    ));
+                    logger.warn("Didn't manage to update Helm charts. Retrying...");
                     OperationResult::Retry(e)
                 }
             }
