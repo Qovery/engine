@@ -25,7 +25,7 @@ use crate::infrastructure_action::eks::cluster_create::create_eks_cluster;
 use crate::infrastructure_action::eks::cluster_delete::delete_eks_cluster;
 use crate::infrastructure_action::eks::cluster_pause::pause_eks_cluster;
 use crate::infrastructure_action::eks::cluster_upgrade::upgrade_eks_cluster;
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_action::{InfraLoggerImpl, InfrastructureAction};
 use chrono::Duration as ChronoDuration;
 use function_name::named;
 use serde_derive::{Deserialize, Serialize};
@@ -38,6 +38,10 @@ impl InfrastructureAction for EKS {
     #[named]
     fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().name(),
             "kubernetes",
@@ -60,6 +64,7 @@ impl InfrastructureAction for EKS {
                 &self.options,
                 &self.advanced_settings,
                 self.qovery_allowed_public_access_cidrs.as_ref(),
+                logger,
             )
         })
     }
@@ -67,6 +72,10 @@ impl InfrastructureAction for EKS {
     #[named]
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().name(),
             "kubernetes",
@@ -87,6 +96,7 @@ impl InfrastructureAction for EKS {
                 &self.options,
                 &self.advanced_settings,
                 self.qovery_allowed_public_access_cidrs.as_ref(),
+                logger,
             )
         })
     }
@@ -94,6 +104,10 @@ impl InfrastructureAction for EKS {
     #[named]
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().name(),
             "kubernetes",
@@ -115,6 +129,7 @@ impl InfrastructureAction for EKS {
                 &self.options,
                 &self.advanced_settings,
                 self.qovery_allowed_public_access_cidrs.as_ref(),
+                logger,
             )
         })
     }
@@ -126,6 +141,10 @@ impl InfrastructureAction for EKS {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        let logger = InfraLoggerImpl {
+            event_details: event_details.clone(),
+            logger: self.logger().clone_dyn(),
+        };
         print_action(
             infra_ctx.cloud_provider().name(),
             "kubernetes",
@@ -134,7 +153,7 @@ impl InfrastructureAction for EKS {
             event_details,
             self.logger(),
         );
-        upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status)
+        upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
     }
 }
 

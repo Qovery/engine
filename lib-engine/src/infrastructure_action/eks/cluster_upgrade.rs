@@ -7,7 +7,7 @@ use crate::cmd::terraform_validators::TerraformValidators;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, InfrastructureStep};
 use crate::infrastructure_action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{
@@ -15,6 +15,7 @@ use crate::infrastructure_action::eks::utils::{
 };
 use crate::infrastructure_action::eks::AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
 use crate::infrastructure_action::utils::{delete_completed_jobs, delete_crashlooping_pods};
+use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 
@@ -22,14 +23,11 @@ pub fn upgrade_eks_cluster(
     kubernetes: &EKS,
     infra_ctx: &InfrastructureContext,
     kubernetes_upgrade_status: KubernetesUpgradeStatus,
+    logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Start preparing EKS cluster upgrade process".to_string()),
-    ));
-
+    logger.info("Start preparing EKS cluster upgrade process");
     let temp_dir = kubernetes.temp_dir();
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, infra_ctx.cloud_provider()) {
         Ok(value) => Some(value),
@@ -54,9 +52,7 @@ pub fn upgrade_eks_cluster(
         cluster_upgrade_timeout_in_min = timeout;
 
         if let Some(x) = message {
-            kubernetes
-                .logger()
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+            logger.info(x);
         }
     };
 
@@ -79,10 +75,7 @@ pub fn upgrade_eks_cluster(
     //
     match &kubernetes_upgrade_status.required_upgrade_on {
         Some(KubernetesNodesType::Masters) => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Start upgrading process for master nodes.".to_string()),
-            ));
+            logger.info("Start upgrading process for master nodes.");
 
             // AWS requires the upgrade to be done in 2 steps (masters, then workers)
             // use the current kubernetes masters' version for workers, in order to avoid migration in one step
@@ -123,11 +116,7 @@ pub fn upgrade_eks_cluster(
                 )));
             }
 
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Upgrading Kubernetes master nodes.".to_string()),
-            ));
-
+            logger.info("Upgrading Kubernetes master nodes.");
             match terraform_init_validate_plan_apply(
                 temp_dir.to_string_lossy().as_ref(),
                 kubernetes.context.is_dry_run_deploy(),
@@ -138,12 +127,7 @@ pub fn upgrade_eks_cluster(
                 &TerraformValidators::Default,
             ) {
                 Ok(_) => {
-                    kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(
-                            "Kubernetes master nodes have been successfully upgraded.".to_string(),
-                        ),
-                    ));
+                    logger.info("Kubernetes master nodes have been successfully upgraded.");
                 }
                 Err(e) => {
                     return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
@@ -151,20 +135,10 @@ pub fn upgrade_eks_cluster(
             }
         }
         Some(KubernetesNodesType::Workers) => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(
-                    "No need to perform Kubernetes master upgrade, they are already up to date.".to_string(),
-                ),
-            ));
+            logger.info("No need to perform Kubernetes master upgrade, they are already up to date.");
         }
         None => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe(
-                    "No Kubernetes upgrade required, masters and workers are already up to date.".to_string(),
-                ),
-            ));
+            logger.info("No Kubernetes upgrade required, masters and workers are already up to date.");
             return Ok(());
         }
     }
@@ -172,10 +146,7 @@ pub fn upgrade_eks_cluster(
     //
     // Upgrade worker nodes
     //
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Preparing workers nodes for upgrade for Kubernetes cluster.".to_string()),
-    ));
+    logger.info("Preparing workers nodes for upgrade for Kubernetes cluster.");
 
     // disable cluster autoscaler to avoid interfering with AWS upgrade procedure
     context.insert("enable_cluster_autoscaler", &false);
@@ -212,15 +183,8 @@ pub fn upgrade_eks_cluster(
         )));
     }
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Starting Kubernetes worker nodes upgrade".to_string()),
-    ));
-
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Checking clusters content health".to_string()),
-    ));
+    logger.info("Start upgrading process for worker nodes.");
+    logger.info("Checking clusters content health");
 
     // disable all replicas with issues to avoid upgrade failures
     let kube_client = infra_ctx.mk_kube_client()?;
@@ -237,12 +201,9 @@ pub fn upgrade_eks_cluster(
         // if number of replicas > 0: it is not already disabled
         // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
         if replicas > 0 && ready_replicas == 0 {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                    deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-                )),
+            logger.info(format!(
+                "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
             ));
             block_on(kube_client.set_deployment_replicas_number(
                 event_details.clone(),
@@ -270,12 +231,9 @@ pub fn upgrade_eks_cluster(
         // if number of replicas > 0: it is not already disabled
         // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
         if status.replicas > 0 && ready_replicas == 0 {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                    sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-                )),
+            logger.info(format!(
+                "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
+                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
             ));
             block_on(kube_client.set_statefulset_replicas_number(
                 event_details.clone(),
@@ -299,7 +257,7 @@ pub fn upgrade_eks_cluster(
         infra_ctx.cloud_provider().credentials_environment_variables(),
         Infrastructure(InfrastructureStep::Upgrade),
     ) {
-        kubernetes.logger().log(EngineEvent::Error(*e.clone(), None));
+        logger.error(*e.clone(), None::<&str>);
         return Err(e);
     }
 
@@ -309,7 +267,7 @@ pub fn upgrade_eks_cluster(
         Infrastructure(InfrastructureStep::Upgrade),
         None,
     ) {
-        kubernetes.logger().log(EngineEvent::Error(*e.clone(), None));
+        logger.error(*e.clone(), None::<&str>);
         return Err(e);
     }
 
@@ -317,9 +275,9 @@ pub fn upgrade_eks_cluster(
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
         let ev = event_details.clone();
         let _guard = scopeguard::guard(
-            set_cluster_autoscaler_replicas(kubernetes, event_details.clone(), 0, infra_ctx)?,
+            set_cluster_autoscaler_replicas(kubernetes, event_details.clone(), 0, infra_ctx, &logger)?,
             |_| {
-                let _ = set_cluster_autoscaler_replicas(kubernetes, ev, 1, infra_ctx);
+                let _ = set_cluster_autoscaler_replicas(kubernetes, ev, 1, infra_ctx, &logger);
             },
         );
     }
@@ -346,10 +304,7 @@ pub fn upgrade_eks_cluster(
     )
     .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details,
-        EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded".to_string()),
-    ));
+    logger.info("Kubernetes worker nodes have been successfully upgraded.");
 
     Ok(())
 }
@@ -359,15 +314,13 @@ fn set_cluster_autoscaler_replicas(
     event_details: EventDetails,
     replicas_count: u32,
     infra_ctx: &InfrastructureContext,
+    logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let autoscaler_new_state = match replicas_count {
         0 => "disable",
         _ => "enable",
     };
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{autoscaler_new_state}`.")),
-    ));
+    logger.info(format!("Set cluster autoscaler to: `{autoscaler_new_state}`."));
     let selector = "cluster-autoscaler-aws-cluster-autoscaler";
     let namespace = "kube-system";
     kubectl_exec_scale_replicas(

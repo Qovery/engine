@@ -36,7 +36,7 @@ pub(super) fn create_gke_cluster(
             cluster.version.clone(),
             infra_ctx.cloud_provider().credentials_environment_variables(),
             event_details.clone(),
-            cluster.logger(),
+            &logger,
             None,
         ) {
             Ok(kubernetes_upgrade_status) if kubernetes_upgrade_status.required_upgrade_on.is_some() => {

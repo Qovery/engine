@@ -11,12 +11,13 @@ use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
+use crate::events::{InfrastructureStep, Stage};
 use crate::infrastructure_action::eks::karpenter::Karpenter;
 use crate::infrastructure_action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+use crate::infrastructure_action::InfraLogger;
 use crate::io_models::context::Features;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -34,14 +35,11 @@ pub fn pause_eks_cluster(
     options: &Options,
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+    logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
-    kubernetes.logger().log(EngineEvent::Info(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-        EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
-    ));
-
+    logger.info("Preparing cluster pause.");
     let temp_dir = kubernetes.temp_dir();
 
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
@@ -67,9 +65,7 @@ pub fn pause_eks_cluster(
         cluster_upgrade_timeout_in_min = timeout;
 
         if let Some(x) = message {
-            kubernetes
-                .logger()
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x)));
+            logger.info(x);
         }
     };
 
@@ -135,18 +131,13 @@ pub fn pause_eks_cluster(
         }
         Err(e) => {
             let error = EngineError::new_terraform_error(event_details, e);
-            kubernetes.logger().log(EngineEvent::Error(error.clone(), None));
+            logger.error(error.clone(), None::<&str>);
             return Err(Box::new(error));
         }
     };
 
     if tf_workers_resources.is_empty() && !kubernetes.is_karpenter_enabled() {
-        kubernetes.logger().log(EngineEvent::Warning(
-            event_details,
-            EventMessage::new_from_safe(
-                "Could not find workers resources in terraform state. Cluster seems already paused.".to_string(),
-            ),
-        ));
+        logger.warn("Could not find workers resources in terraform state. Cluster seems already paused.");
         return Ok(());
     }
 
@@ -195,22 +186,18 @@ pub fn pause_eks_cluster(
 
                 match wait_engine_job_finish {
                     Ok(_) => {
-                        kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
+                        logger.info("No current running jobs on the Engine, infrastructure pause is allowed to start");
                     }
                     Err(Error { error, .. }) => {
                         return Err(Box::new(error));
                     }
                 }
             }
-            false => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history".to_string()))),
+            false => logger.info("Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history"),
         }
     }
 
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
-    ));
-
+    logger.info("Pausing cluster deployment.");
     if kubernetes.is_karpenter_enabled() {
         let kube_client = infra_ctx.mk_kube_client()?;
         let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
@@ -225,11 +212,7 @@ pub fn pause_eks_cluster(
         infra_ctx.context().is_dry_run_deploy(),
     ) {
         Ok(_) => {
-            let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
-            kubernetes
-                .logger()
-                .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
-
+            logger.info(format!("Kubernetes cluster {} successfully paused", kubernetes.name()));
             Ok(())
         }
         Err(e) => Err(Box::new(EngineError::new_terraform_error(event_details, e))),
