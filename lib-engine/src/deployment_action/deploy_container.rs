@@ -61,7 +61,7 @@ where
             })
         };
 
-        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
                 self.kube_label_selector(),
@@ -88,9 +88,7 @@ where
                         )?;
                     }
                 }
-                Err(e) => target
-                    .env_logger(self, EnvironmentStep::Deploy)
-                    .send_warning(e.to_string()),
+                Err(e) => logger.warning(e.to_string()),
             };
 
             let chart = ChartInfo {

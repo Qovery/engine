@@ -28,7 +28,7 @@ where
     Application<T>: ToTeraContext,
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let long_task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+        let long_task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
@@ -56,9 +56,7 @@ where
                         )?;
                     }
                 }
-                Err(e) => target
-                    .env_logger(self, EnvironmentStep::Deploy)
-                    .send_warning(e.to_string()),
+                Err(e) => logger.warning(e.to_string()),
             };
 
             let chart = ChartInfo {
