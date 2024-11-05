@@ -11,6 +11,7 @@ use crate::engine::InfrastructureContext;
 
 use crate::cloud_provider::gcp::kubernetes::{Gke, GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -145,7 +146,7 @@ pub(super) fn upgrade_gke_cluster(
         cluster.context().is_dry_run_deploy(),
     );
 
-    tf_resources.create(
+    let _tf_output: GkeQoveryTerraformOutput = tf_resources.create(
         infra_ctx
             .cloud_provider()
             .credentials_environment_variables()
