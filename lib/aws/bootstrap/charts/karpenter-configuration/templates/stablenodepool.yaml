@@ -25,6 +25,7 @@ spec:
         - key: nodepool/stable
           effect: NoSchedule
       expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 30s
