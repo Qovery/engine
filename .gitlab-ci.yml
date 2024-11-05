@@ -18,6 +18,7 @@ stages:
   - minimal-tests
   - tests
   - tests-quarantine
+  - release-tag
   - release
   - deploy
 
@@ -908,7 +909,7 @@ create-multi-arch-image:
       when: always
 
 docker-tag:
-  stage: release
+  stage: release-tag
   retry: 0
   before_script:
     - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 20 ${IMAGE_ARCH}
@@ -934,8 +935,6 @@ gitlab-release:
   variables:
     GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
     GIT_DEPTH: 0
-  needs:
-    - job: docker-tag
   # patch versions based on tags and use goreleaser to perform a release
   script:
     - ./helper.sh update_engine_version
