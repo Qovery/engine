@@ -909,8 +909,6 @@ create-multi-arch-image:
 
 docker-tag:
   stage: release
-  needs:
-    - job: create-multi-arch-image
   retry: 0
   before_script:
     - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 20 ${IMAGE_ARCH}
