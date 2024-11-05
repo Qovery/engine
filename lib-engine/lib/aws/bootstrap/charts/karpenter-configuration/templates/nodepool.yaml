@@ -22,6 +22,7 @@ spec:
         kind: EC2NodeClass
         name: default
       expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidateAfter: 0s
     consolidationPolicy: WhenEmptyOrUnderutilized
