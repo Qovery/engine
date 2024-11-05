@@ -97,7 +97,7 @@ release-image:
       allow_failure: true
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-      allow_failure: true
+      allow_failure: false
 
 release-image-slim:
   stage: build-and-lint
@@ -132,7 +132,7 @@ release-image-slim:
       allow_failure: true
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-      allow_failure: true
+      allow_failure: false
 
 #gitguardian:
 #  stage: build-and-lint
@@ -904,9 +904,8 @@ create-multi-arch-image:
   tags:
     - vm-1cpu-1gmem-0g
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
-      allow_failure: false
 
 docker-tag:
   stage: release
