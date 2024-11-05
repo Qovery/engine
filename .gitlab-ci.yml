@@ -67,7 +67,7 @@ release-image:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 20 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 30 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
@@ -95,12 +95,15 @@ release-image:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
+      allow_failure: true
 
 release-image-slim:
   stage: build-and-lint
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 20 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 30 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
@@ -126,6 +129,9 @@ release-image-slim:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
+      allow_failure: true
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
       allow_failure: true
 
 #gitguardian:
@@ -899,7 +905,7 @@ create-multi-arch-image:
     - vm-1cpu-1gmem-0g
   rules:
     - if: $CI_COMMIT_TAG
-      when: manual
+      when: always
       allow_failure: false
 
 docker-tag:
