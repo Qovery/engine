@@ -391,9 +391,15 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             fs::create_dir(this.chart_workspace_directory())
                 .map_err(|e| to_error(format!("Cannot create destination directory for chart due to {}", e)))?;
 
-            let repository_url = engine_helm_registry.get_url();
+            let repository_url_with_credentials = match engine_helm_registry.get_url_with_credentials() {
+                Ok(url) => url,
+                Err(err) => {
+                    error!("Cannot get URL with credentials, taking the url without credentials: {}", err);
+                    engine_helm_registry.get_url()
+                }
+            };
             let url_without_password = {
-                let mut url = repository_url.clone();
+                let mut url = repository_url_with_credentials.clone();
                 let _ = url.set_password(None);
                 url
             };
@@ -405,7 +411,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             target
                 .helm
                 .download_chart(
-                    &repository_url,
+                    &repository_url_with_credentials,
                     engine_helm_registry,
                     chart_name,
                     chart_version,
