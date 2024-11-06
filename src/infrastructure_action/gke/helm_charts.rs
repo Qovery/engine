@@ -14,7 +14,6 @@ use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
-use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -425,25 +424,12 @@ pub(super) fn gke_helm_charts(
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
-    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(cert_manager_config)),
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(k8s_event_logger)),
     ];
-
-    // pdb infra
-    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
-        let pdb_infra = QoveryPdbInfraChart::new(
-            chart_prefix_path,
-            HelmChartNamespaces::Qovery,
-            prometheus_namespace,
-            loki_namespace,
-        )
-        .to_common_helm_chart()?;
-
-        level_7.push(Some(Box::new(pdb_infra)));
-    }
 
     Ok(vec![
         level_1.into_iter().flatten().collect(),

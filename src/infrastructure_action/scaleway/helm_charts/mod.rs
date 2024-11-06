@@ -40,7 +40,6 @@ use crate::cloud_provider::helm_charts::loki_chart::{
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
-use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::io_models::QoveryIdentifier;
@@ -601,7 +600,7 @@ pub fn kapsule_helm_charts(
 
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let mut level_7: Vec<Box<dyn HelmChart>> = vec![
+    let level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_cluster_agent),
         Box::new(qovery_shell_agent),
@@ -627,19 +626,6 @@ pub fn kapsule_helm_charts(
     }
     if let Some(grafana_chart) = grafana {
         level_2.push(Box::new(grafana_chart))
-    }
-
-    // pdb infra
-    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
-        let pdb_infra = QoveryPdbInfraChart::new(
-            chart_prefix_path,
-            HelmChartNamespaces::Qovery,
-            prometheus_namespace,
-            loki_namespace,
-        )
-        .to_common_helm_chart()?;
-
-        level_7.push(Box::new(pdb_infra));
     }
 
     info!("charts configuration preparation finished");

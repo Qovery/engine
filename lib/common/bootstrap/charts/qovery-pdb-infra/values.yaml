@@ -1,4 +1,0 @@
-loki:
-  namespace: set-by-engine
-prometheus:
-  namespace: set-by-engine

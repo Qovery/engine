@@ -157,8 +157,6 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
-    #[serde(alias = "infra.pdb.enabled", default)]
-    pub infra_pdb_enabled: bool,
     #[serde(alias = "gcp.vpc.enable_flow_logs")]
     pub gcp_vpc_enable_flow_logs: bool,
     #[serde(alias = "gcp.vpc.flow_logs_sampling")]
@@ -212,7 +210,6 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
-            infra_pdb_enabled: false,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,
