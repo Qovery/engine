@@ -373,7 +373,7 @@ impl Helm {
 
     pub fn download_chart(
         &self,
-        repository: &Url,
+        repository_with_credentials: &Url,
         engine_helm_registry: &Registry,
         chart_name: &str,
         chart_version: &str,
@@ -382,9 +382,9 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
     ) -> Result<(), HelmError> {
-        return match repository.scheme() {
+        return match repository_with_credentials.scheme() {
             "https" => self.download_https_chart(
-                repository,
+                repository_with_credentials,
                 chart_name,
                 chart_version,
                 target_directory,
@@ -403,7 +403,7 @@ impl Helm {
             ),
             _ => Err(InvalidRepositoryConfig(format!(
                 "Invalid repository scheme {}",
-                repository.scheme()
+                repository_with_credentials.scheme()
             ))),
         };
     }
@@ -580,7 +580,7 @@ impl Helm {
 
     pub fn download_https_chart(
         &self,
-        repository: &Url,
+        repository_url_with_credentials: &Url,
         chart_name: &str,
         chart_version: &str,
         target_directory: &Path,
@@ -593,11 +593,19 @@ impl Helm {
         // So use same target dir, to avoid issues
         let tmpdir = Self::get_temp_dir(target_directory, chart_name, FETCH)?;
 
+        // Clean repository url from password otherwise it will appear on logs sent to core
+        let repository_url_without_credentials = {
+            let mut url = repository_url_with_credentials.clone();
+            let _ = url.set_password(None);
+            url
+        };
+
+        // Mandatory helm arguments
         let mut helm_args = vec![
             "fetch",
             "--debug", // there is no debug log but if someday they appear
             "--repo",
-            repository.as_str(),
+            repository_url_without_credentials.as_str(),
             chart_name,
             "--version",
             chart_version,
@@ -610,13 +618,26 @@ impl Helm {
             helm_args.push("--insecure-skip-tls-verify");
         }
 
-        let login = urlencoding::decode(repository.username()).unwrap_or_default();
-        let password = repository
+        // Extract login & password from url
+        let repository_username = repository_url_with_credentials.username();
+        let login = urlencoding::decode(repository_url_with_credentials.username()).unwrap_or_default();
+        let password = repository_url_with_credentials
             .password()
             .map(|password| urlencoding::decode(password).unwrap_or_default());
 
-        if let Some(password) = &password {
-            helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", password])
+        // Handle 3 different cases
+        match (repository_username.is_empty(), &password) {
+            (false, None) => {
+                // If the --password arg is not set, the fetch will fail
+                helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", ""]);
+            }
+            (false, Some(password)) => {
+                helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", password]);
+            }
+            (true, Some(password)) => {
+                helm_args.extend_from_slice(&["--pass-credentials", "--password", password]);
+            }
+            (true, None) => {}
         }
 
         let mut error_message: Vec<String> = Vec::new();
@@ -654,7 +675,7 @@ impl Helm {
                     errors::CommandError::new(
                         format!(
                             "Helm failed to fetch chart {} at version {} from {}",
-                            chart_name, chart_version, repository
+                            chart_name, chart_version, repository_url_without_credentials
                         ),
                         Some(stderr_msg),
                         Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
