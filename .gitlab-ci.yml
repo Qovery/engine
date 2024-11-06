@@ -240,30 +240,6 @@ aws-minimal-tests:
     expire_in: 1 week
   interruptible: true
 
-aws-ec2-minimal-tests:
-  stage: minimal-tests
-  retry: 1
-  timeout: 3 hours
-  before_script:
-    - ci_helper await_docker_socket
-  script:
-    - ./helper.sh aws_ec2_minimal_tests
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  tags:
-    - vm-3cpu-12gmem-0g
-  dependencies:
-    - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
-
 gcp-minimal-tests:
   stage: minimal-tests
   retry: 1
@@ -362,61 +338,6 @@ aws-infra-upgrade:
     expire_in: 2 week
   interruptible: true
 
-aws-ec2-infra:
-  stage: tests
-  retry: 1
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_ec2_infra
-  dependencies:
-    - build-and-lint-code
-  tags:
-    - vm-3cpu-12gmem-0g
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
-aws-ec2-infra-upgrade:
-  stage: tests
-  retry: 1
-  timeout: 3 hours
-  when: manual
-  script:
-    - ./helper.sh aws_ec2_infra_upgrade
-  dependencies:
-    - build-and-lint-code
-  tags:
-    - vm-3cpu-12gmem-0g
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
 aws-managed-services:
   stage: tests
   retry: 1
@@ -444,66 +365,12 @@ aws-managed-services:
     expire_in: 2 week
   interruptible: true
 
-aws-ec2-managed-services:
-  stage: tests
-  retry: 1
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_ec2_managed_services
-  tags:
-    - vm-3cpu-12gmem-0g
-  dependencies:
-    - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
 aws-self-hosted:
   stage: tests
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
-  tags:
-    - vm-3cpu-12gmem-0g
-  dependencies:
-    - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
-aws-ec2-self-hosted:
-  stage: tests
-  retry: 1
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_ec2_self_hosted
   tags:
     - vm-3cpu-12gmem-0g
   dependencies:
