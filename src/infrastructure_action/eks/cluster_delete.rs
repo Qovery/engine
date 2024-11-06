@@ -1,28 +1,22 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
-use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubeconfig_helper::{delete_kubeconfig_from_object_storage, fetch_kubeconfig};
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::kubectl_exec_get_all_namespaces;
-use crate::cmd::terraform::{terraform_init_validate_plan_apply, terraform_output, TerraformError};
+use crate::cmd::terraform::TerraformError;
 use crate::cmd::terraform_validators::TerraformValidators;
-use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
+use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
+use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::ec2_k3s::sdk::QoveryAwsSdkConfigEc2;
 use crate::infrastructure_action::ec2_k3s::AwsEc2QoveryTerraformOutput;
-use crate::infrastructure_action::eks::helm_charts::karpenter::KarpenterChart;
-use crate::infrastructure_action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
-use crate::infrastructure_action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::infrastructure_action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure_action::eks::karpenter::Karpenter;
 use crate::infrastructure_action::eks::nodegroup::{
@@ -30,7 +24,7 @@ use crate::infrastructure_action::eks::nodegroup::{
 };
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure_action::eks::AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+use crate::infrastructure_action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure_action::InfraLogger;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -49,7 +43,6 @@ pub fn delete_eks_cluster(
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
     object_store: &dyn ObjectStorage,
-    template_directory: &str,
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
@@ -58,109 +51,78 @@ pub fn delete_eks_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-    let mut skip_kubernetes_step = false;
 
     logger.info("Preparing cluster deletion.");
-    let aws_conn = match cloud_provider.aws_sdk_client() {
-        Some(x) => x,
-        None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
+    let aws_conn = cloud_provider
+        .aws_sdk_client()
+        .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
+    let template_directory = match kubernetes.as_eks() {
+        Some(eks) => PathBuf::from(&eks.template_directory),
+        None => PathBuf::from(&kubernetes.as_ec2().unwrap().template_directory),
     };
 
     let temp_dir = kubernetes.temp_dir();
-    let node_groups_with_desired_states = match kubernetes.kind() {
-        Kind::Eks => {
-            let applied_node_groups = if kubernetes.is_karpenter_enabled() {
-                node_groups_when_karpenter_is_enabled(
-                    kubernetes,
-                    infra_ctx,
-                    node_groups,
-                    &event_details,
-                    KubernetesClusterAction::Delete,
-                )?
-            } else {
-                node_groups
-            };
-
-            let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider) {
-                Ok(value) => Some(value),
-                Err(_) => None,
-            };
+    let node_groups = match kubernetes.as_eks() {
+        Some(_) => {
+            let node_groups = node_groups_when_karpenter_is_enabled(
+                kubernetes,
+                infra_ctx,
+                node_groups,
+                &event_details,
+                KubernetesClusterAction::Delete,
+            )?;
 
             should_update_desired_nodes(
                 event_details.clone(),
                 kubernetes,
                 KubernetesClusterAction::Delete,
-                applied_node_groups,
-                aws_eks_client,
+                node_groups,
+                get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider).ok(),
             )?
         }
-        Kind::Ec2 => {
+        // It is EC2
+        None => {
             vec![NodeGroupsWithDesiredState::new_from_node_groups(
                 &node_groups[0],
                 1,
                 false,
             )]
         }
-        _ => {
-            return Err(Box::new(EngineError::new_unsupported_cluster_kind(
-                event_details,
-                "only AWS clusters are supported for this delete method",
-                CommandError::new_from_safe_message(
-                    "please contact Qovery, deletion can't happen on something else than AWS clsuter type".to_string(),
-                ),
-            )));
-        }
     };
 
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
-    let mut cluster_upgrade_timeout_in_min = AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
-        let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
-            .unwrap_or(Vec::with_capacity(0));
+    let kube_client = infra_ctx.mk_kube_client()?;
+    let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+        .unwrap_or(Vec::with_capacity(0));
 
-        let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Delete);
-        cluster_upgrade_timeout_in_min = timeout;
+    let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Delete);
+    let cluster_upgrade_timeout_in_min = timeout;
+    if let Some(x) = message {
+        logger.info(x);
+    }
 
-        if let Some(x) = message {
-            logger.info(x);
-        }
-    };
-    let mut context = eks_tera_context(
+    let mut tera_context = eks_tera_context(
         kubernetes,
         cloud_provider,
         dns_provider,
         aws_zones,
-        &node_groups_with_desired_states,
+        &node_groups,
         options,
         cluster_upgrade_timeout_in_min,
         false,
         advanced_settings,
         qovery_allowed_public_access_cidrs,
     )?;
-    context.insert("is_deletion_step", &true);
+    tera_context.insert("is_deletion_step", &true);
 
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir, &context) {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            template_directory.to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-    // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-    let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
-    if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            bootstrap_charts_dir,
-            common_charts_temp_dir,
-            e,
-        )));
-    }
+    let tf_resources = TerraformInfraResources::new(
+        tera_context.clone(),
+        template_directory.join("terraform"),
+        temp_dir.join("terraform"),
+        event_details.clone(),
+        infra_ctx.context().is_dry_run_deploy(),
+    );
 
     // should apply before destroy to be sure destroy will compute on all resources
     // don't exit on failure, it can happen if we resume a destroy process
@@ -172,42 +134,37 @@ pub fn delete_eks_cluster(
 
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
-    if let Err(e) = terraform_init_validate_plan_apply(
-        temp_dir.to_string_lossy().as_ref(),
-        false,
-        cloud_provider.credentials_environment_variables().as_slice(),
-        &TerraformValidators::None,
-    ) {
-        // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-        logger.warn(EventMessage::new(
-            "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-            Some(e.to_string()),
-        ));
-    };
 
-    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
-    if kubernetes.kind() != Kind::Ec2 {
-        let _ = delete_kubeconfig_from_object_storage(kubernetes, object_store);
-    };
+    match kubernetes.as_ec2() {
+        // EKS
+        None => {
+            let _: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources
+                .create(cloud_provider.credentials_environment_variables().as_slice(), &logger)
+                .inspect_err(|e| {
+                    logger.warn(EventMessage::new(
+                        "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                        Some(e.to_string()),
+                    ));
+                });
+            kubernetes.kubeconfig_local_file_path()
+        }
 
-    let kubernetes_config_file_path = match kubernetes.kind() {
-        Kind::Eks => kubernetes.kubeconfig_local_file_path(),
-        Kind::Ec2 => {
-            let qovery_terraform_output: AwsEc2QoveryTerraformOutput = terraform_output(
-                temp_dir.to_string_lossy().as_ref(),
-                infra_ctx
-                    .cloud_provider()
-                    .credentials_environment_variables()
-                    .as_slice(),
-            )
-            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+        Some(ec2) => {
+            let qovery_terraform_output: AwsEc2QoveryTerraformOutput = tf_resources
+                .create(cloud_provider.credentials_environment_variables().as_slice(), &logger)
+                .inspect_err(|e| {
+                    logger.warn(EventMessage::new(
+                        "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                        Some(e.to_string()),
+                    ));
+                })?;
+
+            // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+            let _ = delete_kubeconfig_from_object_storage(ec2, object_store);
+
             // send cluster info to vault if info mismatch
             // create vault connection (Vault connectivity should not be on the critical deployment path,
             // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-            let vault_conn = match QVaultClient::new(event_details.clone()) {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            };
             let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
                 cloud_provider.access_key_id(),
                 kubernetes.region().to_string(),
@@ -222,23 +179,19 @@ pub fn delete_eks_cluster(
                 cloud_provider.organization_id().to_string(),
                 kubernetes.context().is_test_cluster(),
             ));
-            if let Some(vault) = vault_conn {
-                // update info without taking care of the kubeconfig because we don't have it yet
+            if let Ok(vault) = QVaultClient::new(event_details.clone()) {
                 let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
             };
 
-            let port = match qovery_terraform_output.kubernetes_port_to_u16() {
-                Ok(p) => p,
-                Err(e) => {
-                    return Err(Box::new(EngineError::new_terraform_error(
-                        event_details,
-                        TerraformError::ConfigFileInvalidContent {
-                            path: "ec2 terraform output".to_string(),
-                            raw_message: e,
-                        },
-                    )));
-                }
-            };
+            let port = qovery_terraform_output.kubernetes_port_to_u16().map_err(|e| {
+                Box::new(EngineError::new_terraform_error(
+                    event_details.clone(),
+                    TerraformError::ConfigFileInvalidContent {
+                        path: "ec2 terraform output".to_string(),
+                        raw_message: e,
+                    },
+                ))
+            })?;
 
             // wait for k3s port to be open
             // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
@@ -292,155 +245,9 @@ pub fn delete_eks_cluster(
                 Err(Error { error, .. }) => return Err(error),
             }
         }
-        _ => {
-            logger.warn("Skipping Kubernetes uninstall because it can't be reached.");
-            skip_kubernetes_step = true;
-            PathBuf::from("")
-        }
     };
 
-    if !skip_kubernetes_step {
-        // should make the diff between all namespaces and qovery managed namespaces
-        let message = format!(
-            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
-            kubernetes.name(),
-            kubernetes.short_id()
-        );
-
-        logger.info(message);
-        let all_namespaces = kubectl_exec_get_all_namespaces(
-            &kubernetes_config_file_path,
-            cloud_provider.credentials_environment_variables(),
-        );
-
-        match all_namespaces {
-            Ok(namespace_vec) => {
-                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
-                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
-
-                logger.info("Deleting non Qovery namespaces");
-                for namespace_to_delete in namespaces_to_delete.iter() {
-                    match cmd::kubectl::kubectl_exec_delete_namespace(
-                        &kubernetes_config_file_path,
-                        namespace_to_delete,
-                        cloud_provider.credentials_environment_variables(),
-                    ) {
-                        Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", namespace_to_delete)),
-                        Err(e) => {
-                            if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
-                                logger.warn(EventMessage::new_from_safe(format!(
-                                    "Can't delete the namespace `{namespace_to_delete}`"
-                                )));
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                let message_safe = format!(
-                    "Error while getting all namespaces for Kubernetes cluster {}",
-                    kubernetes.name_with_id(),
-                );
-                logger.warn(EventMessage::new(
-                    message_safe.clone(),
-                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
-                ));
-            }
-        }
-
-        let message = format!(
-            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
-            kubernetes.name(),
-            kubernetes.short_id()
-        );
-
-        logger.info(message);
-        // delete custom metrics api to avoid stale namespaces on deletion
-        let helm = Helm::new(
-            Some(&kubernetes_config_file_path),
-            &cloud_provider.credentials_environment_variables(),
-        )
-        .map_err(|e| to_engine_error(&event_details, e))?;
-        let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-        if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-            // this error is not blocking
-            logger.warn(EventMessage::new_from_engine_error(to_engine_error(&event_details, e)));
-        }
-
-        // required to avoid namespace stuck on deletion
-        if let Err(e) = uninstall_cert_manager(
-            &kubernetes_config_file_path,
-            cloud_provider.credentials_environment_variables(),
-            event_details.clone(),
-            kubernetes.logger(),
-        ) {
-            // this error is not blocking, logging a warning and move on
-            logger.warn(EventMessage::new(
-                "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
-                Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-            ));
-        }
-
-        logger.info("Deleting Qovery managed helm charts");
-        let qovery_namespaces = get_qovery_managed_namespaces();
-        for qovery_namespace in qovery_namespaces.iter() {
-            let charts_to_delete = helm
-                .list_release(Some(qovery_namespace), &[])
-                .map_err(|e| to_engine_error(&event_details, e))?;
-
-            for chart in charts_to_delete {
-                let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                    Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
-                    Err(e) => logger.warn(EventMessage::new(
-                        format!("Can't delete chart `{}`", &chart.name),
-                        Some(e.to_string()),
-                    )),
-                }
-            }
-        }
-
-        logger.info("Deleting Qovery managed namespaces");
-        for qovery_namespace in qovery_namespaces.iter() {
-            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                &kubernetes_config_file_path,
-                qovery_namespace,
-                cloud_provider.credentials_environment_variables(),
-            );
-            match deletion {
-                Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", qovery_namespace)),
-                Err(e) => {
-                    if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
-                        logger.warn(EventMessage::new_from_safe(format!(
-                            "Can't delete the namespace `{qovery_namespace}`"
-                        )));
-                    }
-                }
-            }
-        }
-
-        logger.info("Delete all remaining deployed helm applications");
-        // Do not uninstall Karpenter to be able to delete the nodes properly .
-        match helm.list_release(None, &[]) {
-            Ok(helm_charts) => {
-                for chart in helm_charts.into_iter().filter(|helm_chart| {
-                    helm_chart.name != KarpenterChart::chart_name()
-                        && helm_chart.name != KarpenterConfigurationChart::chart_name()
-                        && helm_chart.name != KarpenterCrdChart::chart_name()
-                }) {
-                    let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                        Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
-                        Err(e) => logger.warn(EventMessage::new(
-                            format!("Error deleting chart `{}`", chart.name),
-                            Some(e.to_string()),
-                        )),
-                    }
-                }
-            }
-            Err(e) => logger.warn(EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string()))),
-        }
-    };
+    delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger)?;
 
     logger.info(format!(
         "Deleting Kubernetes cluster {}/{}",
@@ -448,21 +255,22 @@ pub fn delete_eks_cluster(
         kubernetes.short_id()
     ));
     if let Some(kubernetes) = kubernetes.as_eks() {
-        // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
-        block_on(delete_eks_nodegroups(
-            aws_conn,
-            kubernetes.cluster_name(),
-            kubernetes.context().is_first_cluster_deployment(),
-            NodeGroupsDeletionType::All,
-            event_details.clone(),
-        ))?;
-
         if kubernetes.is_karpenter_enabled() {
             let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+        } else {
+            // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
+            block_on(delete_eks_nodegroups(
+                aws_conn,
+                kubernetes.cluster_name(),
+                kubernetes.context().is_first_cluster_deployment(),
+                NodeGroupsDeletionType::All,
+                event_details.clone(),
+            ))?;
         }
 
         // remove S3 buckets from tf state
+        // TODO: Why do we forgot them ?
         logger.info("Removing S3 buckets from tf state");
         let resources_to_be_removed_from_tf_state: Vec<(&str, &str)> = vec![
             ("aws_s3_bucket.loki_bucket", "S3 logs bucket"),
@@ -476,7 +284,7 @@ pub fn delete_eks_cluster(
 
         for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
             match cmd::terraform::terraform_remove_resource_from_tf_state(
-                temp_dir.to_string_lossy().as_ref(),
+                temp_dir.join("terraform").to_string_lossy().as_ref(),
                 resource_to_be_removed_from_tf_state.0,
                 &TerraformValidators::None,
             ) {
@@ -506,21 +314,13 @@ pub fn delete_eks_cluster(
         };
     }
 
-    if let Err(err) = cmd::terraform::terraform_init_validate_destroy(
-        temp_dir.to_string_lossy().as_ref(),
-        cloud_provider.credentials_environment_variables().as_slice(),
-        &TerraformValidators::None,
-    ) {
-        return Err(Box::new(EngineError::new_terraform_error(event_details, err)));
-    }
+    tf_resources.delete(cloud_provider.credentials_environment_variables().as_slice(), &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");
 
     // delete info on vault
-    let vault_conn = QVaultClient::new(event_details);
-    if let Ok(vault_conn) = vault_conn {
+    if let Ok(vault_conn) = QVaultClient::new(event_details) {
         let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
-
         // ignore on failure
         let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.short_id());
     };

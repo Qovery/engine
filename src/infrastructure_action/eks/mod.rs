@@ -50,23 +50,7 @@ impl InfrastructureAction for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || {
-            create_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                &self.s3,
-                self.long_id,
-                self.template_directory.as_str(),
-                &self.zones,
-                &self.nodes_groups,
-                &self.options,
-                &self.advanced_settings,
-                self.qovery_allowed_public_access_cidrs.as_ref(),
-                logger,
-            )
-        })
+        send_progress_on_long_task(self, Action::Create, || create_eks_cluster(self, infra_ctx, logger))
     }
 
     #[named]
@@ -84,21 +68,7 @@ impl InfrastructureAction for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Pause, || {
-            pause_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                self.template_directory.as_str(),
-                &self.zones,
-                &self.nodes_groups,
-                &self.options,
-                &self.advanced_settings,
-                self.qovery_allowed_public_access_cidrs.as_ref(),
-                logger,
-            )
-        })
+        send_progress_on_long_task(self, Action::Pause, || pause_eks_cluster(self, infra_ctx, logger))
     }
 
     #[named]
@@ -123,7 +93,6 @@ impl InfrastructureAction for EKS {
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
                 &self.s3,
-                self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,

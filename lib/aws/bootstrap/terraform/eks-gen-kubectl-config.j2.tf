@@ -30,7 +30,7 @@ KUBECONFIG
 }
 
 resource "local_file" "kubeconfig" {
-  filename = "{{ s3_kubeconfig_bucket }}/${var.kubernetes_cluster_id}.yaml"
+  filename = "../{{ s3_kubeconfig_bucket }}/${var.kubernetes_cluster_id}.yaml"
   content = local.kubeconfig
   file_permission = "0644"
   depends_on = [aws_eks_cluster.eks_cluster]

@@ -461,6 +461,10 @@ pub fn bootstrap_on_fargate_when_karpenter_is_enabled(
     kubernetes: &dyn Kubernetes,
     kubernetes_action: KubernetesClusterAction,
 ) -> bool {
+    if !kubernetes.is_karpenter_enabled() {
+        return false;
+    }
+
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap => true,
         KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
@@ -480,6 +484,10 @@ pub fn node_groups_when_karpenter_is_enabled<'a>(
     event_details: &EventDetails,
     kubernetes_action: KubernetesClusterAction,
 ) -> Result<&'a [NodeGroups], Box<EngineError>> {
+    if !kubernetes.is_karpenter_enabled() {
+        return Ok(node_groups);
+    }
+
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap
         | KubernetesClusterAction::Upgrade(_)
@@ -488,7 +496,7 @@ pub fn node_groups_when_karpenter_is_enabled<'a>(
         | KubernetesClusterAction::Delete
         | KubernetesClusterAction::CleanKarpenterMigration => Ok(&[]),
         KubernetesClusterAction::Update(_)
-            if kubernetes.context().is_first_cluster_deployment()
+            if infra_context.context().is_first_cluster_deployment()
                 || Karpenter::deployment_is_installed(&infra_context.mk_kube_client()?, event_details) =>
         {
             Ok(&[])

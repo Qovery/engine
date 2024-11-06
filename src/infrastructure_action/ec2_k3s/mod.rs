@@ -7,15 +7,13 @@ use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::ec2_k3s::cluster_upgrade::ec2_k3s_cluster_upgrade;
-use crate::infrastructure_action::{InfraLoggerImpl, InfrastructureAction};
+use crate::infrastructure_action::{InfraLogger, InfraLoggerImpl, InfrastructureAction};
 use function_name::named;
 use serde_derive::{Deserialize, Serialize};
 
 mod cluster_upgrade;
 // super is required because it used by the action of eks ;x
-pub(super) mod helm_charts;
 pub(super) mod sdk;
-pub(super) mod utils;
 
 use super::utils::from_terraform_value;
 
@@ -35,23 +33,9 @@ impl InfrastructureAction for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || {
-            crate::infrastructure_action::eks::cluster_create::create_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                &self.s3,
-                self.long_id,
-                self.template_directory.as_str(),
-                &self.zones,
-                &[self.node_group_from_instance_type()],
-                &self.options,
-                &self.advanced_settings,
-                None,
-                logger,
-            )
-        })
+
+        logger.warn("Creating a EC2 instance is not supported yet. Skipping this step.");
+        Ok(())
     }
 
     #[named]
@@ -69,21 +53,8 @@ impl InfrastructureAction for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Pause, || {
-            crate::infrastructure_action::eks::cluster_pause::pause_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                self.template_directory.as_str(),
-                &self.zones,
-                &[self.node_group_from_instance_type()],
-                &self.options,
-                &self.advanced_settings,
-                None,
-                logger,
-            )
-        })
+        logger.warn("Pausing a EC2 instance is not supported yet. Skipping this step.");
+        Ok(())
     }
 
     #[named]
@@ -108,7 +79,6 @@ impl InfrastructureAction for EC2 {
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
                 &self.s3,
-                self.template_directory.as_str(),
                 &self.zones,
                 &[self.node_group_from_instance_type()],
                 &self.options,

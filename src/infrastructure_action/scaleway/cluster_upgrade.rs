@@ -1,14 +1,13 @@
-use crate::cloud_provider::kubectl_utils::{check_workers_on_upgrade, delete_completed_jobs, delete_crashlooping_pods};
+use crate::cloud_provider::kubectl_utils::check_workers_on_upgrade;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
-use crate::runtime::block_on;
-use crate::services::kube_client::SelectK8sResourceBy;
 
 pub fn upgrade_kapsule_cluster(
     cluster: &Kapsule,
@@ -29,89 +28,7 @@ pub fn upgrade_kapsule_cluster(
     logger.info("Checking clusters content health.");
 
     // disable all replicas with issues to avoid upgrade failures
-    let kube_client = infra_ctx.mk_kube_client()?;
-    let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
-    for deploy in deployments {
-        let status = match deploy.status {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let replicas = status.replicas.unwrap_or(0);
-        let ready_replicas = status.ready_replicas.unwrap_or(0);
-
-        // if number of replicas > 0: it is not already disabled
-        // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
-        if replicas > 0 && ready_replicas == 0 {
-            logger.info(format!(
-                "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-            ));
-            block_on(kube_client.set_deployment_replicas_number(
-                event_details.clone(),
-                deploy.metadata.name.as_str(),
-                deploy.metadata.namespace.as_str(),
-                0,
-            ))?;
-        } else {
-            info!(
-                "Deployment {}/{} has {}/{} replicas ready. No action needed.",
-                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-            );
-        }
-    }
-    // same with statefulsets
-    let statefulsets = block_on(kube_client.get_statefulsets(event_details.clone(), None, SelectK8sResourceBy::All))?;
-    for sts in statefulsets {
-        let status = match sts.status {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let ready_replicas = status.ready_replicas.unwrap_or(0);
-
-        // if number of replicas > 0: it is not already disabled
-        // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
-        if status.replicas > 0 && ready_replicas == 0 {
-            logger.info(format!(
-                "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-            ));
-            block_on(kube_client.set_statefulset_replicas_number(
-                event_details.clone(),
-                sts.metadata.name.as_str(),
-                sts.metadata.namespace.as_str(),
-                0,
-            ))?;
-        } else {
-            info!(
-                "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
-                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-            );
-        }
-    }
-
-    if let Err(e) = delete_crashlooping_pods(
-        cluster,
-        None,
-        None,
-        Some(3),
-        infra_ctx.cloud_provider().credentials_environment_variables(),
-        Infrastructure(InfrastructureStep::Upgrade),
-    ) {
-        logger.error(*e.clone(), Some("Failed to delete crashlooping pods."));
-        return Err(e);
-    }
-
-    if let Err(e) = delete_completed_jobs(
-        cluster,
-        infra_ctx.cloud_provider().credentials_environment_variables(),
-        Infrastructure(InfrastructureStep::Upgrade),
-        None,
-    ) {
-        logger.error(*e.clone(), Some("Failed to delete completed jobs."));
-        return Err(e);
-    }
+    prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, event_details.clone(), &logger)?;
 
     logger.info("Upgrading Kubernetes nodes.");
     let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;

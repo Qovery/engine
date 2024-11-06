@@ -1,14 +1,10 @@
-use crate::cloud_provider::gcp::kubernetes::{Gke, GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES};
-use crate::cloud_provider::helm::ChartInfo;
-use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kubernetes};
-use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::Helm;
-use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
-use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
+use crate::cloud_provider::gcp::kubernetes::Gke;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::engine::InfrastructureContext;
-use crate::errors::{EngineError, ErrorMessageVerbosity};
+use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
+use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
@@ -23,7 +19,6 @@ pub(super) fn delete_gke_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Delete));
-    let skip_kubernetes_step = false;
 
     logger.info("Preparing to delete cluster.");
     let temp_dir = cluster.temp_dir();
@@ -54,7 +49,6 @@ pub(super) fn delete_gke_cluster(
     )?;
 
     // generate files and copy them into temp dir
-    let kubeconfig_path = cluster.kubeconfig_local_file_path();
     if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
         cluster.template_directory.as_str(),
         temp_dir,
@@ -81,143 +75,9 @@ pub(super) fn delete_gke_cluster(
         )));
     }
 
-    if !skip_kubernetes_step {
-        // Configure kubectl to be able to connect to cluster
-        let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
-
-        // should make the diff between all namespaces and qovery managed namespaces
-        let message = format!(
-            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
-            cluster.name(),
-            cluster.short_id()
-        );
-        logger.info(message);
-        let all_namespaces = kubectl_exec_get_all_namespaces(
-            &kubeconfig_path,
-            infra_ctx.cloud_provider().credentials_environment_variables(),
-        );
-
-        match all_namespaces {
-            Ok(namespace_vec) => {
-                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
-                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
-
-                logger.info("Deleting non Qovery namespaces");
-                for namespace_to_delete in namespaces_to_delete
-                    .into_iter()
-                    .filter(|ns| !(*GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES).contains(ns))
-                {
-                    match kubectl_exec_delete_namespace(
-                        &kubeconfig_path,
-                        namespace_to_delete,
-                        infra_ctx.cloud_provider().credentials_environment_variables(),
-                    ) {
-                        Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", namespace_to_delete)),
-                        Err(e) if !e.message(ErrorMessageVerbosity::FullDetails).contains("not found") => {
-                            logger.warn(format!("Can't delete the namespace `{}`", namespace_to_delete));
-                        }
-                        Err(e) => logger.warn(EventMessage::new(
-                            format!("Can't delete the namespace `{}`", namespace_to_delete),
-                            Some(e.message_safe()),
-                        )),
-                    }
-                }
-            }
-            Err(e) => {
-                let message_safe = format!(
-                    "Error while getting all namespaces for Kubernetes cluster {}",
-                    cluster.name_with_id(),
-                );
-                logger.warn(EventMessage::new(
-                    message_safe,
-                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ));
-            }
-        }
-
-        let message = format!(
-            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
-            cluster.name(),
-            cluster.short_id()
-        );
-        logger.info(message);
-        let helm = Helm::new(
-            Some(&kubeconfig_path),
-            &infra_ctx.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
-
-        // required to avoid namespace stuck on deletion
-        if let Err(e) = uninstall_cert_manager(
-            &kubeconfig_path,
-            infra_ctx.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            cluster.logger(),
-        ) {
-            // this error is not blocking, logging a warning and move on
-            logger.warn(EventMessage::new(
-                "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
-                Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-            ));
-        }
-
-        logger.info("Deleting Qovery managed helm charts");
-        let qovery_namespaces = get_qovery_managed_namespaces();
-        for qovery_namespace in qovery_namespaces.iter() {
-            let charts_to_delete = helm
-                .list_release(Some(qovery_namespace), &[])
-                .map_err(|e| EngineError::new_helm_error(event_details.clone(), e.clone()))?;
-
-            for chart in charts_to_delete {
-                let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                    Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
-                    Err(e) => {
-                        let message_safe = format!("Can't delete chart `{}`", chart.name);
-                        logger.warn(EventMessage::new(message_safe, Some(e.to_string())))
-                    }
-                }
-            }
-        }
-
-        logger.info("Deleting Qovery managed namespaces");
-        for qovery_namespace in qovery_namespaces.iter() {
-            let deletion = kubectl_exec_delete_namespace(
-                &kubeconfig_path,
-                qovery_namespace,
-                infra_ctx.cloud_provider().credentials_environment_variables(),
-            );
-            match deletion {
-                Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", qovery_namespace)),
-                Err(e) if !e.message(ErrorMessageVerbosity::FullDetails).contains("not found") => {
-                    logger.warn(format!("Can't delete namespace {qovery_namespace}."));
-                }
-                Err(e) => logger.warn(EventMessage::new(
-                    format!("Can't delete namespace {qovery_namespace}"),
-                    Some(e.to_string()),
-                )),
-            }
-        }
-
-        logger.info("Delete all remaining deployed helm applications");
-        match helm.list_release(None, &[]) {
-            Ok(helm_charts) => {
-                for chart in helm_charts {
-                    let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
-                        Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
-                        Err(e) => {
-                            let message_safe = format!("Error deleting chart `{}`", chart.name);
-                            logger.warn(EventMessage::new(message_safe, Some(e.to_string())));
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                logger.warn(EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())));
-            }
-        }
-    };
+    // Configure kubectl to be able to connect to cluster
+    let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
+    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger)?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(
