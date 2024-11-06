@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::kubernetes::ec2::EC2;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
@@ -50,8 +51,9 @@ pub fn put_kubeconfig_file_to_object_storage(
     Ok(())
 }
 
+// TODO(ec2) - remove this function when we delete ec2_k3s
 pub fn delete_kubeconfig_from_object_storage(
-    kube: &dyn Kubernetes,
+    kube: &EC2,
     object_store: &dyn ObjectStorage,
 ) -> Result<(), Box<EngineError>> {
     if let Err(e) = object_store.delete_object(

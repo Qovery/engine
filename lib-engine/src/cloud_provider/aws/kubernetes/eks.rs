@@ -39,7 +39,7 @@ pub struct EKS {
     pub zones: Vec<AwsZone>,
     pub s3: S3,
     pub nodes_groups: Vec<NodeGroups>,
-    pub template_directory: String,
+    pub template_directory: PathBuf,
     pub options: Options,
     pub logger: Box<dyn Logger>,
     pub advanced_settings: ClusterAdvancedSettings,
@@ -68,7 +68,7 @@ impl EKS {
         qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
-        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+        let template_directory = PathBuf::from(format!("{}/aws/bootstrap", context.lib_root_dir()));
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
