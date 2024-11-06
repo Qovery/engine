@@ -8,14 +8,14 @@ mod self_managed;
 mod utils;
 
 use crate::cloud_provider::kubernetes::KubernetesUpgradeStatus;
+use crate::cloud_provider::service::Action;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EventDetails, EventMessage};
-use tera::Context as TeraContext;
-
-// TODO: Remove pub export if possible
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
+use crate::infrastructure_action::utils::mk_logger;
 use crate::logger::Logger;
-pub use ec2_k3s::AwsEc2QoveryTerraformOutput;
+use tera::Context as TeraContext;
 
 pub trait InfrastructureAction: Send + Sync {
     fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
@@ -26,6 +26,36 @@ pub trait InfrastructureAction: Send + Sync {
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>>;
+
+    fn run(&self, infra_ctx: &InfrastructureContext, action: Action) -> Result<(), Box<EngineError>> {
+        let step = match action {
+            Action::Create => InfrastructureStep::Create,
+            Action::Pause => InfrastructureStep::Pause,
+            Action::Delete => InfrastructureStep::Delete,
+            Action::Restart => InfrastructureStep::RestartedError,
+        };
+        let logger = mk_logger(infra_ctx.kubernetes(), step);
+        if infra_ctx.context().is_dry_run_deploy() {
+            logger.warn("Dry run mode is enabled. No changes will be made to the infrastructure");
+        }
+
+        logger.info(format!(
+            "{} {} cluster {}",
+            action,
+            infra_ctx.kubernetes().kind(),
+            infra_ctx.kubernetes().name()
+        ));
+        match action {
+            Action::Create => self.create_cluster(infra_ctx),
+            Action::Pause => self.pause_cluster(infra_ctx),
+            Action::Delete => self.delete_cluster(infra_ctx),
+            Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
+                infra_ctx
+                    .kubernetes()
+                    .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
+            ))),
+        }
+    }
 }
 
 pub trait ToInfraTeraContext {
