@@ -216,6 +216,10 @@ pub fn create_eks_cluster(
 
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply(KubernetesClusterAction::Update(None))?;
+    if infra_ctx.context().is_dry_run_deploy() {
+        logger.warn("Exiting. Dry run is not supported after the terraform action for now");
+        return Ok(());
+    }
     put_kubeconfig_file_to_object_storage(kubernetes, &kubernetes.s3)?;
     let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
 

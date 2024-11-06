@@ -1,3 +1,7 @@
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::events::InfrastructureStep;
+use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::{InfraLogger, InfraLoggerImpl};
 use serde::de::DeserializeOwned;
 
 pub fn from_terraform_value<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -13,6 +17,15 @@ where
     }
 
     TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
+}
+
+pub fn mk_logger(kube: &dyn Kubernetes, step: InfrastructureStep) -> impl InfraLogger {
+    let event_details = kube.get_event_details(Infrastructure(step));
+    let logger = InfraLoggerImpl {
+        event_details,
+        logger: kube.logger().clone_dyn(),
+    };
+    logger
 }
 
 #[cfg(test)]

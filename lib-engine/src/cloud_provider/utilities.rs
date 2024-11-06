@@ -111,21 +111,6 @@ pub fn wait_until_port_is_open(
     }
 }
 
-pub fn print_action(
-    cloud_provider_name: &str,
-    struct_name: &str,
-    fn_name: &str,
-    item_name: &str,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) {
-    let msg = format!("{cloud_provider_name}.{struct_name}.{fn_name} called for {item_name}");
-    match fn_name.contains("error") {
-        true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
-        false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
-    }
-}
-
 pub fn are_pvcs_bound(
     service: &dyn Service,
     namespace: &str,
