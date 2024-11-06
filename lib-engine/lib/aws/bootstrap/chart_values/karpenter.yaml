@@ -8,9 +8,8 @@ serviceMonitor:
   enabled: set-by-engine-code
 
 serviceAccount:
-  annotations: {
+  annotations:
     eks.amazonaws.com/role-arn: set-by-engine-code
-  }
 
 dnsPolicy: Default
 
@@ -25,3 +24,6 @@ controller:
     limits:
       cpu: 1
       memory: 1Gi
+
+podLabels:
+  admission.datadoghq.com/enabled: "false"
