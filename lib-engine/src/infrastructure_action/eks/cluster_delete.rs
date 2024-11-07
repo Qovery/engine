@@ -24,7 +24,7 @@ use crate::infrastructure_action::eks::nodegroup::{
 };
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure_action::eks::AwsEksQoveryTerraformOutput;
+use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::InfraLogger;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -92,14 +92,16 @@ pub fn delete_eks_cluster(
 
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
-    let kube_client = infra_ctx.mk_kube_client()?;
-    let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
-        .unwrap_or(Vec::with_capacity(0));
+    let mut cluster_upgrade_timeout_in_min = AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
+    if let Some(kube_client) = infra_ctx.mk_kube_client() {
+        let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
+            .unwrap_or(Vec::with_capacity(0));
 
-    let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Delete);
-    let cluster_upgrade_timeout_in_min = timeout;
-    if let Some(x) = message {
-        logger.info(x);
+        let (timeout, message) = define_cluster_upgrade_timeout(pods_list, KubernetesClusterAction::Delete);
+        cluster_upgrade_timeout_in_min = timeout;
+        if let Some(x) = message {
+            logger.info(x);
+        }
     }
 
     let mut tera_context = eks_tera_context(
