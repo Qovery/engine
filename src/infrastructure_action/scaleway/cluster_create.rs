@@ -1,7 +1,7 @@
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
-use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
@@ -32,34 +32,11 @@ pub fn create_kapsule_cluster(
     logger.info("Preparing SCW cluster deployment.");
 
     // upgrade cluster instead if required
-    if !cluster.context().is_first_cluster_deployment() {
-        match is_kubernetes_upgrade_required(
-            cluster.kubeconfig_local_file_path(),
-            cluster.version().clone(),
-            infra_ctx.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            &logger,
-            None,
-        ) {
-            Ok(x) => {
-                if x.required_upgrade_on.is_some() {
-                    cluster.upgrade_cluster(infra_ctx, x)?;
-                } else {
-                    logger.info("Kubernetes cluster upgrade not required");
-                }
-            }
-            Err(e) => {
-                // Log a warning, this error is not blocking
-                logger.warn(EventMessage::new(
-                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ));
-            }
-        };
+    if let Some(version_target) = cluster.is_upgrade_required(infra_ctx) {
+        cluster.upgrade_cluster(infra_ctx, version_target)?;
     }
 
     let temp_dir = cluster.temp_dir();
-
     // TODO(benjaminch): move this elsewhere
     // Create object-storage buckets
     logger.info("Create Qovery managed object storage buckets");

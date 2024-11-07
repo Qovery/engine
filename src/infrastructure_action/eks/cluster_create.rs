@@ -2,7 +2,7 @@ use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
-use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::KubernetesClusterAction;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
@@ -185,33 +185,10 @@ pub fn create_eks_cluster(
             }
         }
 
-        match is_kubernetes_upgrade_required(
-            kubernetes.kubeconfig_local_file_path(),
-            kubernetes.version(),
-            cloud_provider.credentials_environment_variables(),
-            event_details.clone(),
-            &logger,
-            match kubernetes.is_karpenter_enabled() {
-                true => Some("eks.amazonaws.com/compute-type!=fargate"), // Exclude fargate nodes from the test in case of karpenter, those will be recreated after helm deploy
-                false => None,
-            },
-        ) {
-            Err(e) => logger.warn(format!("Error detected, upgrade won't occurs, but standard deployment. {}", e)),
-            Ok(x) => {
-                if x.required_upgrade_on.is_some() {
-                    kubernetes_version_upgrade_requested = true;
-                    let res = match kubernetes.as_eks() {
-                        Some(eks) => eks.upgrade_cluster(infra_ctx, x),
-                        _ => unreachable!("only EKS kind of cluster is expected here"),
-                    };
-
-                    // return error on upgrade failure
-                    res?;
-                } else {
-                    logger.info("Kubernetes cluster upgrade not required");
-                }
-            }
-        };
+        if let Some(version_target) = kubernetes.is_upgrade_required(infra_ctx) {
+            kubernetes_version_upgrade_requested = true;
+            kubernetes.upgrade_cluster(infra_ctx, version_target)?;
+        }
     }
 
     // apply to generate tf_qovery_config.json
