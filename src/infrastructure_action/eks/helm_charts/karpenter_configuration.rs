@@ -219,6 +219,13 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             .for_each(|(index, requirement)| {
                 let prefix = format!("global_node_pools.requirements[{}]", index);
 
+                let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
+                    // The nodepool support only lowercase value for arch
+                    requirement.values.iter().map(|value| value.to_lowercase()).join(",")
+                } else {
+                    requirement.values.join(",")
+                };
+
                 values.push(ChartSetValue {
                     key: format!("{}.key", prefix),
                     value: requirement.key.to_k8s_label(),
@@ -233,7 +240,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 });
                 values.push(ChartSetValue {
                     key: format!("{}.values", prefix),
-                    value: format!("{{{}}}", requirement.values.join(",")),
+                    value: format!("{{{}}}", formated_values),
                 });
             });
 
@@ -415,7 +422,7 @@ mod tests {
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::Arch,
                             operator: Some(KarpenterRequirementOperator::In),
-                            values: vec!["amd64".to_string()],
+                            values: vec!["AMD64".to_string()],
                         },
                     ]),
                 }),
@@ -433,7 +440,7 @@ mod tests {
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::Arch,
                             operator: Some(KarpenterRequirementOperator::In),
-                            values: vec!["amd64".to_string()],
+                            values: vec!["AMD64".to_string()],
                         },
                     ]),
                 }),
@@ -451,7 +458,7 @@ mod tests {
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::Arch,
                             operator: Some(KarpenterRequirementOperator::In),
-                            values: vec!["amd64".to_string()],
+                            values: vec!["AMD64".to_string()],
                         },
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::CapacityType,
