@@ -7,10 +7,10 @@ mod scaleway;
 mod self_managed;
 mod utils;
 
-use crate::cloud_provider::kubernetes::KubernetesUpgradeStatus;
+use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, KubernetesUpgradeStatus};
 use crate::cloud_provider::service::Action;
 use crate::engine::InfrastructureContext;
-use crate::errors::EngineError;
+use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::utils::mk_logger;
@@ -54,6 +54,41 @@ pub trait InfrastructureAction: Send + Sync {
                     .kubernetes()
                     .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
             ))),
+        }
+    }
+
+    // During upgrade check we may want to exclude some node as not pertinent/managed by us
+    // I.e: fargate nodes are managed by karpenter, so we don't want to upgrade them
+    fn upgrade_node_selector(&self) -> Option<&str> {
+        None
+    }
+
+    fn is_upgrade_required(&self, infra_ctx: &InfrastructureContext) -> Option<KubernetesUpgradeStatus> {
+        if infra_ctx.context().is_first_cluster_deployment() || infra_ctx.context().is_dry_run_deploy() {
+            return None;
+        }
+
+        let event_details = infra_ctx
+            .kubernetes()
+            .get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
+        match is_kubernetes_upgrade_required(
+            infra_ctx.kubernetes().kubeconfig_local_file_path(),
+            infra_ctx.kubernetes().version().clone(),
+            infra_ctx.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+            &logger,
+            self.upgrade_node_selector(),
+        ) {
+            Ok(v) if v.required_upgrade_on.is_some() => Some(v),
+            Ok(_) => None,
+            Err(e) => {
+                logger.warn(EventMessage::new(
+                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                ));
+                None
+            }
         }
     }
 }

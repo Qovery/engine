@@ -2,10 +2,10 @@ use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
-use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
@@ -29,32 +29,11 @@ pub(super) fn create_gke_cluster(
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
     logger.info("Preparing GKE cluster deployment.");
 
-    if !cluster.context().is_first_cluster_deployment() {
-        // upgrade cluster instead if required
-        match is_kubernetes_upgrade_required(
-            cluster.kubeconfig_local_file_path(),
-            cluster.version.clone(),
-            infra_ctx.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            &logger,
-            None,
-        ) {
-            Ok(kubernetes_upgrade_status) if kubernetes_upgrade_status.required_upgrade_on.is_some() => {
-                cluster.upgrade_cluster(infra_ctx, kubernetes_upgrade_status)?;
-            }
-            Ok(_) => logger.info("Kubernetes cluster upgrade not required"),
-            Err(e) => {
-                // Log a warning, this error is not blocking
-                logger.warn(EventMessage::new(
-                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                ))
-            }
-        };
+    if let Some(version_target) = cluster.is_upgrade_required(infra_ctx) {
+        cluster.upgrade_cluster(infra_ctx, version_target)?;
     }
 
     let temp_dir = cluster.temp_dir();
-
     logger.info("Deploying GKE cluster.");
     if let Err(err) = create_object_storage(cluster, &logger, event_details.clone()) {
         logger.error(*err.clone(), None::<&str>);

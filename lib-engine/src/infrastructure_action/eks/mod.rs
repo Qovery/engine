@@ -11,7 +11,7 @@ mod tera_context;
 mod utils;
 
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
-use crate::cloud_provider::kubernetes::{send_progress_on_long_task, KubernetesUpgradeStatus};
+use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::service::Action;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
@@ -65,6 +65,14 @@ impl InfrastructureAction for EKS {
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
         upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+    }
+
+    fn upgrade_node_selector(&self) -> Option<&str> {
+        // Exclude fargate nodes from the test in case of karpenter, those will be recreated after helm deploy
+        match self.is_karpenter_enabled() {
+            true => Some("eks.amazonaws.com/compute-type!=fargate"),
+            false => None,
+        }
     }
 }
 
