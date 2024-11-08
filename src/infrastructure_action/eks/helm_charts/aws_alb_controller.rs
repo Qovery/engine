@@ -107,7 +107,7 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                             Some(KubernetesCpuResourceUnit::MilliCpu(128)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(128)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                         ),
                     )],
                 )),
