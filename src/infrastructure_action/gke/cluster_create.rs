@@ -1,6 +1,6 @@
 use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::cloud_provider::helm::deploy_charts_levels;
-use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
@@ -62,7 +62,7 @@ pub(super) fn create_gke_cluster(
         return Ok(());
     }
 
-    put_kubeconfig_file_to_object_storage(cluster, &cluster.object_storage)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
@@ -199,7 +199,7 @@ fn create_object_storage(
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     logger.info("Create Qovery managed object storage buckets.");
-    for bucket_name in &[&cluster.kubeconfig_bucket_name(), &cluster.logs_bucket_name()] {
+    for bucket_name in &[&cluster.logs_bucket_name()] {
         let existing_bucket = cluster
             .object_storage
             .create_bucket(bucket_name, cluster.advanced_settings.resource_ttl(), true)

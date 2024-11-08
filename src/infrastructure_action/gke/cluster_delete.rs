@@ -8,7 +8,7 @@ use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
-use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
+use crate::object_storage::ObjectStorage;
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
 use std::collections::HashSet;
@@ -98,19 +98,6 @@ pub(super) fn delete_gke_cluster(
 }
 
 fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
-    if let Err(e) = cluster
-        .object_storage
-        .delete_bucket(&cluster.kubeconfig_bucket_name(), BucketDeleteStrategy::HardDelete)
-    {
-        logger.warn(EventMessage::new(
-            format!(
-                "Cannot delete cluster kubeconfig object storage `{}`",
-                &cluster.kubeconfig_bucket_name()
-            ),
-            Some(e.to_string()),
-        ));
-    }
-
     // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
     if let Err(e) = cluster
         .object_storage

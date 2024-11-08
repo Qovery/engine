@@ -368,7 +368,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.AWS_TEST_KUBECONFIG,
+                    secrets.AWS_TEST_KUBECONFIG_b64,
                     temp_dir,
                     None,
                 )
@@ -424,7 +424,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.SCALEWAY_TEST_KUBECONFIG,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                     temp_dir,
                 )
                 .expect("Cannot instantiate SCW Kapsule"),
@@ -451,7 +451,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.GCP_TEST_KUBECONFIG,
+                    secrets.GCP_TEST_KUBECONFIG_b64,
                     temp_dir,
                 )
                 .expect("Cannot instantiate GKE"),

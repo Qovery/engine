@@ -3,7 +3,7 @@ use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
+use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{event_details, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::NodeGroups;
@@ -95,14 +95,13 @@ impl EKS {
             qovery_allowed_public_access_cidrs,
         };
 
+        // kubeconfig may be missing if it is the first time we create the cluster
         if let Some(kubeconfig) = &cluster.kubeconfig {
             write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
-        } else {
-            fetch_kubeconfig(&cluster, &cluster.s3)?;
         }
 
         Ok(cluster)

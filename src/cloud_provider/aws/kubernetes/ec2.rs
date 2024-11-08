@@ -3,7 +3,6 @@ use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::fetch_kubeconfig;
 use crate::cloud_provider::kubernetes::{event_details, InstanceType, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups};
 use crate::cloud_provider::vault::ClusterSecrets;
@@ -104,8 +103,6 @@ impl EC2 {
             _kubeconfig: kubeconfig,
             temp_dir,
         };
-
-        fetch_kubeconfig(&cluster, &cluster.s3)?;
 
         Ok(cluster)
     }

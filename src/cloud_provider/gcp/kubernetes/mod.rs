@@ -1,6 +1,6 @@
 use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
+use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -271,8 +271,6 @@ impl Gke {
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
-        } else {
-            fetch_kubeconfig(&cluster, &cluster.object_storage)?;
         }
 
         Ok(cluster)

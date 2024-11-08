@@ -47,7 +47,6 @@ impl InfrastructureAction for EKS {
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
-                &self.s3,
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
@@ -100,4 +99,6 @@ pub struct AwsEksQoveryTerraformOutput {
     pub cluster_security_group_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub kubeconfig: String,
 }
