@@ -11,6 +11,7 @@ use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub(super) fn delete_gke_cluster(
@@ -77,7 +78,7 @@ pub(super) fn delete_gke_cluster(
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
-    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger)?;
+    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(

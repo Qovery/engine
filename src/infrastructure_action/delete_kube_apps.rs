@@ -13,12 +13,14 @@ use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
+use std::collections::HashSet;
 
 pub(super) fn delete_kube_apps(
     cluster: &dyn Kubernetes,
     infra_ctx: &InfrastructureContext,
     event_details: EventDetails,
     logger: &impl InfraLogger,
+    skip_helm_releases: HashSet<String>,
 ) -> Result<(), Box<EngineError>> {
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
     // should make the diff between all namespaces and qovery managed namespaces
@@ -138,7 +140,10 @@ pub(super) fn delete_kube_apps(
     logger.info("Deleting all remaining deployed helm applications");
     match helm.list_release(None, &[]) {
         Ok(helm_charts) => {
-            for chart in helm_charts {
+            for chart in helm_charts
+                .into_iter()
+                .filter(|helm_chart| !skip_helm_releases.contains(&helm_chart.name))
+            {
                 let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                 match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                     Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),

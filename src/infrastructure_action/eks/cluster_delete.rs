@@ -1,3 +1,6 @@
+use super::helm_charts::karpenter::KarpenterChart;
+use super::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
@@ -33,6 +36,7 @@ use crate::services::kube_client::SelectK8sResourceBy;
 use crate::{cmd, secret_manager};
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
@@ -249,7 +253,16 @@ pub fn delete_eks_cluster(
         }
     };
 
-    delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger)?;
+    let skip_helm_release = if kubernetes.is_karpenter_enabled() {
+        HashSet::from([
+            KarpenterChart::chart_name(),
+            KarpenterConfigurationChart::chart_name(),
+            KarpenterCrdChart::chart_name(),
+        ])
+    } else {
+        HashSet::with_capacity(0)
+    };
+    delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger, skip_helm_release)?;
 
     logger.info(format!(
         "Deleting Kubernetes cluster {}/{}",
