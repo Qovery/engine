@@ -1,3 +1,4 @@
+mod cluster_bootstrap;
 mod cluster_create;
 mod cluster_delete;
 mod cluster_pause;
@@ -16,6 +17,7 @@ use crate::cloud_provider::service::Action;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
+use crate::infrastructure_action::eks::cluster_bootstrap::bootstrap_eks_cluster;
 use crate::infrastructure_action::eks::cluster_create::create_eks_cluster;
 use crate::infrastructure_action::eks::cluster_delete::delete_eks_cluster;
 use crate::infrastructure_action::eks::cluster_pause::pause_eks_cluster;
@@ -29,6 +31,11 @@ static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration
 static AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::minutes(15);
 
 impl InfrastructureAction for EKS {
+    fn bootstap_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
+        send_progress_on_long_task(self, Action::Create, || bootstrap_eks_cluster(self, infra_ctx, logger))
+    }
+
     fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
         send_progress_on_long_task(self, Action::Create, || create_eks_cluster(self, infra_ctx, logger))

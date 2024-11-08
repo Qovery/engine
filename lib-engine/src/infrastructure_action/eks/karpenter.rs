@@ -457,26 +457,6 @@ fn uninstall_chart(
         })
 }
 
-pub fn bootstrap_on_fargate_when_karpenter_is_enabled(
-    kubernetes: &dyn Kubernetes,
-    kubernetes_action: KubernetesClusterAction,
-) -> bool {
-    if !kubernetes.is_karpenter_enabled() {
-        return false;
-    }
-
-    match kubernetes_action {
-        KubernetesClusterAction::Bootstrap => true,
-        KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
-        KubernetesClusterAction::Update(_) => false,
-        KubernetesClusterAction::Upgrade(_)
-        | KubernetesClusterAction::Pause
-        | KubernetesClusterAction::Resume(_)
-        | KubernetesClusterAction::Delete
-        | KubernetesClusterAction::CleanKarpenterMigration => false,
-    }
-}
-
 pub fn node_groups_when_karpenter_is_enabled<'a>(
     kubernetes: &dyn Kubernetes,
     infra_context: &InfrastructureContext,
