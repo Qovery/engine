@@ -93,7 +93,7 @@ pub fn delete_eks_cluster(
     // generate terraform files and copy them into temp dir
     // in case error, this should no be a blocking error
     let mut cluster_upgrade_timeout_in_min = AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
-    if let Some(kube_client) = infra_ctx.mk_kube_client() {
+    if let Ok(kube_client) = infra_ctx.mk_kube_client() {
         let pods_list = block_on(kube_client.get_pods(event_details.clone(), None, SelectK8sResourceBy::All))
             .unwrap_or(Vec::with_capacity(0));
 
