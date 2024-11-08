@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::deploy_charts_levels;
-use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
@@ -41,17 +41,6 @@ pub fn create_kapsule_cluster(
     // Create object-storage buckets
     logger.info("Create Qovery managed object storage buckets");
 
-    // (erebe): Why don't we use terraform to create those buckets ?
-    if let Err(e) = cluster.object_storage.create_bucket(
-        cluster.kubeconfig_bucket_name().as_str(),
-        cluster.advanced_settings().resource_ttl(),
-        false,
-    ) {
-        let error = EngineError::new_object_storage_error(event_details, e);
-        logger.error(error.clone(), None::<&str>);
-        return Err(Box::new(error));
-    }
-
     // Logs bucket
     if let Err(e) = cluster.object_storage.create_bucket(
         cluster.logs_bucket_name().as_str(),
@@ -86,9 +75,8 @@ pub fn create_kapsule_cluster(
         return Ok(());
     }
 
-    // push config file to object storage
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
-    put_kubeconfig_file_to_object_storage(cluster, &cluster.object_storage)?;
 
     // Prepare charts directories
     if let Err(e) =

@@ -63,15 +63,3 @@ pub struct AwsEc2QoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
 }
-
-impl AwsEc2QoveryTerraformOutput {
-    pub fn kubernetes_port_to_u16(&self) -> Result<u16, String> {
-        match self.aws_ec2_kubernetes_port.parse::<u16>() {
-            Ok(x) => Ok(x),
-            Err(e) => Err(format!(
-                "error while trying to convert kubernetes port from string {} to int: {}",
-                self.aws_ec2_kubernetes_port, e
-            )),
-        }
-    }
-}

@@ -53,4 +53,6 @@ pub struct GkeQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub loki_logging_service_account_email: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub kubeconfig: String,
 }

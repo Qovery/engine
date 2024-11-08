@@ -172,7 +172,7 @@ pub fn obfuscation_service() -> Box<dyn ObfuscationService> {
 pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
-    pub AWS_TEST_KUBECONFIG: Option<String>,
+    pub AWS_TEST_KUBECONFIG_b64: Option<String>,
     pub AWS_EC2_KUBECONFIG: Option<String>,
     pub AWS_EC2_DEFAULT_REGION: Option<String>,
     pub AWS_EC2_TEST_MANAGED_REGION: Option<String>,
@@ -203,7 +203,7 @@ pub struct FuncTestsSecrets {
     pub GCP_TEST_CLUSTER_ID: Option<String>,
     pub GCP_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub GCP_DEFAULT_REGION: Option<String>,
-    pub GCP_TEST_KUBECONFIG: Option<String>,
+    pub GCP_TEST_KUBECONFIG_b64: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
     pub HTTP_LISTEN_ON: Option<String>,
     pub LETS_ENCRYPT_EMAIL_REPORT: Option<String>,
@@ -222,7 +222,7 @@ pub struct FuncTestsSecrets {
     pub SCALEWAY_TEST_ORGANIZATION_ID: Option<String>,
     pub SCALEWAY_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub SCALEWAY_TEST_CLUSTER_REGION: Option<String>,
-    pub SCALEWAY_TEST_KUBECONFIG: Option<String>,
+    pub SCALEWAY_TEST_KUBECONFIG_b64: Option<String>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -286,7 +286,7 @@ impl FuncTestsSecrets {
         let empty_secrets = FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
-            AWS_TEST_KUBECONFIG: None,
+            AWS_TEST_KUBECONFIG_b64: None,
             AWS_EC2_KUBECONFIG: None,
             AWS_EC2_DEFAULT_REGION: None,
             AWS_EC2_TEST_MANAGED_REGION: None,
@@ -335,7 +335,7 @@ impl FuncTestsSecrets {
             SCALEWAY_TEST_ORGANIZATION_ID: None,
             SCALEWAY_TEST_ORGANIZATION_LONG_ID: None,
             SCALEWAY_TEST_CLUSTER_REGION: None,
-            SCALEWAY_TEST_KUBECONFIG: None,
+            SCALEWAY_TEST_KUBECONFIG_b64: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -348,7 +348,7 @@ impl FuncTestsSecrets {
             QOVERY_DNS_API_URL: None,
             QOVERY_DNS_API_KEY: None,
             QOVERY_DNS_DOMAIN: None,
-            GCP_TEST_KUBECONFIG: None,
+            GCP_TEST_KUBECONFIG_b64: None,
         };
 
         let vault_config = match Self::get_vault_config() {
@@ -390,7 +390,15 @@ impl FuncTestsSecrets {
         FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
-            AWS_TEST_KUBECONFIG: Self::select_secret("AWS_TEST_KUBECONFIG", secrets.AWS_TEST_KUBECONFIG),
+            AWS_TEST_KUBECONFIG_b64: Self::select_secret(
+                "AWS_TEST_KUBECONFIG",
+                String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(secrets.AWS_TEST_KUBECONFIG_b64.as_ref().unwrap())
+                        .unwrap(),
+                )
+                .ok(),
+            ),
             AWS_EC2_KUBECONFIG: Self::select_secret("AWS_EC2_KUBECONFIG", secrets.AWS_EC2_KUBECONFIG),
             AWS_EC2_DEFAULT_REGION: Self::select_secret("AWS_EC2_DEFAULT_REGION", secrets.AWS_EC2_DEFAULT_REGION),
             AWS_EC2_TEST_MANAGED_REGION: Self::select_secret(
@@ -490,7 +498,15 @@ impl FuncTestsSecrets {
                 "SCALEWAY_TEST_CLUSTER_REGION",
                 secrets.SCALEWAY_TEST_CLUSTER_REGION,
             ),
-            SCALEWAY_TEST_KUBECONFIG: Self::select_secret("SCALEWAY_TEST_KUBECONFIG", secrets.SCALEWAY_TEST_KUBECONFIG),
+            SCALEWAY_TEST_KUBECONFIG_b64: Self::select_secret(
+                "SCALEWAY_TEST_KUBECONFIG",
+                String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().unwrap())
+                        .unwrap(),
+                )
+                .ok(),
+            ),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
@@ -515,7 +531,15 @@ impl FuncTestsSecrets {
             QOVERY_DNS_API_URL: Self::select_secret("QOVERY_DNS_API_URL", secrets.QOVERY_DNS_API_URL),
             QOVERY_DNS_API_KEY: Self::select_secret("QOVERY_DNS_API_KEY", secrets.QOVERY_DNS_API_KEY),
             QOVERY_DNS_DOMAIN: Self::select_secret("QOVERYDNS_DOMAIN", secrets.QOVERY_DNS_DOMAIN),
-            GCP_TEST_KUBECONFIG: Self::select_secret("GCP_TEST_KUBECONFIG", secrets.GCP_TEST_KUBECONFIG),
+            GCP_TEST_KUBECONFIG_b64: Self::select_secret(
+                "GCP_TEST_KUBECONFIG",
+                String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(secrets.GCP_TEST_KUBECONFIG_b64.as_ref().unwrap())
+                        .unwrap(),
+                )
+                .ok(),
+            ),
         }
     }
 }

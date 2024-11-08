@@ -51,4 +51,6 @@ use super::utils::{from_terraform_value, mk_logger};
 pub struct ScalewayQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     pub loki_storage_config_scaleway_s3: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub kubeconfig: String,
 }

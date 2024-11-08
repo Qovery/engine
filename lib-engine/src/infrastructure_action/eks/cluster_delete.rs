@@ -4,13 +4,9 @@ use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{delete_kubeconfig_from_object_storage, fetch_kubeconfig};
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
-use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
-use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::terraform::TerraformError;
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
@@ -19,7 +15,6 @@ use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::ec2_k3s::sdk::QoveryAwsSdkConfigEc2;
-use crate::infrastructure_action::ec2_k3s::AwsEc2QoveryTerraformOutput;
 use crate::infrastructure_action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure_action::eks::karpenter::Karpenter;
 use crate::infrastructure_action::eks::nodegroup::{
@@ -29,16 +24,11 @@ use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::InfraLogger;
-use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::{cmd, secret_manager};
-use retry::delay::Fixed;
-use retry::{Error, OperationResult};
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::Read;
 use std::path::PathBuf;
 
 pub fn delete_eks_cluster(
@@ -46,7 +36,6 @@ pub fn delete_eks_cluster(
     kubernetes: &dyn Kubernetes,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
-    object_store: &dyn ObjectStorage,
     aws_zones: &[AwsZone],
     node_groups: &[NodeGroups],
     options: &Options,
@@ -141,117 +130,14 @@ pub fn delete_eks_cluster(
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
 
-    match kubernetes.as_ec2() {
-        // EKS
-        None => {
-            let _: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources
-                .create(cloud_provider.credentials_environment_variables().as_slice(), &logger)
-                .inspect_err(|e| {
-                    logger.warn(EventMessage::new(
-                        "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                        Some(e.to_string()),
-                    ));
-                });
-            kubernetes.kubeconfig_local_file_path()
-        }
-
-        Some(ec2) => {
-            let qovery_terraform_output: AwsEc2QoveryTerraformOutput = tf_resources
-                .create(cloud_provider.credentials_environment_variables().as_slice(), &logger)
-                .inspect_err(|e| {
-                    logger.warn(EventMessage::new(
-                        "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                        Some(e.to_string()),
-                    ));
-                })?;
-
-            // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
-            let _ = delete_kubeconfig_from_object_storage(ec2, object_store);
-
-            // send cluster info to vault if info mismatch
-            // create vault connection (Vault connectivity should not be on the critical deployment path,
-            // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-            let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-                cloud_provider.access_key_id(),
-                kubernetes.region().to_string(),
-                cloud_provider.secret_access_key(),
-                None,
-                Some(qovery_terraform_output.aws_ec2_public_hostname.clone()),
-                kubernetes.kind(),
-                kubernetes.cluster_name(),
-                kubernetes.long_id().to_string(),
-                options.grafana_admin_user.clone(),
-                options.grafana_admin_password.clone(),
-                cloud_provider.organization_id().to_string(),
-                kubernetes.context().is_test_cluster(),
+    let _: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources
+        .create(cloud_provider.credentials_environment_variables().as_slice(), &logger)
+        .inspect_err(|e| {
+            logger.warn(EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
             ));
-            if let Ok(vault) = QVaultClient::new(event_details.clone()) {
-                let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
-            };
-
-            let port = qovery_terraform_output.kubernetes_port_to_u16().map_err(|e| {
-                Box::new(EngineError::new_terraform_error(
-                    event_details.clone(),
-                    TerraformError::ConfigFileInvalidContent {
-                        path: "ec2 terraform output".to_string(),
-                        raw_message: e,
-                    },
-                ))
-            })?;
-
-            // wait for k3s port to be open
-            // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
-            wait_until_port_is_open(
-                &TcpCheckSource::DnsName(qovery_terraform_output.aws_ec2_public_hostname.as_str()),
-                port,
-                600,
-                kubernetes.logger(),
-                event_details.clone(),
-            )
-            .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
-
-            // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
-            // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
-            let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
-                match fetch_kubeconfig(kubernetes, object_store) {
-                    Ok(_) => (),
-                    Err(e) => return OperationResult::Retry(e),
-                };
-
-                let current_kubeconfig_path = kubernetes.kubeconfig_local_file_path();
-                let mut kubeconfig_file = File::open(&current_kubeconfig_path).expect("Cannot open kubeconfig file");
-
-                // ensure the kubeconfig content address match with the current instance dns
-                let mut buffer = String::new();
-                let _ = kubeconfig_file.read_to_string(&mut buffer);
-                match buffer.contains(&qovery_terraform_output.aws_ec2_public_hostname) {
-                    true => {
-                        logger.info(format!(
-                            "kubeconfig stored on s3 do correspond with the actual host {}",
-                            &qovery_terraform_output.aws_ec2_public_hostname
-                        ));
-                        OperationResult::Ok(current_kubeconfig_path)
-                    }
-                    false => {
-                        logger.warn(
-                            EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                                &qovery_terraform_output.aws_ec2_public_hostname
-                            )),
-                        );
-                        OperationResult::Retry(Box::new(
-                            EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details.clone()),
-                        ))
-                    }
-                }
-            });
-
-            match result {
-                Ok(x) => x,
-                Err(Error { error, .. }) => return Err(error),
-            }
-        }
-    };
+        });
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([

@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::helm::deploy_charts_levels;
-use crate::cloud_provider::kubeconfig_helper::put_kubeconfig_file_to_object_storage;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::KubernetesClusterAction;
 use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
@@ -197,7 +197,7 @@ pub fn create_eks_cluster(
         logger.warn("Exiting. Dry run is not supported after the terraform action for now");
         return Ok(());
     }
-    put_kubeconfig_file_to_object_storage(kubernetes, &kubernetes.s3)?;
+    update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig)?;
     let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
 
     // send cluster info with kubeconfig
