@@ -8,14 +8,12 @@ use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EventMessage, InfrastructureStep, Stage};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
 use crate::infrastructure_action::eks::helm_charts::{eks_helm_charts, EksChartsConfigPrerequisites};
+use crate::infrastructure_action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure_action::eks::karpenter::Karpenter;
-use crate::infrastructure_action::eks::karpenter::{
-    bootstrap_on_fargate_when_karpenter_is_enabled, node_groups_when_karpenter_is_enabled,
-};
 use crate::infrastructure_action::eks::nodegroup::{
     delete_eks_nodegroups, node_group_is_running, should_update_desired_nodes, NodeGroupsDeletionType,
 };
@@ -34,6 +32,7 @@ use crate::string::terraform_list_format;
 use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
+use rusoto_eks::EksClient;
 use std::str::FromStr;
 
 pub fn create_eks_cluster(
@@ -69,21 +68,20 @@ pub fn create_eks_cluster(
     let aws_conn = cloud_provider
         .aws_sdk_client()
         .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
-    let terraform_apply = |kubernetes_action: KubernetesClusterAction| {
+    let terraform_apply = || {
         // don't create node groups if karpenter is enabled
         let nodes_groups = node_groups_when_karpenter_is_enabled(
             kubernetes,
             infra_ctx,
             &kubernetes.nodes_groups,
             &event_details,
-            kubernetes_action,
+            KubernetesClusterAction::Update(None),
         )?;
 
-        let bootstrap_on_fargate = bootstrap_on_fargate_when_karpenter_is_enabled(kubernetes, kubernetes_action);
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
-            kubernetes_action,
+            KubernetesClusterAction::Update(None),
             nodes_groups,
             aws_eks_client.clone(),
         )?;
@@ -111,7 +109,7 @@ pub fn create_eks_cluster(
             &node_groups_with_desired_states,
             &kubernetes.options,
             cluster_upgrade_timeout_in_min,
-            bootstrap_on_fargate,
+            false,
             &kubernetes.advanced_settings,
             kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
         )?;
@@ -160,39 +158,32 @@ pub fn create_eks_cluster(
         }
     };
 
-    let mut kubernetes_version_upgrade_requested = false;
-
-    // upgrade cluster instead if required
-    if kubernetes.context().is_first_cluster_deployment() {
-        // terraform deployment dedicated to cloud resources
-        terraform_apply(KubernetesClusterAction::Bootstrap)?;
-    } else {
-        // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
-        logger.info("Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present");
-        if let Err(e) = block_on(delete_eks_nodegroups(
-            aws_conn.clone(),
-            kubernetes.cluster_name(),
-            kubernetes.context().is_first_cluster_deployment(),
-            NodeGroupsDeletionType::FailedOnly,
-            event_details.clone(),
-        )) {
-            // only return failures if the cluster is not absent, because it can be a VPC quota issue
-            let nodgroups_len = block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name()))
-                .map(|n| n.nodegroups().len())
-                .unwrap_or(1);
-            if e.tag() != &Tag::CannotGetCluster && nodgroups_len != 1 {
-                return Err(e);
-            }
-        }
-
-        if let Some(version_target) = kubernetes.is_upgrade_required(infra_ctx) {
-            kubernetes_version_upgrade_requested = true;
-            kubernetes.upgrade_cluster(infra_ctx, version_target)?;
+    // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
+    logger.info("Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present");
+    if let Err(e) = block_on(delete_eks_nodegroups(
+        aws_conn.clone(),
+        kubernetes.cluster_name(),
+        kubernetes.context().is_first_cluster_deployment(),
+        NodeGroupsDeletionType::FailedOnly,
+        event_details.clone(),
+    )) {
+        // only return failures if the cluster is not absent, because it can be a VPC quota issue
+        let nodgroups_len = block_on(aws_conn.list_all_eks_nodegroups(kubernetes.cluster_name()))
+            .map(|n| n.nodegroups().len())
+            .unwrap_or(1);
+        if e.tag() != &Tag::CannotGetCluster && nodgroups_len != 1 {
+            return Err(e);
         }
     }
 
+    let mut kubernetes_version_upgrade_requested = false;
+    if let Some(version_target) = kubernetes.is_upgrade_required(infra_ctx) {
+        kubernetes_version_upgrade_requested = true;
+        kubernetes.upgrade_cluster(infra_ctx, version_target)?;
+    }
+
     // apply to generate tf_qovery_config.json
-    let (eks_tf_output, tera_context) = terraform_apply(KubernetesClusterAction::Update(None))?;
+    let (eks_tf_output, tera_context) = terraform_apply()?;
     if infra_ctx.context().is_dry_run_deploy() {
         logger.warn("Exiting. Dry run is not supported after the terraform action for now");
         return Ok(());
@@ -312,7 +303,6 @@ pub fn create_eks_cluster(
     let alb_already_deployed = !found_alb_mutating_configs.is_empty();
 
     // retrieve cluster CPU architectures
-    let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
     let charts_prerequisites = EksChartsConfigPrerequisites {
         organization_id: cloud_provider.organization_id().to_string(),
         organization_long_id: cloud_provider.organization_long_id(),
@@ -405,20 +395,66 @@ pub fn create_eks_cluster(
     )
     .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
 
-    if kubernetes.is_karpenter_enabled() {
-        let has_node_group_running = kubernetes.nodes_groups.iter().any(|ng| {
-            matches!(
-                node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
-                Ok(Some(_v))
-            )
-        });
+    clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
 
-        // after Karpenter is deployed, we can remove the node groups
-        // after Karpenter is deployed, we can remove fargate profile for add-ons
-        if has_node_group_running || kubernetes.context().is_first_cluster_deployment() {
-            terraform_apply(KubernetesClusterAction::CleanKarpenterMigration)?;
-        }
+    Ok(())
+}
+
+// after Karpenter is deployed, we can remove the node groups
+// after Karpenter is deployed, we can remove fargate profile for add-ons
+// TODO: remove this function once every cluster has Karpenter enabled.
+// It is only needed for the transition between nodegroup to karpente
+fn clean_karpenter_installation(
+    kubernetes: &EKS,
+    infra_ctx: &InfrastructureContext,
+    logger: &impl InfraLogger,
+    event_details: EventDetails,
+    aws_eks_client: Option<EksClient>,
+) -> Result<(), Box<EngineError>> {
+    if !kubernetes.is_karpenter_enabled() {
+        return Ok(());
     }
+
+    let has_node_group_running = kubernetes.nodes_groups.iter().any(|ng| {
+        matches!(
+            node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
+            Ok(Some(_v))
+        )
+    });
+
+    if !(has_node_group_running || kubernetes.context().is_first_cluster_deployment()) {
+        return Ok(());
+    }
+    // generate terraform files and copy them into temp dir
+    let tera_context = eks_tera_context(
+        kubernetes,
+        infra_ctx.cloud_provider(),
+        infra_ctx.dns_provider(),
+        kubernetes.zones.as_slice(),
+        &[],
+        &kubernetes.options,
+        AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
+        false,
+        &kubernetes.advanced_settings,
+        kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
+    )?;
+
+    logger.info(format!("Deploying {} cluster.", kubernetes.kind()));
+    let tf_action = TerraformInfraResources::new(
+        tera_context.clone(),
+        kubernetes.template_directory.join("terraform"),
+        kubernetes.temp_dir().join("terrafor_karpenter_cleanup"),
+        event_details.clone(),
+        infra_ctx.context().is_dry_run_deploy(),
+    );
+
+    let _: AwsEksQoveryTerraformOutput = tf_action.create(
+        infra_ctx
+            .cloud_provider()
+            .credentials_environment_variables()
+            .as_slice(),
+        logger,
+    )?;
 
     Ok(())
 }

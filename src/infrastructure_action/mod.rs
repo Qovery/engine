@@ -18,6 +18,11 @@ use crate::logger::Logger;
 use tera::Context as TeraContext;
 
 pub trait InfrastructureAction: Send + Sync {
+    /// Will be called only if it is the first time the cluster is created.
+    /// Otherwise, it will be skipped and the `create_cluster` method will be called directly.
+    fn bootstap_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+        Ok(())
+    }
     fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
@@ -46,7 +51,12 @@ pub trait InfrastructureAction: Send + Sync {
             infra_ctx.kubernetes().name()
         ));
         match action {
-            Action::Create => self.create_cluster(infra_ctx),
+            Action::Create => {
+                if infra_ctx.context().is_first_cluster_deployment() {
+                    self.bootstap_cluster(infra_ctx)?;
+                }
+                self.create_cluster(infra_ctx)
+            }
             Action::Pause => self.pause_cluster(infra_ctx),
             Action::Delete => self.delete_cluster(infra_ctx),
             Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
