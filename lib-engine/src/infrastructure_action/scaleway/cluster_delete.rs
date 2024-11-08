@@ -10,6 +10,7 @@ use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use std::collections::HashSet;
 
 pub fn delete_kapsule_cluster(
     cluster: &Kapsule,
@@ -74,7 +75,7 @@ pub fn delete_kapsule_cluster(
         )));
     }
 
-    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger)?;
+    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     logger.info("Running Terraform destroy");
