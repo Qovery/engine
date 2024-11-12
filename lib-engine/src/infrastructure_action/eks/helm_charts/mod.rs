@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
 };
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -12,7 +12,7 @@ use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStora
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
-    ToCommonHelmChart,
+    HelmChartVpaType, ToCommonHelmChart,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -21,7 +21,7 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::Kind;
-use aws_alb_controller::AwsLoadBalancerControllerChart;
+use aws_alb_controller_chart::AwsLoadBalancerControllerChart;
 use karpenter::KarpenterChart;
 
 use crate::dns_provider::DnsProviderConfiguration;
@@ -65,7 +65,7 @@ use std::path::Path;
 use std::sync::Arc;
 use url::Url;
 
-pub mod aws_alb_controller;
+pub mod aws_alb_controller_chart;
 pub mod aws_iam_eks_user_mapper_chart;
 pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
@@ -297,7 +297,30 @@ pub fn eks_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
         chart_config_prerequisites.cluster_name.clone(),
-        true,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartVpaType::EnabledWithConstraints(VpaContainerPolicy::new(
+            "*".to_string(),
+            Some(KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu,
+            )),
+            Some(KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu,
+            )),
+            Some(KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_min_memory_in_mib,
+            )),
+            Some(KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_max_memory_in_mib,
+            )),
+        )),
         chart_config_prerequisites.alb_controller_already_deployed
             && chart_config_prerequisites
                 .cluster_advanced_settings
