@@ -104,6 +104,14 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
+    #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.min_in_milli_cpu")]
+    pub aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.max_in_milli_cpu")]
+    pub aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.memory.min_in_mib")]
+    pub aws_eks_alb_controller_vpa_min_memory_in_mib: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.memory.max_in_mib")]
+    pub aws_eks_alb_controller_vpa_max_memory_in_mib: u32,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -161,7 +169,6 @@ pub struct ClusterAdvancedSettings {
     pub gcp_vpc_enable_flow_logs: bool,
     #[serde(alias = "gcp.vpc.flow_logs_sampling")]
     pub gcp_vpc_flow_logs_sampling: Option<Percentage>,
-
     #[serde(alias = "qovery.static_ip_mode")]
     pub qovery_static_ip_mode: Option<bool>,
     #[serde(alias = "k8s.api.allowed_public_access_cidrs")]
@@ -214,6 +221,10 @@ impl Default for ClusterAdvancedSettings {
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,
             k8s_api_allowed_public_access_cidrs: None,
+            aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: 128,
+            aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
+            aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
+            aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
         }
     }
 }

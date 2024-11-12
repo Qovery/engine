@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::cloud_provider::helm::CommonChart;
+use crate::cloud_provider::helm::{CommonChart, VpaContainerPolicy};
 use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
@@ -57,6 +57,15 @@ pub struct HelmChartResources {
     pub limit_memory: KubernetesMemoryResourceUnit,
     pub request_cpu: KubernetesCpuResourceUnit,
     pub request_memory: KubernetesMemoryResourceUnit,
+}
+
+pub enum HelmChartVpaType {
+    /// VPA won't be enabled for the chart
+    Disabled,
+    /// VPA will be enabled for the chart with default values
+    EnabledWithChartDefault,
+    /// VPA will be enabled for the chart with custom values
+    EnabledWithConstraints(VpaContainerPolicy),
 }
 
 #[derive(Clone)]
