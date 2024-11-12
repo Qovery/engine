@@ -80,4 +80,4 @@ readReplicas:
     {%- for key, value in annotations_group.pods %}
       {{ key }}: |-
       {{ value }}
-      {%- endfor %}
+    {%- endfor %}
