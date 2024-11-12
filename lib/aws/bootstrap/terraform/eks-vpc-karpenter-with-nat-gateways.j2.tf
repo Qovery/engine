@@ -41,7 +41,7 @@ resource "aws_route_table" "eks_karpenter_cluster" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.eks_cluster.id
+    nat_gateway_id = aws_internet_gateway.eks_cluster.id
   }
 
   tags = local.tags_eks_vpc_public
@@ -62,7 +62,7 @@ resource "aws_route_table" "eks_karpenter_cluster_zone_a_private" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.eks_karpenter_zone_a_public[count.index].id
+    nat_gateway_id = aws_nat_gateway.eks_karpenter_zone_a_public[count.index].id
   }
 
   tags = local.tags_eks_vpc_private
