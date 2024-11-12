@@ -121,6 +121,10 @@ primary:
     {%- endfor %}
 
 readReplicas:
+  # Remove when when https://github.com/bitnami/charts/issues/30415 is fixed
+  extraEnvVars:
+    - name: POSTGRESQL_REPLICATION_USE_PASSFILE
+      value: "false"
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
     {{ key }}: |-
