@@ -7,6 +7,7 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 
 pub fn upgrade_kapsule_cluster(
@@ -43,7 +44,7 @@ pub fn upgrade_kapsule_cluster(
         event_details.clone(),
         cluster.context().is_dry_run_deploy(),
     );
-    tf_resources.create(&[], &logger)?;
+    let _: ScalewayQoveryTerraformOutput = tf_resources.create(&[], &logger)?;
 
     check_workers_on_upgrade(
         cluster,
