@@ -50,10 +50,18 @@ resource "aws_vpc" "eks" {
   tags = local.tags_eks_vpc
 }
 
+# To delete ALLOW ALL rules in the default security group of the VPC
+# We don't use it this SG
+resource "aws_default_security_group" "default_sg" {
+  vpc_id = aws_vpc.eks.id
+}
+
 # Internet gateway
 resource "aws_internet_gateway" "eks_cluster" {
   vpc_id = aws_vpc.eks.id
 
   tags = local.tags_eks_vpc
 }
+
+
 {%- endif -%}
