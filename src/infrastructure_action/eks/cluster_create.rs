@@ -113,7 +113,9 @@ pub fn create_eks_cluster(
             &node_groups_with_desired_states,
             &kubernetes.options,
             cluster_upgrade_timeout_in_min,
-            false,
+            // if it is the first install we must keep fargate profile for add-ons/user-mapper, until we have karpenter installed (during helm deployments)
+            // After karpenter is installed, we can remove the fargate profile for add-ons/user-mapper.
+            infra_ctx.kubernetes().is_karpenter_enabled() && infra_ctx.context().is_first_cluster_deployment(),
             &kubernetes.advanced_settings,
             kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
         )?;
