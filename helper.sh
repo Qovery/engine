@@ -539,13 +539,13 @@ echo "Detected commit ID: $commit_id"
 # for channels if specified
 case $2 in 
   "prod")
-    channel = "prod"
+    channel="prod"
     ;;
   "staging")
-    channel = "staging"
+    channel="staging"
     ;;
   *)
-    channel = "dev"
+    channel="dev"
     ;;
 esac
 
