@@ -830,14 +830,11 @@ gitlab-release:
     - if: $CI_COMMIT_TAG
       when: manual
 
-deploy-qovery-infra-engines:
+.deploy-qovery-infra-engines:
   stage: deploy
   retry: 0
   needs:
     - gitlab-release
-  parallel:
-    matrix:
-      - CHANNEL: [staging, prod]
   script:
     - ./helper.sh deploy_engines_infra_static_ip $CHANNEL
   tags:
@@ -847,30 +844,14 @@ deploy-qovery-infra-engines:
       when: manual
 
 2-deploy-qovery-infra-engines-staging:
-  stage: deploy
-  retry: 0
-  needs:
-    - gitlab-release
-  script:
-    - ./helper.sh deploy_engines_infra_static_ip staging
-  tags:
-    - vm-250mcpu-1gmem-0g
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
+  extends: .deploy-qovery-infra-engines
+  variables:
+    CHANNEL: staging
 
 3-deploy-qovery-infra-engines-prod:
-  stage: deploy
-  retry: 0
-  needs:
-    - gitlab-release
-  script:
-    - ./helper.sh deploy_engines_infra_static_ip prod
-  tags:
-    - vm-250mcpu-1gmem-0g
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
+  extends: .deploy-qovery-infra-engines
+  variables:
+    CHANNEL: prod
 
 4-deploy-qovery-env-engines:
   stage: deploy
