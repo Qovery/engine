@@ -81,7 +81,11 @@ pub fn create_eks_cluster(
         let node_groups_with_desired_states = should_update_desired_nodes(
             event_details.clone(),
             kubernetes,
-            KubernetesClusterAction::Update(None),
+            if infra_ctx.context().is_first_cluster_deployment() {
+                KubernetesClusterAction::Bootstrap
+            } else {
+                KubernetesClusterAction::Update(None)
+            },
             nodes_groups,
             aws_eks_client.clone(),
         )?;
