@@ -121,7 +121,7 @@ resource "aws_route_table" "eks_cluster" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    nat_gateway_id = aws_internet_gateway.eks_cluster.id
+    gateway_id = aws_internet_gateway.eks_cluster.id
   }
 
   {% for route in vpc_custom_routing_table %}
