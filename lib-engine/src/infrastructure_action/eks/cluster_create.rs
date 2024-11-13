@@ -151,8 +151,8 @@ pub fn create_eks_cluster(
                         NodeGroupsDeletionType::FailedOnly,
                         event_details.clone(),
                     )) {
-                        Ok(_) => OperationResult::Err(e),
-                        Err(e) => OperationResult::Err(e),
+                        Ok(_) => OperationResult::Retry(e),
+                        Err(_) => OperationResult::Retry(e),
                     }
                 }
             }
