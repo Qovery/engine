@@ -146,10 +146,26 @@ function get_release_ga() { ## Get globally available release version
 
 function deploy_engines_infra_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
+  case $1 in
+    "prod")
+      namespace="qovery-engine-infra"
+      jwt_token="$INFRA_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
+      ;;
+    "staging")
+      namespace="qovery-engine-infra-staging"
+      jwt_token="$INFRA_STAGING_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
+      ;;
+    *)
+      # it doesn't exists but can be useful for tests
+      namespace="qovery-engine-infra-dev"
+      jwt_token="$INFRA_DEV_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
+      ;;
+  esac
+
   AWS_ACCESS_KEY_ID="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
-  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --history-max 50 --wait --timeout 3600s --namespace qovery-engine-infra qovery-engine \
+  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $namespace qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
 environmentVariables.CLOUD_PROVIDER="aws",\
@@ -164,7 +180,7 @@ environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="6d9f665a-c203-4b02-8d49-ee05ad3f1137",\
-environmentVariables.CLUSTER_JWT_TOKEN="$INFRA_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN",\
+environmentVariables.CLUSTER_JWT_TOKEN="$jwt_token",\
 rbac.clusterPermission="none",\
 buildContainer.enabled="false",\
 metrics.enabled="true",\
@@ -520,6 +536,19 @@ else
 fi
 echo "Detected commit ID: $commit_id"
 
+# for channels if specified
+case $2 in 
+  "prod")
+    channel = "prod"
+    ;;
+  "staging")
+    channel = "staging"
+    ;;
+  *)
+    channel = "dev"
+    ;;
+esac
+
 case $1 in
 await_docker)
   await_docker
@@ -536,7 +565,7 @@ deploy_engines_envs)
   ;;
 # Deploy the engines dedicated for infra deployments on cluster with static ip
 deploy_engines_infra_static_ip)
-  deploy_engines_infra_static_ip
+  deploy_engines_infra_static_ip $channel
   ;;
 # Deploy on the engines dedicated for customer's environments deployments on cluster with static ip
 deploy_engines_environment_static_ip)
