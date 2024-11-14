@@ -1,4 +1,3 @@
-use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -9,19 +8,16 @@ use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventMessage, InfrastructureStep};
+use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure_action::scaleway::helm_charts::{kapsule_helm_charts, KapsuleChartsConfigPrerequisites};
+use crate::infrastructure_action::scaleway::helm_charts::KapsuleHelmsDeployment;
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
-use crate::io_models::context::Features;
-use crate::models::domain::ToHelmString;
-use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::ObjectStorage;
-use crate::string::terraform_list_format;
-use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::OperationResult;
+use std::path::PathBuf;
 
 pub fn create_kapsule_cluster(
     cluster: &Kapsule,
@@ -78,54 +74,13 @@ pub fn create_kapsule_cluster(
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
 
-    // Prepare charts directories
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(&cluster.template_directory, temp_dir, &tera_context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string_lossy().to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/scaleway/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", cluster.context().lib_root_dir()),
-            format!("{}/common/charts", temp_dir.to_string_lossy()),
-        ),
-        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/scaleway/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", cluster.context().lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
-    let cluster_info = cluster.get_scw_cluster_info()?;
-    if cluster_info.is_none() {
-        return Err(Box::new(EngineError::new_no_cluster_found_error(
-            event_details,
+    let cluster_info = cluster.get_scw_cluster_info()?.ok_or_else(|| {
+        Box::new(EngineError::new_no_cluster_found_error(
+            event_details.clone(),
             CommandError::new_from_safe_message("Error, no cluster found from the Scaleway API".to_string()),
-        )));
-    }
+        ))
+    })?;
 
-    let cluster_endpoint = match cluster_info.clone() {
-        Some(x) => x.cluster_url,
-        None => None,
-    };
     let cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
         infra_ctx.cloud_provider().access_key_id(),
         infra_ctx.cloud_provider().secret_access_key(),
@@ -133,7 +88,7 @@ pub fn create_kapsule_cluster(
         cluster.region().to_string(),
         cluster.default_zone().unwrap_or("").to_string(),
         None,
-        cluster_endpoint,
+        cluster_info.cluster_url.clone(),
         cluster.kind(),
         infra_ctx.cloud_provider().name().to_string(),
         cluster.long_id().to_string(),
@@ -148,10 +103,7 @@ pub fn create_kapsule_cluster(
     // if it temporarily fails, just ignore it, data will be pushed on the next sync)
     let _ = cluster.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
-    let current_nodegroups = match get_existing_sanitized_node_groups(
-        cluster,
-        cluster_info.expect("A cluster should be present at this create stage"),
-    ) {
+    let current_nodegroups = match get_existing_sanitized_node_groups(cluster, cluster_info) {
         Ok(x) => x,
         Err(e) => {
             match e {
@@ -196,7 +148,6 @@ pub fn create_kapsule_cluster(
 
     // ensure all node groups are in ready state Scaleway side
     logger.info("Ensuring all groups nodes are in ready state from the Scaleway API");
-
     for ng in current_nodegroups {
         let res = retry::retry(
             // retry 10 min max per nodegroup until they are ready
@@ -283,12 +234,9 @@ pub fn create_kapsule_cluster(
     logger.info("All node groups for this cluster are ready from cloud provider API");
 
     // ensure all nodes are ready on Kubernetes
-    match check_workers_on_create(cluster, infra_ctx.cloud_provider(), None) {
-        Ok(_) => logger.info("Kubernetes nodes have been successfully created"),
-        Err(e) => {
-            return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));
-        }
-    };
+    check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
+        .map_err(|e| Box::new(EngineError::new_k8s_node_not_ready(event_details.clone(), e)))?;
+    logger.info("Kubernetes nodes have been successfully created");
 
     // kubernetes helm deployments on the cluster
     let credentials_environment_variables: Vec<(String, String)> = infra_ctx
@@ -305,58 +253,20 @@ pub fn create_kapsule_cluster(
         ));
     }
 
-    let charts_prerequisites = KapsuleChartsConfigPrerequisites::new(
-        infra_ctx.cloud_provider().organization_id().to_string(),
-        infra_ctx.cloud_provider().organization_long_id(),
-        cluster.short_id().to_string(),
-        cluster.long_id,
-        cluster.zone,
-        cluster.options.qovery_engine_location.clone(),
-        cluster.context().is_feature_enabled(&Features::LogsHistory),
-        cluster.context().is_feature_enabled(&Features::MetricsHistory),
-        cluster.context().is_feature_enabled(&Features::Grafana),
-        infra_ctx.dns_provider().domain().to_helm_format_string(),
-        terraform_list_format(
-            infra_ctx
-                .dns_provider()
-                .resolvers()
-                .iter()
-                .map(|x| x.to_string())
-                .collect(),
+    let helms_deployments = KapsuleHelmsDeployment::new(
+        HelmInfraContext::new(
+            tera_context,
+            PathBuf::from(infra_ctx.context().lib_root_dir()),
+            cluster.template_directory.clone(),
+            cluster.temp_dir().join("helms"),
+            event_details.clone(),
+            credentials_environment_variables,
+            cluster.context().is_dry_run_deploy(),
         ),
-        infra_ctx.dns_provider().domain().root_domain().to_helm_format_string(),
-        LetsEncryptConfig::new(
-            cluster.options.tls_email_report.to_string(),
-            cluster.context().is_test_cluster(),
-        ),
-        infra_ctx.dns_provider().provider_configuration(),
-        cluster.options.clone(),
-        cluster.advanced_settings().clone(),
-        qovery_terraform_output.loki_storage_config_scaleway_s3,
+        qovery_terraform_output,
+        cluster,
     );
+    helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
-    logger.info("Preparing chart configuration to be deployed");
-    let helm_charts_to_deploy = kapsule_helm_charts(
-        &charts_prerequisites,
-        Some(temp_dir.to_string_lossy().as_ref()),
-        &kubeconfig_path,
-        &*cluster.context().qovery_api,
-        cluster.customer_helm_charts_override(),
-        infra_ctx.dns_provider().domain(),
-    )
-    .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
-
-    deploy_charts_levels(
-        infra_ctx.mk_kube_client()?.client(),
-        &kubeconfig_path,
-        credentials_environment_variables
-            .iter()
-            .map(|(l, r)| (l.as_str(), r.as_str()))
-            .collect_vec()
-            .as_slice(),
-        helm_charts_to_deploy,
-        cluster.context().is_dry_run_deploy(),
-        Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
-    )
-    .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
+    Ok(())
 }

@@ -49,33 +49,6 @@ pub(super) fn delete_gke_cluster(
         &logger,
     )?;
 
-    // generate files and copy them into temp dir
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        cluster.template_directory.as_str(),
-        temp_dir,
-        &tera_context,
-    ) {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/gcp/bootstrap/common/charts directory.
-    // this is due to the required dependencies of lib/gcp/bootstrap/*.tf files
-    let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", cluster.context.lib_root_dir());
-    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.to_string_lossy());
-    if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            bootstrap_charts_dir,
-            common_charts_temp_dir,
-            e,
-        )));
-    }
-
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
