@@ -1,14 +1,19 @@
 use super::InfraLogger;
-use crate::cloud_provider::helm::{deploy_charts_levels, HelmChart};
+use crate::cloud_provider::helm::{HelmAction, HelmChart, HelmChartError};
 use crate::cloud_provider::models::CustomerHelmChartsOverride;
+use crate::cmd::command::CommandKiller;
+use crate::cmd::helm::Helm;
 use crate::engine::InfrastructureContext;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread;
 use tera::Context as TeraContext;
 
 pub(super) trait HelmInfraResources {
@@ -26,36 +31,65 @@ pub(super) trait HelmInfraResources {
         infra_ctx: &InfrastructureContext,
         logger: &impl InfraLogger,
     ) -> Result<(), Box<EngineError>> {
-        logger.info("Preparing helm files on disk");
+        logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
+        logger.info("⚓ Preparing Helm files on disk");
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
         let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
 
-        logger.info("Going to deploy helm charts in this sequence:");
+        logger.info("🛳️ Going to deploy Helm charts in this sequence:");
         charts_to_deploy.iter().enumerate().for_each(|(ix, charts_lvl)| {
             let chart_names = charts_lvl.iter().map(|c| &c.get_chart_info().name).sorted().join(", ");
             logger.info(format!("Level {}: {}", ix, chart_names));
         });
 
-        deploy_charts_levels(
-            infra_ctx.mk_kube_client()?.client(),
-            &infra_ctx.kubernetes().kubeconfig_local_file_path(),
-            self.charts_context()
-                .envs
+        let ev_details = &self.charts_context().event_details;
+        let envs = self
+            .charts_context()
+            .envs
+            .iter()
+            .map(|(l, r)| (l.as_str(), r.as_str()))
+            .collect_vec();
+        let helm = Helm::new(Some(infra_ctx.kubernetes().kubeconfig_local_file_path()), &envs)
+            .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e.into())))?;
+
+        for charts_level in charts_to_deploy {
+            // Show diff for all chart we want to deploy
+            charts_level
                 .iter()
-                .map(|(l, r)| (l.as_str(), r.as_str()))
-                .collect_vec()
-                .as_slice(),
-            charts_to_deploy,
-            self.charts_context().is_dry_run,
-            Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
-        )
-        .map_err(|e| {
-            Box::new(EngineError::new_helm_chart_error(
-                self.charts_context().event_details.clone(),
-                e,
-            ))
-        })
+                .filter(|c| c.get_chart_info().action == HelmAction::Deploy)
+                .for_each(|chart| {
+                    let Ok(mut buf_writer) =
+                        create_helm_diff_file(&self.charts_context().destination_folder, &chart.get_chart_info().name)
+                    else {
+                        return;
+                    };
+                    let _ = helm.upgrade_diff(chart.get_chart_info(), &envs, &mut |line| {
+                        let _ = buf_writer.write_all(line.as_bytes());
+                        logger.info(line);
+                    });
+                });
+
+            // Skip actual deployment if dry run
+            if self.charts_context().is_dry_run {
+                logger.warn("🚨 Dry run mode enabled, skipping actual deployment");
+                continue;
+            }
+
+            // We do the actual deployment in parallel
+            deploy_parallel_charts(
+                infra_ctx.mk_kube_client()?.client(),
+                &infra_ctx.kubernetes().kubeconfig_local_file_path(),
+                &envs,
+                charts_level,
+            )
+            .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e)))?;
+        }
+
+        logger.info("⚓ Helm charts deployed successfully");
+        logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
+
+        Ok(())
     }
 }
 
@@ -158,4 +192,77 @@ pub(super) fn mk_customer_chart_override_fn(
                 })
         }),
     }
+}
+
+fn deploy_parallel_charts(
+    kube_client: &kube::Client,
+    kubernetes_config: &Path,
+    envs: &[(&str, &str)],
+    charts: Vec<Box<dyn HelmChart>>,
+) -> Result<(), HelmChartError> {
+    thread::scope(|s| {
+        let mut handles = vec![];
+
+        for chart in charts.into_iter() {
+            let path = kubernetes_config.to_path_buf();
+            let current_span = tracing::Span::current();
+            let handle = s.spawn(move || {
+                // making sure to pass the current span to the new thread not to lose any tracing info
+                let _span = current_span.enter();
+                chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
+            });
+
+            handles.push(handle);
+        }
+
+        let mut errors: Vec<Result<(), HelmChartError>> = vec![];
+        for handle in handles {
+            match handle.join() {
+                Ok(helm_run_ret) => {
+                    if let Err(e) = helm_run_ret {
+                        errors.push(Err(e));
+                    }
+                }
+                Err(e) => {
+                    let err = match e.downcast_ref::<&'static str>() {
+                        None => match e.downcast_ref::<String>() {
+                            None => "Unable to get error.",
+                            Some(s) => s.as_str(),
+                        },
+                        Some(s) => *s,
+                    };
+                    let error = Err(HelmChartError::CommandError(CommandError::new(
+                        "Thread panicked during parallel charts deployments.".to_string(),
+                        Some(err.to_string()),
+                        None,
+                    )));
+                    errors.push(error);
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            error!("Deployments of charts failed with: {:?}", errors);
+            errors.remove(0)
+        }
+    })
+}
+
+fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<BufWriter<File>> {
+    use std::fs::{self, OpenOptions};
+
+    if !dir_path.exists() {
+        fs::create_dir_all(dir_path)?;
+    }
+
+    let filepath = dir_path.join("helm-diffs").join(format!("{}.diff", chart_name));
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true) // This will ensure the content is overridden
+        .open(filepath)?;
+
+    Ok(BufWriter::new(file))
 }
