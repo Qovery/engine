@@ -5,7 +5,7 @@ ARG KUBECTL_VERSION="1.30.3"
 ARG HELM_VERSION="3.15.2-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"
-ARG HELM_DIFF_VERSION="v3.8.1"
+ARG HELM_DIFF_VERSION="v3.9.12"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:27.1.1-1~debian.12~bookworm"
@@ -15,7 +15,7 @@ ARG CONTAINERD_VERSION="1.7.19-1"
 ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.1-2024-10-21T15-59-17"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.80.1-2024-11-04T16-52-23"
 
 
 ###########################################
