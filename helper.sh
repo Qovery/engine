@@ -148,16 +148,16 @@ function deploy_engines_infra_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
   case $1 in
     "prod")
-      namespace="qovery-engine-infra"
+      name="qovery-engine-infra"
       jwt_token="$INFRA_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
       ;;
     "staging")
-      namespace="qovery-engine-infra-staging"
+      name="qovery-engine-infra-staging"
       jwt_token="$INFRA_STAGING_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
       ;;
     *)
       # it doesn't exists but can be useful for tests
-      namespace="qovery-engine-infra-dev"
+      name="qovery-engine-infra-dev"
       jwt_token="$INFRA_DEV_CLUSTER_INFRA_STATIC_IP_JWT_TOKEN"
       ;;
   esac
@@ -165,9 +165,10 @@ function deploy_engines_infra_static_ip() { ## Release GA to prod
   AWS_ACCESS_KEY_ID="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
-  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $namespace qovery-engine \
+  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $name qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set image.tag="$tag",\
+fullnameOverride="$name",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
