@@ -1,5 +1,4 @@
 use crate::cloud_provider::gcp::kubernetes::Gke;
-use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -8,16 +7,13 @@ use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
+use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure_action::gke::helm_charts::{gke_helm_charts, GkeChartsConfigPrerequisites};
+use crate::infrastructure_action::gke::helm_charts::GkeHelmsDeployment;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
-use crate::io_models::context::Features;
-use crate::models::domain::ToHelmString;
-use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::ObjectStorage;
 use base64::Engine;
-use itertools::Itertools;
 use std::fs;
 use std::path::PathBuf;
 
@@ -85,7 +81,7 @@ pub(super) fn create_gke_cluster(
         cluster.options.gcp_json_credentials.project_id.to_string(),
         cluster.region.clone(),
         Some(base64::engine::general_purpose::STANDARD.encode(kubeconfig)),
-        Some(qovery_terraform_output.gke_cluster_public_hostname),
+        Some(qovery_terraform_output.gke_cluster_public_hostname.clone()),
         cluster.kind(),
         infra_ctx.cloud_provider().name().to_string(),
         cluster.long_id().to_string(),
@@ -105,92 +101,22 @@ pub(super) fn create_gke_cluster(
             ))
         });
 
-    // kubernetes helm deployments on the cluster
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        cluster.template_directory.as_str(),
-        temp_dir,
-        &tera_context,
-    ) {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            cluster.template_directory.to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/gcp/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", cluster.context.lib_root_dir()),
-            format!("{}/common/charts", temp_dir.to_string_lossy()),
+    let helms_deployments = GkeHelmsDeployment::new(
+        HelmInfraContext::new(
+            tera_context,
+            PathBuf::from(infra_ctx.context().lib_root_dir()),
+            PathBuf::from(cluster.template_directory.clone()),
+            cluster.temp_dir().join("helms"),
+            event_details.clone(),
+            vec![],
+            cluster.context().is_dry_run_deploy(),
         ),
-        // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/gcp/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", cluster.context.lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
-    let credentials_environment_variables: Vec<(String, String)> = infra_ctx
-        .cloud_provider()
-        .credentials_environment_variables()
-        .into_iter()
-        .map(|x| (x.0.to_string(), x.1.to_string()))
-        .collect();
-
-    logger.info("Preparing chart configuration to be deployed.");
-    let charts_prerequisites = GkeChartsConfigPrerequisites::new(
-        infra_ctx.cloud_provider().organization_id().to_string(),
-        infra_ctx.cloud_provider().organization_long_id(),
-        cluster.short_id().to_string(),
-        cluster.long_id,
-        cluster.context.is_feature_enabled(&Features::LogsHistory),
-        cluster.context.is_feature_enabled(&Features::MetricsHistory),
-        infra_ctx.dns_provider().domain().to_helm_format_string(),
-        infra_ctx.dns_provider().domain().root_domain().to_helm_format_string(),
-        LetsEncryptConfig::new(cluster.options.tls_email_report.to_string(), cluster.context.is_test_cluster()),
-        infra_ctx.dns_provider().provider_configuration(),
-        qovery_terraform_output.loki_logging_service_account_email,
-        cluster.logs_bucket_name(),
-        cluster.options.clone(),
-        cluster.advanced_settings().clone(),
+        qovery_terraform_output,
+        cluster,
     );
+    helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
-    let helm_charts_to_deploy = gke_helm_charts(
-        &charts_prerequisites,
-        Some(temp_dir.to_string_lossy().as_ref()),
-        &cluster.kubeconfig_local_file_path(),
-        &*cluster.context.qovery_api,
-        cluster.customer_helm_charts_override(),
-        infra_ctx.dns_provider().domain(),
-    )
-    .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
-
-    deploy_charts_levels(
-        infra_ctx.mk_kube_client()?.client(),
-        &cluster.kubeconfig_local_file_path(),
-        credentials_environment_variables
-            .iter()
-            .map(|(l, r)| (l.as_str(), r.as_str()))
-            .collect_vec()
-            .as_slice(),
-        helm_charts_to_deploy,
-        cluster.context.is_dry_run_deploy(),
-        Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
-    )
-    .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))
+    Ok(())
 }
 
 fn create_object_storage(

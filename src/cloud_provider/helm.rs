@@ -689,7 +689,7 @@ pub fn deploy_charts_levels(
             let chart_info = chart.get_chart_info();
             // don't do diff on destroy or skip
             if chart_info.action == Deploy {
-                let _ = helm.upgrade_diff(chart_info, &[], helm_diff_output_directory);
+                let _ = helm.upgrade_diff(chart_info, envs, helm_diff_output_directory);
             }
         }
 

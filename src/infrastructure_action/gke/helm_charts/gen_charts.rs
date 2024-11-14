@@ -1,4 +1,4 @@
-use crate::cloud_provider::gcp::kubernetes::GkeOptions;
+use super::GkeChartsConfigPrerequisites;
 use crate::cloud_provider::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -21,7 +21,6 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     ToCommonHelmChart,
 };
-use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
@@ -35,71 +34,14 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
 use crate::models::gcp::GcpStorageType;
-use crate::models::third_parties::LetsEncryptConfig;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
 use time::Duration;
 use url::Url;
 
-pub struct GkeChartsConfigPrerequisites {
-    pub organization_id: String,
-    pub organization_long_id: uuid::Uuid,
-    pub cluster_id: String,
-    pub cluster_long_id: uuid::Uuid,
-    pub ff_log_history_enabled: bool,
-    pub ff_metrics_history_enabled: bool,
-    pub managed_dns_helm_format: String,
-    pub managed_dns_root_domain_helm_format: String,
-    pub lets_encrypt_config: LetsEncryptConfig,
-    pub dns_provider_config: DnsProviderConfiguration,
-    pub loki_logging_service_account_email: String,
-    pub logs_bucket_name: String,
-    // qovery options form json input
-    pub infra_options: GkeOptions,
-    pub cluster_advanced_settings: ClusterAdvancedSettings,
-}
-
-impl GkeChartsConfigPrerequisites {
-    pub fn new(
-        organization_id: String,
-        organization_long_id: uuid::Uuid,
-        cluster_id: String,
-        cluster_long_id: uuid::Uuid,
-        ff_log_history_enabled: bool,
-        ff_metrics_history_enabled: bool,
-        managed_dns_helm_format: String,
-        managed_dns_root_domain_helm_format: String,
-        lets_encrypt_config: LetsEncryptConfig,
-        dns_provider_config: DnsProviderConfiguration,
-        loki_logging_service_account_email: String,
-        logs_bucket_name: String,
-        infra_options: GkeOptions,
-        cluster_advanced_settings: ClusterAdvancedSettings,
-    ) -> Self {
-        Self {
-            organization_id,
-            organization_long_id,
-            cluster_id,
-            cluster_long_id,
-            ff_log_history_enabled,
-            ff_metrics_history_enabled,
-            managed_dns_helm_format,
-            managed_dns_root_domain_helm_format,
-            lets_encrypt_config,
-            dns_provider_config,
-            loki_logging_service_account_email,
-            logs_bucket_name,
-            infra_options,
-            cluster_advanced_settings,
-        }
-    }
-}
-
 pub(super) fn gke_helm_charts(
     chart_config_prerequisites: &GkeChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    _kubernetes_config: &Path,
     qovery_api: &dyn QoveryApi,
     customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,

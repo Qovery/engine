@@ -1,4 +1,5 @@
 mod delete_kube_apps;
+mod deploy_helms;
 mod deploy_terraform;
 mod ec2_k3s;
 mod eks;
