@@ -22,20 +22,17 @@ use crate::cloud_provider::helm_charts::{
     ToCommonHelmChart,
 };
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{
-    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-};
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::Kind;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::errors::CommandError;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::infrastructure_action::deploy_helms::mk_customer_chart_override_fn;
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
 use crate::models::gcp::GcpStorageType;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashSet;
 use time::Duration;
 use url::Url;
 
@@ -43,19 +40,10 @@ pub(super) fn gke_helm_charts(
     chart_config_prerequisites: &GkeChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
-    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
-        Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
-            match customer_helm_charts_override.clone() {
-                Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
-                    chart_name: chart_name.to_string(),
-                    chart_values: content.clone(),
-                }),
-                None => None,
-            }
-        });
+    let get_chart_override_fn =
+        mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");

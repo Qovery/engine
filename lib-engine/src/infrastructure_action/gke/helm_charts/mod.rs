@@ -9,8 +9,10 @@ use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraReso
 use crate::infrastructure_action::gke::helm_charts::gen_charts::gke_helm_charts;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::io_models::context::Features;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::models::domain::ToHelmString;
 use crate::models::third_parties::LetsEncryptConfig;
+use std::collections::HashMap;
 
 pub mod gen_charts;
 
@@ -30,6 +32,7 @@ pub struct GkeChartsConfigPrerequisites {
     // qovery options form json input
     pub infra_options: GkeOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl GkeChartsConfigPrerequisites {
@@ -48,6 +51,7 @@ impl GkeChartsConfigPrerequisites {
         logs_bucket_name: String,
         infra_options: GkeOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
+        customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Self {
         Self {
             organization_id,
@@ -64,6 +68,7 @@ impl GkeChartsConfigPrerequisites {
             logs_bucket_name,
             infra_options,
             cluster_advanced_settings,
+            customer_helm_charts_override,
         }
     }
 }
@@ -91,7 +96,7 @@ impl<'a> HelmInfraResources for GkeHelmsDeployment<'a> {
         &self.context
     }
 
-    fn to_chart_config_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
+    fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
         GkeChartsConfigPrerequisites::new(
             infra_ctx.cloud_provider().organization_id().to_string(),
             infra_ctx.cloud_provider().organization_long_id(),
@@ -110,6 +115,7 @@ impl<'a> HelmInfraResources for GkeHelmsDeployment<'a> {
             self.cluster.logs_bucket_name(),
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
+            self.cluster.customer_helm_charts_override(),
         )
     }
 
@@ -122,7 +128,6 @@ impl<'a> HelmInfraResources for GkeHelmsDeployment<'a> {
             &charts_prerequisites,
             Some(self.context.destination_folder.to_string_lossy().as_ref()),
             &*infra_ctx.context().qovery_api,
-            infra_ctx.kubernetes().customer_helm_charts_override(),
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
