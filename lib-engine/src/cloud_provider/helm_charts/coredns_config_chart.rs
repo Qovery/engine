@@ -103,6 +103,7 @@ impl HelmChart for CoreDNSConfigChart {
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         _payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let kind = "configmap";
         let mut envs = envs.to_vec();
@@ -201,7 +202,7 @@ impl HelmChart for CoreDNSConfigChart {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        let payload = match self.pre_exec(kubernetes_config, envs, None) {
+        let payload = match self.pre_exec(kubernetes_config, envs, None, cmd_killer) {
             Ok(p) => match p {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
