@@ -253,11 +253,11 @@ fn deploy_parallel_charts(
 fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<BufWriter<File>> {
     use std::fs::{self, OpenOptions};
 
-    if !dir_path.exists() {
-        fs::create_dir_all(dir_path)?;
+    let filepath = dir_path.join("helm-diffs").join(format!("{}.diff", chart_name));
+    if !filepath.exists() {
+        fs::create_dir_all(&filepath)?;
     }
 
-    let filepath = dir_path.join("helm-diffs").join(format!("{}.diff", chart_name));
     let file = OpenOptions::new()
         .write(true)
         .create(true)
