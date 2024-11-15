@@ -53,7 +53,7 @@ pub(super) trait HelmInfraResources {
         let helm = Helm::new(Some(infra_ctx.kubernetes().kubeconfig_local_file_path()), &envs)
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e.into())))?;
 
-        for charts_level in charts_to_deploy {
+        for (ix, charts_level) in charts_to_deploy.into_iter().enumerate() {
             // Show diff for all chart we want to deploy
             charts_level
                 .iter()
@@ -87,6 +87,12 @@ pub(super) trait HelmInfraResources {
             }
 
             // We do the actual deployment in parallel
+            let chart_names = charts_level
+                .iter()
+                .map(|c| &c.get_chart_info().name)
+                .sorted()
+                .join(", ");
+            logger.info(format!("🛳️ Deploying in parallel charts of level {}: {}", ix, chart_names));
             deploy_parallel_charts(
                 infra_ctx.mk_kube_client()?.client(),
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
