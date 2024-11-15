@@ -50,7 +50,6 @@ pub fn delete_eks_cluster(
         .aws_sdk_client()
         .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
 
-    let temp_dir = kubernetes.temp_dir();
     let node_groups = node_groups_when_karpenter_is_enabled(
         kubernetes,
         infra_ctx,
@@ -98,7 +97,7 @@ pub fn delete_eks_cluster(
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
         kubernetes.template_directory.join("terraform"),
-        temp_dir.join("terraform"),
+        kubernetes.temp_dir.join("terraform"),
         event_details.clone(),
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
@@ -167,7 +166,7 @@ pub fn delete_eks_cluster(
 
     for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
         match cmd::terraform::terraform_remove_resource_from_tf_state(
-            temp_dir.join("terraform").to_string_lossy().as_ref(),
+            kubernetes.temp_dir.join("terraform").to_string_lossy().as_ref(),
             resource_to_be_removed_from_tf_state.0,
             &TerraformValidators::None,
         ) {
