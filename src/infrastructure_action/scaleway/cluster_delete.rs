@@ -22,15 +22,13 @@ pub fn delete_kapsule_cluster(
 
     logger.info("Preparing to delete cluster.");
 
-    let temp_dir = cluster.temp_dir();
-
     // generate terraform files and copy them into temp dir
     // We re-update the cluster to be sure it is in a correct state before deleting it
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
         cluster.template_directory.join("terraform"),
-        temp_dir.join("terraform"),
+        cluster.temp_dir().join("terraform"),
         event_details.clone(),
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
@@ -44,7 +42,6 @@ pub fn delete_kapsule_cluster(
         cluster.short_id()
     ));
     logger.info("Running Terraform apply before running a delete.");
-
     let _qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;

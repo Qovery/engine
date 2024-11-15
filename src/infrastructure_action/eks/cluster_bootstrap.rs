@@ -57,7 +57,7 @@ pub fn bootstrap_eks_cluster(
 
         match qovery_terraform_output {
             Ok(output) => OperationResult::Ok(output),
-            Err(e) => OperationResult::Err(e),
+            Err(e) => OperationResult::Retry(e),
         }
     });
 

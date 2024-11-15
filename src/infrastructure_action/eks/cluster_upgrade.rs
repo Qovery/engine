@@ -1,4 +1,5 @@
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
+use crate::cloud_provider::kubectl_utils::check_workers_on_upgrade;
 use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::models::KubernetesClusterAction;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
@@ -10,9 +11,7 @@ use crate::infrastructure_action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
-use crate::infrastructure_action::eks::utils::{
-    check_workers_on_upgrade, define_cluster_upgrade_timeout, get_rusoto_eks_client,
-};
+use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
