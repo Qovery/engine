@@ -847,11 +847,19 @@ gitlab-release:
   extends: .deploy-qovery-infra-engines
   variables:
     CHANNEL: staging
+  environment:
+    name: infra-staging
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/cef5383b-c50d-496d-b19f-d42914408888/settings/general
+    deployment_tier: staging
 
 3-deploy-qovery-infra-engines-prod:
   extends: .deploy-qovery-infra-engines
   variables:
     CHANNEL: prod
+  environment:
+    name: infra-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/6d9f665a-c203-4b02-8d49-ee05ad3f1137/settings/general
+    deployment_tier: production
 
 4-deploy-qovery-env-engines:
   stage: deploy
@@ -866,6 +874,10 @@ gitlab-release:
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
+  environment:
+    name: env-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
+    deployment_tier: production
 
 update_qovery_chart:
   stage: deploy
