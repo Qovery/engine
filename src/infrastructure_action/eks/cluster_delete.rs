@@ -4,7 +4,7 @@ use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::terraform_validators::TerraformValidators;
@@ -14,7 +14,6 @@ use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure_action::ec2_k3s::sdk::QoveryAwsSdkConfigEc2;
 use crate::infrastructure_action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure_action::eks::karpenter::Karpenter;
 use crate::infrastructure_action::eks::nodegroup::{
@@ -208,13 +207,6 @@ pub fn delete_eks_cluster(
     }
 
     logger.info("Running Terraform destroy");
-    if kubernetes.kind() == Kind::Ec2 {
-        match cloud_provider.aws_sdk_client() {
-            None => return Err(Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details))),
-            Some(client) => block_on(client.detach_ec2_volumes(kubernetes.short_id(), &event_details))?,
-        };
-    }
-
     tf_resources.delete(cloud_provider.credentials_environment_variables().as_slice(), &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");

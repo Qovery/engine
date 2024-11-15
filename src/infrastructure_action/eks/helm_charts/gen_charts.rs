@@ -1,7 +1,8 @@
 use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
 };
+use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
@@ -10,7 +11,7 @@ use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStora
 use crate::cloud_provider::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
-    ToCommonHelmChart,
+    HelmChartVpaType, ToCommonHelmChart,
 };
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -18,43 +19,56 @@ use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
-use crate::models::domain::Domain;
 
-use super::KapsuleChartsConfigPrerequisites;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
-use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
+use crate::cloud_provider::helm_charts::grafana_chart::{
+    CloudWatchConfig, GrafanaAdminUser, GrafanaChart, GrafanaDatasources,
+};
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
 };
+use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::infrastructure_action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure_action::eks::helm_charts::aws_alb_controller_chart::AwsLoadBalancerControllerChart;
+use crate::infrastructure_action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
+    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
+};
+use crate::infrastructure_action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
+use crate::infrastructure_action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
+use crate::infrastructure_action::eks::helm_charts::karpenter::KarpenterChart;
+use crate::infrastructure_action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
+use crate::infrastructure_action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
+use crate::infrastructure_action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::io_models::QoveryIdentifier;
+use crate::models::aws::AwsStorageType;
+use crate::models::domain::Domain;
+use crate::models::ToCloudProviderFormat;
+use chrono::Duration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
 
-pub fn kapsule_helm_charts(
-    chart_config_prerequisites: &KapsuleChartsConfigPrerequisites,
+pub(super) fn eks_helm_charts(
+    chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    info!("preparing chart configuration to be deployed");
-    let kind_provider = Kind::Scw;
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
+
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
@@ -63,9 +77,144 @@ pub fn kapsule_helm_charts(
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
-        kind_provider,
-        HashSet::from_iter(vec![QoveryStorageType::Ssd]),
+        Kind::Aws,
+        HashSet::from_iter(vec![
+            QoveryStorageType::Ssd,
+            QoveryStorageType::Hdd,
+            QoveryStorageType::Cold,
+            QoveryStorageType::Nvme,
+        ]),
         HelmChartNamespaces::KubeSystem,
+    )
+    .to_common_helm_chart()?;
+
+    // AWS IAM EKS user mapper
+    let mut aws_iam_eks_user_mapper: Option<CommonChart> = None;
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_iam_user_mapper_sso_enabled
+        || chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_iam_user_mapper_group_enabled
+        || chart_config_prerequisites.is_karpenter_enabled
+    {
+        aws_iam_eks_user_mapper = Some(
+            AwsIamEksUserMapperChart::new(
+                chart_prefix_path,
+                "iam-eks-user-mapper".to_string(),
+                chart_config_prerequisites.aws_iam_eks_user_mapper_role_arn.clone(),
+                match &chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_iam_user_mapper_group_enabled
+                {
+                    true => GroupConfig::Enabled {
+                        group_config_mapping: vec![GroupConfigMapping {
+                            iam_group_name: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .aws_iam_user_mapper_group_name
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_default(), // TODO(benjaminch): introduce a proper error
+                            k8s_group_name: "system:masters".to_string(),
+                        }],
+                    },
+                    false => GroupConfig::Disabled,
+                },
+                match &chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_iam_user_mapper_sso_enabled
+                {
+                    true => SSOConfig::Enabled {
+                        sso_role_arn: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .aws_iam_user_mapper_sso_role_arn
+                            .as_ref()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default(), // TODO(benjaminch): introduce a proper error
+                    },
+                    false => SSOConfig::Disabled,
+                },
+                match chart_config_prerequisites.is_karpenter_enabled {
+                    true => KarpenterConfig::Enabled {
+                        aws_account_id: chart_config_prerequisites.aws_account_id.clone(),
+                        cluster_name: chart_config_prerequisites.cluster_name.clone(),
+                    },
+                    false => KarpenterConfig::Disabled,
+                },
+                Duration::seconds(30), // TODO(benjaminch): might be a parameter
+                HelmChartResourcesConstraintType::ChartDefault,
+            )
+            .to_common_helm_chart()?,
+        );
+    }
+
+    // AWS nodes term handler
+    let aws_node_term_handler =
+        AwsNodeTermHandlerChart::new(chart_prefix_path, chart_config_prerequisites.is_karpenter_enabled)
+            .to_common_helm_chart()?;
+
+    // Vertical pod autoscaler
+    let vpa = VpaChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        true,
+        HelmChartNamespaces::KubeSystem,
+    )
+    .to_common_helm_chart()?;
+
+    // Karpenter
+    let karpenter = KarpenterChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cluster_name.to_string(),
+        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
+        chart_config_prerequisites.is_karpenter_enabled,
+        false,
+        chart_config_prerequisites.kubernetes_version_upgrade_requested,
+    )
+    .to_common_helm_chart()?;
+
+    // Karpenter CRD
+    let karpenter_crd = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
+
+    let karpenter_with_monitoring = KarpenterChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cluster_name.to_string(),
+        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
+        chart_config_prerequisites.is_karpenter_enabled,
+        true,
+        chart_config_prerequisites.kubernetes_version_upgrade_requested,
+    )
+    .to_common_helm_chart()?;
+
+    // Karpenter Configuration
+    let karpenter_configuration = KarpenterConfigurationChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cluster_name.to_string(),
+        chart_config_prerequisites.is_karpenter_enabled,
+        chart_config_prerequisites.cluster_security_group_id.clone(),
+        &chart_config_prerequisites.cluster_id,
+        chart_config_prerequisites.cluster_long_id,
+        &chart_config_prerequisites.organization_id,
+        chart_config_prerequisites.organization_long_id,
+        chart_config_prerequisites.region.to_cloud_provider_format(),
+        chart_config_prerequisites.karpenter_parameters.clone(),
+        chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
+        chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
+    )
+    .to_common_helm_chart()?;
+
+    // Cluster autoscaler
+    let cluster_autoscaler = ClusterAutoscalerChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cloud_provider.to_string(),
+        chart_config_prerequisites.region.clone(),
+        chart_config_prerequisites.cluster_name.to_string(),
+        chart_config_prerequisites.aws_iam_cluster_autoscaler_role_arn.clone(),
+        prometheus_namespace,
+        chart_config_prerequisites.ff_metrics_history_enabled,
+        chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
 
@@ -80,14 +229,39 @@ pub fn kapsule_helm_charts(
         HelmChartNamespaces::KubeSystem,
     );
 
-    // Vertical pod autoscaler
-    let vpa = VpaChart::new(
+    // ALB controller
+    let aws_load_balancer_controller = AwsLoadBalancerControllerChart::new(
         chart_prefix_path,
+        chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
+        chart_config_prerequisites.cluster_name.clone(),
         HelmChartResourcesConstraintType::ChartDefault,
-        HelmChartResourcesConstraintType::ChartDefault,
-        HelmChartResourcesConstraintType::ChartDefault,
-        true,
-        HelmChartNamespaces::KubeSystem,
+        HelmChartVpaType::EnabledWithConstraints(VpaContainerPolicy::new(
+            "*".to_string(),
+            Some(KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu,
+            )),
+            Some(KubernetesCpuResourceUnit::MilliCpu(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu,
+            )),
+            Some(KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_min_memory_in_mib,
+            )),
+            Some(KubernetesMemoryResourceUnit::MebiByte(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .aws_eks_alb_controller_vpa_max_memory_in_mib,
+            )),
+        )),
+        chart_config_prerequisites.alb_controller_already_deployed
+            && chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_eks_enable_alb_controller,
     )
     .to_common_helm_chart()?;
 
@@ -117,7 +291,7 @@ pub fn kapsule_helm_charts(
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
-                false,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
@@ -129,31 +303,31 @@ pub fn kapsule_helm_charts(
         true => Some(
             LokiChart::new(
                 chart_prefix_path,
-                // LokiEncryptionType::None, // Scaleway does not support encryption yet.
+                // LokiEncryptionType::ServerSideEncryption,
                 loki_namespace,
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
-                    s3_config: Some(chart_config_prerequisites.loki_storage_config_scaleway_s3.clone()),
-                    region: Some(chart_config_prerequisites.zone.region().to_string()),
-                    aws_iam_loki_role_arn: None,
-                    bucketname: None,
+                    region: Some(chart_config_prerequisites.region.to_cloud_provider_format().to_string()), // TODO(benjaminch): region to be struct instead of String
+                    bucketname: Some(chart_config_prerequisites.aws_s3_loki_bucket_name.clone()),
+                    s3_config: Some(chart_config_prerequisites.loki_storage_config_aws_s3.clone()),
+                    aws_iam_loki_role_arn: Some(chart_config_prerequisites.aws_iam_loki_role_arn.clone()),
                     insecure: false,
-                    use_path_style: true,
+                    use_path_style: false,
                 }),
                 get_chart_override_fn.clone(),
                 true,
                 None,
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
-                false,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
     };
 
-    /* Example to delete an old chart
+    /* Example to delete an old install
     let old_prometheus_operator = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "prometheus-operator".to_string(),
@@ -163,19 +337,23 @@ pub fn kapsule_helm_charts(
         },
     };*/
 
+    // K8s Event Logger
+    let k8s_event_logger =
+        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+
     // Kube prometheus stack
     let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
         false => None,
         true => Some(
             KubePrometheusStackChart::new(
                 chart_prefix_path,
-                "scw-sbv-ssd-0".to_string(),
+                AwsStorageType::GP2.to_k8s_storage_class(),
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 true,
                 get_chart_override_fn.clone(),
                 true,
-                false,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
@@ -191,13 +369,35 @@ pub fn kapsule_helm_charts(
                 prometheus_namespace,
                 get_chart_override_fn.clone(),
                 true,
-                false,
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         ),
     };
 
-    // metric-server is built-in Scaleway cluster, no need to manage it
+    let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
+    if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
+        qovery_cert_manager_webhook = Some(
+            QoveryCertManagerWebhookChart::new(
+                chart_prefix_path,
+                qovery_dns_config.clone(),
+                HelmChartResourcesConstraintType::ChartDefault,
+                UpdateStrategy::RollingUpdate,
+                HelmChartNamespaces::CertManager,
+                HelmChartNamespaces::CertManager,
+            )
+            .to_common_helm_chart()?,
+        );
+    }
+
+    // Metrics server
+    let metrics_server = MetricsServerChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
+        true,
+    )
+    .to_common_helm_chart()?;
 
     // Kube state metrics
     let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
@@ -230,9 +430,12 @@ pub fn kapsule_helm_charts(
                     prometheus_internal_url,
                     loki_chart_name: LokiChart::chart_name(),
                     loki_namespace: loki_namespace.to_string(),
-                    cloudwatch_config: None,
+                    cloudwatch_config: Some(CloudWatchConfig::new(
+                        chart_config_prerequisites.region.to_cloud_provider_format().to_string(), // TODO(benjaminch): region to be struct instead of String
+                        chart_config_prerequisites.aws_iam_cloudwatch_role_arn.clone(),
+                    )),
                 },
-                "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+                AwsStorageType::GP2.to_k8s_storage_class(),
             )
             .to_common_helm_chart()?,
         ),
@@ -263,21 +466,6 @@ pub fn kapsule_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
-    if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
-        qovery_cert_manager_webhook = Some(
-            QoveryCertManagerWebhookChart::new(
-                chart_prefix_path,
-                qovery_dns_config.clone(),
-                HelmChartResourcesConstraintType::ChartDefault,
-                UpdateStrategy::RollingUpdate,
-                HelmChartNamespaces::CertManager,
-                HelmChartNamespaces::CertManager,
-            )
-            .to_common_helm_chart()?,
-        );
-    }
-
     // Nginx ingress
     let nginx_ingress = NginxIngressChart::new(
         chart_prefix_path,
@@ -307,12 +495,12 @@ pub fn kapsule_helm_charts(
         chart_config_prerequisites.ff_metrics_history_enabled,
         get_chart_override_fn.clone(),
         domain.clone(),
-        Kind::Scw,
+        Kind::Aws,
         chart_config_prerequisites.organization_long_id.to_string(),
         chart_config_prerequisites.organization_id.clone(),
         chart_config_prerequisites.cluster_long_id.to_string(),
         chart_config_prerequisites.cluster_id.clone(),
-        KubernetesKind::ScwKapsule,
+        KubernetesKind::Eks,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings
@@ -329,12 +517,7 @@ pub fn kapsule_helm_charts(
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
         HelmChartNamespaces::NginxIngress,
-        Some(
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .load_balancer_size
-                .clone(),
-        ),
+        None,
         chart_config_prerequisites
             .cluster_advanced_settings
             .nginx_controller_enable_client_ip,
@@ -348,16 +531,14 @@ pub fn kapsule_helm_charts(
             .cluster_advanced_settings
             .nginx_controller_log_format_escaping
             .to_model(),
-        false, // AWS only
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_enable_alb_controller,
     )
     .to_common_helm_chart()?;
 
-    // K8s Event Logger
-    let k8s_event_logger =
-        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
-
     // Qovery cluster agent
-    let qovery_cluster_agent = QoveryClusterAgentChart::new(
+    let cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
         qovery_api
             .service_version(EngineServiceType::ClusterAgent)
@@ -372,7 +553,7 @@ pub fn kapsule_helm_charts(
             ),
             false => None,
         },
-        &chart_config_prerequisites.infra_options.jwt_token,
+        &chart_config_prerequisites.infra_options.jwt_token.clone(),
         QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
         QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
         HelmChartResourcesConstraintType::ChartDefault,
@@ -419,6 +600,7 @@ pub fn kapsule_helm_charts(
                         CommandError::new("cannot get engine version".to_string(), Some(e.to_string()), None)
                     })?,
                 },
+                // metrics
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
                     value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
@@ -431,15 +613,15 @@ pub fn kapsule_helm_charts(
                 // env vars
                 ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
-                    value: chart_config_prerequisites.organization_id.clone(),
+                    value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),
-                    value: "scw".to_string(),
+                    value: chart_config_prerequisites.cloud_provider.clone(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.REGION".to_string(),
-                    value: chart_config_prerequisites.zone.to_string(),
+                    value: chart_config_prerequisites.region.to_cloud_provider_format().to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.LIB_ROOT_DIR".to_string(),
@@ -472,7 +654,12 @@ pub fn kapsule_helm_charts(
                 },
                 ChartSetValue {
                     key: "buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES".to_string(),
-                    value: "AMD64".to_string(), // Scaleway doesn't support ARM arch yet
+                    value: chart_config_prerequisites
+                        .cpu_architectures
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<String>>()
+                        .join(","),
                 },
                 // engine resources limits
                 ChartSetValue {
@@ -498,30 +685,48 @@ pub fn kapsule_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let mut level_1: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(q_storage_class),
-        Box::new(coredns_config),
-        Box::new(vpa),
+    let mut level_0: Vec<Box<dyn HelmChart>> = vec![
+        // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
         Box::new(q_priority_class_chart),
     ];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
+    // If IAM settings are set and activated
+    if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
+        level_1.push(Box::new(aws_iam_eks_user_mapper));
+    }
 
-    let level_3: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
-    let level_4: Vec<Box<dyn HelmChart>> = if let Some(qovery_webhook) = qovery_cert_manager_webhook {
-        vec![Box::new(qovery_webhook)]
-    } else {
-        vec![]
-    };
+    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
-    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
-    let level_7: Vec<Box<dyn HelmChart>> = vec![
+    if let Some(qovery_webhook) = qovery_cert_manager_webhook {
+        level_5.push(Box::new(qovery_webhook));
+    }
+
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(metrics_server),
+        Box::new(aws_node_term_handler),
+        Box::new(external_dns),
+    ];
+
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .aws_eks_enable_alb_controller
+        || chart_config_prerequisites.alb_controller_already_deployed
+    {
+        level_6.push(Box::new(aws_load_balancer_controller));
+    }
+
+    let level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+
+    let level_8: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
-        Box::new(qovery_cluster_agent),
+        Box::new(cluster_agent),
         Box::new(qovery_shell_agent),
         Box::new(qovery_engine),
         Box::new(k8s_event_logger),
@@ -529,24 +734,42 @@ pub fn kapsule_helm_charts(
 
     // observability
     if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
-        level_1.push(Box::new(kube_prometheus_stack_chart));
+        level_2.push(Box::new(kube_prometheus_stack_chart));
     }
     if let Some(prometheus_adapter_chart) = prometheus_adapter {
-        level_2.push(Box::new(prometheus_adapter_chart));
+        level_3.push(Box::new(prometheus_adapter_chart));
     }
     if let Some(kube_state_metrics_chart) = kube_state_metrics {
-        level_2.push(Box::new(kube_state_metrics_chart));
+        level_3.push(Box::new(kube_state_metrics_chart));
     }
     if let Some(promtail_chart) = promtail {
-        level_1.push(Box::new(promtail_chart));
+        level_2.push(Box::new(promtail_chart));
     }
     if let Some(loki_chart) = loki {
-        level_2.push(Box::new(loki_chart));
+        level_3.push(Box::new(loki_chart));
     }
     if let Some(grafana_chart) = grafana {
-        level_2.push(Box::new(grafana_chart))
+        level_3.push(Box::new(grafana_chart))
+    }
+
+    // karpenter
+    if chart_config_prerequisites.is_karpenter_enabled {
+        level_0.push(Box::new(karpenter_crd));
+
+        level_1.push(Box::new(coredns_config.clone()));
+        level_1.push(Box::new(karpenter));
+
+        level_2.push(Box::new(karpenter_configuration));
+
+        if chart_config_prerequisites.ff_metrics_history_enabled {
+            level_4.push(Box::new(karpenter_with_monitoring))
+        }
+    } else {
+        level_3.push(Box::new(coredns_config));
     }
 
     info!("charts configuration preparation finished");
-    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])
+    Ok(vec![
+        level_0, level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8,
+    ])
 }

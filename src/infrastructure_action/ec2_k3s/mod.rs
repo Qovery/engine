@@ -7,9 +7,6 @@ use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::{InfraLogger, InfraLoggerImpl, InfrastructureAction};
 use serde_derive::{Deserialize, Serialize};
 
-// super is required because it used by the action of eks ;x
-pub(super) mod sdk;
-
 use super::utils::from_terraform_value;
 
 impl InfrastructureAction for EC2 {

@@ -1,6 +1,4 @@
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
-use crate::cloud_provider::aws::regions::AwsRegion;
-use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
 use crate::cloud_provider::models::KubernetesClusterAction;
@@ -9,9 +7,10 @@ use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage};
+use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
-use crate::infrastructure_action::eks::helm_charts::{eks_helm_charts, EksChartsConfigPrerequisites};
+use crate::infrastructure_action::eks::helm_charts::EksHelmsDeployment;
 use crate::infrastructure_action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure_action::eks::karpenter::Karpenter;
 use crate::infrastructure_action::eks::nodegroup::{
@@ -22,18 +21,13 @@ use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::{InfraLogger, InfrastructureAction};
-use crate::io_models::context::Features;
-use crate::models::domain::ToHelmString;
 use crate::models::kubernetes::K8sObject;
-use crate::models::third_parties::LetsEncryptConfig;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
-use crate::string::terraform_list_format;
-use itertools::Itertools;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use rusoto_eks::EksClient;
-use std::str::FromStr;
+use std::path::PathBuf;
 
 pub fn create_eks_cluster(
     kubernetes: &EKS,
@@ -205,41 +199,6 @@ pub fn create_eks_cluster(
     logger.info("Preparing chart configuration to be deployed");
     // kubernetes helm deployments on the cluster
 
-    if let Err(e) =
-        crate::template::generate_and_copy_all_files_into_dir(&kubernetes.template_directory, temp_dir, &tera_context)
-    {
-        return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details.clone(),
-            kubernetes.template_directory.to_string_lossy().to_string(),
-            temp_dir.to_string_lossy().to_string(),
-            e,
-        )));
-    }
-
-    let dirs_to_be_copied_to = vec![
-        // copy lib/common/bootstrap/charts directory (and subdirectory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        (
-            format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir()),
-            format!("{}/common/charts", temp_dir.to_string_lossy()),
-        ),
-        // copy lib/common/bootstrap/chart_values directory (and subdirectory) into the lib/aws/bootstrap/common/chart_values directory.
-        (
-            format!("{}/common/bootstrap/chart_values", kubernetes.context().lib_root_dir()),
-            format!("{}/common/chart_values", temp_dir.to_string_lossy()),
-        ),
-    ];
-    for (source_dir, target_dir) in dirs_to_be_copied_to {
-        if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
-            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                source_dir,
-                target_dir,
-                e,
-            )));
-        }
-    }
-
     let credentials_environment_variables: Vec<(String, String)> = cloud_provider
         .credentials_environment_variables()
         .into_iter()
@@ -300,67 +259,6 @@ pub fn create_eks_cluster(
     }
 
     let qube_client = infra_ctx.mk_kube_client()?;
-
-    // check if alb controller is already enabled to decide if webhooks should be enabled or not
-    let found_alb_mutating_configs = block_on(
-        qube_client
-            .get_mutating_webhook_configurations(event_details.clone(), SelectK8sResourceBy::Name("xxx".to_string())),
-    )?;
-    let alb_already_deployed = !found_alb_mutating_configs.is_empty();
-
-    // retrieve cluster CPU architectures
-    let charts_prerequisites = EksChartsConfigPrerequisites {
-        organization_id: cloud_provider.organization_id().to_string(),
-        organization_long_id: cloud_provider.organization_long_id(),
-        infra_options: kubernetes.options.clone(),
-        cluster_id: kubernetes.short_id().to_string(),
-        cluster_long_id: kubernetes.long_id,
-        region: AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
-            EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
-        })?,
-        cluster_name: kubernetes.cluster_name(),
-        cpu_architectures: kubernetes.cpu_architectures(),
-        cloud_provider: "aws".to_string(),
-        qovery_engine_location: kubernetes.options.qovery_engine_location.clone(),
-        ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
-        ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-        ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
-        managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
-        managed_dns_resolvers_terraform_format: terraform_list_format(
-            dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect(),
-        ),
-        managed_dns_root_domain_helm_format: dns_provider.domain().root_domain().to_helm_format_string(),
-        lets_encrypt_config: LetsEncryptConfig::new(
-            kubernetes.options.tls_email_report.to_string(),
-            kubernetes.context().is_test_cluster(),
-        ),
-        dns_provider_config: dns_provider.provider_configuration(),
-        cluster_advanced_settings: kubernetes.advanced_settings().clone(),
-        is_karpenter_enabled: kubernetes.is_karpenter_enabled(),
-        karpenter_parameters: kubernetes.get_karpenter_parameters(),
-        aws_account_id: eks_tf_output.aws_account_id.clone(),
-        aws_iam_eks_user_mapper_role_arn: eks_tf_output.aws_iam_eks_user_mapper_role_arn.clone(),
-        aws_iam_cluster_autoscaler_role_arn: eks_tf_output.aws_iam_cluster_autoscaler_role_arn.clone(),
-        aws_iam_cloudwatch_role_arn: eks_tf_output.aws_iam_cloudwatch_role_arn.clone(),
-        aws_iam_loki_role_arn: eks_tf_output.aws_iam_loki_role_arn.clone(),
-        aws_s3_loki_bucket_name: eks_tf_output.aws_s3_loki_bucket_name.clone(),
-        loki_storage_config_aws_s3: eks_tf_output.loki_storage_config_aws_s3.clone(),
-        karpenter_controller_aws_role_arn: eks_tf_output.karpenter_controller_aws_role_arn.clone(),
-        cluster_security_group_id: eks_tf_output.cluster_security_group_id.clone(),
-        alb_controller_already_deployed: alb_already_deployed,
-        kubernetes_version_upgrade_requested,
-        aws_iam_alb_controller_arn: eks_tf_output.aws_iam_alb_controller_arn.clone(),
-    };
-    let helm_charts_to_deploy = eks_helm_charts(
-        &charts_prerequisites,
-        Some(temp_dir.to_string_lossy().as_ref()),
-        &kubeconfig_path,
-        &*kubernetes.context().qovery_api,
-        kubernetes.customer_helm_charts_override(),
-        dns_provider.domain(),
-    )
-    .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
-
     // before deploying Helm charts, we need to check if Nginx ingress controller needs to move NLB to ALB controller
     let nginx_namespace = "nginx-ingress";
     let services = block_on(qube_client.get_services(
@@ -387,19 +285,29 @@ pub fn create_eks_cluster(
         }
     }
 
-    deploy_charts_levels(
-        qube_client.client(),
-        &kubeconfig_path,
-        credentials_environment_variables
-            .iter()
-            .map(|(l, r)| (l.as_str(), r.as_str()))
-            .collect_vec()
-            .as_slice(),
-        helm_charts_to_deploy,
-        kubernetes.context().is_dry_run_deploy(),
-        Some(&infra_ctx.kubernetes().helm_charts_diffs_directory()),
-    )
-    .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
+    // check if alb controller is already enabled to decide if webhooks should be enabled or not
+    let found_alb_mutating_configs = block_on(
+        qube_client
+            .get_mutating_webhook_configurations(event_details.clone(), SelectK8sResourceBy::Name("xxx".to_string())),
+    )?;
+    let alb_already_deployed = !found_alb_mutating_configs.is_empty();
+
+    let helms_deployments = EksHelmsDeployment::new(
+        HelmInfraContext::new(
+            tera_context,
+            PathBuf::from(infra_ctx.context().lib_root_dir()),
+            kubernetes.template_directory.clone(),
+            kubernetes.temp_dir().join("helms"),
+            event_details.clone(),
+            credentials_environment_variables,
+            kubernetes.context().is_dry_run_deploy(),
+        ),
+        eks_tf_output,
+        kubernetes,
+        alb_already_deployed,
+        kubernetes_version_upgrade_requested,
+    );
+    helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
     clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
 

@@ -11,11 +11,13 @@ use crate::errors::EngineError;
 use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::io_models::context::Features;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::models::domain::ToHelmString;
 use crate::models::scaleway::ScwZone;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::string::terraform_list_format;
 use gen_charts::kapsule_helm_charts;
+use std::collections::HashMap;
 
 pub struct KapsuleChartsConfigPrerequisites {
     pub organization_id: String,
@@ -36,6 +38,7 @@ pub struct KapsuleChartsConfigPrerequisites {
     pub infra_options: KapsuleOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub loki_storage_config_scaleway_s3: String,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
 impl KapsuleChartsConfigPrerequisites {
@@ -57,6 +60,7 @@ impl KapsuleChartsConfigPrerequisites {
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         loki_storage_config_scaleway_s3: String,
+        customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Self {
         KapsuleChartsConfigPrerequisites {
             organization_id,
@@ -76,6 +80,7 @@ impl KapsuleChartsConfigPrerequisites {
             infra_options,
             cluster_advanced_settings,
             loki_storage_config_scaleway_s3,
+            customer_helm_charts_override,
         }
     }
 }
@@ -107,7 +112,7 @@ impl<'a> HelmInfraResources for KapsuleHelmsDeployment<'a> {
         &self.context
     }
 
-    fn to_chart_config_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
+    fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
         KapsuleChartsConfigPrerequisites::new(
             infra_ctx.cloud_provider().organization_id().to_string(),
             infra_ctx.cloud_provider().organization_long_id(),
@@ -136,6 +141,7 @@ impl<'a> HelmInfraResources for KapsuleHelmsDeployment<'a> {
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.terraform_output.loki_storage_config_scaleway_s3.clone(),
+            self.cluster.customer_helm_charts_override(),
         )
     }
 
@@ -148,7 +154,6 @@ impl<'a> HelmInfraResources for KapsuleHelmsDeployment<'a> {
             &charts_prerequisites,
             Some(self.context.destination_folder.to_string_lossy().as_ref()),
             &*infra_ctx.context().qovery_api,
-            infra_ctx.kubernetes().customer_helm_charts_override(),
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))

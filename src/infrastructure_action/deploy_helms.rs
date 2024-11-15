@@ -1,17 +1,21 @@
 use super::InfraLogger;
 use crate::cloud_provider::helm::{deploy_charts_levels, HelmChart};
+use crate::cloud_provider::models::CustomerHelmChartsOverride;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use itertools::Itertools;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tera::Context as TeraContext;
 
 pub(super) trait HelmInfraResources {
     type ChartPrerequisite;
 
     fn charts_context(&self) -> &HelmInfraContext;
-    fn to_chart_config_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite;
+    fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite;
     fn gen_charts_to_deploy(
         &self,
         infra_ctx: &InfrastructureContext,
@@ -24,7 +28,7 @@ pub(super) trait HelmInfraResources {
     ) -> Result<(), Box<EngineError>> {
         logger.info("Preparing helm files on disk");
         self.charts_context().prepare_helm_files_on_disk()?;
-        let chart_configs = self.to_chart_config_prerequisite(infra_ctx);
+        let chart_configs = self.new_chart_prerequisite(infra_ctx);
         let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
 
         logger.info("Going to deploy helm charts in this sequence:");
@@ -137,5 +141,21 @@ impl HelmInfraContext {
         }
 
         Ok(())
+    }
+}
+
+pub(super) fn mk_customer_chart_override_fn(
+    chart_overrides: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+) -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
+    match chart_overrides {
+        None => Arc::new(|_| None),
+        Some(charts_override) => Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
+            charts_override
+                .get(&chart_name)
+                .map(|content| CustomerHelmChartsOverride {
+                    chart_name: chart_name.to_string(),
+                    chart_values: content.clone(),
+                })
+        }),
     }
 }
