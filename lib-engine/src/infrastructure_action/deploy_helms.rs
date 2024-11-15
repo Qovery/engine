@@ -59,11 +59,21 @@ pub(super) trait HelmInfraResources {
                 .iter()
                 .filter(|c| c.get_chart_info().action == HelmAction::Deploy)
                 .for_each(|chart| {
-                    let Ok(mut buf_writer) =
-                        create_helm_diff_file(&self.charts_context().destination_folder, &chart.get_chart_info().name)
-                    else {
-                        return;
+                    let mut buf_writer = match create_helm_diff_file(
+                        &self.charts_context().destination_folder,
+                        &chart.get_chart_info().name,
+                    ) {
+                        Ok(buf_writer) => buf_writer,
+                        Err(err) => {
+                            logger.warn(format!(
+                                "Unable to create diff file for chart {}: {}",
+                                chart.get_chart_info().name,
+                                err
+                            ));
+                            return;
+                        }
                     };
+                    logger.info(format!("🔍 Showing diff for chart: {}", chart.get_chart_info().name));
                     let _ = helm.upgrade_diff(chart.get_chart_info(), &envs, &mut |line| {
                         let _ = buf_writer.write_all(line.as_bytes());
                         logger.info(line);
@@ -253,10 +263,13 @@ fn deploy_parallel_charts(
 fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<BufWriter<File>> {
     use std::fs::{self, OpenOptions};
 
-    let filepath = dir_path.join("helm-diffs").join(format!("{}.diff", chart_name));
-    if !filepath.exists() {
-        fs::create_dir_all(&filepath)?;
-    }
+    let filepath = {
+        let filepath = dir_path.join("helm-diffs");
+        if !filepath.exists() {
+            fs::create_dir_all(&filepath)?;
+        }
+        filepath.join(format!("{}.diff", chart_name))
+    };
 
     let file = OpenOptions::new()
         .write(true)
