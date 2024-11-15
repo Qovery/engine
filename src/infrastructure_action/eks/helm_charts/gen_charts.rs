@@ -161,6 +161,7 @@ pub(super) fn eks_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         true,
         HelmChartNamespaces::KubeSystem,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -688,6 +689,21 @@ pub(super) fn eks_helm_charts(
     let mut level_0: Vec<Box<dyn HelmChart>> = vec![
         // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
         Box::new(q_priority_class_chart),
+        // This chart is required in order to install CRDs and declare later charts with VPA
+        // It will be installed only if chart doesn't exist already on the cluster in order to avoid
+        // disabling VPA on VPA controller at each update
+        Box::new(
+            VpaChart::new(
+                chart_prefix_path,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                false, // <- VPA not activated
+                HelmChartNamespaces::KubeSystem,
+                true, // <- wont be deployed if already exists
+            )
+            .to_common_helm_chart()?,
+        ),
     ];
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];

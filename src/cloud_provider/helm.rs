@@ -297,6 +297,7 @@ pub struct ChartInfo {
     pub k8s_selector: Option<String>,
     pub backup_resources: Option<Vec<String>>,
     pub crds_update: Option<CRDSUpdate>,
+    pub skip_if_already_installed: bool,
 }
 
 impl ChartInfo {
@@ -382,6 +383,7 @@ impl Default for ChartInfo {
             k8s_selector: None,
             backup_resources: None,
             crds_update: None,
+            skip_if_already_installed: false,
         }
     }
 }
@@ -418,6 +420,7 @@ pub trait HelmChart: Send {
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
@@ -441,7 +444,7 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
-        let payload = self.pre_exec(kubernetes_config, envs, payload)?;
+        let payload = self.pre_exec(kubernetes_config, envs, payload, cmd_killer)?;
         let payload = match self.exec(kubernetes_config, envs, payload.clone(), cmd_killer) {
             Ok(payload) => payload,
             Err(e) => {
@@ -487,6 +490,15 @@ pub trait HelmChart: Send {
                         None
                     }
                 };
+
+                // Allow to skip the deployment if the chart is already installed
+                if chart_info.skip_if_already_installed && installed_chart_version.is_some() {
+                    info!(
+                        "chart {} is already installed and option to skip it if installed is set to true, skipping",
+                        &chart_info.name
+                    );
+                    return Ok(payload);
+                }
 
                 let upgrade_status = match prepare_chart_backup_on_upgrade(
                     kubernetes_config,
@@ -734,27 +746,26 @@ impl HelmChart for CommonChart {
         &self.chart_info
     }
 
-    fn post_exec(
+    fn pre_exec(
         &self,
-        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
+        // Cleaning any existing crash looping pod for this helm chart
+        if let Some(selector) = self.get_selector() {
+            kubectl_delete_crash_looping_pods(
+                kubernetes_config,
+                Some(self.get_chart_info().get_namespace_string().as_str()),
+                Some(selector.as_str()),
+                envs.to_vec(),
+            )?;
+        }
+
         let helm = Helm::new(Some(kubernetes_config), envs)?;
 
-        // installation checker
-        let chart_payload_res = match &self.chart_installation_checker {
-            Some(checker) => match checker.verify_installation(kube_client) {
-                Ok(_) => Ok(payload),
-                Err(e) => Err(HelmChartError::CommandError(e)),
-            },
-            // If no checker set, then consider it's ok
-            None => Ok(payload),
-        };
-
-        // deploy VPA if exists or uninstall it if not wanted
+        // deploy VPA if exists
         let vpa_chart = match &self.vertical_pod_autoscaler {
             Some(vpa) => self.get_vpa_chart_info(Some(vpa.clone())),
             None => self.get_vpa_chart_info(None),
@@ -765,11 +776,44 @@ impl HelmChart for CommonChart {
                 warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.upgrade(&vpa_chart, &[], cmd_killer)?;
             }
+            HelmAction::Skip | HelmAction::Destroy => {}
+        }
+
+        Ok(payload)
+    }
+
+    fn post_exec(
+        &self,
+        kube_client: &kube::Client,
+        kubernetes_config: &Path,
+        envs: &[(&str, &str)],
+        payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
+        // installation checker
+        let chart_payload_res = match &self.chart_installation_checker {
+            Some(checker) => match checker.verify_installation(kube_client) {
+                Ok(_) => Ok(payload),
+                Err(e) => Err(HelmChartError::CommandError(e)),
+            },
+            // If no checker set, then consider it's ok
+            None => Ok(payload),
+        };
+
+        let helm = Helm::new(Some(kubernetes_config), envs)?;
+
+        //  uninstall VPA if not wanted
+        let vpa_chart = match &self.vertical_pod_autoscaler {
+            Some(vpa) => self.get_vpa_chart_info(Some(vpa.clone())),
+            None => self.get_vpa_chart_info(None),
+        };
+        warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
+        match vpa_chart.action {
             HelmAction::Destroy => {
                 warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
-            HelmAction::Skip => {}
+            HelmAction::Skip | Deploy => {}
         }
 
         chart_payload_res
@@ -787,6 +831,26 @@ impl HelmChart for ServiceChart {
 
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
+    }
+
+    fn pre_exec(
+        &self,
+        kubernetes_config: &Path,
+        envs: &[(&str, &str)],
+        payload: Option<ChartPayload>,
+        _cmd_killer: &CommandKiller,
+    ) -> Result<Option<ChartPayload>, HelmChartError> {
+        // Cleaning any existing crash looping pod for this helm chart
+        if let Some(selector) = self.get_selector() {
+            kubectl_delete_crash_looping_pods(
+                kubernetes_config,
+                Some(self.get_chart_info().get_namespace_string().as_str()),
+                Some(selector.as_str()),
+                envs.to_vec(),
+            )?;
+        }
+
+        Ok(payload)
     }
 
     fn exec(
