@@ -17,6 +17,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
 use crate::infrastructure_action::InfrastructureAction;
+use crate::models::domain::ToTerraformString;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::runtime::block_on;
@@ -43,6 +44,27 @@ pub enum ScwNodeGroupErrors {
     NodeGroupValidationError(CommandError),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum KapsuleClusterType {
+    #[default]
+    Kapsule, // Mutualized control plane
+    KapsuleDedicated4,
+    KapsuleDedicated8,
+    KapsuleDedicated16,
+}
+
+impl ToTerraformString for KapsuleClusterType {
+    fn to_terraform_format_string(&self) -> String {
+        match self {
+            KapsuleClusterType::Kapsule => "kapsule".to_string(),
+            KapsuleClusterType::KapsuleDedicated4 => "kapsule-dedicated-4".to_string(),
+            KapsuleClusterType::KapsuleDedicated8 => "kapsule-dedicated-8".to_string(),
+            KapsuleClusterType::KapsuleDedicated16 => "kapsule-dedicated-16".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
     // Qovery
@@ -62,6 +84,8 @@ pub struct KapsuleOptions {
     pub scaleway_project_id: String,
     pub scaleway_access_key: String,
     pub scaleway_secret_key: String,
+    #[serde(default)]
+    pub scaleway_kubernetes_type: KapsuleClusterType,
 
     // Other
     pub tls_email_report: String,
@@ -83,6 +107,7 @@ impl KapsuleOptions {
         scaleway_access_key: String,
         scaleway_secret_key: String,
         tls_email_report: String,
+        scaleway_kubernetes_type: KapsuleClusterType,
     ) -> KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
@@ -98,6 +123,7 @@ impl KapsuleOptions {
             scaleway_access_key,
             scaleway_secret_key,
             tls_email_report,
+            scaleway_kubernetes_type,
         }
     }
 }

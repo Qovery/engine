@@ -6,6 +6,7 @@ resource "scaleway_vpc_private_network" "private_network" {
 {% endif %}
 resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   name    = var.kubernetes_cluster_name
+  type    = var.scaleway_ks_type
   version = var.scaleway_ks_version
   cni     = "cilium"
   delete_additional_resources = true
