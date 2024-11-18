@@ -20,7 +20,8 @@ stages:
   - tests-quarantine
   - release-tag
   - release
-  - deploy
+  - deploy-staging
+  - deploy-prod
 
 ##################
 # BUILD AND LINT #
@@ -818,7 +819,9 @@ gitlab-release:
 ##########
 
 1-set-globally-available:
-  stage: deploy
+  stage: deploy-prod
+  needs:
+    - gitlab-release
   retry: 2
   dependencies:
     - gitlab-release
@@ -831,7 +834,6 @@ gitlab-release:
       when: manual
 
 .deploy-qovery-infra-engines:
-  stage: deploy
   retry: 0
   needs:
     - gitlab-release
@@ -843,7 +845,8 @@ gitlab-release:
     - if: $CI_COMMIT_TAG
       when: manual
 
-2-deploy-qovery-infra-engines-staging:
+1-deploy-qovery-infra-engines-staging:
+  stage: deploy-staging
   extends: .deploy-qovery-infra-engines
   variables:
     CHANNEL: staging
@@ -852,7 +855,8 @@ gitlab-release:
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/cef5383b-c50d-496d-b19f-d42914408888/settings/general
     deployment_tier: staging
 
-3-deploy-qovery-infra-engines-prod:
+2-deploy-qovery-infra-engines-prod:
+  stage: deploy-prod
   extends: .deploy-qovery-infra-engines
   variables:
     CHANNEL: prod
@@ -861,8 +865,20 @@ gitlab-release:
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/6d9f665a-c203-4b02-8d49-ee05ad3f1137/settings/general
     deployment_tier: production
 
-4-deploy-qovery-env-engines:
-  stage: deploy
+3-update_qovery_chart:
+  stage: deploy-prod
+  retry: 1
+  needs:
+    - gitlab-release
+  script:
+    - ./helper.sh update_qovery_chart
+  tags:
+    - bm-7cpu-16gmem-0g
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+
+.deploy-qovery-env-engines:
   retry: 0
   needs:
     - gitlab-release
@@ -874,20 +890,23 @@ gitlab-release:
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
+
+2-deploy-qovery-env-engines-staging:
+  stage: deploy-staging
+  extends: .deploy-qovery-env-engines
+  variables:
+    CHANNEL: staging
+  environment:
+    name: env-staging
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
+    deployment_tier: staging
+
+4-deploy-qovery-env-engines-prod:
+  stage: deploy-prod
+  extends: .deploy-qovery-env-engines
+  variables:
+    CHANNEL: prod
   environment:
     name: env-production
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
     deployment_tier: production
-
-update_qovery_chart:
-  stage: deploy
-  retry: 1
-  dependencies:
-    - gitlab-release
-  script:
-    - ./helper.sh update_qovery_chart
-  tags:
-    - bm-7cpu-16gmem-0g
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
