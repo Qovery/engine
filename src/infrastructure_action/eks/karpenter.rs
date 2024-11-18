@@ -330,7 +330,7 @@ impl Karpenter {
         let cluster_name = kubernetes.cluster_name();
 
         // Karpenter Configuration
-        let karpenter_configuration_chart = KarpenterConfigurationChart::new(
+        let mut karpenter_configuration_chart = KarpenterConfigurationChart::new(
             Some(kubernetes.temp_dir().to_string_lossy().as_ref()),
             cluster_name.to_string(),
             true,
@@ -355,6 +355,16 @@ impl Karpenter {
                 ),
             )
         })?;
+
+        // Override the path to the chart, as it as not been rendered on disk during the normal chart flow
+        // we take it directly from the template directory
+        karpenter_configuration_chart.chart_info.path = kubernetes
+            .template_directory
+            .join("charts")
+            .join(karpenter_configuration_chart.chart_info.name.clone())
+            .to_string_lossy()
+            .to_string();
+        karpenter_configuration_chart.chart_info.values_files = vec![];
 
         Ok(karpenter_configuration_chart.chart_info)
     }
