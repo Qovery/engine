@@ -330,7 +330,7 @@ impl Karpenter {
         let cluster_name = kubernetes.cluster_name();
 
         // Karpenter Configuration
-        let karpenter_configuration_chart = KarpenterConfigurationChart::new(
+        let mut karpenter_configuration_chart = KarpenterConfigurationChart::new(
             Some(kubernetes.temp_dir().to_string_lossy().as_ref()),
             cluster_name.to_string(),
             true,
@@ -355,6 +355,16 @@ impl Karpenter {
                 ),
             )
         })?;
+
+        // Override the path to the chart, as it as not been rendered on disk during the normal chart flow
+        // we take it directly from the template directory
+        karpenter_configuration_chart.chart_info.path = kubernetes
+            .template_directory
+            .join("charts")
+            .join(karpenter_configuration_chart.chart_info.name.clone())
+            .to_string_lossy()
+            .to_string();
+        karpenter_configuration_chart.chart_info.values_files = vec![];
 
         Ok(karpenter_configuration_chart.chart_info)
     }
@@ -457,22 +467,6 @@ fn uninstall_chart(
         })
 }
 
-pub fn bootstrap_on_fargate_when_karpenter_is_enabled(
-    kubernetes: &dyn Kubernetes,
-    kubernetes_action: KubernetesClusterAction,
-) -> bool {
-    match kubernetes_action {
-        KubernetesClusterAction::Bootstrap => true,
-        KubernetesClusterAction::Update(_) if kubernetes.context().is_first_cluster_deployment() => true,
-        KubernetesClusterAction::Update(_) => false,
-        KubernetesClusterAction::Upgrade(_)
-        | KubernetesClusterAction::Pause
-        | KubernetesClusterAction::Resume(_)
-        | KubernetesClusterAction::Delete
-        | KubernetesClusterAction::CleanKarpenterMigration => false,
-    }
-}
-
 pub fn node_groups_when_karpenter_is_enabled<'a>(
     kubernetes: &dyn Kubernetes,
     infra_context: &InfrastructureContext,
@@ -480,6 +474,10 @@ pub fn node_groups_when_karpenter_is_enabled<'a>(
     event_details: &EventDetails,
     kubernetes_action: KubernetesClusterAction,
 ) -> Result<&'a [NodeGroups], Box<EngineError>> {
+    if !kubernetes.is_karpenter_enabled() {
+        return Ok(node_groups);
+    }
+
     match kubernetes_action {
         KubernetesClusterAction::Bootstrap
         | KubernetesClusterAction::Upgrade(_)
@@ -488,7 +486,7 @@ pub fn node_groups_when_karpenter_is_enabled<'a>(
         | KubernetesClusterAction::Delete
         | KubernetesClusterAction::CleanKarpenterMigration => Ok(&[]),
         KubernetesClusterAction::Update(_)
-            if kubernetes.context().is_first_cluster_deployment()
+            if infra_context.context().is_first_cluster_deployment()
                 || Karpenter::deployment_is_installed(&infra_context.mk_kube_client()?, event_details) =>
         {
             Ok(&[])

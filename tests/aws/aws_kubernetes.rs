@@ -47,7 +47,7 @@ fn create_and_destroy_eks_cluster(
     })
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(any(feature = "test-aws-infra", feature = "test-aws-infra-upgrade"))]
 fn create_and_destroy_arm64_eks_cluster(
     region: String,
     test_type: ClusterTestType,

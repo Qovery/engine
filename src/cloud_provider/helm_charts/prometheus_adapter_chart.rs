@@ -22,6 +22,7 @@ pub struct PrometheusAdapterChart {
     prometheus_namespace: HelmChartNamespaces,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
+    additional_char_path: Option<HelmChartValuesFilePath>,
 }
 
 impl PrometheusAdapterChart {
@@ -31,6 +32,7 @@ impl PrometheusAdapterChart {
         prometheus_namespace: HelmChartNamespaces,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
+        karpenter_enabled: bool,
     ) -> Self {
         PrometheusAdapterChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -48,6 +50,14 @@ impl PrometheusAdapterChart {
             prometheus_namespace,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "prometheus-adapter-with-karpenter".to_string(),
+                )),
+                false => None,
+            },
         }
     }
 
@@ -58,13 +68,18 @@ impl PrometheusAdapterChart {
 
 impl ToCommonHelmChart for PrometheusAdapterChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "prometheus-adapter".to_string(),
                 path: self.chart_path.to_string(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
                 namespace: self.prometheus_namespace,
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values: vec![ChartSetValue {
                     key: "prometheus.url".to_string(),
                     value: self.prometheus_internal_url.clone(),
@@ -157,6 +172,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             get_prometheus_adapter_chart_override(),
             false,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -185,6 +201,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             get_prometheus_adapter_chart_override(),
+            false,
             false,
         );
 
@@ -218,6 +235,7 @@ mod tests {
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
             get_prometheus_adapter_chart_override(),
+            false,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();

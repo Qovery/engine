@@ -1,17 +1,14 @@
-use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kubernetes, KubernetesUpgradeStatus};
+use crate::cloud_provider::kubernetes::{send_progress_on_long_task, KubernetesUpgradeStatus};
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::service::Action;
-use crate::cloud_provider::utilities::print_action;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
-use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::scaleway::cluster_create::create_kapsule_cluster;
 use crate::infrastructure_action::scaleway::cluster_delete::delete_kapsule_cluster;
 use crate::infrastructure_action::scaleway::cluster_pause::pause_kapsule_cluster;
 use crate::infrastructure_action::scaleway::cluster_upgrade::upgrade_kapsule_cluster;
 use crate::infrastructure_action::InfrastructureAction;
-use function_name::named;
 use serde_derive::{Deserialize, Serialize};
 
 mod cluster_create;
@@ -23,71 +20,43 @@ mod nodegroup;
 mod tera_context;
 
 impl InfrastructureAction for Kapsule {
-    #[named]
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || create_kapsule_cluster(self, infra_ctx))
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        _has_been_upraded: bool,
+    ) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
+        send_progress_on_long_task(self, Action::Create, || create_kapsule_cluster(self, infra_ctx, logger))
     }
 
-    #[named]
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || pause_kapsule_cluster(self, infra_ctx))
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Pause);
+        send_progress_on_long_task(self, Action::Pause, || pause_kapsule_cluster(self, infra_ctx, logger))
     }
 
-    #[named]
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || delete_kapsule_cluster(self, infra_ctx))
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Delete);
+        send_progress_on_long_task(self, Action::Delete, || delete_kapsule_cluster(self, infra_ctx, logger))
     }
 
-    #[named]
     fn upgrade_cluster(
         &self,
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        upgrade_kapsule_cluster(self, infra_ctx, kubernetes_upgrade_status)
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
+        send_progress_on_long_task(self, Action::Create, || {
+            upgrade_kapsule_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        })
     }
 }
 
-use super::utils::from_terraform_value;
+use super::utils::{from_terraform_value, mk_logger};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScalewayQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     pub loki_storage_config_scaleway_s3: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub kubeconfig: String,
 }

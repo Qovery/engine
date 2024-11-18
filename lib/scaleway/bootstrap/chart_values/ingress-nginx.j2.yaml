@@ -17,6 +17,10 @@ controller:
     use-proxy-protocol: "true"
     # enable real IP (client IP)
     enable-real-ip: "false" # set-by-engine-code
+    # passes the incoming X-Forwarded-* headers to upstreams
+    use-forwarded-headers: "false" # set-by-engine-code
+    # append the remote address to the X-Forwarded-For header instead of replacing it
+    compute-full-forwarded-for: "false" # set-by-engine-code
     # customize log-format / set-by-engine-code
     # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
     # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
@@ -94,8 +98,8 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-health-check-max-retries: "2"
       service.beta.kubernetes.io/scw-loadbalancer-redispatch-attempt-count: "1"
       service.beta.kubernetes.io/scw-loadbalancer-timeout-server: "30s"
-      # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-GP-S, LB-GP-M, LB-GP-L, LB-GP-XL)
-      service.beta.kubernetes.io/scw-loadbalancer-type: "LB-GP-S" # set-by-engine-code
+      # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-S, LB-GP-M, LB-GP-L, LB-GP-XL)
+      service.beta.kubernetes.io/scw-loadbalancer-type: "LB-S" # set-by-engine-code
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
       external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
     externalTrafficPolicy: "Local"

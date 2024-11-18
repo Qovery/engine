@@ -6,24 +6,17 @@ spec:
   template:
     spec:
       requirements:
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64", "arm64"]
-        - key: kubernetes.io/os
-          operator: In
-          values: ["linux"]
-        - key: karpenter.sh/capacity-type
-          operator: In
+        {{- range .Values.global_node_pools.requirements }}
+        - key: "{{ .key }}"
+          operator: "{{ .operator }}"
           values:
-            {{ range.Values.capacity_type }}
-              - {{ . }}
-            {{ end }}
-        - key: karpenter.k8s.aws/instance-category
-          operator: In
-          values: [ "c", "d", "h", "i", "im", "inf", "is", "m", "r", "t", "trn", "x", "z" ]
-        - key: karpenter.k8s.aws/instance-generation
-          operator: Gt
-          values: ["2"]
+            {{- range .values }}
+            - "{{ . }}"
+            {{- end }}
+          {{- if .minValues }}
+          minValues: {{ .minValues }}
+          {{- end }}
+        {{- end }}
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
@@ -32,6 +25,7 @@ spec:
         - key: nodepool/stable
           effect: NoSchedule
       expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 30s

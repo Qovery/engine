@@ -1,11 +1,11 @@
-use serde::{Deserialize, Serialize};
-
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::kubernetes::ProviderOptions;
 use crate::cloud_provider::models::{CpuArchitecture, VpcCustomRoutingTable, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 pub mod ec2;
 pub mod eks;
@@ -82,11 +82,67 @@ pub struct Options {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterNodePool {
+    pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterNodePoolRequirement {
+    pub key: KarpenterNodePoolRequirementKey,
+    pub values: Vec<String>,
+    pub operator: Option<KarpenterRequirementOperator>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum KarpenterNodePoolRequirementKey {
+    InstanceCategory,
+    InstanceFamily,
+    InstanceGeneration,
+    InstanceSize,
+    InstanceType,
+    Arch,
+    CapacityType,
+    Os,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum KarpenterRequirementOperator {
+    In,
+    Gt,
+}
+
+impl fmt::Display for KarpenterRequirementOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let output = match self {
+            KarpenterRequirementOperator::In => "In",
+            KarpenterRequirementOperator::Gt => "Gt",
+        };
+        write!(f, "{}", output)
+    }
+}
+
+impl KarpenterNodePoolRequirementKey {
+    pub(crate) fn to_k8s_label(&self) -> String {
+        match self {
+            KarpenterNodePoolRequirementKey::InstanceCategory => "karpenter.k8s.aws/instance-category".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceFamily => "karpenter.k8s.aws/instance-family".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceGeneration => "karpenter.k8s.aws/instance-generation".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceSize => "karpenter.k8s.aws/instance-size".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceType => "node.kubernetes.io/instance-type".to_string(),
+            KarpenterNodePoolRequirementKey::Arch => "kubernetes.io/arch".to_string(),
+            KarpenterNodePoolRequirementKey::CapacityType => "karpenter.sh/capacity-type".to_string(),
+            KarpenterNodePoolRequirementKey::Os => "kubernetes.io/os".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterParameters {
     pub spot_enabled: bool,
     pub max_node_drain_time_in_secs: Option<i32>,
     pub disk_size_in_gib: i32,
     pub default_service_architecture: CpuArchitecture,
+    pub qovery_node_pools: Option<KarpenterNodePool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

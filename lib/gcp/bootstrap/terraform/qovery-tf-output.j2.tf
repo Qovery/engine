@@ -1,5 +1,13 @@
-locals {
-  kubeconfig = <<KUBECONFIG
+data "aws_caller_identity" "current" {}
+
+{%- if log_history_enabled %}
+output "loki_logging_service_account_email" { value = resource.google_service_account.loki_service_account.email }
+{%- endif %}
+output "gke_cluster_public_hostname" { value = google_container_cluster.primary.endpoint  }
+output "kubeconfig" {
+    sensitive = true
+    depends_on = [google_container_cluster.primary]
+    value = <<KUBECONFIG
 apiVersion: v1
 clusters:
 - cluster:
@@ -24,11 +32,4 @@ users:
         https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
       provideClusterInfo: true
 KUBECONFIG
-}
-
-resource "local_file" "kubeconfig" {
-  filename = "${var.object_storage_kubeconfig_bucket}/${var.kubernetes_cluster_id}.yaml"
-  content = local.kubeconfig
-  file_permission = "0644"
-  depends_on = [google_container_cluster.primary]
 }

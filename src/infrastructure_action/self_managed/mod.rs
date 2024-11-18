@@ -7,7 +7,11 @@ use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::InfrastructureAction;
 
 impl InfrastructureAction for SelfManaged {
-    fn create_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(
+        &self,
+        _infra_ctx: &InfrastructureContext,
+        _has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>> {
         Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
             self.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
         )))
@@ -15,13 +19,13 @@ impl InfrastructureAction for SelfManaged {
 
     fn pause_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
-            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
+            self.get_event_details(Infrastructure(InfrastructureStep::PauseError)),
         )))
     }
 
     fn delete_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
-            self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
+            self.get_event_details(Infrastructure(InfrastructureStep::DeleteError)),
         )))
     }
 
@@ -31,7 +35,7 @@ impl InfrastructureAction for SelfManaged {
         _kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
-            self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
+            self.get_event_details(Infrastructure(InfrastructureStep::UpgradeError)),
         )))
     }
 }

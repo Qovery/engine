@@ -1,6 +1,6 @@
 [package]
 name = "qovery-engine"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Romaric Philogene <romaric@qovery.com>"]
 edition = "2021"
 
@@ -155,19 +155,10 @@ test-all-minimal = [
 ]
 
 # functionnal tests by type
-test-aws-self-hosted = [
-    "env-logger-check",
-    "test-git-container",
-]
+test-aws-self-hosted = ["env-logger-check", "test-git-container"]
 test-aws-ec2-self-hosted = ["env-logger-check"]
-test-scw-self-hosted = [
-    "env-logger-check",
-    "test-git-container",
-]
-test-gcp-self-hosted = [
-    "env-logger-check",
-    "test-git-container",
-]
+test-scw-self-hosted = ["env-logger-check", "test-git-container"]
+test-gcp-self-hosted = ["env-logger-check", "test-git-container"]
 test-all-self-hosted = [
     "test-aws-self-hosted",
     "test-aws-ec2-self-hosted",

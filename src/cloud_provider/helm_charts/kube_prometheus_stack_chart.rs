@@ -28,6 +28,7 @@ pub struct KubePrometheusStackChart {
     kubelet_service_monitor_resource_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
+    additional_char_path: Option<HelmChartValuesFilePath>,
 }
 
 impl KubePrometheusStackChart {
@@ -39,6 +40,7 @@ impl KubePrometheusStackChart {
         kubelet_service_monitor_resource_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
+        karpenter_enabled: bool,
     ) -> Self {
         KubePrometheusStackChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -58,6 +60,14 @@ impl KubePrometheusStackChart {
             kubelet_service_monitor_resource_enabled,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "kube-prometheus-stack-with-karpenter".to_string(),
+                )),
+                false => None,
+            },
         }
     }
 
@@ -68,6 +78,11 @@ impl KubePrometheusStackChart {
 
 impl ToCommonHelmChart for KubePrometheusStackChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KubePrometheusStackChart::chart_name(),
@@ -93,7 +108,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                         "monitoring.coreos.com_thanosrulers.yaml".to_string(),
                     ]
                 }),
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values: vec![
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName".to_string(),
@@ -246,6 +261,7 @@ mod tests {
             true,
             get_prometheus_chart_override(),
             false,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -276,6 +292,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
             get_prometheus_chart_override(),
+            false,
             false,
         );
 
@@ -317,6 +334,7 @@ mod tests {
             HelmChartNamespaces::Prometheus,
             true,
             get_prometheus_chart_override(),
+            false,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();

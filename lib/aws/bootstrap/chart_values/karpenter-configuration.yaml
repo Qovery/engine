@@ -10,3 +10,6 @@ tags:
   OrganizationId: set-by-engine-code
   OrganizationLongId: set-by-engine-code
   Region: set-by-engine-code
+
+global_node_pools:
+  requirements: []

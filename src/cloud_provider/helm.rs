@@ -21,7 +21,7 @@ use super::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::deploy_helm::default_helm_timeout;
 use crate::events::EventDetails;
-use std::{fs, thread};
+use std::fs;
 
 #[derive(Error, Debug, Clone)]
 pub enum HelmChartError {
@@ -616,94 +616,6 @@ pub struct ChartReleaseTemplate {
     pub data: String,
 }
 
-fn deploy_parallel_charts(
-    kube_client: &kube::Client,
-    kubernetes_config: &Path,
-    envs: &[(&str, &str)],
-    charts: Vec<Box<dyn HelmChart>>,
-) -> Result<(), HelmChartError> {
-    thread::scope(|s| {
-        let mut handles = vec![];
-
-        for chart in charts.into_iter() {
-            let path = kubernetes_config.to_path_buf();
-            let current_span = tracing::Span::current();
-            let handle = s.spawn(move || {
-                // making sure to pass the current span to the new thread not to lose any tracing info
-                let _span = current_span.enter();
-                chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
-            });
-
-            handles.push(handle);
-        }
-
-        let mut errors: Vec<Result<(), HelmChartError>> = vec![];
-        for handle in handles {
-            match handle.join() {
-                Ok(helm_run_ret) => {
-                    if let Err(e) = helm_run_ret {
-                        errors.push(Err(e));
-                    }
-                }
-                Err(e) => {
-                    let err = match e.downcast_ref::<&'static str>() {
-                        None => match e.downcast_ref::<String>() {
-                            None => "Unable to get error.",
-                            Some(s) => s.as_str(),
-                        },
-                        Some(s) => *s,
-                    };
-                    let error = Err(HelmChartError::CommandError(CommandError::new(
-                        "Thread panicked during parallel charts deployments.".to_string(),
-                        Some(err.to_string()),
-                        None,
-                    )));
-                    errors.push(error);
-                }
-            }
-        }
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            error!("Deployments of charts failed with: {:?}", errors);
-            errors.remove(0)
-        }
-    })
-}
-
-pub fn deploy_charts_levels(
-    kube_client: &kube::Client,
-    kubernetes_config: &Path,
-    envs: &[(&str, &str)],
-    charts: Vec<Vec<Box<dyn HelmChart>>>,
-    dry_run: bool,
-    helm_diff_output_directory: Option<&Path>,
-) -> Result<(), HelmChartError> {
-    // first show diff
-    let helm = Helm::new(Some(kubernetes_config), envs)?;
-
-    for level in charts {
-        // Show diff for all chart in this state
-        for chart in &level {
-            let chart_info = chart.get_chart_info();
-            // don't do diff on destroy or skip
-            if chart_info.action == Deploy {
-                let _ = helm.upgrade_diff(chart_info, &[], helm_diff_output_directory);
-            }
-        }
-
-        // Skip actual deployment if dry run
-        if dry_run {
-            continue;
-        }
-
-        deploy_parallel_charts(kube_client, kubernetes_config, envs, level)?
-    }
-
-    Ok(())
-}
-
 //
 // Common charts
 //
@@ -887,7 +799,7 @@ impl HelmChart for ServiceChart {
         let chart_info = self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                let _ = self.helm.upgrade_diff(chart_info, &[], None);
+                let _ = self.helm.upgrade_diff(chart_info, &[], &mut |_| {});
                 match self.helm.upgrade(chart_info, &[], cmd_killer) {
                     Ok(_) => {}
                     Err(e) => {

@@ -1,4 +1,20 @@
 clusterName: set-by-engine-code
+
 serviceAccount:
   annotations:
     eks.amazonaws.com/role-arn: set-by-engine-code
+
+replicaCount: 1
+
+enableServiceMutatorWebhook: set-by-engine-code
+
+autoscaling:
+  enabled: true
+
+resources:
+  limits:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+  requests:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code

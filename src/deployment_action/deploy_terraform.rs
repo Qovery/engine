@@ -44,7 +44,7 @@ impl TerraformDeployment {
         generate_and_copy_all_files_into_dir(
             &self.terraform_common_folder,
             &self.destination_folder,
-            self.tera_context.clone(),
+            &self.tera_context,
         )
         .map_err(|e| {
             EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -59,7 +59,7 @@ impl TerraformDeployment {
         generate_and_copy_all_files_into_dir(
             &self.terraform_resource_folder,
             &self.destination_folder,
-            self.tera_context.clone(),
+            &self.tera_context,
         )
         .map_err(|e| {
             EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -116,7 +116,6 @@ impl DeploymentAction for TerraformDeployment {
         self.prepare_terraform_files()?;
         match cmd::terraform::terraform_init_validate_destroy(
             &self.destination_folder.to_string_lossy(),
-            false,
             target.cloud_provider.credentials_environment_variables().as_slice(),
             &TerraformValidators::None,
         ) {

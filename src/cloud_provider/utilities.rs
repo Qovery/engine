@@ -11,7 +11,6 @@ use core::result::Result::{Err, Ok};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
-use serde::de::DeserializeOwned;
 use std::fmt;
 use std::io;
 use std::net::{SocketAddr, TcpStream as NetTcpStream};
@@ -112,21 +111,6 @@ pub fn wait_until_port_is_open(
     }
 }
 
-pub fn print_action(
-    cloud_provider_name: &str,
-    struct_name: &str,
-    fn_name: &str,
-    item_name: &str,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) {
-    let msg = format!("{cloud_provider_name}.{struct_name}.{fn_name} called for {item_name}");
-    match fn_name.contains("error") {
-        true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
-        false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
-    }
-}
-
 pub fn are_pvcs_bound(
     service: &dyn Service,
     namespace: &str,
@@ -174,102 +158,14 @@ pub fn update_pvcs(
     Ok(())
 }
 
-pub fn from_terraform_value<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-    T: DeserializeOwned,
-{
-    use serde::Deserialize;
-
-    #[derive(serde_derive::Deserialize)]
-    struct TerraformJsonValue<T> {
-        value: T,
-    }
-
-    TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::utilities::from_terraform_value;
     use crate::cloud_provider::utilities::{
         check_tcp_port_is_open, check_udp_port_is_open, TcpCheckErrors, TcpCheckSource,
     };
     use crate::errors::CommandError;
     use crate::models::types::VersionsNumber;
     use std::str::FromStr;
-
-    #[test]
-    pub fn test_terraform_value_parsing() {
-        let json = r#"
-{
-  "aws_account_id": {
-    "sensitive": false,
-    "type": "string",
-    "value": "843237546537"
-  },
-  "aws_iam_alb_controller_arn": {
-    "sensitive": false,
-    "type": "string",
-    "value": "arn:aws:iam::843237546537:role/qovery-eks-alb-controller-z00000019"
-  },
-  "aws_iam_cloudwatch_role_arn": {
-    "sensitive": false,
-    "type": "string",
-    "value": "arn:aws:iam::843237546537:role/qovery-cloudwatch-z00000019"
-  },
-  "aws_number": {
-    "sensitive": false,
-    "type": "number",
-    "value": 12
-  },
-  "aws_float": {
-    "sensitive": false,
-    "type": "number",
-    "value": 12.64
-  },
-  "aws_list": {
-    "sensitive": false,
-    "type": "list",
-    "value": [
-      "a",
-      "b",
-      "c"
-    ]
-  }
-}
-        "#;
-
-        #[derive(serde_derive::Deserialize)]
-        struct TestStruct {
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_account_id: String,
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_iam_alb_controller_arn: String,
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_iam_cloudwatch_role_arn: String,
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_number: u32,
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_float: f32,
-            #[serde(deserialize_with = "from_terraform_value")]
-            aws_list: Vec<String>,
-        }
-
-        let value: TestStruct = serde_json::from_str(json).unwrap();
-        assert_eq!(value.aws_account_id, "843237546537");
-        assert_eq!(
-            value.aws_iam_alb_controller_arn,
-            "arn:aws:iam::843237546537:role/qovery-eks-alb-controller-z00000019"
-        );
-        assert_eq!(
-            value.aws_iam_cloudwatch_role_arn,
-            "arn:aws:iam::843237546537:role/qovery-cloudwatch-z00000019"
-        );
-        assert_eq!(value.aws_number, 12);
-        assert_eq!(value.aws_float, 12.64);
-        assert!(!value.aws_list.is_empty());
-    }
 
     #[test]
     pub fn test_port_open() {

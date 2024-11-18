@@ -5,6 +5,7 @@ use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, InfrastructureStep};
+use crate::infrastructure_action::ToInfraTeraContext;
 use crate::io_models::context::Features;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::types::Percentage;
@@ -14,10 +15,13 @@ use std::env;
 use tera::Context as TeraContext;
 use time::format_description;
 
-pub(super) fn gke_tera_context(
-    cluster: &Gke,
-    infra_ctx: &InfrastructureContext,
-) -> Result<TeraContext, Box<EngineError>> {
+impl ToInfraTeraContext for Gke {
+    fn to_infra_tera_context(&self, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
+        gke_tera_context(self, infra_ctx)
+    }
+}
+
+fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 

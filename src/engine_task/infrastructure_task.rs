@@ -166,7 +166,7 @@ impl Task for InfrastructureTask {
             let _ = is_terminated_tx.send(());
         });
 
-        let engine = match self.request.engine(
+        let infra_ctx = match self.request.engine(
             &self.info_context(),
             self.request.event_details(),
             self.logger.clone(),
@@ -180,17 +180,10 @@ impl Task for InfrastructureTask {
             }
         };
 
-        let ret: Result<(), Box<EngineError>> = match self.request.action {
-            Action::Create => engine.kubernetes().as_infra_actions().create_cluster(&engine),
-            Action::Pause => engine.kubernetes().as_infra_actions().pause_cluster(&engine),
-            Action::Delete => engine.kubernetes().as_infra_actions().delete_cluster(&engine),
-            Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
-                engine
-                    .kubernetes()
-                    .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
-            ))),
-        };
-
+        let ret = infra_ctx
+            .kubernetes()
+            .as_infra_actions()
+            .run(&infra_ctx, self.request.action.to_service_action());
         self.handle_transaction_result(self.logger.clone(), ret);
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
@@ -201,8 +194,8 @@ impl Task for InfrastructureTask {
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
             match crate::fs::create_workspace_archive(
-                engine.context().workspace_root_dir(),
-                engine.context().execution_id(),
+                infra_ctx.context().workspace_root_dir(),
+                infra_ctx.context().execution_id(),
             ) {
                 Ok(file) => match super::upload_s3_file(self.request.archive.as_ref(), &file) {
                     Ok(_) => {

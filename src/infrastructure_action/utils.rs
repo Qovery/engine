@@ -1,7 +1,7 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cmd::kubectl::{kubectl_delete_completed_jobs, kubectl_exec_delete_pod, kubectl_get_crash_looping_pods};
-use crate::errors::EngineError;
-use crate::events::Stage;
+use crate::events::InfrastructureStep;
+use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::{InfraLogger, InfraLoggerImpl};
 use serde::de::DeserializeOwned;
 
 pub fn from_terraform_value<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -19,58 +19,88 @@ where
     TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
 }
 
-pub fn delete_crashlooping_pods(
-    kube: &dyn Kubernetes,
-    namespace: Option<&str>,
-    selector: Option<&str>,
-    restarted_min_count: Option<usize>,
-    envs: Vec<(&str, &str)>,
-    stage: Stage,
-) -> Result<(), Box<EngineError>> {
-    let event_details = kube.get_event_details(stage);
-
-    match kubectl_get_crash_looping_pods(
-        kube.kubeconfig_local_file_path(),
-        namespace,
-        selector,
-        restarted_min_count,
-        envs.clone(),
-    ) {
-        Ok(pods) => {
-            for pod in pods {
-                if let Err(e) = kubectl_exec_delete_pod(
-                    kube.kubeconfig_local_file_path(),
-                    pod.metadata.namespace.as_str(),
-                    pod.metadata.name.as_str(),
-                    envs.clone(),
-                ) {
-                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pod(
-                        event_details,
-                        pod.metadata.name.to_string(),
-                        e,
-                    )));
-                }
-            }
-        }
-        Err(e) => {
-            return Err(Box::new(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e)));
-        }
+pub fn mk_logger(kube: &dyn Kubernetes, step: InfrastructureStep) -> impl InfraLogger {
+    let event_details = kube.get_event_details(Infrastructure(step));
+    let logger = InfraLoggerImpl {
+        event_details,
+        logger: kube.logger().clone_dyn(),
     };
-
-    Ok(())
+    logger
 }
 
-pub fn delete_completed_jobs(
-    kube: &dyn Kubernetes,
-    envs: Vec<(&str, &str)>,
-    stage: Stage,
-    ignored_namespaces: Option<Vec<&str>>,
-) -> Result<(), Box<EngineError>> {
-    let event_details = kube.get_event_details(stage);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    if let Err(e) = kubectl_delete_completed_jobs(kube.kubeconfig_local_file_path(), envs, ignored_namespaces) {
-        return Err(Box::new(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e)));
-    };
+    #[test]
+    pub fn test_terraform_value_parsing() {
+        let json = r#"
+{
+  "aws_account_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "843237546537"
+  },
+  "aws_iam_alb_controller_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::843237546537:role/qovery-eks-alb-controller-z00000019"
+  },
+  "aws_iam_cloudwatch_role_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::843237546537:role/qovery-cloudwatch-z00000019"
+  },
+  "aws_number": {
+    "sensitive": false,
+    "type": "number",
+    "value": 12
+  },
+  "aws_float": {
+    "sensitive": false,
+    "type": "number",
+    "value": 12.64
+  },
+  "aws_list": {
+    "sensitive": false,
+    "type": "list",
+    "value": [
+      "a",
+      "b",
+      "c"
+    ]
+  }
+}
+        "#;
 
-    Ok(())
+        #[derive(serde_derive::Deserialize)]
+        struct TestStruct {
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_account_id: String,
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_iam_alb_controller_arn: String,
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_iam_cloudwatch_role_arn: String,
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_number: u32,
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_float: f32,
+            #[serde(deserialize_with = "from_terraform_value")]
+            aws_list: Vec<String>,
+        }
+
+        let value: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(value.aws_account_id, "843237546537");
+        assert_eq!(
+            value.aws_iam_alb_controller_arn,
+            "arn:aws:iam::843237546537:role/qovery-eks-alb-controller-z00000019"
+        );
+        assert_eq!(
+            value.aws_iam_cloudwatch_role_arn,
+            "arn:aws:iam::843237546537:role/qovery-cloudwatch-z00000019"
+        );
+        assert_eq!(value.aws_number, 12);
+        assert_eq!(value.aws_float, 12.64);
+        assert!(!value.aws_list.is_empty());
+    }
 }

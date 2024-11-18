@@ -50,6 +50,10 @@ primary:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"
     values: {{ node_affinity_values }}
+  # Remove when when https://github.com/bitnami/charts/issues/30415 is fixed
+  extraEnvVars:
+    - name: POSTGRESQL_REPLICATION_USE_PASSFILE
+      value: "false"
 {%- if node_affinity %}
   affinity:
     nodeAffinity:
@@ -138,6 +142,10 @@ primary:
     {%- endfor %}
 
 readReplicas:
+  # Remove when when https://github.com/bitnami/charts/issues/30415 is fixed
+  extraEnvVars:
+    - name: POSTGRESQL_REPLICATION_USE_PASSFILE
+      value: "false"
   nodeAffinityPreset:
     type: "{{ node_affinity_type }}"
     key: "{{ node_affinity_key }}"

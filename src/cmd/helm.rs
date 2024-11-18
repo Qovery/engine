@@ -1,4 +1,4 @@
-use std::fs;
+use std::fmt::Write as FmtWrite;
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ use crate::events::EventDetails;
 use crate::io_models::container::Registry;
 use semver::Version;
 use serde_derive::Deserialize;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::str::FromStr;
 use tempfile::TempDir;
 use url::Url;
@@ -372,7 +372,7 @@ impl Helm {
 
     pub fn download_chart(
         &self,
-        repository: &Url,
+        repository_with_credentials: &Url,
         engine_helm_registry: &Registry,
         chart_name: &str,
         chart_version: &str,
@@ -381,9 +381,9 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
     ) -> Result<(), HelmError> {
-        return match repository.scheme() {
+        return match repository_with_credentials.scheme() {
             "https" => self.download_https_chart(
-                repository,
+                repository_with_credentials,
                 chart_name,
                 chart_version,
                 target_directory,
@@ -402,7 +402,7 @@ impl Helm {
             ),
             _ => Err(InvalidRepositoryConfig(format!(
                 "Invalid repository scheme {}",
-                repository.scheme()
+                repository_with_credentials.scheme()
             ))),
         };
     }
@@ -579,7 +579,7 @@ impl Helm {
 
     pub fn download_https_chart(
         &self,
-        repository: &Url,
+        repository_url_with_credentials: &Url,
         chart_name: &str,
         chart_version: &str,
         target_directory: &Path,
@@ -592,11 +592,19 @@ impl Helm {
         // So use same target dir, to avoid issues
         let tmpdir = Self::get_temp_dir(target_directory, chart_name, FETCH)?;
 
+        // Clean repository url from password otherwise it will appear on logs sent to core
+        let repository_url_without_credentials = {
+            let mut url = repository_url_with_credentials.clone();
+            let _ = url.set_password(None);
+            url
+        };
+
+        // Mandatory helm arguments
         let mut helm_args = vec![
             "fetch",
             "--debug", // there is no debug log but if someday they appear
             "--repo",
-            repository.as_str(),
+            repository_url_without_credentials.as_str(),
             chart_name,
             "--version",
             chart_version,
@@ -609,13 +617,26 @@ impl Helm {
             helm_args.push("--insecure-skip-tls-verify");
         }
 
-        let login = urlencoding::decode(repository.username()).unwrap_or_default();
-        let password = repository
+        // Extract login & password from url
+        let repository_username = repository_url_with_credentials.username();
+        let login = urlencoding::decode(repository_url_with_credentials.username()).unwrap_or_default();
+        let password = repository_url_with_credentials
             .password()
             .map(|password| urlencoding::decode(password).unwrap_or_default());
 
-        if let Some(password) = &password {
-            helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", password])
+        // Handle 3 different cases
+        match (repository_username.is_empty(), &password) {
+            (false, None) => {
+                // If the --password arg is not set, the fetch will fail
+                helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", ""]);
+            }
+            (false, Some(password)) => {
+                helm_args.extend_from_slice(&["--pass-credentials", "--username", &login, "--password", password]);
+            }
+            (true, Some(password)) => {
+                helm_args.extend_from_slice(&["--pass-credentials", "--password", password]);
+            }
+            (true, None) => {}
         }
 
         let mut error_message: Vec<String> = Vec::new();
@@ -653,7 +674,7 @@ impl Helm {
                     errors::CommandError::new(
                         format!(
                             "Helm failed to fetch chart {} at version {} from {}",
-                            chart_name, chart_version, repository
+                            chart_name, chart_version, repository_url_without_credentials
                         ),
                         Some(stderr_msg),
                         Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
@@ -753,10 +774,12 @@ impl Helm {
         &self,
         chart: &ChartInfo,
         envs: &[(&str, &str)],
-        helm_diff_output_directory: Option<&Path>,
+        stdout_output: &mut impl FnMut(String),
     ) -> Result<(), HelmError> {
         let mut args_string: Vec<String> = vec![
             "diff".to_string(),
+            "--output".to_string(),
+            "dyff".to_string(),
             "upgrade".to_string(),
             "--install".to_string(),
             "--namespace".to_string(),
@@ -803,44 +826,11 @@ impl Helm {
         args_string.push(chart.name.clone());
         args_string.push(chart.path.clone());
 
-        // preparing output file for diff if requested
-        let mut output_file: Option<File> = match helm_diff_output_directory {
-            None => None,
-            Some(path) => {
-                if !Path::new(path).exists() {
-                    if let Err(e) = fs::create_dir_all(path) {
-                        warn!("Cannot create directory to write diff: {}", e);
-                    }
-                }
-                match OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true) // This will ensure the content is overridden
-                    .open(path.join(format!("{}.diff", chart.name)))
-                {
-                    Ok(f) => Some(f),
-                    Err(e) => {
-                        // Non blocking error, we will emit a warning and continue
-                        warn!("Cannot open file to write diff: {}", e);
-                        None
-                    }
-                }
-            }
-        };
-
         let mut stderr_msg = String::new();
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
-            &mut |line| {
-                info!("{}", line);
-                if let Some(f) = output_file.as_mut() {
-                    if let Err(e) = writeln!(f, "{}", line) {
-                        // non blocking error
-                        warn!("Cannot write to file: {}", e);
-                    }
-                }
-            },
+            stdout_output,
             &mut |line| {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", chart.name, line);
@@ -1480,6 +1470,47 @@ impl Helm {
             }
         }
     }
+
+    pub fn get_template(&self, chart_path: &str, chart: &ChartInfo) -> Result<String, HelmError> {
+        let mut output = String::new();
+        let mut args_string: Vec<String> = vec!["template".to_string(), chart.name.to_string(), chart_path.to_string()];
+
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value in &chart.values_string {
+            args_string.push("--set-string".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &[],
+            &mut |line| {
+                if let Err(e) = writeln!(output, "{}", line) {
+                    error!("Error writing to output: {:?}", e);
+                }
+                debug!("{}", line);
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart.name, line);
+            },
+            &CommandKiller::never(),
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(output),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+                Err(CmdError(chart.name.to_string(), HelmCommand::TEMPLATE, err.into()))
+            }
+        }
+    }
 }
 
 fn helm_exec_with_output<STDOUT, STDERR>(
@@ -1665,6 +1696,8 @@ mod tests {
     use crate::deployment_action::deploy_helm::default_helm_timeout;
     use crate::io_models::container::Registry::GenericCr;
     use semver::Version;
+    use std::fs::OpenOptions;
+    use std::io::Write;
     use std::path::Path;
     use std::sync::{Arc, Barrier};
     use std::thread;
@@ -1778,7 +1811,7 @@ mod tests {
     fn test_upgrade_diff() {
         let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade-diff");
 
-        let ret = helm.upgrade_diff(&charts[0], &[], None);
+        let ret = helm.upgrade_diff(&charts[0], &[], &mut |_| {});
         assert!(matches!(ret, Ok(())));
     }
 
@@ -1790,7 +1823,17 @@ mod tests {
         let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new(release_name);
 
         // execute:
-        let ret = helm.upgrade_diff(&charts[0], &[], Some(helm_diffs_output_dir.path()));
+        let mut writer = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true) // This will ensure the content is overridden
+            .open(helm_diffs_output_dir.path().join(format!("{}.diff", release_name)))
+            .unwrap();
+
+        let ret = helm.upgrade_diff(&charts[0], &[], &mut |line| {
+            writer.write_all(line.as_bytes()).unwrap();
+        });
+        drop(writer);
 
         // verify:
         assert!(helm_diffs_output_dir

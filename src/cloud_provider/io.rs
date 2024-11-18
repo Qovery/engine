@@ -96,12 +96,6 @@ pub struct ClusterAdvancedSettings {
     pub aws_iam_user_mapper_sso_enabled: bool,
     #[serde(alias = "aws.iam.sso_role_arn")]
     pub aws_iam_user_mapper_sso_role_arn: Option<String>,
-    #[serde(alias = "aws.enable_karpenter")]
-    pub aws_enable_karpenter: bool,
-    #[serde(alias = "aws.karpenter.max_node_drain_in_sec")]
-    pub aws_karpenter_max_node_drain_in_sec: Option<i32>,
-    #[serde(alias = "aws.karpenter.enable_spot")]
-    pub aws_karpenter_enable_spot: bool,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
@@ -110,6 +104,14 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
+    #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.min_in_milli_cpu")]
+    pub aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.max_in_milli_cpu")]
+    pub aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.memory.min_in_mib")]
+    pub aws_eks_alb_controller_vpa_min_memory_in_mib: u32,
+    #[serde(alias = "aws.eks.alb_controller.vpa.memory.max_in_mib")]
+    pub aws_eks_alb_controller_vpa_max_memory_in_mib: u32,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -148,6 +150,10 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_min_number_instances: u32,
     #[serde(alias = "nginx.controller.enable_client_ip")]
     pub nginx_controller_enable_client_ip: bool,
+    #[serde(alias = "nginx.controller.use_forwarded_headers")]
+    pub nginx_controller_use_forwarded_headers: bool,
+    #[serde(alias = "nginx.controller.compute_full_forwarded_for")]
+    pub nginx_controller_compute_full_forwarded_for: bool,
     #[serde(alias = "nginx.controller.log_format_upstream")]
     pub nginx_controller_log_format_upstream: Option<String>,
     #[serde(
@@ -159,13 +165,10 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
-    #[serde(alias = "infra.pdb.enabled", default)]
-    pub infra_pdb_enabled: bool,
     #[serde(alias = "gcp.vpc.enable_flow_logs")]
     pub gcp_vpc_enable_flow_logs: bool,
     #[serde(alias = "gcp.vpc.flow_logs_sampling")]
     pub gcp_vpc_flow_logs_sampling: Option<Percentage>,
-
     #[serde(alias = "qovery.static_ip_mode")]
     pub qovery_static_ip_mode: Option<bool>,
     #[serde(alias = "k8s.api.allowed_public_access_cidrs")]
@@ -208,18 +211,20 @@ impl Default for ClusterAdvancedSettings {
             nginx_hpa_min_number_instances: 2,
             nginx_hpa_max_number_instances: 25,
             nginx_controller_enable_client_ip: false,
+            nginx_controller_use_forwarded_headers: false,
+            nginx_controller_compute_full_forwarded_for: false,
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
-            aws_enable_karpenter: false,
-            aws_karpenter_max_node_drain_in_sec: None,
-            aws_karpenter_enable_spot: false,
-            infra_pdb_enabled: false,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,
             k8s_api_allowed_public_access_cidrs: None,
+            aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: 128,
+            aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
+            aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
+            aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
         }
     }
 }

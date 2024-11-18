@@ -35,7 +35,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
 
         // Deploy
-        let tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+        let tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
         assert!(tx.is_ok());
 
         test_name.to_string()

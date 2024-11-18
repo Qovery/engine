@@ -47,6 +47,10 @@ auth:
   database: "{{ database_db_name }}"
 
 primary:
+  # Remove when when https://github.com/bitnami/charts/issues/30415 is fixed
+  extraEnvVars:
+    - name: POSTGRESQL_REPLICATION_USE_PASSFILE
+      value: "false"
   initdb:
     user: "{{ database_login }}"
     password: "{{ database_password }}"
@@ -117,6 +121,10 @@ primary:
     {%- endfor %}
 
 readReplicas:
+  # Remove when when https://github.com/bitnami/charts/issues/30415 is fixed
+  extraEnvVars:
+    - name: POSTGRESQL_REPLICATION_USE_PASSFILE
+      value: "false"
   podAnnotations:
     {%- for key, value in annotations_group.pods %}
     {{ key }}: |-

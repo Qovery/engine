@@ -39,7 +39,7 @@ bitflags! {
     struct TerraformAction: u32 {
         const INIT = 0b00000001;
         const VALIDATE = 0b00000010;
-        // const PLAN = 0b00000100; Not needed, apply and destroy should call plan on their end
+        const PLAN = 0b00000100;
         const APPLY = 0b00001000;
         const DESTROY = 0b00010000;
         const STATE_LIST = 0b00100000;
@@ -1179,49 +1179,40 @@ pub fn terraform_state_list(
     }
 }
 
-pub fn terraform_plan(
+pub fn terraform_plan_internal(
     root_dir: &str,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
+    is_destroy: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     // plan
-    let terraform_args = vec!["plan", "-no-color", "-out", "tf_plan"];
-    // Retry is not needed, fixing it to 1 only for the time being
-    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
-            Ok(out) => OperationResult::Ok(out),
-            Err(err) => {
-                let _ = manage_common_issues(root_dir, "", &err, validators);
-                // Error while trying to Terraform plan the rendered templates
-                OperationResult::Retry(err)
-            }
-        }
-    });
-
-    match result {
-        Ok(output) => Ok(output),
-        Err(retry::Error { error, .. }) => Err(error),
-    }
+    let terraform_args = if is_destroy {
+        vec!["plan", "-destroy", "-no-color", "-out", "tf_plan"]
+    } else {
+        vec!["plan", "-out", "-no-color", "tf_plan"]
+    };
+    terraform_exec(root_dir, terraform_args, envs, validators)
 }
 
-fn terraform_apply(
+fn terraform_apply_internal(
     root_dir: &str,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
     let terraform_args = vec!["apply", "-lock=false", "-no-color", "-auto-approve", "tf_plan"];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        // ensure we do plan before apply otherwise apply could crash.
-        if let Err(e) = terraform_plan(root_dir, envs, validators) {
-            return OperationResult::Retry(e);
-        };
-
         // terraform apply
         match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, "", &err, validators);
-                // error while trying to Terraform validate on the rendered templates
+
+                // We have to re-do a plan to update the tf_plan file state
+                let _ = match terraform_plan_internal(root_dir, envs, validators, false) {
+                    Ok(plan) => plan,
+                    Err(err) => return OperationResult::Retry(err),
+                };
+
                 OperationResult::Retry(err)
             }
         }
@@ -1238,6 +1229,7 @@ pub fn terraform_apply_with_tf_workers_resources(
     tf_workers_resources: Vec<String>,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
+    is_dry_run: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     let mut terraform_args_string = vec![
         "apply".to_string(),
@@ -1250,8 +1242,13 @@ pub fn terraform_apply_with_tf_workers_resources(
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
-        if let Err(err) = terraform_plan(root_dir, envs, validators) {
-            return OperationResult::Retry(err);
+        let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
+            Ok(plan) => plan,
+            Err(err) => return OperationResult::Retry(err),
+        };
+
+        if is_dry_run {
+            return OperationResult::Ok(plan);
         }
 
         // terraform apply
@@ -1300,11 +1297,6 @@ pub fn terraform_destroy(
     // terraform destroy
     let terraform_args = vec!["destroy", "-lock=false", "-no-color", "-auto-approve"];
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        // terraform plan first
-        if let Err(err) = terraform_plan(root_dir, envs, validators) {
-            return OperationResult::Retry(err);
-        }
-
         // terraform destroy
         match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
             Ok(out) => OperationResult::Ok(out),
@@ -1411,12 +1403,21 @@ fn terraform_run(
         output.extend(terraform_state_list(root_dir, envs, validators)?);
     }
 
-    if actions.contains(TerraformAction::OUTPUT) {
-        output.extend(terraform_output_internal(root_dir, envs)?);
+    if actions.contains(TerraformAction::PLAN) {
+        output.extend(terraform_plan_internal(
+            root_dir,
+            envs,
+            validators,
+            actions.contains(TerraformAction::DESTROY),
+        )?);
     }
 
     if actions.contains(TerraformAction::APPLY) && !dry_run {
-        output.extend(terraform_apply(root_dir, envs, validators)?);
+        output.extend(terraform_apply_internal(root_dir, envs, validators)?);
+    }
+
+    if actions.contains(TerraformAction::OUTPUT) {
+        output.extend(terraform_output_internal(root_dir, envs)?);
     }
 
     if actions.contains(TerraformAction::DESTROY) && !dry_run {
@@ -1434,12 +1435,31 @@ pub fn terraform_init_validate_plan_apply(
 ) -> Result<TerraformOutput, TerraformError> {
     // Terraform init, validate, plan and apply
     terraform_run(
-        TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::APPLY,
+        TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::PLAN | TerraformAction::APPLY,
         root_dir,
         dry_run,
         envs,
         validators,
     )
+}
+
+pub fn terraform_apply(
+    root_dir: &str,
+    dry_run: bool,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+) -> Result<TerraformOutput, TerraformError> {
+    // Terraform init, validate, plan and apply
+    terraform_run(TerraformAction::APPLY, root_dir, dry_run, envs, validators)
+}
+
+pub fn terraform_plan(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    is_destroy: bool,
+) -> Result<TerraformOutput, TerraformError> {
+    // Terraform init, validate, plan and apply
+    terraform_plan_internal(root_dir, envs, &TerraformValidators::None, is_destroy)
 }
 
 pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {
@@ -1467,16 +1487,10 @@ pub fn terraform_init_validate(
 
 pub fn terraform_init_validate_destroy(
     root_dir: &str,
-    run_apply_before_destroy: bool,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    let mut terraform_actions_to_be_performed = TerraformAction::INIT | TerraformAction::VALIDATE;
-
-    // better to apply before destroy to ensure terraform destroy will delete on all resources
-    if run_apply_before_destroy {
-        terraform_actions_to_be_performed |= TerraformAction::APPLY;
-    }
+    let terraform_actions_to_be_performed = TerraformAction::INIT | TerraformAction::VALIDATE | TerraformAction::PLAN;
 
     terraform_run(
         terraform_actions_to_be_performed | TerraformAction::DESTROY,

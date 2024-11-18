@@ -7,7 +7,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
+use crate::events::{EnvironmentStep, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::container::{get_container_with_invalid_storage_size, Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -61,7 +61,7 @@ where
             })
         };
 
-        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
                 self.kube_label_selector(),
@@ -88,10 +88,7 @@ where
                         )?;
                     }
                 }
-                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(e.to_string()),
-                )),
+                Err(e) => logger.warning(e.to_string()),
             };
 
             let chart = ChartInfo {

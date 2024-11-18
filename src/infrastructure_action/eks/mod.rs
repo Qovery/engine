@@ -1,6 +1,7 @@
-pub(super) mod cluster_create;
-pub(super) mod cluster_delete;
-pub(super) mod cluster_pause;
+mod cluster_bootstrap;
+mod cluster_create;
+mod cluster_delete;
+mod cluster_pause;
 mod cluster_upgrade;
 mod custom_vpc;
 mod helm_charts;
@@ -10,24 +11,19 @@ mod sdk;
 mod tera_context;
 mod utils;
 
-// used by ec2_k3s/cluster_upgrade.rs
-pub use tera_context::eks_tera_context;
-
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::service::Action;
-use crate::cloud_provider::utilities::print_action;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
-use crate::events::Stage::Infrastructure;
+use crate::infrastructure_action::eks::cluster_bootstrap::bootstrap_eks_cluster;
 use crate::infrastructure_action::eks::cluster_create::create_eks_cluster;
 use crate::infrastructure_action::eks::cluster_delete::delete_eks_cluster;
 use crate::infrastructure_action::eks::cluster_pause::pause_eks_cluster;
 use crate::infrastructure_action::eks::cluster_upgrade::upgrade_eks_cluster;
 use crate::infrastructure_action::InfrastructureAction;
 use chrono::Duration as ChronoDuration;
-use function_name::named;
 use serde_derive::{Deserialize, Serialize};
 
 static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::hours(1);
@@ -35,110 +31,67 @@ static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration
 static AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::minutes(15);
 
 impl InfrastructureAction for EKS {
-    #[named]
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
+    fn bootstap_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
+        send_progress_on_long_task(self, Action::Create, || bootstrap_eks_cluster(self, infra_ctx, logger))
+    }
+
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
         send_progress_on_long_task(self, Action::Create, || {
-            create_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                &self.s3,
-                self.long_id,
-                self.template_directory.as_str(),
-                &self.zones,
-                &self.nodes_groups,
-                &self.options,
-                &self.advanced_settings,
-                self.qovery_allowed_public_access_cidrs.as_ref(),
-            )
+            create_eks_cluster(self, infra_ctx, has_been_upgraded, logger)
         })
     }
 
-    #[named]
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || {
-            pause_eks_cluster(
-                infra_ctx,
-                self,
-                infra_ctx.cloud_provider(),
-                infra_ctx.dns_provider(),
-                self.template_directory.as_str(),
-                &self.zones,
-                &self.nodes_groups,
-                &self.options,
-                &self.advanced_settings,
-                self.qovery_allowed_public_access_cidrs.as_ref(),
-            )
-        })
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Pause);
+        send_progress_on_long_task(self, Action::Pause, || pause_eks_cluster(self, infra_ctx, logger))
     }
 
-    #[named]
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Delete);
         send_progress_on_long_task(self, Action::Delete, || {
             delete_eks_cluster(
                 infra_ctx,
                 self,
                 infra_ctx.cloud_provider(),
                 infra_ctx.dns_provider(),
-                &self.s3,
-                self.template_directory.as_str(),
                 &self.zones,
                 &self.nodes_groups,
                 &self.options,
                 &self.advanced_settings,
                 self.qovery_allowed_public_access_cidrs.as_ref(),
+                logger,
             )
         })
     }
 
-    #[named]
     fn upgrade_cluster(
         &self,
         infra_ctx: &InfrastructureContext,
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            infra_ctx.cloud_provider().name(),
-            "kubernetes",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status)
+        let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
+
+        send_progress_on_long_task(self, Action::Create, || {
+            upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        })
+    }
+
+    fn upgrade_node_selector(&self) -> Option<&str> {
+        // Exclude fargate nodes from the test in case of karpenter, those will be recreated after helm deploy
+        match self.is_karpenter_enabled() {
+            true => Some("eks.amazonaws.com/compute-type!=fargate"),
+            false => None,
+        }
     }
 }
 
-use super::utils::from_terraform_value;
+use super::utils::{from_terraform_value, mk_logger};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformOutput {
@@ -162,4 +115,6 @@ pub struct AwsEksQoveryTerraformOutput {
     pub cluster_security_group_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub kubeconfig: String,
 }

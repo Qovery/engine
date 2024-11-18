@@ -1,7 +1,5 @@
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
-use crate::cloud_provider::aws::kubernetes::ec2::EC2;
-use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -16,9 +14,8 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_action::{InfraLogger, InfrastructureAction};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
@@ -31,7 +28,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::any::Any;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -433,7 +430,6 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn logger(&self) -> &dyn Logger;
-    fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -464,25 +460,12 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
     fn is_karpenter_enabled(&self) -> bool {
         false
     }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
-    fn helm_charts_diffs_directory(&self) -> PathBuf {
-        self.temp_dir().join("helm-charts-diffs")
-    }
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction;
-
-    // TODO: Remove those methods when we remove EC2
-    // It is needed because our integration sucks
-    fn as_ec2(&self) -> Option<&EC2> {
-        None
-    }
-    fn as_eks(&self) -> Option<&EKS> {
-        None
-    }
 }
 
 pub trait KubernetesNode {
@@ -658,7 +641,7 @@ pub fn is_kubernetes_upgrade_required<P>(
     requested_version: KubernetesVersion,
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
-    logger: &dyn Logger,
+    logger: &impl InfraLogger,
     node_selector: Option<&str>,
 ) -> Result<KubernetesUpgradeStatus, Box<EngineError>>
 where
@@ -920,7 +903,7 @@ fn check_kubernetes_upgrade_status(
     deployed_masters_version: VersionsNumber,
     deployed_workers_version: Vec<VersionsNumber>,
     event_details: EventDetails,
-    logger: &dyn Logger,
+    logger: &impl InfraLogger,
 ) -> Result<KubernetesUpgradeStatus, Box<EngineError>> {
     let mut total_workers = 0;
     let mut non_up_to_date_workers = 0;
@@ -934,7 +917,7 @@ fn check_kubernetes_upgrade_status(
     match compare_kubernetes_cluster_versions_for_upgrade(&deployed_masters_version, &wished_version) {
         Ok(x) => {
             if let Some(msg) = x.message {
-                logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+                logger.info(msg);
             };
             if x.older_version_detected {
                 older_masters_version_detected = x.older_version_detected;
@@ -957,13 +940,7 @@ fn check_kubernetes_upgrade_status(
 
     // check workers versions
     if deployed_workers_version.is_empty() {
-        logger.log(EngineEvent::Info(
-            event_details,
-            EventMessage::new_from_safe(
-                "No worker nodes found, can't check if upgrade is required for workers".to_string(),
-            ),
-        ));
-
+        logger.info("No worker nodes found, can't check if upgrade is required for workers");
         return Ok(KubernetesUpgradeStatus {
             required_upgrade_on,
             requested_version: wished_version,
@@ -1006,18 +983,15 @@ fn check_kubernetes_upgrade_status(
         }
     }
 
-    logger.log(EngineEvent::Info(
-        event_details,
-        EventMessage::new_from_safe(match &required_upgrade_on {
-            None => "All workers are up to date, no upgrade required".to_string(),
-            Some(node_type) => match node_type {
-                KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
-                KubernetesNodesType::Workers => format!(
-                    "Kubernetes workers upgrade required, need to update {non_up_to_date_workers}/{total_workers} nodes"
-                ),
-            },
-        }),
-    ));
+    logger.info(EventMessage::new_from_safe(match &required_upgrade_on {
+        None => "All workers are up to date, no upgrade required".to_string(),
+        Some(node_type) => match node_type {
+            KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
+            KubernetesNodesType::Workers => format!(
+                "Kubernetes workers upgrade required, need to update {non_up_to_date_workers}/{total_workers} nodes"
+            ),
+        },
+    }));
 
     Ok(KubernetesUpgradeStatus {
         required_upgrade_on,
@@ -1256,7 +1230,7 @@ where
                     }
                 };
 
-                thread::sleep(Duration::from_secs(30));
+                thread::sleep(Duration::from_secs(60 * 5));
 
                 // watch for thread termination
                 match rx.try_recv() {
@@ -1452,7 +1426,9 @@ mod tests {
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
-    use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::errors::EngineError;
+    use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+    use crate::infrastructure_action::InfraLogger;
     use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
@@ -1463,6 +1439,14 @@ mod tests {
     use std::sync::Arc;
     use strum::IntoEnumIterator;
     use uuid::Uuid;
+
+    impl InfraLogger for StdIoLogger {
+        fn info(&self, _message: impl Into<EventMessage>) {}
+
+        fn warn(&self, _message: impl Into<EventMessage>) {}
+
+        fn error(self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
+    }
 
     pub fn kubeconfig_path() -> String {
         env::var("HOME").unwrap() + "/.kube/config"

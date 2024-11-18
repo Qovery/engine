@@ -30,6 +30,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
+use qovery_engine::cloud_provider::service::Action;
 use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
 use tracing::{span, Level};
@@ -137,12 +138,12 @@ pub fn cluster_test(
         Kind::OnPremise => todo!(),
     };
     // Bootstrap
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
     assert!(deploy_tx.is_ok());
 
     // update
     engine.context_mut().update_is_first_cluster_deployment(false);
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
     assert!(deploy_tx.is_ok());
 
     // Deploy env if any
@@ -171,7 +172,7 @@ pub fn cluster_test(
             assert!(pause_tx.is_ok());
 
             // Resume
-            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
             assert!(resume_tx.is_ok());
         }
         ClusterTestType::WithUpgrade => {
@@ -225,7 +226,7 @@ pub fn cluster_test(
             };
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let upgrade_tx = engine.kubernetes().as_infra_actions().run(&engine, Action::Create);
             assert!(upgrade_tx.is_ok());
 
             // Delete
@@ -284,7 +285,7 @@ pub fn cluster_test(
             };
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
             assert!(upgrade_tx.is_ok());
 
             // Delete
@@ -313,11 +314,9 @@ pub fn cluster_test(
     }
 
     // Delete
-    //let mut delete_tx = Transaction::new(&engine).unwrap();
-    //if let Err(err) = delete_tx.delete_kubernetes() {
-    //    panic!("{err:?}")
-    //}
-    //assert!(matches!(delete_tx.commit(), Ok(_)));
+    if let Err(err) = engine.kubernetes().as_infra_actions().delete_cluster(&engine) {
+        panic!("{err:?}")
+    }
 
     test_name.to_string()
 }
@@ -370,7 +369,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.AWS_TEST_KUBECONFIG,
+                    secrets.AWS_TEST_KUBECONFIG_b64,
                     temp_dir,
                     None,
                 )
@@ -426,7 +425,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.SCALEWAY_TEST_KUBECONFIG,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                     temp_dir,
                 )
                 .expect("Cannot instantiate SCW Kapsule"),
@@ -453,7 +452,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.GCP_TEST_KUBECONFIG,
+                    secrets.GCP_TEST_KUBECONFIG_b64,
                     temp_dir,
                 )
                 .expect("Cannot instantiate GKE"),

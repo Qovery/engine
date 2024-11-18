@@ -17,3 +17,8 @@ tags:
   OrganizationId: ""
   OrganizationLongId: ""
   Region: ""
+
+# to configure all the node pools (later we can have a section by node pool)
+global_node_pools:
+  requirements: []
+  terminationGracePeriod: 48h

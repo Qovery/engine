@@ -1,4 +1,4 @@
-use crate::cloud_provider::gcp::kubernetes::GkeOptions;
+use super::GkeChartsConfigPrerequisites;
 use crate::cloud_provider::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -14,7 +14,6 @@ use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
-use crate::cloud_provider::helm_charts::qovery_pdb_infra_chart::QoveryPdbInfraChart;
 use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::cloud_provider::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -22,99 +21,29 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     ToCommonHelmChart,
 };
-use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{
-    CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-};
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::Kind;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::errors::CommandError;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::infrastructure_action::deploy_helms::mk_customer_chart_override_fn;
 use crate::io_models::QoveryIdentifier;
 use crate::models::domain::Domain;
 use crate::models::gcp::GcpStorageType;
-use crate::models::third_parties::LetsEncryptConfig;
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
-use std::sync::Arc;
+use std::collections::HashSet;
 use time::Duration;
 use url::Url;
-
-pub struct GkeChartsConfigPrerequisites {
-    pub organization_id: String,
-    pub organization_long_id: uuid::Uuid,
-    pub cluster_id: String,
-    pub cluster_long_id: uuid::Uuid,
-    pub ff_log_history_enabled: bool,
-    pub ff_metrics_history_enabled: bool,
-    pub managed_dns_helm_format: String,
-    pub managed_dns_root_domain_helm_format: String,
-    pub lets_encrypt_config: LetsEncryptConfig,
-    pub dns_provider_config: DnsProviderConfiguration,
-    pub loki_logging_service_account_email: String,
-    pub logs_bucket_name: String,
-    // qovery options form json input
-    pub infra_options: GkeOptions,
-    pub cluster_advanced_settings: ClusterAdvancedSettings,
-}
-
-impl GkeChartsConfigPrerequisites {
-    pub fn new(
-        organization_id: String,
-        organization_long_id: uuid::Uuid,
-        cluster_id: String,
-        cluster_long_id: uuid::Uuid,
-        ff_log_history_enabled: bool,
-        ff_metrics_history_enabled: bool,
-        managed_dns_helm_format: String,
-        managed_dns_root_domain_helm_format: String,
-        lets_encrypt_config: LetsEncryptConfig,
-        dns_provider_config: DnsProviderConfiguration,
-        loki_logging_service_account_email: String,
-        logs_bucket_name: String,
-        infra_options: GkeOptions,
-        cluster_advanced_settings: ClusterAdvancedSettings,
-    ) -> Self {
-        Self {
-            organization_id,
-            organization_long_id,
-            cluster_id,
-            cluster_long_id,
-            ff_log_history_enabled,
-            ff_metrics_history_enabled,
-            managed_dns_helm_format,
-            managed_dns_root_domain_helm_format,
-            lets_encrypt_config,
-            dns_provider_config,
-            loki_logging_service_account_email,
-            logs_bucket_name,
-            infra_options,
-            cluster_advanced_settings,
-        }
-    }
-}
 
 pub(super) fn gke_helm_charts(
     chart_config_prerequisites: &GkeChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    _kubernetes_config: &Path,
     qovery_api: &dyn QoveryApi,
-    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> =
-        Arc::new(move |chart_name: String| -> Option<CustomerHelmChartsOverride> {
-            match customer_helm_charts_override.clone() {
-                Some(x) => x.get(&chart_name).map(|content| CustomerHelmChartsOverride {
-                    chart_name: chart_name.to_string(),
-                    chart_values: content.clone(),
-                }),
-                None => None,
-            }
-        });
+    let get_chart_override_fn =
+        mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
@@ -217,6 +146,7 @@ pub(super) fn gke_helm_charts(
                 true,
                 get_chart_override_fn.clone(),
                 true,
+                false,
             )
             .to_common_helm_chart()?,
         )),
@@ -232,6 +162,7 @@ pub(super) fn gke_helm_charts(
                 prometheus_namespace,
                 get_chart_override_fn.clone(),
                 true,
+                false,
             )
             .to_common_helm_chart()?,
         )),
@@ -349,6 +280,12 @@ pub(super) fn gke_helm_charts(
             .nginx_controller_enable_client_ip,
         chart_config_prerequisites
             .cluster_advanced_settings
+            .nginx_controller_use_forwarded_headers,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_compute_full_forwarded_for,
+        chart_config_prerequisites
+            .cluster_advanced_settings
             .nginx_controller_log_format_escaping
             .to_model(),
         false, // only for AWS
@@ -417,25 +354,12 @@ pub(super) fn gke_helm_charts(
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
-    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(cert_manager_config)),
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(k8s_event_logger)),
     ];
-
-    // pdb infra
-    if chart_config_prerequisites.cluster_advanced_settings.infra_pdb_enabled {
-        let pdb_infra = QoveryPdbInfraChart::new(
-            chart_prefix_path,
-            HelmChartNamespaces::Qovery,
-            prometheus_namespace,
-            loki_namespace,
-        )
-        .to_common_helm_chart()?;
-
-        level_7.push(Some(Box::new(pdb_infra)));
-    }
 
     Ok(vec![
         level_1.into_iter().flatten().collect(),

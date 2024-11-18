@@ -3,7 +3,7 @@ use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
+use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{event_details, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::NodeGroups;
@@ -39,7 +39,7 @@ pub struct EKS {
     pub zones: Vec<AwsZone>,
     pub s3: S3,
     pub nodes_groups: Vec<NodeGroups>,
-    pub template_directory: String,
+    pub template_directory: PathBuf,
     pub options: Options,
     pub logger: Box<dyn Logger>,
     pub advanced_settings: ClusterAdvancedSettings,
@@ -68,7 +68,7 @@ impl EKS {
         qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
-        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+        let template_directory = PathBuf::from(format!("{}/aws/bootstrap", context.lib_root_dir()));
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
@@ -95,41 +95,20 @@ impl EKS {
             qovery_allowed_public_access_cidrs,
         };
 
+        // kubeconfig may be missing if it is the first time we create the cluster
         if let Some(kubeconfig) = &cluster.kubeconfig {
             write_kubeconfig_on_disk(
                 &cluster.kubeconfig_local_file_path(),
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
-        } else {
-            fetch_kubeconfig(&cluster, &cluster.s3)?;
         }
 
         Ok(cluster)
     }
 
     pub fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
-        if let Some(karpenter_parameters) = &self.options.karpenter_parameters {
-            return Some(KarpenterParameters {
-                spot_enabled: karpenter_parameters.spot_enabled,
-                max_node_drain_time_in_secs: karpenter_parameters.max_node_drain_time_in_secs,
-                disk_size_in_gib: karpenter_parameters.disk_size_in_gib,
-                default_service_architecture: karpenter_parameters.default_service_architecture,
-            });
-        }
-
-        if self.advanced_settings.aws_enable_karpenter {
-            if let Some(node_group) = self.nodes_groups.first() {
-                return Some(KarpenterParameters {
-                    spot_enabled: self.advanced_settings.aws_karpenter_enable_spot,
-                    max_node_drain_time_in_secs: self.advanced_settings.aws_karpenter_max_node_drain_in_sec,
-                    disk_size_in_gib: node_group.disk_size_in_gib,
-                    default_service_architecture: node_group.instance_architecture,
-                });
-            }
-        }
-
-        None
+        self.options.karpenter_parameters.clone()
     }
 }
 
@@ -168,10 +147,6 @@ impl Kubernetes for EKS {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
-    }
-
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
     }
 
     fn is_network_managed_by_user(&self) -> bool {
@@ -232,12 +207,8 @@ impl Kubernetes for EKS {
         &self.advanced_settings
     }
 
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        self.customer_helm_charts_override.clone()
-    }
-
     fn is_karpenter_enabled(&self) -> bool {
-        self.options.karpenter_parameters.is_some() || self.advanced_settings.aws_enable_karpenter
+        self.options.karpenter_parameters.is_some()
     }
 
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
@@ -284,9 +255,5 @@ impl Kubernetes for EKS {
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction {
         self
-    }
-
-    fn as_eks(&self) -> Option<&EKS> {
-        Some(self)
     }
 }

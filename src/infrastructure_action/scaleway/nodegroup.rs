@@ -1,9 +1,7 @@
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::node::ScwNodeGroup;
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
-use crate::errors::{CommandError, EngineError};
-use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, InfrastructureStep};
+use crate::errors::CommandError;
 use crate::runtime::block_on;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 
@@ -107,10 +105,10 @@ pub(super) fn get_node_group_info(cluster: &Kapsule, pool_id: &str) -> Result<Sc
     };
 
     // ensure there is no missing info
-    check_missing_nodegroup_info(cluster, &pool.name, "name")?;
-    check_missing_nodegroup_info(cluster, &pool.min_size, "min_size")?;
-    check_missing_nodegroup_info(cluster, &pool.max_size, "max_size")?;
-    check_missing_nodegroup_info(cluster, &pool.status, "status")?;
+    check_missing_nodegroup_info(&pool.name, "name")?;
+    check_missing_nodegroup_info(&pool.min_size, "min_size")?;
+    check_missing_nodegroup_info(&pool.max_size, "max_size")?;
+    check_missing_nodegroup_info(&pool.status, "status")?;
 
     match ScwNodeGroup::new(
         pool.id,
@@ -126,22 +124,9 @@ pub(super) fn get_node_group_info(cluster: &Kapsule, pool_id: &str) -> Result<Sc
     }
 }
 
-fn check_missing_nodegroup_info<T>(cluster: &Kapsule, item: &Option<T>, name: &str) -> Result<(), ScwNodeGroupErrors> {
-    let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-
+fn check_missing_nodegroup_info<T>(item: &Option<T>, name: &str) -> Result<(), ScwNodeGroupErrors> {
     if item.is_none() {
-        cluster.logger().log(EngineEvent::Error(
-            EngineError::new_missing_workers_group_info_error(
-                event_details,
-                CommandError::new_from_safe_message(format!(
-                    "Missing node pool info {} for cluster {}",
-                    name,
-                    cluster.context().cluster_short_id()
-                )),
-            ),
-            None,
-        ));
-        return Err(ScwNodeGroupErrors::MissingNodePoolInfo);
+        return Err(ScwNodeGroupErrors::MissingNodePoolInfo(name.to_string()));
     };
 
     Ok(())

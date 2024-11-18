@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::cloud_provider::helm::CommonChart;
+use crate::cloud_provider::helm::{CommonChart, VpaContainerPolicy};
 use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
@@ -24,7 +24,6 @@ pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_cluster_agent_chart;
-pub mod qovery_pdb_infra_chart;
 pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
@@ -58,6 +57,15 @@ pub struct HelmChartResources {
     pub limit_memory: KubernetesMemoryResourceUnit,
     pub request_cpu: KubernetesCpuResourceUnit,
     pub request_memory: KubernetesMemoryResourceUnit,
+}
+
+pub enum HelmChartVpaType {
+    /// VPA won't be enabled for the chart
+    Disabled,
+    /// VPA will be enabled for the chart with default values
+    EnabledWithChartDefault,
+    /// VPA will be enabled for the chart with custom values
+    EnabledWithConstraints(VpaContainerPolicy),
 }
 
 #[derive(Clone)]

@@ -1,7 +1,7 @@
 pub mod node;
 
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubeconfig_helper::{fetch_kubeconfig, write_kubeconfig_on_disk};
+use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{self, InstanceType, Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::cloud_provider::models::{CpuArchitecture, NodeGroups};
 use crate::cloud_provider::qovery::EngineLocation;
@@ -39,7 +39,7 @@ pub enum ScwNodeGroupErrors {
     ClusterDoesNotExists(CommandError),
     MultipleClusterFound,
     NoNodePoolFound(CommandError),
-    MissingNodePoolInfo,
+    MissingNodePoolInfo(String),
     NodeGroupValidationError(CommandError),
 }
 
@@ -111,11 +111,11 @@ pub struct Kapsule {
     pub zone: ScwZone,
     pub object_storage: ScalewayOS,
     pub nodes_groups: Vec<NodeGroups>,
-    pub template_directory: String,
+    pub template_directory: PathBuf,
     pub options: KapsuleOptions,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
-    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
 }
@@ -136,7 +136,7 @@ impl Kapsule {
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
-        let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
+        let template_directory = PathBuf::from(context.lib_root_dir()).join("scaleway").join("bootstrap");
         let event_details = kubernetes::event_details(cloud_provider, long_id, name.to_string(), &context);
 
         for node_group in &nodes_groups {
@@ -215,8 +215,6 @@ impl Kapsule {
                 kubeconfig,
                 cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
             )?;
-        } else {
-            fetch_kubeconfig(&cluster, &cluster.object_storage)?;
         }
 
         Ok(cluster)
@@ -334,10 +332,6 @@ impl Kubernetes for Kapsule {
         self.logger.borrow()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         false
     }
@@ -391,10 +385,6 @@ impl Kubernetes for Kapsule {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
-    }
-
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        self.customer_helm_charts_override.clone()
     }
 
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {

@@ -114,6 +114,17 @@ pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<
     Ok(general_purpose::STANDARD.encode(replaced_comma))
 }
 
+pub fn envs_to_slice(env_var: &[(String, String)]) -> Vec<(&str, &str)> {
+    env_var.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+}
+
+pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
+    env_var
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests_utilities {
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
