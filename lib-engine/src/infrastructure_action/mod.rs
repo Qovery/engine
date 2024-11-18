@@ -24,7 +24,11 @@ pub trait InfrastructureAction: Send + Sync {
     fn bootstap_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         Ok(())
     }
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>>;
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn delete_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>>;
     fn upgrade_cluster(
@@ -53,10 +57,14 @@ pub trait InfrastructureAction: Send + Sync {
         ));
         match action {
             Action::Create => {
+                let mut cluster_has_been_upgraded = false;
                 if infra_ctx.context().is_first_cluster_deployment() {
                     self.bootstap_cluster(infra_ctx)?;
+                } else if let Some(upgrade_status) = self.is_upgrade_required(infra_ctx) {
+                    cluster_has_been_upgraded = true;
+                    self.upgrade_cluster(infra_ctx, upgrade_status)?;
                 }
-                self.create_cluster(infra_ctx)
+                self.create_cluster(infra_ctx, cluster_has_been_upgraded)
             }
             Action::Pause => self.pause_cluster(infra_ctx),
             Action::Delete => self.delete_cluster(infra_ctx),

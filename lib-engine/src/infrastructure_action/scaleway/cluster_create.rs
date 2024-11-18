@@ -13,8 +13,9 @@ use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::helm_charts::KapsuleHelmsDeployment;
 use crate::infrastructure_action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
-use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
+use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::ObjectStorage;
+use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use std::path::PathBuf;
@@ -26,11 +27,6 @@ pub fn create_kapsule_cluster(
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
     logger.info("Preparing SCW cluster deployment.");
-
-    // upgrade cluster instead if required
-    if let Some(version_target) = cluster.is_upgrade_required(infra_ctx) {
-        cluster.upgrade_cluster(infra_ctx, version_target)?;
-    }
 
     let temp_dir = cluster.temp_dir();
     // TODO(benjaminch): move this elsewhere
@@ -55,15 +51,10 @@ pub fn create_kapsule_cluster(
         cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(&logger)?;
 
     // Dry run is not supported after the terraform action for now
     if cluster.context().is_dry_run_deploy() {

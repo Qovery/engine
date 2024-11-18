@@ -175,7 +175,7 @@ pub struct Gke {
     pub name: String,
     pub version: KubernetesVersion,
     pub region: GcpRegion,
-    pub template_directory: String,
+    pub template_directory: PathBuf,
     pub object_storage: GoogleOS,
     pub options: GkeOptions,
     pub logger: Box<dyn Logger>,
@@ -255,7 +255,7 @@ impl Gke {
             name: name.to_string(),
             version,
             region,
-            template_directory: format!("{}/gcp/bootstrap", context.lib_root_dir()),
+            template_directory: PathBuf::from(context.lib_root_dir()).join("gcp/bootstrap"),
             object_storage: google_object_storage,
             options,
             logger,
@@ -371,10 +371,6 @@ impl Kubernetes for Gke {
         self.logger.as_ref()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(()) // TODO(ENG-1805): add some checks eventually
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         matches!(self.options.vpc_mode, VpcMode::UserNetworkConfig { .. })
     }
@@ -399,10 +395,6 @@ impl Kubernetes for Gke {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
-    }
-
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        self.customer_helm_charts_override.clone()
     }
 
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {

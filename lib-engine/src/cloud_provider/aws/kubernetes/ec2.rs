@@ -165,10 +165,6 @@ impl Kubernetes for EC2 {
         self.logger.borrow()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         false
     }
@@ -222,20 +218,11 @@ impl Kubernetes for EC2 {
         &self.advanced_settings
     }
 
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        //todo(pmavro): use box/arc instead of clone
-        self.customer_helm_charts_override.clone()
-    }
-
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         vec![(
             "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
             "nlb".to_string(),
         )]
-    }
-
-    fn as_ec2(&self) -> Option<&EC2> {
-        Some(self)
     }
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction {

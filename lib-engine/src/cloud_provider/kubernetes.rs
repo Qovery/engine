@@ -1,7 +1,5 @@
 use super::models::NodeGroupsWithDesiredState;
 use super::vault::ClusterSecrets;
-use crate::cloud_provider::aws::kubernetes::ec2::EC2;
-use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -18,7 +16,6 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::infrastructure_action::{InfraLogger, InfrastructureAction};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
@@ -31,7 +28,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::any::Any;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -433,7 +430,6 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn logger(&self) -> &dyn Logger;
-    fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
     fn cpu_architectures(&self) -> Vec<CpuArchitecture>;
     fn get_event_details(&self, stage: Stage) -> EventDetails {
@@ -464,25 +460,12 @@ pub trait Kubernetes: Send + Sync {
     ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>;
     fn is_karpenter_enabled(&self) -> bool {
         false
     }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
-    fn helm_charts_diffs_directory(&self) -> PathBuf {
-        self.temp_dir().join("helm-charts-diffs")
-    }
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction;
-
-    // TODO: Remove those methods when we remove EC2
-    // It is needed because our integration sucks
-    fn as_ec2(&self) -> Option<&EC2> {
-        None
-    }
-    fn as_eks(&self) -> Option<&EKS> {
-        None
-    }
 }
 
 pub trait KubernetesNode {
@@ -1247,7 +1230,7 @@ where
                     }
                 };
 
-                thread::sleep(Duration::from_secs(30));
+                thread::sleep(Duration::from_secs(60 * 5));
 
                 // watch for thread termination
                 match rx.try_recv() {

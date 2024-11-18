@@ -144,7 +144,7 @@ impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
             alb_controller_already_deployed: self.alb_already_deployed,
             kubernetes_version_upgrade_requested: self.kubernetes_version_upgrade_requested,
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
-            customer_helm_charts_override: cluster.customer_helm_charts_override(),
+            customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
         }
     }
 

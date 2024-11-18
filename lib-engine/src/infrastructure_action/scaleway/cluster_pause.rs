@@ -8,6 +8,7 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
+use crate::utilities::envs_to_string;
 
 pub fn pause_kapsule_cluster(
     cluster: &Kapsule,
@@ -30,11 +31,12 @@ pub fn pause_kapsule_cluster(
         cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
 
     logger.info("Pausing cluster deployment.");
-    tf_resources.pause(&[], &["scw_ks_worker_nodes"])?;
+    tf_resources.pause(&["scw_ks_worker_nodes"])?;
 
     if let Err(e) = check_workers_on_pause(cluster, infra_ctx.cloud_provider(), None) {
         return Err(Box::new(EngineError::new_k8s_node_not_ready(event_details, e)));

@@ -30,6 +30,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
+use qovery_engine::cloud_provider::service::Action;
 use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
 use tracing::{span, Level};
@@ -137,12 +138,12 @@ pub fn cluster_test(
         Kind::OnPremise => todo!(),
     };
     // Bootstrap
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
     assert!(deploy_tx.is_ok());
 
     // update
     engine.context_mut().update_is_first_cluster_deployment(false);
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
     assert!(deploy_tx.is_ok());
 
     // Deploy env if any
@@ -171,7 +172,7 @@ pub fn cluster_test(
             assert!(pause_tx.is_ok());
 
             // Resume
-            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
             assert!(resume_tx.is_ok());
         }
         ClusterTestType::WithUpgrade => {
@@ -225,7 +226,7 @@ pub fn cluster_test(
             };
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let upgrade_tx = engine.kubernetes().as_infra_actions().run(&engine, Action::Create);
             assert!(upgrade_tx.is_ok());
 
             // Delete
@@ -284,7 +285,7 @@ pub fn cluster_test(
             };
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine);
+            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
             assert!(upgrade_tx.is_ok());
 
             // Delete

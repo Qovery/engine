@@ -20,7 +20,11 @@ mod nodegroup;
 mod tera_context;
 
 impl InfrastructureAction for Kapsule {
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        _has_been_upraded: bool,
+    ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
         send_progress_on_long_task(self, Action::Create, || create_kapsule_cluster(self, infra_ctx, logger))
     }
@@ -41,7 +45,9 @@ impl InfrastructureAction for Kapsule {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
-        upgrade_kapsule_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        send_progress_on_long_task(self, Action::Create, || {
+            upgrade_kapsule_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        })
     }
 }
 

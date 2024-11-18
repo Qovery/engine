@@ -115,7 +115,7 @@ pub struct Kapsule {
     pub options: KapsuleOptions,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
-    customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
 }
@@ -332,10 +332,6 @@ impl Kubernetes for Kapsule {
         self.logger.borrow()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         false
     }
@@ -389,10 +385,6 @@ impl Kubernetes for Kapsule {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
-    }
-
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        self.customer_helm_charts_override.clone()
     }
 
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {

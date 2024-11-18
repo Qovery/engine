@@ -100,6 +100,7 @@ pub(super) trait HelmInfraResources {
                 charts_level,
             )
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e)))?;
+            logger.info(format!("✅ Charts of level {} depoyed", ix));
         }
 
         logger.info("⚓ Helm charts deployed successfully");

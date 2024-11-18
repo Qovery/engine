@@ -10,6 +10,7 @@ use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use crate::utilities::envs_to_string;
 use std::collections::HashSet;
 
 pub fn delete_kapsule_cluster(
@@ -31,6 +32,7 @@ pub fn delete_kapsule_cluster(
         cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
 
@@ -43,25 +45,13 @@ pub fn delete_kapsule_cluster(
     ));
     logger.info("Running Terraform apply before running a delete.");
 
-    let _qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let _qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     logger.info("Running Terraform destroy");
-    tf_resources.delete(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    tf_resources.delete(&logger)?;
 
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details.clone());

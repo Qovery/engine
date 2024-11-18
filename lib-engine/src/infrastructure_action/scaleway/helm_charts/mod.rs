@@ -141,7 +141,7 @@ impl<'a> HelmInfraResources for KapsuleHelmsDeployment<'a> {
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.terraform_output.loki_storage_config_scaleway_s3.clone(),
-            self.cluster.customer_helm_charts_override(),
+            self.cluster.customer_helm_charts_override.clone(),
         )
     }
 

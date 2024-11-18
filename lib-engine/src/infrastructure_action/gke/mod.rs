@@ -19,7 +19,11 @@ use crate::infrastructure_action::InfrastructureAction;
 use serde_derive::{Deserialize, Serialize};
 
 impl InfrastructureAction for Gke {
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        _has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
         send_progress_on_long_task(self, Action::Create, || create_gke_cluster(self, infra_ctx, logger))
     }
@@ -40,7 +44,10 @@ impl InfrastructureAction for Gke {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
-        upgrade_gke_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+
+        send_progress_on_long_task(self, Action::Create, || {
+            upgrade_gke_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        })
     }
 }
 

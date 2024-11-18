@@ -11,8 +11,9 @@ use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraReso
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::helm_charts::GkeHelmsDeployment;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
-use crate::infrastructure_action::{InfraLogger, InfrastructureAction, ToInfraTeraContext};
+use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::ObjectStorage;
+use crate::utilities::envs_to_string;
 use base64::Engine;
 use std::fs;
 use std::path::PathBuf;
@@ -25,10 +26,6 @@ pub(super) fn create_gke_cluster(
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
     logger.info("Preparing GKE cluster deployment.");
 
-    if let Some(version_target) = cluster.is_upgrade_required(infra_ctx) {
-        cluster.upgrade_cluster(infra_ctx, version_target)?;
-    }
-
     let temp_dir = cluster.temp_dir();
     logger.info("Deploying GKE cluster.");
     if let Err(err) = create_object_storage(cluster, &logger, event_details.clone()) {
@@ -40,18 +37,13 @@ pub(super) fn create_gke_cluster(
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
-        PathBuf::from(&cluster.template_directory).join("terraform"),
+        cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     if cluster.context().is_dry_run_deploy() {
         logger.warn("Exiting. Dry run is not supported after the terraform action for now");
@@ -105,7 +97,7 @@ pub(super) fn create_gke_cluster(
         HelmInfraContext::new(
             tera_context,
             PathBuf::from(infra_ctx.context().lib_root_dir()),
-            PathBuf::from(cluster.template_directory.clone()),
+            cluster.template_directory.clone(),
             cluster.temp_dir().join("helms"),
             event_details.clone(),
             vec![],
