@@ -81,10 +81,10 @@ variable "scaleway_ks_version" {
   type    = string
 }
 
-variable "scaleway_ks_pool_autoscale" {
-  description = "Enable built-in cluster autoscaler"
-  default = true
-  type    = bool
+variable "scaleway_ks_type" {
+  description = "Kubernetes cluster version"
+  default = "{{ kubernetes_cluster_type }}"
+  type    = string
 }
 
 # Qovery features

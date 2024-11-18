@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernet
 use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
-use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
+use qovery_engine::cloud_provider::scaleway::kubernetes::{KapsuleClusterType, KapsuleOptions};
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::errors::ContainerRegistryError;
@@ -245,6 +245,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
+            KapsuleClusterType::Kapsule,
         )
     }
 }
