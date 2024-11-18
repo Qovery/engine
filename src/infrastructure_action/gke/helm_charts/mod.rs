@@ -115,7 +115,7 @@ impl<'a> HelmInfraResources for GkeHelmsDeployment<'a> {
             self.cluster.logs_bucket_name(),
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
-            self.cluster.customer_helm_charts_override(),
+            self.cluster.customer_helm_charts_override.clone(),
         )
     }
 

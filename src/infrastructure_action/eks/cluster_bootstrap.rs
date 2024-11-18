@@ -7,6 +7,7 @@ use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::InfraLogger;
+use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 
@@ -47,17 +48,12 @@ pub fn bootstrap_eks_cluster(
         kubernetes.template_directory.join("terraform"),
         temp_dir.join("terraform_bootstrap"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
     );
 
     let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        let qovery_terraform_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_action.create(
-            infra_ctx
-                .cloud_provider()
-                .credentials_environment_variables()
-                .as_slice(),
-            &logger,
-        );
+        let qovery_terraform_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_action.create(&logger);
 
         match qovery_terraform_output {
             Ok(output) => OperationResult::Ok(output),

@@ -12,6 +12,7 @@ use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, g
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
+use crate::utilities::envs_to_string;
 use std::path::PathBuf;
 
 pub fn pause_eks_cluster(
@@ -76,9 +77,10 @@ pub fn pause_eks_cluster(
         PathBuf::from(&kubernetes.template_directory).join("terraform"),
         kubernetes.temp_dir().join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         kubernetes.context().is_dry_run_deploy(),
     );
-    tf_action.pause(&[], &["aws_eks_node_group."])?;
+    tf_action.pause(&["aws_eks_node_group."])?;
 
     logger.info(format!("Kubernetes cluster {} successfully paused", kubernetes.name()));
     Ok(())

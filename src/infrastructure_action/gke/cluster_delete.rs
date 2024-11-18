@@ -11,8 +11,8 @@ use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::ObjectStorage;
 use crate::secret_manager;
 use crate::secret_manager::vault::QVaultClient;
+use crate::utilities::envs_to_string;
 use std::collections::HashSet;
-use std::path::PathBuf;
 
 pub(super) fn delete_gke_cluster(
     cluster: &Gke,
@@ -36,31 +36,20 @@ pub(super) fn delete_gke_cluster(
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
-        PathBuf::from(&cluster.template_directory).join("terraform"),
+        cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let _: GkeQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let _: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
-    tf_resources.delete(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    tf_resources.delete(&logger)?;
 
     // delete info on vault
     let _ = delete_vault_data(cluster, event_details.clone(), &logger);

@@ -3,7 +3,6 @@ use crate::cloud_provider::kubernetes::{Kubernetes, KubernetesUpgradeStatus, Kub
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use std::path::PathBuf;
 
 use crate::engine::InfrastructureContext;
 
@@ -12,6 +11,7 @@ use crate::infrastructure_action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
+use crate::utilities::envs_to_string;
 use std::str::FromStr;
 
 pub(super) fn upgrade_gke_cluster(
@@ -54,19 +54,14 @@ pub(super) fn upgrade_gke_cluster(
     );
     let tf_resources = TerraformInfraResources::new(
         tera_context,
-        PathBuf::from(&cluster.template_directory).join("terraform"),
+        cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
 
-    let _tf_output: GkeQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let _tf_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     check_control_plane_on_upgrade(cluster, infra_ctx.cloud_provider(), kubernetes_version).map_err(|e| {
         Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(

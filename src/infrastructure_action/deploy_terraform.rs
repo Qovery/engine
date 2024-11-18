@@ -7,6 +7,7 @@ use crate::errors::EngineError;
 use crate::events::EventDetails;
 use crate::infrastructure_action::InfraLogger;
 use crate::template::generate_and_copy_all_files_into_dir;
+use crate::utilities::envs_to_slice;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ pub struct TerraformInfraResources {
     terraform_common_folder: PathBuf,
     destination_folder: PathBuf,
     event_details: EventDetails,
+    envs: Vec<(String, String)>,
     is_dry_run: bool,
 }
 
@@ -26,6 +28,7 @@ impl TerraformInfraResources {
         terraform_common_folder: PathBuf,
         destination_folder: PathBuf,
         event_details: EventDetails,
+        envs: Vec<(String, String)>,
         is_dry_run: bool,
     ) -> TerraformInfraResources {
         TerraformInfraResources {
@@ -33,6 +36,7 @@ impl TerraformInfraResources {
             terraform_common_folder,
             destination_folder,
             event_details,
+            envs,
             is_dry_run,
         }
     }
@@ -66,17 +70,14 @@ impl TerraformInfraResources {
         Ok(())
     }
 
-    pub fn create<T: DeserializeOwned>(
-        &self,
-        envs: &[(&str, &str)],
-        logger: &impl InfraLogger,
-    ) -> Result<T, Box<EngineError>> {
+    pub fn create<T: DeserializeOwned>(&self, logger: &impl InfraLogger) -> Result<T, Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
         self.prepare_terraform_files()?;
-        self.terraform_init(envs)?;
+        self.terraform_init(&envs)?;
 
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
         logger.info("🏗️ Creating terraform resources with the following plan");
-        terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, false)
+        terraform_plan(self.destination_folder.to_string_lossy().as_ref(), &envs, false)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
             .into_iter()
@@ -86,23 +87,24 @@ impl TerraformInfraResources {
         terraform_apply(
             self.destination_folder.to_string_lossy().as_ref(),
             self.is_dry_run,
-            envs,
+            &envs,
             &TerraformValidators::Default,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
-        terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), envs)
+        terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), &envs)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
     }
 
-    pub fn delete(&self, envs: &[(&str, &str)], logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
+    pub fn delete(&self, logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
         self.prepare_terraform_files()?;
-        self.terraform_init(envs)?;
+        self.terraform_init(&envs)?;
 
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
         logger.info("🏗️ Deleting terraform resources with the following plan");
-        terraform_plan(self.destination_folder.to_string_lossy().as_ref(), envs, true)
+        terraform_plan(self.destination_folder.to_string_lossy().as_ref(), &envs, true)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
             .into_iter()
@@ -114,7 +116,7 @@ impl TerraformInfraResources {
 
         terraform_destroy(
             self.destination_folder.to_string_lossy().as_ref(),
-            envs,
+            &envs,
             &TerraformValidators::None,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
@@ -123,15 +125,16 @@ impl TerraformInfraResources {
         Ok(())
     }
 
-    pub fn pause(&self, envs: &[(&str, &str)], resources_filters: &[&str]) -> Result<(), Box<EngineError>> {
+    pub fn pause(&self, resources_filters: &[&str]) -> Result<(), Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
         self.prepare_terraform_files()?;
-        self.terraform_init(envs)?;
+        self.terraform_init(&envs)?;
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
         let tf_workers_resources = terraform_state_list(
             self.destination_folder.to_string_lossy().as_ref(),
-            envs,
+            &envs,
             &TerraformValidators::Default,
         )
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
@@ -144,7 +147,7 @@ impl TerraformInfraResources {
         terraform_apply_with_tf_workers_resources(
             self.destination_folder.to_string_lossy().as_ref(),
             tf_workers_resources,
-            envs,
+            &envs,
             &TerraformValidators::Default,
             self.is_dry_run,
         )

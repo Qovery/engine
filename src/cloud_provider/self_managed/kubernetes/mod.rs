@@ -126,10 +126,6 @@ impl Kubernetes for SelfManaged {
         self.logger.borrow()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         true
     }
@@ -171,17 +167,6 @@ impl Kubernetes for SelfManaged {
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
-    }
-
-    fn customer_helm_charts_override(
-        &self,
-    ) -> Option<
-        std::collections::HashMap<
-            crate::io_models::engine_request::ChartValuesOverrideName,
-            crate::io_models::engine_request::ChartValuesOverrideValues,
-        >,
-    > {
-        None
     }
 
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {

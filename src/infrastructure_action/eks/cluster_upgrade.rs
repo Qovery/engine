@@ -17,6 +17,7 @@ use crate::infrastructure_action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
+use crate::utilities::envs_to_string;
 use std::path::PathBuf;
 
 pub fn upgrade_eks_cluster(
@@ -86,15 +87,10 @@ pub fn upgrade_eks_cluster(
         PathBuf::from(&kubernetes.template_directory).join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
     );
-    let _: AwsEksQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let _: AwsEksQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     //
     // Upgrade worker nodes
@@ -111,6 +107,7 @@ pub fn upgrade_eks_cluster(
         PathBuf::from(&kubernetes.template_directory).join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
     );
 
@@ -130,13 +127,7 @@ pub fn upgrade_eks_cluster(
         );
     }
 
-    let _: AwsEksQoveryTerraformOutput = tf_resources.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        &logger,
-    )?;
+    let _: AwsEksQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     // In case of karpenter, we don't need to upgrade workers, it will do it by itself
     if !infra_ctx.kubernetes().is_karpenter_enabled() {

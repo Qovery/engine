@@ -20,10 +20,11 @@ use crate::infrastructure_action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure_action::eks::tera_context::eks_tera_context;
 use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
-use crate::infrastructure_action::{InfraLogger, InfrastructureAction};
+use crate::infrastructure_action::InfraLogger;
 use crate::models::kubernetes::K8sObject;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
+use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use rusoto_eks::EksClient;
@@ -32,6 +33,7 @@ use std::path::PathBuf;
 pub fn create_eks_cluster(
     kubernetes: &EKS,
     infra_ctx: &InfrastructureContext,
+    has_been_upgraded: bool,
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
@@ -120,17 +122,13 @@ pub fn create_eks_cluster(
             kubernetes.template_directory.join("terraform"),
             temp_dir.join("terraform"),
             event_details.clone(),
+            envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
             infra_ctx.context().is_dry_run_deploy(),
         );
 
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
-            let qovery_terraform_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_action.create(
-                infra_ctx
-                    .cloud_provider()
-                    .credentials_environment_variables()
-                    .as_slice(),
-                &logger,
-            );
+            let qovery_terraform_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> =
+                tf_action.create(&logger);
 
             match qovery_terraform_output {
                 Ok(output) => OperationResult::Ok(output),
@@ -176,12 +174,6 @@ pub fn create_eks_cluster(
         }
     }
 
-    let mut kubernetes_version_upgrade_requested = false;
-    if let Some(version_target) = kubernetes.is_upgrade_required(infra_ctx) {
-        kubernetes_version_upgrade_requested = true;
-        kubernetes.upgrade_cluster(infra_ctx, version_target)?;
-    }
-
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply()?;
     if infra_ctx.context().is_dry_run_deploy() {
@@ -206,7 +198,6 @@ pub fn create_eks_cluster(
         .collect();
 
     if kubernetes.is_karpenter_enabled() {
-        let kubernetes = kubernetes.as_eks().expect("expected EKS cluster here");
         if let Some(karpenter_parameters) = &kubernetes.get_karpenter_parameters() {
             if karpenter_parameters.spot_enabled {
                 block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
@@ -305,7 +296,7 @@ pub fn create_eks_cluster(
         eks_tf_output,
         kubernetes,
         alb_already_deployed,
-        kubernetes_version_upgrade_requested,
+        has_been_upgraded,
     );
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
@@ -359,16 +350,11 @@ fn clean_karpenter_installation(
         kubernetes.template_directory.join("terraform"),
         kubernetes.temp_dir().join("terrafor_karpenter_cleanup"),
         event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
     );
 
-    let _: AwsEksQoveryTerraformOutput = tf_action.create(
-        infra_ctx
-            .cloud_provider()
-            .credentials_environment_variables()
-            .as_slice(),
-        logger,
-    )?;
+    let _: AwsEksQoveryTerraformOutput = tf_action.create(logger)?;
 
     Ok(())
 }

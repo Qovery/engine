@@ -10,7 +10,11 @@ use serde_derive::{Deserialize, Serialize};
 use super::utils::from_terraform_value;
 
 impl InfrastructureAction for EC2 {
-    fn create_cluster(&self, _infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(
+        &self,
+        _infra_ctx: &InfrastructureContext,
+        _has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         let logger = InfraLoggerImpl {
             event_details: event_details.clone(),

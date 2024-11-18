@@ -42,9 +42,10 @@ pub fn upgrade_kapsule_cluster(
         cluster.template_directory.join("terraform"),
         temp_dir.join("terraform"),
         event_details.clone(),
+        vec![],
         cluster.context().is_dry_run_deploy(),
     );
-    let _: ScalewayQoveryTerraformOutput = tf_resources.create(&[], &logger)?;
+    let _: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
 
     check_workers_on_upgrade(
         cluster,

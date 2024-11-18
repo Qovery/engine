@@ -149,10 +149,6 @@ impl Kubernetes for EKS {
         self.logger.borrow()
     }
 
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        Ok(())
-    }
-
     fn is_network_managed_by_user(&self) -> bool {
         self.options.user_provided_network.is_some()
     }
@@ -211,10 +207,6 @@ impl Kubernetes for EKS {
         &self.advanced_settings
     }
 
-    fn customer_helm_charts_override(&self) -> Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>> {
-        self.customer_helm_charts_override.clone()
-    }
-
     fn is_karpenter_enabled(&self) -> bool {
         self.options.karpenter_parameters.is_some()
     }
@@ -263,9 +255,5 @@ impl Kubernetes for EKS {
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction {
         self
-    }
-
-    fn as_eks(&self) -> Option<&EKS> {
-        Some(self)
     }
 }

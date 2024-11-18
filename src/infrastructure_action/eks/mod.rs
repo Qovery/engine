@@ -36,9 +36,15 @@ impl InfrastructureAction for EKS {
         send_progress_on_long_task(self, Action::Create, || bootstrap_eks_cluster(self, infra_ctx, logger))
     }
 
-    fn create_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
+    fn create_cluster(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        has_been_upgraded: bool,
+    ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Create);
-        send_progress_on_long_task(self, Action::Create, || create_eks_cluster(self, infra_ctx, logger))
+        send_progress_on_long_task(self, Action::Create, || {
+            create_eks_cluster(self, infra_ctx, has_been_upgraded, logger)
+        })
     }
 
     fn pause_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
@@ -70,7 +76,10 @@ impl InfrastructureAction for EKS {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>> {
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
-        upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+
+        send_progress_on_long_task(self, Action::Create, || {
+            upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
+        })
     }
 
     fn upgrade_node_selector(&self) -> Option<&str> {
