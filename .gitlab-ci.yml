@@ -878,8 +878,15 @@ gitlab-release:
     - if: $CI_COMMIT_TAG
       when: always
 
-.deploy-qovery-env-engines:
+4-deploy-qovery-env-engines:
+  stage: deploy-prod
   retry: 0
+  variables:
+    CHANNEL: prod
+  environment:
+    name: env-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
+    deployment_tier: production
   needs:
     - gitlab-release
   script:
@@ -890,23 +897,3 @@ gitlab-release:
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
-
-2-deploy-qovery-env-engines-staging:
-  stage: deploy-staging
-  extends: .deploy-qovery-env-engines
-  variables:
-    CHANNEL: staging
-  environment:
-    name: env-staging
-    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
-    deployment_tier: staging
-
-4-deploy-qovery-env-engines-prod:
-  stage: deploy-prod
-  extends: .deploy-qovery-env-engines
-  variables:
-    CHANNEL: prod
-  environment:
-    name: env-production
-    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/clusters/general
-    deployment_tier: production
