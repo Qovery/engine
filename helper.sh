@@ -370,14 +370,25 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   filter_tests=$1
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
-  export RUST_LOG=debug
+  export RUST_LOG=info
   prepare_tests
   use_sccache
 
   if [ $filter_tests = "unit-tests" ] ; then
-   features_to_test_option="" # will execute only default features (unit tests)
+    # will execute only default features (unit tests)
+   features_to_test_option=(
+     --lib
+     --bins
+   )
   else
-   features_to_test_option="--features $filter_tests --no-default-features"
+   # will execute only the features specified form tests/ folder (integration tests)
+   features_to_test_option=(
+     --lib
+     --tests
+     -E 'kind(test)'
+     --features $filter_tests
+     --no-default-features
+   )
   fi
 
   STARTTIME=$(date +%s)
@@ -392,14 +403,11 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   # and we cannot increase it properly for the time being CF: https://docs.gitlab.com/ee/administration/instance_limits.html#maximum-file-size-for-job-logs
   output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
   touch $output_log_file
-  tail -f $output_log_file | grep -ve "\"level\":\"DEBUG\"" -ve "\"level\":\"TRACE\"" -ve "\"level\":\"INFO\"" &
+  tail -f $output_log_file &
 
   # Using nextest to run tests (mainly because its compatibility with junit)
   # https://nexte.st/docs/machine-readable/junit/
-  # overriding default profile to output junit report
-  echo '[profile.default.junit]' > nextest.config.toml
-  echo 'path = "junit.xml"' >> nextest.config.toml # output junit report
-  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run $features_to_test_option --lib --tests --message-format libtest-json --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --no-fail-fast --profile default -- >> $output_log_file 2>&1
+  cargo nextest run ${features_to_test_option[@]} --message-format human --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --no-fail-fast --profile default -- >> $output_log_file 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
   echo "Test status: $TESTS_STATUS"
 
@@ -631,6 +639,15 @@ gcp_whole_enchilada)
   ;;
 aws_infra)
   run_tests test-aws-infra $commit_id 20
+  ;;
+aws_infra_arm)
+  run_tests test-aws-infra-arm $commit_id 20
+  ;;
+aws_infra_karpenter)
+  run_tests test-aws-infra-karpenter $commit_id 20
+  ;;
+aws_infra_nat_gateway)
+  run_tests test-aws-infra-nat-gateway $commit_id 20
   ;;
 aws_infra_upgrade)
   run_tests test-aws-infra-upgrade $commit_id 20

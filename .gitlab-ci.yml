@@ -311,6 +311,87 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
+aws-infra-arm:
+  stage: tests
+  retry: 0
+  timeout: 4 hours
+  script:
+    - ./helper.sh aws_infra_arm
+  tags:
+    - vm-3cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+aws-infra-karpenter:
+  stage: tests
+  retry: 0
+  timeout: 4 hours
+  script:
+    - ./helper.sh aws_infra_karpenter
+  tags:
+    - vm-3cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+aws-infra-nat-gateway:
+  stage: tests
+  retry: 0
+  timeout: 4 hours
+  script:
+    - ./helper.sh aws_infra_nat_gateway
+  tags:
+    - vm-3cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-infra-upgrade:
   stage: tests
   retry: 0

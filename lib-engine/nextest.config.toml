@@ -1,0 +1,3 @@
+[profile.default.junit]
+path = "junit.xml" # output junit report
+

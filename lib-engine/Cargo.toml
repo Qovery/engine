@@ -178,11 +178,17 @@ test-all-managed-services = [
 ]
 
 test-aws-infra = []
+test-aws-infra-karpenter = []
+test-aws-infra-arm = []
+test-aws-infra-nat-gateway = []
 test-aws-ec2-infra = []
 test-scw-infra = []
 test-gcp-infra = []
 test-all-infra = [
     "test-aws-infra",
+    "test-aws-infra-karpenter",
+    "test-aws-infra-arm",
+    "test-aws-infra-nat-gateway",
     "test-aws-ec2-infra",
     "test-scw-infra",
     "test-gcp-infra",
