@@ -84,13 +84,18 @@ impl TerraformInfraResources {
             .for_each(|line| logger.info(line));
 
         // Apply will be skipped/do nothing if dry run is enabled
-        terraform_apply(
-            self.destination_folder.to_string_lossy().as_ref(),
-            self.is_dry_run,
-            &envs,
-            &TerraformValidators::Default,
-        )
-        .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        // but to log a message, we do the if/else
+        if !self.is_dry_run {
+            terraform_apply(
+                self.destination_folder.to_string_lossy().as_ref(),
+                self.is_dry_run,
+                &envs,
+                &TerraformValidators::Default,
+            )
+            .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        } else {
+            logger.warn("🚨 Dry run mode enabled, skipping actual terraform apply");
+        }
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
         terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), &envs)

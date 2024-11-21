@@ -51,7 +51,6 @@ where
 pub enum HelmAction {
     Deploy,
     Destroy,
-    Skip,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -557,7 +556,6 @@ pub trait HelmChart: Send {
                 // uninstall current chart
                 helm.uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
-            HelmAction::Skip => {}
         }
         Ok(payload)
     }
@@ -776,7 +774,7 @@ impl HelmChart for CommonChart {
                 warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.upgrade(&vpa_chart, &[], cmd_killer)?;
             }
-            HelmAction::Skip | HelmAction::Destroy => {}
+            HelmAction::Destroy => {}
         }
 
         Ok(payload)
@@ -813,7 +811,7 @@ impl HelmChart for CommonChart {
                 warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
                 helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
-            HelmAction::Skip | Deploy => {}
+            Deploy => {}
         }
 
         chart_payload_res
@@ -875,7 +873,6 @@ impl HelmChart for ServiceChart {
                 self.helm
                     .uninstall(chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
             }
-            HelmAction::Skip => {}
         }
         Ok(payload)
     }

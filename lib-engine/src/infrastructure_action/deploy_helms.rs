@@ -33,14 +33,16 @@ pub(super) trait HelmInfraResources {
     ) -> Result<(), Box<EngineError>> {
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         logger.info("⚓ Preparing Helm files on disk");
+        logger.info("⚓ 🏗️ chart is going to be updated");
+        logger.info("⚓ 🗑️ chart is going to be uninstalled");
+        logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
         let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
 
         logger.info("🛳️ Going to deploy Helm charts in this sequence:");
         charts_to_deploy.iter().enumerate().for_each(|(ix, charts_lvl)| {
-            let chart_names = charts_lvl.iter().map(|c| &c.get_chart_info().name).sorted().join(", ");
-            logger.info(format!("Level {}: {}", ix, chart_names));
+            logger.info(format!("Level {}: {}", ix, charts_names_user_str(charts_lvl)));
         });
 
         let ev_details = &self.charts_context().event_details;
@@ -54,6 +56,8 @@ pub(super) trait HelmInfraResources {
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e.into())))?;
 
         for (ix, charts_level) in charts_to_deploy.into_iter().enumerate() {
+            logger.info("");
+            logger.info(format!("🏁 Starting level {}", ix));
             // Show diff for all chart we want to deploy
             charts_level
                 .iter()
@@ -87,11 +91,7 @@ pub(super) trait HelmInfraResources {
             }
 
             // We do the actual deployment in parallel
-            let chart_names = charts_level
-                .iter()
-                .map(|c| &c.get_chart_info().name)
-                .sorted()
-                .join(", ");
+            let chart_names = charts_names_user_str(&charts_level);
             logger.info(format!("🛳️ Deploying in parallel charts of level {}: {}", ix, chart_names));
             deploy_parallel_charts(
                 infra_ctx.mk_kube_client()?.client(),
@@ -108,6 +108,17 @@ pub(super) trait HelmInfraResources {
 
         Ok(())
     }
+}
+
+fn charts_names_user_str(charts: &[Box<dyn HelmChart>]) -> String {
+    charts
+        .iter()
+        .map(|c| match c.get_chart_info().action {
+            HelmAction::Deploy => format!("🏗️ {}", c.get_chart_info().name),
+            HelmAction::Destroy => format!("🗑️ {}", c.get_chart_info().name),
+        })
+        .sorted()
+        .join(", ")
 }
 
 pub struct HelmInfraContext {
