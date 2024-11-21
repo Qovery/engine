@@ -33,8 +33,8 @@ pub(super) trait HelmInfraResources {
     ) -> Result<(), Box<EngineError>> {
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         logger.info("⚓ Preparing Helm files on disk");
-        logger.info("⚓ 🏗️ chart is going to be updated");
-        logger.info("⚓ 🗑️ chart is going to be uninstalled");
+        logger.info("⚓ 📥 chart is going to be updated");
+        logger.info("⚓ 📤 chart is going to be uninstalled");
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
@@ -114,8 +114,8 @@ fn charts_names_user_str(charts: &[Box<dyn HelmChart>]) -> String {
     charts
         .iter()
         .map(|c| match c.get_chart_info().action {
-            HelmAction::Deploy => format!("🏗️ {}", c.get_chart_info().name),
-            HelmAction::Destroy => format!("🗑️ {}", c.get_chart_info().name),
+            HelmAction::Deploy => format!("📥 {}", c.get_chart_info().name),
+            HelmAction::Destroy => format!("📤 {}", c.get_chart_info().name),
         })
         .sorted()
         .join(", ")
