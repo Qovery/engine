@@ -145,7 +145,6 @@ pub fn delete_eks_cluster(
         block_on(delete_eks_nodegroups(
             aws_conn,
             kubernetes.cluster_name(),
-            kubernetes.context().is_first_cluster_deployment(),
             NodeGroupsDeletionType::All,
             event_details.clone(),
         ))?;

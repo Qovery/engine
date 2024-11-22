@@ -137,7 +137,6 @@ pub fn create_eks_cluster(
                     match block_on(delete_eks_nodegroups(
                         aws_conn.clone(),
                         kubernetes.cluster_name(),
-                        kubernetes.context().is_first_cluster_deployment(),
                         NodeGroupsDeletionType::FailedOnly,
                         event_details.clone(),
                     )) {
@@ -159,7 +158,6 @@ pub fn create_eks_cluster(
     if let Err(e) = block_on(delete_eks_nodegroups(
         aws_conn.clone(),
         kubernetes.cluster_name(),
-        kubernetes.context().is_first_cluster_deployment(),
         NodeGroupsDeletionType::FailedOnly,
         event_details.clone(),
     )) {

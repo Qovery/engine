@@ -239,7 +239,6 @@ pub fn node_group_is_running(
 pub async fn delete_eks_nodegroups(
     aws_conn: SdkConfig,
     cluster_name: String,
-    is_first_install: bool,
     nodegroup_delete_selection: NodeGroupsDeletionType,
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
@@ -283,18 +282,18 @@ pub async fn delete_eks_nodegroups(
         }
     };
 
-    // If it is the first installation of the cluster, we dont want to keep any nodegroup.
-    // So just delete everything
-    let nodegroups_to_delete = if is_first_install || nodegroup_delete_selection == NodeGroupsDeletionType::All {
-        info!("Deleting all nodegroups of this cluster as it is the first installation.");
-        all_cluster_nodegroups_described
-    } else {
-        match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described.clone()) {
-            Ok(x) => x,
-            Err(e) => {
-                // print AWS nodegroup errors to the customer (useful when quota is reached)
-                if e == NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast {
-                    let nodegroup_health_message = all_cluster_nodegroups_described
+    let nodegroups_to_delete = match nodegroup_delete_selection {
+        NodeGroupsDeletionType::All => {
+            info!("Deleting all nodegroups of this cluster as it is the first installation.");
+            all_cluster_nodegroups_described
+        }
+        NodeGroupsDeletionType::FailedOnly => {
+            match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described.clone()) {
+                Ok(x) => x,
+                Err(e) => {
+                    // print AWS nodegroup errors to the customer (useful when quota is reached)
+                    if e == NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast {
+                        let nodegroup_health_message = all_cluster_nodegroups_described
                         .iter()
                         .map(|n| match n.nodegroup() {
                             Some(nodegroup) => {
@@ -316,17 +315,18 @@ pub async fn delete_eks_nodegroups(
                         .collect::<Vec<String>>()
                         .join("\n");
 
-                    return Err(Box::new(EngineError::new_nodegroup_delete_any_nodegroup_error(
-                        event_details,
-                        nodegroup_health_message,
-                    )));
-                };
+                        return Err(Box::new(EngineError::new_nodegroup_delete_any_nodegroup_error(
+                            event_details,
+                            nodegroup_health_message,
+                        )));
+                    };
 
-                return Err(Box::new(EngineError::new_nodegroup_delete_error(
-                    event_details,
-                    None,
-                    e.to_string(),
-                )));
+                    return Err(Box::new(EngineError::new_nodegroup_delete_error(
+                        event_details,
+                        None,
+                        e.to_string(),
+                    )));
+                }
             }
         }
     };
