@@ -34,7 +34,7 @@ use serde_json::json;
 use std::time::Duration;
 use uuid::Uuid;
 
-const HELM_CHART_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const HELM_CHART_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(9 * 60);
 
 impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
