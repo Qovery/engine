@@ -414,13 +414,6 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
 
-  # Log management part
-  cd $GITLAB_LOG_UTILITIES_DIR
-  STARTTIME=$(date +%s)
-  # sorts logs into multiple files
-  ./sorter.sh $output_log_file
-  # print failed tests
-  ./print_tests_status.sh
   ENDTIME=$(date +%s)
   echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
 
