@@ -55,6 +55,14 @@ unit-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
   interruptible: true
 
 build-engine-ci-image:
@@ -183,28 +191,7 @@ check-pr-labels-is-set:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
 
-unit-Tests:
-  stage: minimal-tests
-  retry: 0
-  script:
-    - ./helper.sh unit_tests
-  tags:
-    - vm-3cpu-12gmem-0g
-  only:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  dependencies:
-    - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
+
 
 scw-minimal-tests:
   stage: minimal-tests
