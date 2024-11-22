@@ -43,6 +43,20 @@ build-and-lint-code:
       when: always
   interruptible: true
 
+unit-tests:
+  stage: build-and-lint
+  retry: 0
+  script:
+    - ./helper.sh unit_tests
+  tags:
+    - bm-7cpu-16gmem-0g
+  when: always
+  needs: ['build-and-lint-code']
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  interruptible: true
+
 build-engine-ci-image:
   stage: build-and-lint
   retry: 0
