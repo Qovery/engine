@@ -1427,7 +1427,7 @@ mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::errors::EngineError;
-    use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+    use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure_action::InfraLogger;
     use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
@@ -1446,6 +1446,8 @@ mod tests {
         fn warn(&self, _message: impl Into<EventMessage>) {}
 
         fn error(self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
+
+        fn diff(&self, _from: InfrastructureDiffType, _message: String) {}
     }
 
     pub fn kubeconfig_path() -> String {

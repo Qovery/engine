@@ -5,7 +5,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError};
-use crate::events::EventDetails;
+use crate::events::{EventDetails, InfrastructureDiffType};
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -80,7 +80,7 @@ pub(super) trait HelmInfraResources {
                     logger.info(format!("🔍 Showing diff for chart: {}", chart.get_chart_info().name));
                     let _ = helm.upgrade_diff(chart.get_chart_info(), &envs, &mut |line| {
                         let _ = buf_writer.write_all(line.as_bytes());
-                        logger.info(line);
+                        logger.diff(InfrastructureDiffType::Helm, line);
                     });
                 });
 

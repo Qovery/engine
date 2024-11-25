@@ -292,6 +292,12 @@ impl Display for Stage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InfrastructureDiffType {
+    Terraform,
+    Helm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// InfrastructureStep: represents an engine infrastructure step.
 pub enum InfrastructureStep {
     // general steps
@@ -307,6 +313,8 @@ pub enum InfrastructureStep {
     RetrieveClusterResources,
     /// GlobalError: used to identify an error happening during a deployment step which is not linked to a specific deployment error step
     GlobalError,
+    /// Used during a diff of the infrastructure. ie: terraform, helm, etc.
+    InfrastructureDiff(InfrastructureDiffType),
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
@@ -376,6 +384,10 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::RestartedError => "restart-error",
                 InfrastructureStep::CannotProcessRequest => "cannot-process-request",
                 InfrastructureStep::GlobalError => "global-error",
+                InfrastructureStep::InfrastructureDiff(name) => match name {
+                    InfrastructureDiffType::Terraform => "infra-diff-terraform",
+                    InfrastructureDiffType::Helm => "infra-diff-helm",
+                },
             },
         )
     }
@@ -649,6 +661,7 @@ impl EventDetails {
                 | InfrastructureStep::UpgradeError
                 | InfrastructureStep::DeleteError
                 | InfrastructureStep::RestartedError
+                | InfrastructureStep::InfrastructureDiff(_)
                 | InfrastructureStep::CannotProcessRequest => return,
             },
             Stage::Environment(step) => match step {
