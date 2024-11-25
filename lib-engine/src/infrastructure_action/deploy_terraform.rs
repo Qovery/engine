@@ -4,7 +4,7 @@ use crate::cmd::terraform::{
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
-use crate::events::EventDetails;
+use crate::events::{EventDetails, InfrastructureDiffType};
 use crate::infrastructure_action::InfraLogger;
 use crate::template::generate_and_copy_all_files_into_dir;
 use crate::utilities::envs_to_slice;
@@ -81,7 +81,7 @@ impl TerraformInfraResources {
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
             .into_iter()
-            .for_each(|line| logger.info(line));
+            .for_each(|line| logger.diff(InfrastructureDiffType::Terraform, line));
 
         // Apply will be skipped/do nothing if dry run is enabled
         // but to log a message, we do the if/else
@@ -113,7 +113,7 @@ impl TerraformInfraResources {
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
             .raw_std_output
             .into_iter()
-            .for_each(|line| logger.info(line));
+            .for_each(|line| logger.diff(InfrastructureDiffType::Terraform, line));
 
         if self.is_dry_run {
             return Ok(());

@@ -143,6 +143,7 @@ pub enum InfrastructureStep {
     RestartedError,
     CannotProcessRequest,
     GlobalError,
+    InfrastructureDiff,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -172,6 +173,7 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::RestartedError => InfrastructureStep::RestartedError,
             events::InfrastructureStep::CannotProcessRequest => InfrastructureStep::CannotProcessRequest,
             events::InfrastructureStep::GlobalError => InfrastructureStep::GlobalError,
+            events::InfrastructureStep::InfrastructureDiff(_) => InfrastructureStep::InfrastructureDiff,
         }
     }
 }
