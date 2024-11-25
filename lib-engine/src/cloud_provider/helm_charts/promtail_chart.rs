@@ -130,9 +130,9 @@ impl ToCommonHelmChart for PromtailChart {
                         ),
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(750)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
                     }],
