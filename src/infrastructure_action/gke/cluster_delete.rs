@@ -49,7 +49,7 @@ pub(super) fn delete_gke_cluster(
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
-    tf_resources.delete(&logger)?;
+    tf_resources.delete(&[], &logger)?;
 
     // delete info on vault
     let _ = delete_vault_data(cluster, event_details.clone(), &logger);

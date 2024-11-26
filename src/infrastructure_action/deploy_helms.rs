@@ -86,7 +86,7 @@ pub(super) trait HelmInfraResources {
 
             // Skip actual deployment if dry run
             if self.charts_context().is_dry_run {
-                logger.warn("🚨 Dry run mode enabled, skipping actual deployment");
+                logger.warn("👻 Dry run mode enabled, skipping actual deployment");
                 continue;
             }
 

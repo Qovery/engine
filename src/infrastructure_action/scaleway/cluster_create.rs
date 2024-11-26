@@ -119,7 +119,7 @@ fn sanitize_node_groups(
     logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     if cluster.context().is_dry_run_deploy() {
-        logger.info("Dry run, skipping node groups sanitization");
+        logger.info("👻 Dry run mode enabled, skipping node groups sanitization");
         return Ok(());
     }
 
